@@ -1,0 +1,3 @@
+# A Game is the journal's own record; IGDB links are optional
+
+A Game is a title on one Platform, as the journal defines it. It is not an IGDB id and not a ROM. Games link to IGDB games when they can, and the journal tries that match by default. But a Game can have no IGDB link (homebrew, obscure titles), and ROMs such as fan translations can be assigned to a Game by hand. We chose this because IGDB's idea of a game doesn't match mine: one IGDB entry covers many platforms, some ports are separate entries, and enhanced re-releases are often separate entries. ROMs come and go, so they can't carry identity either.
