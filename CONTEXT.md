@@ -19,7 +19,7 @@ One specific edition of a Game, e.g. a region, a revision, or a fan translation 
 _Avoid_: Release, revision, dump
 
 **ROM**:
-A game file in an emulator library. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten.
+A game file in an emulator library. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten. It is forgotten only when its Game is deleted, and a Game can't be deleted while it has a present ROM.
 _Avoid_: File, image
 
 **Disc**:
@@ -41,7 +41,7 @@ My score for a Game, from 0.0 to 10.0 in steps of 0.1. A Game with no Rating is 
 _Avoid_: Stars, score
 
 **Rating history**:
-Every Rating a Game has had, each with the date it was set. Ratings brought over from OpenEmu stars are marked as imported and approximate.
+Every Rating a Game has had, each with the date it was set, including being cleared back to unrated. There is at most one entry per day: changing a Rating again that day replaces the day's entry. Ratings brought over from OpenEmu stars are marked as imported and approximate, and are never replaced.
 _Avoid_: Rating log, previous ratings
 
 **Playthrough**:

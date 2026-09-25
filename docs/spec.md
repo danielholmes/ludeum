@@ -32,12 +32,21 @@ Phone or remote access; several Macs; a fork of OpenEmu; two-way sync; importing
 
 ### Journal data
 - **Rating:** 0.0–10.0, or unrated (different from 0.0). One per Game, with a Rating history of dated entries. Stars imported from OpenEmu become ×2 (3★ → 6.0), dated at import and marked imported/approximate.
+- **Rating history:** at most one entry per day (local time). Changing the Rating again the same day replaces that day's entry, and re-entering the current value does nothing. An imported entry is never replaced. Clearing a Rating adds an "unrated" entry. Entries can be deleted but not edited, so there's no backdating. Deleting the latest entry makes the previous one the Rating.
 - **Playthrough:** every field optional (start and end as Partial dates, Outcome of Finished or Dropped, notes, Version, Played via). A Playthrough with no Outcome is in progress. Version and Played via are free text, with suggestions drawn from the Game's ROM names.
 - **Intent:** none, Backlog, or Up next (a set, not ordered). It doesn't depend on Playthroughs.
 - **Childhood:** a flag on a Game.
 - **Lists:** named, unordered, curated. A Game can be in many.
 - **Activity:** read-only play stats summed across a Game's ROMs. A snapshot is saved at each Import so play time can be credited to a year.
 - **Cover:** the IGDB cover. If IGDB has none, OpenEmu's existing box art is carried over once. If neither exists, I upload my own.
+
+### Deleting
+- **A Game with present ROMs can't be deleted.** The UI says to remove its ROMs in OpenEmu first. There's no "ignored ROM": unwanted ROMs are removed in OpenEmu.
+- **Deleting a Game** hard-deletes all its journal data (Rating history, Playthroughs, Intent, Childhood, List memberships, Activity snapshots, IGDB link, uploaded Cover) and its missing ROMs with their Matches. If one of those ROMs reappears, a later Import matches it again as new. Stars and Covers already synced stay in OpenEmu.
+- **Games whose ROMs are all missing** stay as normal Games, marked "no ROM in OpenEmu". They're never hidden or deleted automatically.
+- **A single missing ROM** can't be removed from its Game.
+- **Deleting a List** leaves its Games untouched. The next Sync deletes its collection without asking for the name.
+- **No soft delete or undo.** Deleting a Game, List or Playthrough asks for a confirmation that says what goes with it. The automatic backups are the safety net.
 
 ### First Import from OpenEmu
 - Reads a snapshot of OpenEmu's database, taken with SQLite's backup API. Safe while OpenEmu is running. Never writes to OpenEmu.
@@ -104,9 +113,7 @@ Roughly in the order they block work:
 8. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
 9. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
 10. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
-11. **Rating history:** does re-entering the same value add an entry? Can entries be edited or deleted?
-12. **Deleting things:** deleting a Game (and its ROM Matches); deleting a List; what happens to Games whose ROMs are all missing.
-13. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+11. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
