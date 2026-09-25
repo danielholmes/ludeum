@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import JournalCore
 
 @Suite struct HasheousClientTests {

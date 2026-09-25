@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import JournalCore
 
 /// Fake versions of the external services (Twitch auth, IGDB, IGDB images, Hasheous),
@@ -166,9 +167,12 @@ final class FakeInternet: HTTPTransport, Sendable {
         }
         let json: [String: Any] = [
             "id": 1, "name": "Some Game",
-            "platform": ["name": "Some Platform", "metadata": [
-                ["objectType": "Platform", "id": "x", "immutableId": "\(hit.platform)", "source": "IGDB", "status": "Mapped"],
-            ]],
+            "platform": [
+                "name": "Some Platform",
+                "metadata": [
+                    ["objectType": "Platform", "id": "x", "immutableId": "\(hit.platform)", "source": "IGDB", "status": "Mapped"]
+                ],
+            ],
             "metadata": [
                 ["objectType": "Game", "id": "slug", "immutableId": "\(hit.game)", "source": "IGDB", "status": "Mapped"],
                 ["objectType": "Game", "id": "77", "immutableId": "77", "source": "RetroAchievements", "status": "Mapped"],
@@ -177,7 +181,11 @@ final class FakeInternet: HTTPTransport, Sendable {
         return (200, [:], try! JSONSerialization.data(withJSONObject: json))
     }
 
-    private struct Block { let endpoint: String; let name: String; let text: String }
+    private struct Block {
+        let endpoint: String
+        let name: String
+        let text: String
+    }
 
     private static func queryBlocks(_ body: String) -> [Block] {
         body.components(separatedBy: "query ").dropFirst().map { chunk in

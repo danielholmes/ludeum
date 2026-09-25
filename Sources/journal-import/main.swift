@@ -41,17 +41,19 @@ func check() async throws {
     let ids = try await igdb.search([search])[search] ?? []
     print("IGDB search '\(search.name)' on SNES → \(ids.prefix(5))")
     guard let first = ids.first, let game = try await igdb.games(ids: [first])[first] else { fail("no IGDB result") }
-    print("  \(game.name ?? "?"): \(game.record["screenshots"]?.array?.count ?? 0) screenshots, "
-        + "\(game.record["artworks"]?.array?.count ?? 0) artworks, "
-        + "time to beat (normally): \(game.timeToBeat?["normally"]?.int.map { "\($0 / 3600)h" } ?? "n/a")")
+    print(
+        "  \(game.name ?? "?"): \(game.record["screenshots"]?.array?.count ?? 0) screenshots, "
+            + "\(game.record["artworks"]?.array?.count ?? 0) artworks, "
+            + "time to beat (normally): \(game.timeToBeat?["normally"]?.int.map { "\($0 / 3600)h" } ?? "n/a")")
     if let coverID = game.record["cover"]?["image_id"]?.string {
         print("  cover → \(try await igdb.cover(imageID: coverID).path(percentEncoded: false))")
     }
 
     // A public reference hash from Hasheous's own docs (Jumpman Junior, C64).
     let result = try await hasheous.lookup(md5: "5d7550788a4d1b47ad81fbbbf5c615a9")
-    print("Hasheous 5d7550…c615a9 → IGDB game \(result.match?.igdbGameID.map(String.init) ?? "none"), "
-        + "platform \(result.match?.igdbPlatformID.map(String.init) ?? "none")")
+    print(
+        "Hasheous 5d7550…c615a9 → IGDB game \(result.match?.igdbGameID.map(String.init) ?? "none"), "
+            + "platform \(result.match?.igdbPlatformID.map(String.init) ?? "none")")
 }
 
 switch CommandLine.arguments.dropFirst().first {

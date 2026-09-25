@@ -9,7 +9,7 @@ let package = Package(
         .executable(name: "journal-import", targets: ["journal-import"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0")
     ],
     targets: [
         .target(

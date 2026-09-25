@@ -42,12 +42,14 @@ public final class HasheousClient: Sendable {
     /// Looks up a ROM by MD5. "Not found" is a successful answer and is cached like a match.
     public func lookup(md5: String) async throws -> HasheousResult {
         let md5 = md5.lowercased()
-        let payloads = try await cache.resolve([md5], key: { "hasheous:md5:\($0)" }, maxAge: maxAge, batchSize: 1) { _ in
+        let payloads = try await cache.resolve([md5], key: Self.md5Key, maxAge: maxAge, batchSize: 1) { _ in
             [md5: try await fetch(md5: md5)]
         }
         let record = try JSONValue.decode(payloads[md5]!)
         return record == .null ? .noMatch : .match(HasheousMatch(record: record))
     }
+
+    static func md5Key(_ md5: String) -> String { "hasheous:md5:\(md5)" }
 
     private func fetch(md5: String) async throws -> Data {
         var request = URLRequest(url: URL(string: "https://hasheous.org/api/v1/Lookup/ByHash/md5/\(md5)")!)

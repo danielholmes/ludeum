@@ -150,8 +150,9 @@ public final class IGDBClient: Sendable {
     private func accessToken(replacingStored: Bool = false) async throws -> String {
         let key = "twitch:token:\(credentials.clientID)"
         if !replacingStored, let entry = try cache.entries([key])[key],
-           let stored = try? JSONDecoder().decode(StoredToken.self, from: entry.payload),
-           clock.now() < stored.expiresAt.addingTimeInterval(-3_600) {
+            let stored = try? JSONDecoder().decode(StoredToken.self, from: entry.payload),
+            clock.now() < stored.expiresAt.addingTimeInterval(-3_600)
+        {
             return stored.token
         }
         // Credentials go in the form body, not the URL, so they never appear in logged URLs.

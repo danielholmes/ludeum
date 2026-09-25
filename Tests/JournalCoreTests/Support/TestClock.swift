@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+
 @testable import JournalCore
 
 /// A clock the test controls. Sleeping advances time instantly.
