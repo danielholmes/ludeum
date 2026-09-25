@@ -22,12 +22,16 @@ _Avoid_: Release, revision, dump
 A game file in an emulator library. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten.
 _Avoid_: File, image
 
+**Disc**:
+One of several ROMs that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)".
+_Avoid_: Part, volume, CD
+
 **IGDB link**:
 An optional reference from a Game to one IGDB game and platform, used for metadata, the Game's name and its Cover. A Game has at most one.
 _Avoid_: Anchor, source game
 
 **Match**:
-The link between a ROM and its Game, together with how it was made and when. It is Automatic (by checksum), Confirmed (I accepted a suggested name match), or Manual (I searched IGDB myself).
+The link between a ROM and its Game, together with how it was made and when. It is Automatic (the checksum identifies the game *and* the names agree), Confirmed (I accepted a suggestion from the Review queue), or Manual (I searched IGDB myself). A Match is never made to an IGDB bundle.
 _Avoid_: Mapping, association
 
 ### Journal data
@@ -83,9 +87,9 @@ Writing the journal's data into OpenEmu: Ratings as stars, Lists plus Intent and
 _Avoid_: Push, export
 
 **Review queue**:
-Things the journal won't decide on its own and waits for me to resolve: ROMs with no match or only an uncertain one, and Duplicate Versions.
+Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or by a checksum whose names don't agree), and Duplicate Versions.
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:
-Two or more ROMs in the library at the same time that belong to one Game. The only way to resolve it is to remove ROMs until one is left.
+Two or more present ROMs that belong to one Game but aren't Discs of the same Version. Missing ROMs never count. The only way to resolve it is to remove ROMs until one Version is left.
 _Avoid_: Duplicates, merge

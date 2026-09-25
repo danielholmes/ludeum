@@ -94,9 +94,21 @@ public final class IGDBClient: Sendable {
     }
 
     static func gameKey(_ id: Int) -> String { "igdb:game:\(id)" }
-    static let maxBatch = 500
+    /// Fully expanded records are large: IGDB answers 413 for ~250 at once but is fine with 100.
+    static let maxBatch = 100
 
+    /// Fetches a batch, halving it whenever IGDB says the response would be too large (413).
     private func fetchGames(ids: [Int]) async throws -> [Int: IGDBGame] {
+        do {
+            return try await fetchGameBatch(ids: ids)
+        } catch let error as HTTPStatusError where error.status == 413 && ids.count > 1 {
+            let half = ids.count / 2
+            let first = try await fetchGames(ids: Array(ids[..<half]))
+            return first.merging(try await fetchGames(ids: Array(ids[half...]))) { a, _ in a }
+        }
+    }
+
+    private func fetchGameBatch(ids: [Int]) async throws -> [Int: IGDBGame] {
         let idList = ids.map(String.init).joined(separator: ",")
         let body = """
             query games "games" { fields \(Self.gameFields); where id = (\(idList)); limit 500; };

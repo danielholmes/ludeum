@@ -61,15 +61,26 @@ import Testing
         #expect(h.internet.requestedGameIDBatches == [[1071]])
     }
 
-    @Test func splitsLargeRequestsIntoBatchesOfAtMost500() async throws {
+    @Test func splitsLargeRequestsIntoBatchesOfAtMost100() async throws {
         let h = try Harness()
-        let ids = Array(1...1201)
+        let ids = Array(1...250)
         for id in ids { h.internet.addGame(id, "Game \(id)") }
 
         let games = try await h.igdb.games(ids: ids)
 
-        #expect(games.count == 1201)
-        #expect(h.internet.requestedGameIDBatches.map(\.count) == [500, 500, 201])
+        #expect(games.count == 250)
+        #expect(h.internet.requestedGameIDBatches.map(\.count) == [100, 100, 50])
+    }
+
+    @Test func halvesABatchThatIGDBRejectsAsTooLarge() async throws {
+        let h = try Harness()
+        let ids = Array(1...100)
+        for id in ids { h.internet.addGame(id, "Game \(id)") }
+        h.internet.state.withLock { $0.maxGamesPerResponse = 30 }
+
+        let games = try await h.igdb.games(ids: ids)
+
+        #expect(games.count == 100)
     }
 
     @Test func searchReturnsMatchingGameIDsInIGDBsOrder() async throws {

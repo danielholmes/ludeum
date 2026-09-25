@@ -18,6 +18,7 @@ final class FakeInternet: HTTPTransport, Sendable {
         var games: [Int: String] = [:]
         var timeToBeat: [Int: Int] = [:]
         var searches: [String: [Int]] = [:]  // "<platform>:<name>" → ids
+        var maxGamesPerResponse = Int.max  // larger game batches get "413 Payload Too Large"
         // Twitch
         var tokenLifetime: Int = 5_000_000
         var tokensIssued = 0
@@ -134,6 +135,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         default:
             return (404, [:], Data())
         }
+        let requestedGames = queryBlocks(body).filter { $0.endpoint == "games" }.flatMap { ids(after: "where id = (", in: $0.text) }
+        if requestedGames.count > s.maxGamesPerResponse { return (413, [:], Data()) }
         var results: [[String: Any]] = []
         for block in queryBlocks(body) {
             let result: [Any]
