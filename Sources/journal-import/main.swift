@@ -3,7 +3,8 @@ import JournalCore
 
 // journal-import: command-line tools on top of JournalCore.
 //
-//   journal-import check    Live check of IGDB and Hasheous through the real cache.
+//   journal-import check                    Live check of IGDB and Hasheous through the real cache.
+//   journal-import prototype-first-import   PROTOTYPE: dry run of the first Import (see PROTOTYPE_FirstImport.swift).
 //
 // Credentials come from the environment or a .env file in the current directory
 // (see scripts/setup-igdb.sh).
@@ -27,14 +28,18 @@ func fail(_ message: String) -> Never {
 
 let cacheDirectory = URL.applicationSupportDirectory.appending(path: "GamesJournal/cache", directoryHint: .isDirectory)
 
-func check() async throws {
+func makeClients() throws -> (IGDBClient, HasheousClient) {
     let env = loadEnv()
     guard let clientID = env["IGDB_CLIENT_ID"], let secret = env["IGDB_CLIENT_SECRET"] else {
         fail("IGDB_CLIENT_ID / IGDB_CLIENT_SECRET not set; run scripts/setup-igdb.sh")
     }
     let cache = try CacheStore(directory: cacheDirectory)
     let igdb = IGDBClient(credentials: IGDBCredentials(clientID: clientID, clientSecret: secret), cache: cache)
-    let hasheous = HasheousClient(cache: cache, apiKey: env["HASHEOUS_API_KEY"])
+    return (igdb, HasheousClient(cache: cache, apiKey: env["HASHEOUS_API_KEY"]))
+}
+
+func check() async throws {
+    let (igdb, hasheous) = try makeClients()
     print("cache: \(cacheDirectory.path(percentEncoded: false))")
 
     let search = IGDBSearch(name: "Super Mario World", platformID: 19)  // 19 = SNES
@@ -57,6 +62,12 @@ func check() async throws {
 }
 
 switch CommandLine.arguments.dropFirst().first {
-case "check": try await check()
-default: fail("usage: journal-import check")
+case "check":
+    try await check()
+case "prototype-first-import":
+    let (igdb, hasheous) = try makeClients()
+    let output = URL(filePath: FileManager.default.currentDirectoryPath).appending(path: "prototype-output")
+    try await prototypeFirstImport(igdb: igdb, hasheous: hasheous, outputDirectory: output)
+default:
+    fail("usage: journal-import check | prototype-first-import")
 }
