@@ -64,11 +64,23 @@ Phone or remote access; several Macs; a fork of OpenEmu; two-way sync; importing
 - **Ongoing Imports:** new ROMs go through the same matching. A ROM that disappears is marked missing, and its last Activity is kept.
 
 ### Sync to OpenEmu
+Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The spike on branch `prototype/openemu-write` showed that OpenEmu 2.4.1 keeps such writes across relaunch, its own edits and its launch-time OpenVGDB lookup ([findings](https://github.com/danielholmes/games-journal/blob/research/openemu-database/docs/research/openemu-database.md)).
+
 - Runs by hand, only while OpenEmu is closed, after backing up OpenEmu's database.
-- **Stars:** the Rating ÷ 2, rounded half up (0.0–0.9 → no stars), written to every ROM of the Game.
-- **Collections:** each List, plus `_TODO`, `_TODO Next`, `_Current` and `_Completed` built from Intent and Playthroughs, are owned by the journal and overwritten. Other regular collections are deleted after I confirm them by name. Smart collections are left alone.
-- **Covers:** written only for games that have no box art in OpenEmu.
+- **Stars:** the Rating ÷ 2, rounded half up (0.0–0.9 → no stars), written to `ZGAME.ZRATING` of the OpenEmu game row of each of the Game's ROMs. OpenEmu keeps one game row per ROM. Values are always 0–5, and 0 means no stars (never NULL).
+- **Collections:** each List, plus `_TODO`, `_TODO Next`, `_Current` and `_Completed` built from Intent and Playthroughs, are owned by the journal and overwritten. Other regular collections are deleted after I confirm them by name. Smart collections and collection folders are left alone.
+- **Covers:** written only for games that have no box art in OpenEmu and whose OpenEmu status is 0. A game still waiting for its OpenVGDB lookup (status 3) is skipped until a later Sync, because the lookup can replace its box art.
 - A Game with unresolved Duplicate Versions isn't synced.
+- **Guards:** Sync refuses to run while OpenEmu (`org.openemu.OpenEmu`) is running, if a Dropbox "conflicted copy" sits next to the store, or if the store's UUID isn't the one Imported. It runs `PRAGMA integrity_check` before and after. There's no waiting for Dropbox: on one Mac the local files are the truth.
+- **Backup:** SQLite's backup API, taken while OpenEmu is closed (the store is WAL, so copying `Library.storedata` alone can lose data).
+- **Writing, the way Core Data would:**
+  - All writes happen in one transaction, followed by `PRAGMA wal_checkpoint(TRUNCATE)`, so Dropbox sees a complete main file and an empty WAL.
+  - Every inserted row takes `Z_MAX + 1` from its **root** entity's `Z_PRIMARYKEY` row (`AbstractCollection` for collections, `Image` for covers), and `Z_MAX` is raised in the same transaction. **This is mandatory:** in the spike, a row inserted without it was silently overwritten by OpenEmu's next insert.
+  - Entity numbers (`Z_ENT`) are read from `Z_PRIMARYKEY` by name, never hard-coded. Inserted rows get `Z_OPT = 1`, and every updated row gets `Z_OPT + 1`, including both ends of a membership change (the `Z_2GAMES` join row).
+  - Journal-owned collections are updated in place (name and membership), keeping their `Z_PK`. Deleting a collection deletes its join rows too, and only rows whose `Z_ENT` is `Collection`.
+  - A Cover is a new UUID-named JPEG (quality 0.9, no extension) in `Artwork/`, plus a `ZIMAGE` row (`ZFORMAT` 3, pixel width and height, `ZRELATIVEPATH` = the file name, `ZSOURCE` NULL) linked both ways (`ZGAME.ZBOXIMAGE` and `ZIMAGE.ZBOX`). The file is always new, never overwritten.
+  - `Z_METADATA` and the schema are never touched.
+- **OpenEmu identifiers the journal keeps:** the store UUID (`Z_METADATA.Z_UUID`) of the library it Imported; each ROM's OpenEmu `Z_PK` and MD5 (Sync looks up `ZROM.ZGAME` fresh each time); the `Z_PK` of each journal-owned collection (if it's gone, Sync creates a new one); and the `ZIMAGE` `Z_PK` of each Cover Sync wrote. Core Data never renumbers `Z_PK`s.
 
 ### External data and cache (built: `JournalCore`)
 - **IGDB** (Twitch app token): the full game record, with every useful sub-record expanded plus time-to-beat. Fetched in batches of 100 (halved if IGDB answers 413). One request per name search, since multiquery ignores `search`. At most 3 requests a second.
@@ -83,19 +95,18 @@ Library (filter and sort by Platform, Rating, Intent, List, Outcome, Childhood);
 Roughly in the order they block work:
 
 1. **Journal database schema:** tables for Game, ROM, Match, Rating history, Playthrough, List, Activity snapshots and Covers; migrations; how Partial dates are stored.
-2. **Is writing to OpenEmu safe?** Sync writes straight into OpenEmu's Core Data SQLite store: `Z_OPT`, `Z_PRIMARYKEY`, the collection join table, `ZIMAGE` rows plus files in `Artwork/`. Does OpenEmu 2.4.1 accept these changes without corruption or losing them to a re-sync? Needs a spike against a copy of the library.
-3. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
-4. **Matching rules in detail:** name normalisation for "names agree" (roman numerals, `&`/`and`, subtitles, articles, IGDB alternative names and localisations); the parser for Disc and Version from No-Intro and Redump names; which IGDB `game_type` values count as bundles.
-5. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search, and assigning a ROM to an existing Game (fan translations).
-6. **Duplicate Versions flow:** how the first Import pauses and resumes while I remove ROMs in OpenEmu.
-7. **Year in review:** how Partial dates are counted (a year-only date counts for that year; a month-only date?); crediting Activity to years from snapshot differences; how "time played" is shown for non-emulated Games.
-8. **Adding non-OpenEmu Games:** the IGDB search flow; which IGDB platforms to list; creating a Game by hand.
-9. **Covers:** where uploaded covers are stored and in what format; how Sync writes one into `Artwork/` with a `ZIMAGE` row.
-10. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
-11. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
-12. **Rating history:** does re-entering the same value add an entry? Can entries be edited or deleted?
-13. **Deleting things:** deleting a Game (and its ROM Matches); deleting a List; what happens to Games whose ROMs are all missing.
-14. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+2. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
+3. **Matching rules in detail:** name normalisation for "names agree" (roman numerals, `&`/`and`, subtitles, articles, IGDB alternative names and localisations); the parser for Disc and Version from No-Intro and Redump names; which IGDB `game_type` values count as bundles.
+4. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search, and assigning a ROM to an existing Game (fan translations).
+5. **Duplicate Versions flow:** how the first Import pauses and resumes while I remove ROMs in OpenEmu.
+6. **Year in review:** how Partial dates are counted (a year-only date counts for that year; a month-only date?); crediting Activity to years from snapshot differences; how "time played" is shown for non-emulated Games.
+7. **Adding non-OpenEmu Games:** the IGDB search flow; which IGDB platforms to list; creating a Game by hand.
+8. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
+9. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
+10. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
+11. **Rating history:** does re-entering the same value add an entry? Can entries be edited or deleted?
+12. **Deleting things:** deleting a Game (and its ROM Matches); deleting a List; what happens to Games whose ROMs are all missing.
+13. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
@@ -103,3 +114,4 @@ Roughly in the order they block work:
 - `journal-import check`: a live check against IGDB and Hasheous.
 - `scripts/setup-igdb.sh`: the IGDB credentials wizard.
 - Branch `prototype/first-import`: a throwaway dry run of the first Import. Its verdict is in the commit message and folded into the decisions above.
+- Branch `prototype/openemu-write`: a throwaway spike that wrote a Sync into a copy of the OpenEmu library. Its verdict is in the commit message and folded into Sync to OpenEmu above.
