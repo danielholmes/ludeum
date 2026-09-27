@@ -48,8 +48,9 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
 ### Journal data
 - **Rating:** 0.0–10.0, or unrated (different from 0.0). One per Game, with a Rating history of dated entries. Stars imported from OpenEmu become ×2 (3★ → 6.0), dated at import and marked imported/approximate.
 - **Rating history:** at most one entry per day (local time). Changing the Rating again the same day replaces that day's entry, and re-entering the current value does nothing. An imported entry is never replaced. Clearing a Rating adds an "unrated" entry. Entries can be deleted but not edited, so there's no backdating. Deleting the latest entry makes the previous one the Rating.
-- **Playthrough:** every field optional (start and end as Partial dates, Outcome of Finished or Dropped, notes, Version, Played via). A Playthrough with no Outcome is in progress. Version and Played via are free text, with suggestions drawn from the Game's ROM names.
-- **Intent:** none, Backlog, or Up next (a set, not ordered). It doesn't depend on Playthroughs.
+- **Playthrough:** every field optional (start and end as Partial dates, Outcome of Finished or Dropped, notes, Version, Played via), except that a Playthrough with no Outcome is in progress and **must have a start date**. So an in-progress Playthrough's start date can't be cleared, and removing the Outcome from a Playthrough with no start date asks for one. Version and Played via are free text, with suggestions drawn from the Game's ROM names.
+- **Intent:** none, Backlog, or Up next (a set, not ordered). It doesn't depend on Playthroughs. The date and time it was set is recorded (never edited by hand): changing the value resets it, clearing Intent drops it, and setting the same value again does nothing. Intent from the first Import is undated.
+- **Partial dates sort** as if the missing parts came first: `2024` < `2024-01` < `2024-01-05`.
 - **Childhood:** a flag on a Game.
 - **Lists:** named, unordered, curated. A Game can be in many.
 - **Activity:** read-only play stats summed across a Game's ROMs. A snapshot is saved at each Import so play time can be credited to a year.
@@ -71,7 +72,7 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
   |---|---|
   | `_TODO` | Intent Backlog |
   | `_TODO Next` | Intent Up next |
-  | `_Current` | a Playthrough in progress |
+  | `_Current` | a Playthrough in progress, with the start date I enter during the Import |
   | `_Completed` | a Finished Playthrough with no dates (OpenEmu's last-played date is shown as a hint) |
   | `_Childhood Played` | the Childhood flag |
   | every other collection | a List |
@@ -91,6 +92,7 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
   - Normalising: lowercase; fold diacritics; `&` → `and`; split into words on anything but letters and digits; roman numerals II–XX become digits (not I, V or X); drop `and`, every `the`, and a leading `a`/`an`; drop a leading `Disney's`, `Disney-Pixar's`, `James Bond`, `Tom Clancy's` or `Sid Meier's`; join the words.
 - **Versions** aren't parsed into fields. A Version is described by the ROM name's tags as written (region, languages, revision, dev status, translation and so on), without the Disc and its label, GoodTools dump flags (`[!]`, `[a]`, `[b]`…) and file artefacts. Real names mix No-Intro, Redump, GoodTools, scene and ad-hoc forms, and a Version is only ever shown or suggested as text.
 - **Discs:** the present ROMs of one Game that each carry a `(Disc N)`, with no number repeated, are the Discs of one Version, whatever else their names say (Gran Turismo 2's two Discs come from different DAT versions). An `.m3u` playlist ROM of that Game belongs to the same Version. The free-form flag straight after `(Disc N)` is the disc label.
+- **Start dates for `_Current`:** an in-progress Playthrough needs a start date, so the first Import lists the `_Current` Games (7 in my library) and asks for each one's start date (a Partial date). For any of them I can choose "Not playing" instead, and no Playthrough is created. The Import doesn't finish until every one is answered.
 - **Duplicate Versions** (2 or more *present* ROMs on one Game that aren't Discs of one Version) block the first Import until I remove ROMs in OpenEmu. There's no exceptions mechanism, and the UI should say that real exceptions need a code change. With these rules my library has 2: Double Dragon III (Japan and USA) and Sweet Home (two translations).
 - **Orphaned OpenEmu entries** (the ROM file is missing; 150 of them, 60 holding data) are imported with the ROM marked missing.
 - **Ongoing Imports:** new ROMs go through the same matching. A ROM that disappears is marked missing, and its last Activity is kept.
@@ -119,8 +121,17 @@ Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The
 - **Hasheous:** MD5 → IGDB game and platform. "Not found" is cached. At most 1 request a second. An optional app key can be set with `HASHEOUS_API_KEY`.
 - **Cache:** entries keyed as `source:kind:id`, fresh for 60 days. An expired entry is still used if refreshing it fails. Only successful answers are cached. Images never expire. Runs can be interrupted and resumed.
 
+### What to play next and Top-rated
+- **What to play next** is a plain view, with no ranking or suggestions. It has three sections: **Playing**, **Up next** and **Backlog**. Each Game appears once, in the first section that fits (a Game that's Playing and Up next shows under Playing).
+- **Sorting:** the same filter and sort controls as the Library. Up next and Backlog default to when the Intent was set, newest first, with undated Intent after every dated one, by name. Playing defaults to the in-progress Playthrough's start date, newest first (a Game's latest start counts if several are in progress). Name order is available too. "Intent set" is also a Library sort, with Games that have no Intent last.
+- **Start playing:** an action on a Game in Up next or Backlog. In one step it creates an in-progress Playthrough starting today (day precision) and clears the Game's Intent.
+- **Top-rated** is one list of every rated Game, by current Rating, highest first, with no top-N cut-off. It has the same filters as the Library (Platform, List, Childhood), so "per Platform" is the Platform filter.
+- **Ties share a rank** (1, 2, 2, 4) and are listed by name. There's no hidden tie-break.
+- **Imported Ratings** are included, each marked "≈ imported". The mark disappears once I re-rate the Game.
+- **Unrated Games never appear.** A Rating of 0.0 is a real Rating and appears. Rating history plays no part.
+
 ### Version 1 screens
-Library (filter and sort by Platform, Rating, Intent, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync.
+Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync.
 
 ## Fog: open questions
 

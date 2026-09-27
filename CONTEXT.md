@@ -45,7 +45,7 @@ Every Rating a Game has had, each with the date it was set, including being clea
 _Avoid_: Rating log, previous ratings
 
 **Playthrough**:
-One time I played a Game. Every field is optional: start date, end date, Outcome, notes, and the Version I played. A Game can have any number.
+One time I played a Game. Every field is optional (start date, end date, Outcome, notes, and the Version I played), except that a Playthrough still in progress must have a start date. A Game can have any number.
 _Avoid_: Completion, run, session
 
 **Outcome**:
@@ -53,12 +53,16 @@ How a Playthrough ended: Finished or Dropped. A Playthrough with no Outcome is s
 _Avoid_: Status, result
 
 **Partial date**:
-A date known only to the day, month or year, e.g. "2024-03-17", "2024-03" or "1996". Best guesses are recorded the same way.
+A date known only to the day, month or year, e.g. "2024-03-17", "2024-03" or "1996". Best guesses are recorded the same way. A less precise date sorts before the more precise dates within it: "2024" before "2024-01" before "2024-01-05".
 _Avoid_: Approximate date, fuzzy date
 
 **Intent**:
-What I plan to do with a Game next: Backlog or Up next, or nothing. Intent doesn't depend on Playthroughs, so a finished Game can still be Up next.
+What I plan to do with a Game next: Backlog or Up next, or nothing. Intent doesn't depend on Playthroughs, so a finished Game can still be Up next. It remembers when it was set, except Intent brought over from OpenEmu, which is undated.
 _Avoid_: Status, queue, TODO
+
+**Playing**:
+A Game with a Playthrough in progress, whatever its Intent.
+_Avoid_: Current, in progress (for a Game)
 
 **Childhood**:
 A flag on a Game meaning I played it as a child, at some unknown time.
