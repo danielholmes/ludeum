@@ -31,7 +31,7 @@ private enum Outcome {
 
 /// OpenEmu system → IGDB platform ids, most likely first (GB includes GBC games,
 /// SNES/NES include Japanese Super Famicom/Famicom releases).
-private let igdbPlatforms: [String: [Int]] = [
+let igdbPlatforms: [String: [Int]] = [
     "openemu.system.gb": [33, 22], "openemu.system.snes": [19, 58], "openemu.system.nes": [18, 99],
     "openemu.system.psx": [7], "openemu.system.sg": [29], "openemu.system.gba": [24],
     "openemu.system.nds": [20], "openemu.system.psp": [38], "openemu.system.n64": [4],
@@ -39,10 +39,10 @@ private let igdbPlatforms: [String: [Int]] = [
     "openemu.system.saturn": [32], "openemu.system.gg": [35], "openemu.system.pcecd": [150],
 ]
 
-private func log(_ s: String) { FileHandle.standardError.write(Data((s + "\n").utf8)) }
+func log(_ s: String) { FileHandle.standardError.write(Data((s + "\n").utf8)) }
 
 /// "Lost Vikings, The (U) [!]" → "The Lost Vikings"; "Foo - Bar (USA)" → "Foo: Bar".
-private func cleanName(_ raw: String) -> String {
+func cleanName(_ raw: String) -> String {
     var s = raw.replacingOccurrences(of: #"\s*[\(\[][^\)\]]*[\)\]]"#, with: "", options: .regularExpression)
     s = s.trimmingCharacters(in: .whitespaces)
     if let r = s.range(of: #", (The|A|An)\b"#, options: .regularExpression) {
@@ -53,7 +53,7 @@ private func cleanName(_ raw: String) -> String {
 }
 
 /// Online-only (Dropbox File Provider) files are "dataless": reading them would download them.
-private func isLocal(_ url: URL) -> Bool {
+func isLocal(_ url: URL) -> Bool {
     var st = stat()
     guard lstat(url.path(percentEncoded: false), &st) == 0 else { return false }
     return st.st_flags & 0x4000_0000 == 0  // SF_DATALESS
@@ -61,7 +61,7 @@ private func isLocal(_ url: URL) -> Bool {
 
 /// The ROM bytes: read directly, or unpacked in memory from a small single-file
 /// .7z/.zip with the system's libarchive `tar`. Only called for files already on disk.
-private func romData(_ url: URL) -> Data? {
+func romData(_ url: URL) -> Data? {
     guard ["7z", "zip"].contains(url.pathExtension.lowercased()) else { return try? Data(contentsOf: url) }
     let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? .max
     guard size < 16 << 20 else { return nil }
@@ -83,7 +83,7 @@ private func romData(_ url: URL) -> Data? {
 }
 
 /// MD5 of a headered NES/SNES dump with its header removed, if it has one.
-private func headerlessMD5(_ url: URL, system: String) -> String? {
+func headerlessMD5(_ url: URL, system: String) -> String? {
     guard let data = romData(url) else { return nil }
     let body: Data
     if system == "openemu.system.nes", data.starts(with: [0x4E, 0x45, 0x53, 0x1A]) {

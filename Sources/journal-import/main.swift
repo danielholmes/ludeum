@@ -5,6 +5,7 @@ import JournalCore
 //
 //   journal-import check                    Live check of IGDB and Hasheous through the real cache.
 //   journal-import prototype-first-import   PROTOTYPE: dry run of the first Import (see PROTOTYPE_FirstImport.swift).
+//   journal-import prototype-matching-rules PROTOTYPE: measures matching rules (see PROTOTYPE_MatchingRules.swift).
 //
 // Credentials come from the environment or a .env file in the current directory
 // (see scripts/setup-igdb.sh).
@@ -68,6 +69,10 @@ case "prototype-first-import":
     let (igdb, hasheous) = try makeClients()
     let output = URL(filePath: FileManager.default.currentDirectoryPath).appending(path: "prototype-output")
     try await prototypeFirstImport(igdb: igdb, hasheous: hasheous, outputDirectory: output)
+case "prototype-matching-rules":
+    let (igdb, hasheous) = try makeClients()
+    let output = URL(filePath: FileManager.default.currentDirectoryPath).appending(path: "prototype-output")
+    try await prototypeMatchingRules(igdb: igdb, hasheous: hasheous, outputDirectory: output)
 default:
-    fail("usage: journal-import check | prototype-first-import")
+    fail("usage: journal-import check | prototype-first-import | prototype-matching-rules")
 }
