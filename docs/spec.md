@@ -61,14 +61,22 @@ Phone or remote access; several Macs; a fork of OpenEmu; two-way sync; importing
   | `_Childhood Played` | the Childhood flag |
   | every other collection | a List |
 
-- **Matching** (confirmed in the dry run on the `prototype/first-import` branch):
+- **Matching** (confirmed in the dry run on the `prototype/first-import` branch; rules measured on `prototype/matching-rules`):
   1. Hasheous lookup by OpenEmu's MD5. Uncompressed or small archived NES/SNES dumps are retried with the header stripped, only if the file is already on disk. CD images are never read.
-  2. It's an **Automatic** Match only when the checksum *and* the name agree, and never with an IGDB bundle ([ADR 0004](adr/0004-automatic-match-needs-checksum-and-name.md)).
-  3. Everything else goes to the **Review queue**: suggestions from checksums whose names disagree, IGDB name-search suggestions, or no suggestion at all (search IGDB by hand).
-  4. The Review queue can bulk-confirm suggestions whose names match exactly.
-  5. Expected load on my library: about 937 checksum matches, about 224 name suggestions (211 exact), about 35 with nothing, so roughly 50 items to decide by hand.
-- **Duplicate Versions** (2 or more *present*, non-Disc ROMs on one Game) block the first Import until I remove ROMs in OpenEmu. There's no exceptions mechanism, and the UI should say that real exceptions need a code change. The dry run found 5 real ones.
-- **Discs:** ROMs differing only by `(Disc N)` or a disc label make up one Version.
+  2. It's an **Automatic** Match only when the checksum *and* the name agree ([ADR 0004](adr/0004-automatic-match-needs-checksum-and-name.md)). An IGDB Bundle (`game_type` 3) is treated like any other game: single-cartridge collections (Super Mario Advance, Kirby Super Star, Super Mario All-Stars) really are Bundle records, and the name rule already keeps out wrong multi-game packs.
+  3. Everything else goes to the **Review queue**, with one suggestion or none:
+     - If the checksum's names disagree, a **related record** of the checksum's game whose name agrees (`parent_game`, `version_parent`, `expanded_games`, `remasters`, `remakes`, `ports`, `standalone_expansions`, `forks`) is the suggestion, e.g. *Resident Evil 2: Dual Shock Ver.* for a checksum pointing at *Resident Evil 2*. Otherwise the checksum's own game is.
+     - With no checksum game, IGDB name search on the ROM's platforms. The suggestion is the first candidate whose name agrees, else the first candidate. Candidates of `game_type` Mod (5), DLC (1), Expansion (2), Season (7), Pack/Addon (13) and Update (14) are never suggested.
+     - Otherwise no suggestion (search IGDB by hand).
+  4. The Review queue can bulk-confirm suggestions whose names agree.
+  5. Expected load on my library: about 907 Automatic, about 223 of 224 name suggestions bulk-confirmable, about 35 with nothing. That leaves about 30 checksum suggestions (4 of them bulk-confirmable through a related record), 1 name suggestion and 35 manual searches.
+- **Names agree** when any ROM-side name equals any IGDB-side name after normalising. Never prefix or containment: nearly every wrong checksum match is the IGDB name being a prefix of the ROM's title (*Super Star Wars* for *Super Star Wars: Return of the Jedi*).
+  - ROM side: the ROM's name and OpenVGDB's title (`ZGAMETITLE`). Bracketed groups are removed. A ` ~ ` separates alternative titles. Title and subtitle may be swapped (`Super Mario Advance 2 - Super Mario World`). File artefacts are removed: `.nkit`, `.sav`, trailing copy numbers, `-redump`, `# GBA`, patch suffixes, leading scene release numbers, and for bracket-free homebrew names underscores and a trailing version (`Feed_IT_Souls_v1.4`).
+  - IGDB side: the game's `name`, every `alternative_names[].name` (acronyms included) and every named `game_localizations[]`. An alt name whose comment starts "Japanese", "European", "Korean" or "(North) American", and a Japan, Europe or Korea localization, only count for a ROM from that region (or of unknown region), so *Lilo & Stitch 2*'s Japanese title "Lilo & Stitch" doesn't match a USA *Lilo & Stitch*.
+  - Normalising: lowercase; fold diacritics; `&` → `and`; split into words on anything but letters and digits; roman numerals II–XX become digits (not I, V or X); drop `and`, every `the`, and a leading `a`/`an`; drop a leading `Disney's`, `Disney-Pixar's`, `James Bond`, `Tom Clancy's` or `Sid Meier's`; join the words.
+- **Versions** aren't parsed into fields. A Version is described by the ROM name's tags as written (region, languages, revision, dev status, translation and so on), without the Disc and its label, GoodTools dump flags (`[!]`, `[a]`, `[b]`…) and file artefacts. Real names mix No-Intro, Redump, GoodTools, scene and ad-hoc forms, and a Version is only ever shown or suggested as text.
+- **Discs:** the present ROMs of one Game that each carry a `(Disc N)`, with no number repeated, are the Discs of one Version, whatever else their names say (Gran Turismo 2's two Discs come from different DAT versions). An `.m3u` playlist ROM of that Game belongs to the same Version. The free-form flag straight after `(Disc N)` is the disc label.
+- **Duplicate Versions** (2 or more *present* ROMs on one Game that aren't Discs of one Version) block the first Import until I remove ROMs in OpenEmu. There's no exceptions mechanism, and the UI should say that real exceptions need a code change. With these rules my library has 2: Double Dragon III (Japan and USA) and Sweet Home (two translations).
 - **Orphaned OpenEmu entries** (the ROM file is missing; 150 of them, 60 holding data) are imported with the ROM marked missing.
 - **Ongoing Imports:** new ROMs go through the same matching. A ROM that disappears is marked missing, and its last Activity is kept.
 
@@ -105,15 +113,14 @@ Roughly in the order they block work:
 
 1. **Journal database schema:** tables for Game, ROM, Match, Rating history, Playthrough, List, Activity snapshots and Covers; migrations; how Partial dates are stored.
 2. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
-3. **Matching rules in detail:** name normalisation for "names agree" (roman numerals, `&`/`and`, subtitles, articles, IGDB alternative names and localisations); the parser for Disc and Version from No-Intro and Redump names; which IGDB `game_type` values count as bundles.
-4. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search, and assigning a ROM to an existing Game (fan translations).
-5. **Duplicate Versions flow:** how the first Import pauses and resumes while I remove ROMs in OpenEmu.
-6. **Year in review:** how Partial dates are counted (a year-only date counts for that year; a month-only date?); crediting Activity to years from snapshot differences; how "time played" is shown for non-emulated Games.
-7. **Adding non-OpenEmu Games:** the IGDB search flow; which IGDB platforms to list; creating a Game by hand.
-8. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
-9. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
-10. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
-11. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+3. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search, and assigning a ROM to an existing Game (fan translations).
+4. **Duplicate Versions flow:** how the first Import pauses and resumes while I remove ROMs in OpenEmu.
+5. **Year in review:** how Partial dates are counted (a year-only date counts for that year; a month-only date?); crediting Activity to years from snapshot differences; how "time played" is shown for non-emulated Games.
+6. **Adding non-OpenEmu Games:** the IGDB search flow; which IGDB platforms to list; creating a Game by hand.
+7. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
+8. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
+9. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
+10. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
@@ -122,3 +129,4 @@ Roughly in the order they block work:
 - `scripts/setup-igdb.sh`: the IGDB credentials wizard.
 - Branch `prototype/first-import`: a throwaway dry run of the first Import. Its verdict is in the commit message and folded into the decisions above.
 - Branch `prototype/openemu-write`: a throwaway spike that wrote a Sync into a copy of the OpenEmu library. Its verdict is in the commit message and folded into Sync to OpenEmu above.
+- Branch `prototype/matching-rules`: a throwaway measurement of the matching rules against the dry run's snapshot (`journal-import prototype-matching-rules`). Its verdict is in the commit message and folded into First Import above.

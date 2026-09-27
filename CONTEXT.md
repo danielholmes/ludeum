@@ -23,7 +23,7 @@ A game file in an emulator library. A ROM identifies a Version of a Game, and is
 _Avoid_: File, image
 
 **Disc**:
-One of several ROMs that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)".
+One of several ROMs that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A playlist ROM that loads the Discs belongs to the same Version.
 _Avoid_: Part, volume, CD
 
 **IGDB link**:
@@ -31,7 +31,7 @@ An optional reference from a Game to one IGDB game and platform, used for metada
 _Avoid_: Anchor, source game
 
 **Match**:
-The link between a ROM and its Game, together with how it was made and when. It is Automatic (the checksum identifies the game *and* the names agree), Confirmed (I accepted a suggestion from the Review queue), or Manual (I searched IGDB myself). A Match is never made to an IGDB bundle.
+The link between a ROM and its Game, together with how it was made and when. It is Automatic (the checksum identifies the game *and* the names agree), Confirmed (I accepted a suggestion from the Review queue), or Manual (I searched IGDB myself).
 _Avoid_: Mapping, association
 
 ### Journal data
@@ -87,7 +87,7 @@ Writing the journal's data into OpenEmu: Ratings as stars, Lists plus Intent and
 _Avoid_: Push, export
 
 **Review queue**:
-Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or by a checksum whose names don't agree), and Duplicate Versions.
+Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), and Duplicate Versions.
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:
