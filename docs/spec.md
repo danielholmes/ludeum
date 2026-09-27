@@ -27,8 +27,23 @@ Phone or remote access; several Macs; a fork of OpenEmu; two-way sync; importing
 - A Game is a title on one Platform. It can have one IGDB link or none ([ADR 0002](adr/0002-game-identity-is-journal-owned.md)).
 - Regions, revisions and fan translations belong to the same Game. Ports, and enhanced re-releases that IGDB lists separately, are separate Games.
 - Platform means the platform the Game was made for. How I played it (OpenEmu, Switch Online, Steam Deck, …) is a Playthrough's "Played via".
-- Display name: IGDB's name, which I can override. Games without an IGDB link use a cleaned No-Intro name.
-- Non-emulated Games (PC, Xbox) are added by searching IGDB. Games can also be created by hand with no IGDB link.
+- **Platforms are IGDB's platforms** ([ADR 0005](adr/0005-platforms-are-igdb-platforms.md)): the list comes from IGDB's `platforms` endpoint, cached like any other record. Every Game has one, including Games with no IGDB link. There are no custom Platforms.
+- **An IGDB link is unique:** no two Games share the same IGDB game and Platform. Its platform is always the Game's Platform, even when IGDB doesn't list that game on it.
+- Display name: IGDB's name, which I can override. Games without an IGDB link use a cleaned No-Intro name, or the name I typed.
+
+### Adding Games
+Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are added by hand.
+
+- **Platform picker:** every IGDB platform, type-to-filter, with Platforms my Games already use listed first.
+- **Searching IGDB:** one search box plus an optional Platform filter, empty by default. Each result is an IGDB game with its cover, name, first release year, `game_type` (when it isn't a main game) and its platforms as chips. Results never include DLC (1), Expansion (2), Season (7), Pack/Addon (13) or Update (14). Mods (5) are shown and labelled.
+- **Choosing the Platform:** clicking a platform chip adds the Game on that Platform. A "Different platform…" chip opens the Platform picker, for ports IGDB doesn't list, and the IGDB link then records that game on my Platform. One Game per add: playing it on another Platform means adding it again.
+- **After adding:** the Game takes IGDB's name, Cover and link, and its Game detail opens. Nothing else is asked up front.
+- **No duplicate IGDB links:** a chip whose IGDB game and Platform already belong to a Game is marked "In journal", and clicking it opens that Game. A later Import attaches a matching ROM to that Game rather than creating a new one.
+- **Creating a Game by hand** (no IGDB link): "Add by hand" at the foot of the search results, with the name pre-filled from the search box. Name and Platform are required. A Cover upload is optional, and everything else is edited in Game detail.
+- **Duplicate warning for hand-made Games:** if a Game on the same Platform has a name that *agrees* (the matching normalisation, against its display name and its IGDB names), I'm asked to **Open** it or **Add anyway**. It warns and never blocks, because two games on one platform can share a name.
+- **Linking a hand-made Game later:** a Game with no IGDB link can gain one through the same search, filtered to its Platform. Its name then follows IGDB unless I've overridden it, and its Cover becomes IGDB's. If another Game already holds that link, it's refused ("Already linked to X"), since combining Games is a non-goal. An existing link is never changed or removed.
+- **One search component:** the Review queue's manual IGDB search is this same search. There, the Platform filter is pre-set to the ROM's platforms, and clicking a result Matches the ROM instead of adding a Game.
+- **A hand-made Game created from a ROM** (Review queue, no suggestion): its Platform is pre-selected from the ROM's OpenEmu system. Where the system maps to several IGDB platforms (`openemu.system.gb` covers Game Boy and Game Boy Color), I choose from those, and can still pick any other Platform.
 
 ### Journal data
 - **Rating:** 0.0–10.0, or unrated (different from 0.0). One per Game, with a Rating history of dated entries. Stars imported from OpenEmu become ×2 (3★ → 6.0), dated at import and marked imported/approximate.
@@ -113,14 +128,13 @@ Roughly in the order they block work:
 
 1. **Journal database schema:** tables for Game, ROM, Match, Rating history, Playthrough, List, Activity snapshots and Covers; migrations; how Partial dates are stored.
 2. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
-3. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search, and assigning a ROM to an existing Game (fan translations).
+3. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search (the shared search from Adding Games), and assigning a ROM to an existing Game (fan translations).
 4. **Duplicate Versions flow:** how the first Import pauses and resumes while I remove ROMs in OpenEmu.
 5. **Year in review:** how Partial dates are counted (a year-only date counts for that year; a month-only date?); crediting Activity to years from snapshot differences; how "time played" is shown for non-emulated Games.
-6. **Adding non-OpenEmu Games:** the IGDB search flow; which IGDB platforms to list; creating a Game by hand.
-7. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
-8. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
-9. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
-10. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+6. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
+7. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
+8. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
+9. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
