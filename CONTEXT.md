@@ -45,7 +45,7 @@ Every Rating a Game has had, each with the date it was set, including being clea
 _Avoid_: Rating log, previous ratings
 
 **Playthrough**:
-One time I played a Game. Every field is optional (start date, end date, Outcome, notes, and the Version I played), except that a Playthrough still in progress must have a start date. A Game can have any number.
+One time I played a Game. Every field is optional (start date, end date, Outcome, notes, and the Version I played), except that a Playthrough still in progress must have a start date. Its end date can't come before its start date. A Game can have any number.
 _Avoid_: Completion, run, session
 
 **Outcome**:
@@ -73,7 +73,7 @@ A named, unordered group of Games that I curate, e.g. "Castlevania" or "Light Gu
 _Avoid_: Collection, tag
 
 **Activity**:
-Play statistics recorded automatically by an emulator (play count, last played, total play time), totalled across a Game's ROMs. Read-only. The journal saves a snapshot of it at each Import so play time can be credited to the year it happened. Time from before tracking began has no year.
+Play statistics recorded automatically by an emulator (play count, last played, total play time), totalled across a Game's ROMs. Read-only. The journal saves a snapshot of it at each Import so play time can be credited to the year it happened. Tracking begins at the first Import: the play time in that first snapshot has no year.
 _Avoid_: Stats, history
 
 **Cover**:

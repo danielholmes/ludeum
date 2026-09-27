@@ -48,7 +48,7 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
 ### Journal data
 - **Rating:** 0.0–10.0, or unrated (different from 0.0). One per Game, with a Rating history of dated entries. Stars imported from OpenEmu become ×2 (3★ → 6.0), dated at import and marked imported/approximate.
 - **Rating history:** at most one entry per day (local time). Changing the Rating again the same day replaces that day's entry, and re-entering the current value does nothing. An imported entry is never replaced. Clearing a Rating adds an "unrated" entry. Entries can be deleted but not edited, so there's no backdating. Deleting the latest entry makes the previous one the Rating.
-- **Playthrough:** every field optional (start and end as Partial dates, Outcome of Finished or Dropped, notes, Version, Played via), except that a Playthrough with no Outcome is in progress and **must have a start date**. So an in-progress Playthrough's start date can't be cleared, and removing the Outcome from a Playthrough with no start date asks for one. Version and Played via are free text, with suggestions drawn from the Game's ROM names.
+- **Playthrough:** every field optional (start and end as Partial dates, Outcome of Finished or Dropped, notes, Version, Played via), except that a Playthrough with no Outcome is in progress and **must have a start date**. So an in-progress Playthrough's start date can't be cleared, and removing the Outcome from a Playthrough with no start date asks for one. **The end date can't come before the start date**, compared with the Partial date sort, and a less precise date is allowed when it contains the other (start `2024-03`, end `2024` is fine; end `2023` is refused on save). Version and Played via are free text, with suggestions drawn from the Game's ROM names.
 - **Intent:** none, Backlog, or Up next (a set, not ordered). It doesn't depend on Playthroughs. The date and time it was set is recorded (never edited by hand): changing the value resets it, clearing Intent drops it, and setting the same value again does nothing. Intent from the first Import is undated.
 - **Partial dates sort** as if the missing parts came first: `2024` < `2024-01` < `2024-01-05`.
 - **Childhood:** a flag on a Game.
@@ -130,6 +130,21 @@ Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The
 - **Imported Ratings** are included, each marked "≈ imported". The mark disappears once I re-rate the Game.
 - **Unrated Games never appear.** A Rating of 0.0 is a real Rating and appears. Rating history plays no part.
 
+### Year in review
+A nice-to-have: built after the rest of v1 works.
+
+- **One year at a time**, chosen from a picker listing only years with something in them. The current year is labelled "so far". The Library's filters (Platform, List, Childhood) apply.
+- **Sections:** **Finished** and **Dropped** (Playthroughs that ended that year, with the Game's Cover, Rating and Platform); **Also played** (Playthroughs active that year that didn't end in it); **Play time** (tracked OpenEmu play time credited to that year, per Game, most first, with a total); and **summary numbers** (Finished, Dropped and Started counts, tracked hours, a per-Platform breakdown). Rating history and Childhood play no part.
+- **Which years a Playthrough counts for:** every year from its start year to its end year (to the current year while in progress). It's under Finished or Dropped in its end year and under Also played in each year before that. Every Partial date has a year, so precision doesn't matter here.
+- **Missing dates:** an ended Playthrough with a start date but no end date counts in its start year under Finished or Dropped, marked "end date unknown". One with an end date but no start date counts only in its end year. One with no dates appears in no year, and the footer says "N Playthroughs have no dates", linking to a Library filter for them.
+- **Crediting Activity:** per ROM, the play time added since the previous snapshot is credited to one year, and a Game's time is the sum over its ROMs.
+  - Both snapshots in the same year: that year. Straddling New Year: the year of the ROM's last-played date at the later snapshot. It's a heuristic, and more frequent Imports shrink the error.
+  - A ROM first seen after the first Import: all its play time is tracked (a delta from zero), since it wasn't in the library at the previous Import.
+  - Play time went down (a ROM re-added, stats reset): nothing is credited, and the new value becomes the baseline.
+  - A missing ROM adds nothing, and its last snapshot stays the baseline if it comes back.
+- **Before tracking:** play time in the first Import's snapshot (381 h in my library) has no year and never appears here. Game detail shows it inside the total, e.g. "Play time 12 h 30 m (9 h before tracking)".
+- **Non-emulated Games** have no play time. The section is labelled "OpenEmu play time", and those Games appear through their Playthroughs only. There's no hand-typed hours field.
+
 ### Version 1 screens
 Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync.
 
@@ -141,11 +156,10 @@ Roughly in the order they block work:
 2. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
 3. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search (the shared search from Adding Games), and assigning a ROM to an existing Game (fan translations).
 4. **Duplicate Versions flow:** how the first Import pauses and resumes while I remove ROMs in OpenEmu.
-5. **Year in review:** how Partial dates are counted (a year-only date counts for that year; a month-only date?); crediting Activity to years from snapshot differences; how "time played" is shown for non-emulated Games.
-6. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
-7. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
-8. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
-9. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+5. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
+6. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
+7. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
+8. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
