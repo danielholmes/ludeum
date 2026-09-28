@@ -77,7 +77,7 @@ Play statistics recorded automatically by an emulator (play count, last played, 
 _Avoid_: Stats, history
 
 **Cover**:
-The box art shown for a Game. It comes from the Game's IGDB link. If IGDB has none, it's an image I supplied myself, or the box art OpenEmu already had.
+The box art shown for a Game. It comes from the Game's IGDB link whenever IGDB has one. Otherwise it's the box art OpenEmu had when the Game came in at the first Import, or an image I supplied myself. Either of those is discarded once IGDB has a cover, and a Game can have no Cover at all.
 _Avoid_: Artwork, box image, thumbnail
 
 ### Working with OpenEmu

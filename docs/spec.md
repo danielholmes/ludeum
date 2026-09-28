@@ -54,7 +54,7 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
 - **Childhood:** a flag on a Game.
 - **Lists:** named, unordered, curated. A Game can be in many.
 - **Activity:** read-only play stats summed across a Game's ROMs. A snapshot is saved at each Import so play time can be credited to a year.
-- **Cover:** the IGDB cover. If IGDB has none, OpenEmu's existing box art is carried over once. If neither exists, I upload my own.
+- **Cover:** the IGDB cover. If IGDB has none, OpenEmu's existing box art carried over at the first Import, or an image I upload. See [Covers](#covers).
 
 ### Deleting
 - **A Game with present ROMs can't be deleted.** The UI says to remove its ROMs in OpenEmu first. There's no "ignored ROM": unwanted ROMs are removed in OpenEmu.
@@ -97,13 +97,21 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
 - **Orphaned OpenEmu entries** (the ROM file is missing; 150 of them, 60 holding data) are imported with the ROM marked missing.
 - **Ongoing Imports:** new ROMs go through the same matching. A ROM that disappears is marked missing, and its last Activity is kept.
 
+### Covers
+- **IGDB covers stay in the cache.** The journal stores only the IGDB link. The cover comes from the cached record's `image_id` at IGDB's `cover_big_2x` size (528×748 JPEG), downloaded on demand into the cache's images folder. A Cover not yet downloaded shows a placeholder. If IGDB changes a cover, the journal follows it at the next refresh, and a wiped cache downloads it again.
+- **Journal-owned Covers** (carried over or uploaded) are stored in the journal database as BLOBs, so the dated backups carry them and deleting a Game removes its Cover in the same transaction. There are few of them: in my library only 17 of 1,822 IGDB games have no cover.
+- **Normalised on the way in:** decoded, shrunk to fit a 1,200 px long edge (never enlarged), and re-encoded as JPEG at quality 0.9. Uploads take anything macOS can decode (PNG, HEIC, WebP, …), by file picker or drag-and-drop.
+- **Carried over at the first Import only:** every Game created from a ROM during the first Import (Automatic, confirmed in its Review queue, or hand-made from it) that has no IGDB cover at that moment takes its ROM's OpenEmu box art, read from `Artwork/` and normalised. With several ROMs, the lowest `Z_PK` wins. ROMs resolved after the first Import get nothing, and I upload instead.
+- **IGDB always wins.** Upload, replace and remove are offered only while a Game has no IGDB cover. A journal-owned Cover is deleted, with no prompt, as soon as an IGDB cover exists: when a hand-made Game gains an IGDB link whose record has a cover, or when a refresh brings a cover to a linked Game's record. If IGDB later drops the cover, the Game shows a placeholder and I can upload again. So my 63 hand-picked OpenEmu images aren't imported for Games whose IGDB record has a cover, though OpenEmu keeps them, since Sync never touches existing box art (overriding covers is a non-goal).
+
 ### Sync to OpenEmu
 Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The spike on branch `prototype/openemu-write` showed that OpenEmu 2.4.1 keeps such writes across relaunch, its own edits and its launch-time OpenVGDB lookup ([findings](https://github.com/danielholmes/games-journal/blob/research/openemu-database/docs/research/openemu-database.md)).
 
 - Runs by hand, only while OpenEmu is closed, after backing up OpenEmu's database.
 - **Stars:** the Rating ÷ 2, rounded half up (0.0–0.9 → no stars), written to `ZGAME.ZRATING` of the OpenEmu game row of each of the Game's ROMs. OpenEmu keeps one game row per ROM. Values are always 0–5, and 0 means no stars (never NULL).
 - **Collections:** each List, plus `_TODO`, `_TODO Next`, `_Current` and `_Completed` built from Intent and Playthroughs, are owned by the journal and overwritten. Other regular collections are deleted after I confirm them by name. Smart collections and collection folders are left alone.
-- **Covers:** written only for games that have no box art in OpenEmu and whose OpenEmu status is 0. A game still waiting for its OpenVGDB lookup (status 3) is skipped until a later Sync, because the lookup can replace its box art.
+- **Covers:** written only for games that have no box art in OpenEmu and whose OpenEmu status is 0. A game still waiting for its OpenVGDB lookup (status 3) is skipped until a later Sync, because the lookup can replace its box art. Each OpenEmu game row gets its own file and `ZIMAGE` row (`ZBOX` is one-to-one). If an IGDB cover can't be downloaded, that Cover is skipped for this Sync, and it isn't an error.
+- **Replacing a Cover Sync wrote:** when the Game's Cover changes (e.g. an upload replaced by IGDB's cover on linking), Sync replaces it, but only while the OpenEmu game's `ZBOXIMAGE` still points at the `ZIMAGE` row Sync wrote. If I've changed the box art in OpenEmu, it's left alone and the journal forgets its record. A Game whose Cover goes away leaves OpenEmu's box art as it is: Sync never deletes box art.
 - A Game with unresolved Duplicate Versions isn't synced.
 - **Guards:** Sync refuses to run while OpenEmu (`org.openemu.OpenEmu`) is running, if a Dropbox "conflicted copy" sits next to the store, or if the store's UUID isn't the one Imported. It runs `PRAGMA integrity_check` before and after. There's no waiting for Dropbox: on one Mac the local files are the truth.
 - **Backup:** SQLite's backup API, taken while OpenEmu is closed (the store is WAL, so copying `Library.storedata` alone can lose data).
@@ -112,9 +120,10 @@ Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The
   - Every inserted row takes `Z_MAX + 1` from its **root** entity's `Z_PRIMARYKEY` row (`AbstractCollection` for collections, `Image` for covers), and `Z_MAX` is raised in the same transaction. **This is mandatory:** in the spike, a row inserted without it was silently overwritten by OpenEmu's next insert.
   - Entity numbers (`Z_ENT`) are read from `Z_PRIMARYKEY` by name, never hard-coded. Inserted rows get `Z_OPT = 1`, and every updated row gets `Z_OPT + 1`, including both ends of a membership change (the `Z_2GAMES` join row).
   - Journal-owned collections are updated in place (name and membership), keeping their `Z_PK`. Deleting a collection deletes its join rows too, and only rows whose `Z_ENT` is `Collection`.
-  - A Cover is a new UUID-named JPEG (quality 0.9, no extension) in `Artwork/`, plus a `ZIMAGE` row (`ZFORMAT` 3, pixel width and height, `ZRELATIVEPATH` = the file name, `ZSOURCE` NULL) linked both ways (`ZGAME.ZBOXIMAGE` and `ZIMAGE.ZBOX`). The file is always new, never overwritten.
+  - A Cover is a new UUID-named file (no extension) in `Artwork/` holding the Cover's JPEG bytes unchanged (IGDB's `cover_big_2x`, or the normalised journal-owned image), plus a `ZIMAGE` row (`ZFORMAT` 3, pixel width and height, `ZRELATIVEPATH` = the file name, `ZSOURCE` NULL) linked both ways (`ZGAME.ZBOXIMAGE` and `ZIMAGE.ZBOX`). The file is always new, never overwritten.
+  - Replacing a Cover Sync wrote updates its `ZIMAGE` row in place (new file name, width and height, `Z_OPT + 1`), like a journal-owned collection. The old file is deleted after the commit.
   - `Z_METADATA` and the schema are never touched.
-- **OpenEmu identifiers the journal keeps:** the store UUID (`Z_METADATA.Z_UUID`) of the library it Imported; each ROM's OpenEmu `Z_PK` and MD5 (Sync looks up `ZROM.ZGAME` fresh each time); the `Z_PK` of each journal-owned collection (if it's gone, Sync creates a new one); and the `ZIMAGE` `Z_PK` of each Cover Sync wrote. Core Data never renumbers `Z_PK`s.
+- **OpenEmu identifiers the journal keeps:** the store UUID (`Z_METADATA.Z_UUID`) of the library it Imported; each ROM's OpenEmu `Z_PK` and MD5 (Sync looks up `ZROM.ZGAME` fresh each time); the `Z_PK` of each journal-owned collection (if it's gone, Sync creates a new one); and the `ZIMAGE` `Z_PK` of each Cover Sync wrote, with which Cover it was (the IGDB `image_id`, or a hash of the journal-owned image). Core Data never renumbers `Z_PK`s.
 
 ### External data and cache (built: `JournalCore`)
 - **IGDB** (Twitch app token): the full game record, with every useful sub-record expanded plus time-to-beat. Fetched in batches of 100 (halved if IGDB answers 413). One request per name search, since multiquery ignores `search`. At most 3 requests a second.
@@ -156,10 +165,9 @@ Roughly in the order they block work:
 2. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
 3. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search (the shared search from Adding Games), and assigning a ROM to an existing Game (fan translations).
 4. **Duplicate Versions flow:** how the first Import pauses and resumes while I remove ROMs in OpenEmu.
-5. **Covers:** where uploaded covers are stored and in what format; whether a later Sync replaces a Cover it wrote itself when the journal's Cover changes (how Sync writes one is decided above).
-6. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
-7. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
-8. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+5. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
+6. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
+7. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
