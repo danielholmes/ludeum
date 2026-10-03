@@ -93,7 +93,7 @@ struct Sidebar: View {
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .sheet(item: $naming) { naming in
             ListNameSheet(naming: naming) { name in
-                save {
+                apply {
                     if let list = naming.list {
                         try $0.renameList(list.id, name)
                     } else {
@@ -101,7 +101,6 @@ struct Sidebar: View {
                         selection = .list(id: id, name: name)
                     }
                 }
-                return error
             }
         }
         .confirmationDialog(
@@ -112,7 +111,7 @@ struct Sidebar: View {
             Text(
                 "Its Games stay in the journal. The next Sync deletes its collection in OpenEmu. There's no undo; a backup is taken first.")
         }
-        .alert("Couldn't change the List", isPresented: Binding(get: { error != nil && naming == nil }, set: { if !$0 { error = nil } })) {
+        .alert("Couldn't change the List", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") {}
         } message: {
             Text(error ?? "")
@@ -124,14 +123,19 @@ struct Sidebar: View {
     }
 
     private func save(_ change: (JournalStore) throws -> Void) {
-        guard let journal = services.journal else { return }
+        error = apply(change)
+    }
+
+    /// Runs a journal change and reloads the screens, or returns what went wrong.
+    private func apply(_ change: (JournalStore) throws -> Void) -> String? {
+        guard let journal = services.journal else { return nil }
         do {
             try change(journal)
-            error = nil
+            services.changes.changed()
+            return nil
         } catch {
-            self.error = journalErrorText(error)
+            return journalErrorText(error)
         }
-        services.changes.changed()
     }
 }
 

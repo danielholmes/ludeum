@@ -41,6 +41,7 @@ import Testing
         #expect(doomRow.intent == .backlog)
         #expect(doomRow.isPlaying)
         #expect(rows[2].outcomes == [.finished])
+        #expect(rows.allSatisfy { !$0.noROMInOpenEmu })
     }
 
     @Test func filtersCombine() throws {
@@ -58,6 +59,16 @@ import Testing
         #expect(try names(LibraryFilter(outcome: .finished)) == ["Super Metroid"])
         #expect(try names(LibraryFilter(outcome: .dropped)).isEmpty)
         #expect(try names(LibraryFilter(outcome: .notPlayed)) == ["A Link to the Past"])
+    }
+
+    @Test func aGameWhoseROMsAreAllMissingIsMarked() throws {
+        try h.journal.recordROM(game: doom, openEmuPk: 1, md5: "a", fileName: "doom.zip", systemId: "x", missing: true)
+        try h.journal.recordROM(game: zelda, openEmuPk: 2, md5: "b", fileName: "z.sfc", systemId: "x", missing: true)
+        try h.journal.recordROM(game: zelda, openEmuPk: 3, md5: "c", fileName: "z2.sfc", systemId: "x", missing: false)
+
+        let marked = try h.journal.library(LibraryFilter(), sort: .name, ascending: true).filter(\.noROMInOpenEmu).map(\.name)
+
+        #expect(marked == ["Doom"])
     }
 
     @Test func filtersByList() throws {
@@ -133,7 +144,9 @@ import Testing
         try h.journal.addPlaythrough(other, PlaythroughDraft(outcome: .finished, playedVia: "Steam Deck"))
         try h.journal.addPlaythrough(other, PlaythroughDraft(outcome: .finished, playedVia: "Switch Online"))
 
-        #expect(try h.journal.playedViaSuggestions() == ["Steam Deck", "Switch Online"])
+        #expect(try h.journal.playedViaSuggestions(for: other) == ["Steam Deck", "Switch Online"])
+        try rom(1, "Resident Evil 2 (USA).chd")
+        #expect(try h.journal.playedViaSuggestions(for: game) == ["OpenEmu", "Steam Deck", "Switch Online"])
     }
 
     @Test func aDeletionSaysWhatGoesWithIt() throws {

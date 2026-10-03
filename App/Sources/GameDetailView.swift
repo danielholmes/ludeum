@@ -23,12 +23,19 @@ struct GameDetailView: View {
     @State private var deletion: DeletionSummary?
     @State private var deletingPlaythrough: Playthrough?
     @State private var error: String?
+    @FocusState private var focus: Field?
+
+    private enum Field { case nameOverride, rating }
 
     var body: some View {
         if let game {
             form(game)
         } else {
-            ContentUnavailableView("Game not found", systemImage: "gamecontroller").task(id: id) { load() }
+            ContentUnavailableView(
+                error == nil ? "Game not found" : "Couldn't read this Game", systemImage: "gamecontroller",
+                description: error.map(Text.init)
+            )
+            .task(id: id) { load() }
         }
     }
 
@@ -41,15 +48,17 @@ struct GameDetailView: View {
                     Button("Link to IGDB…") { linking = true }
                 }
                 TextField("Name override", text: $nameOverride, prompt: Text("Use IGDB's name"))
-                    .onSubmit { save { try $0.setNameOverride(id, nameOverride.trimmed.isEmpty ? nil : nameOverride.trimmed) } }
+                    .focused($focus, equals: .nameOverride)
+                    .onSubmit(saveNameOverride)
             }
 
             Section("Rating") {
                 HStack {
-                    TextField("Rating", text: $ratingInput, prompt: Text("0.0–10.0")).frame(width: 90).onSubmit(setRating)
+                    TextField("Rating", text: $ratingInput, prompt: Text("0.0–10.0")).frame(width: 90)
+                        .focused($focus, equals: .rating).onSubmit(setRating)
                     Button("Set", action: setRating)
                     Button("Clear") { save { try $0.setRating(id, nil) } }.disabled(game.rating == nil)
-                    if game.ratingImported { Text("Imported from OpenEmu stars, approximate").font(.caption).foregroundStyle(.secondary) }
+                    if game.ratingImported { Text("Imported from OpenEmu, approximate").font(.caption).foregroundStyle(.secondary) }
                 }
                 ForEach(history, id: \.id) { entry in
                     HStack {
@@ -123,13 +132,20 @@ struct GameDetailView: View {
             }
 
             Section {
-                Button("Delete Game…", role: .destructive) { deletion = try? services.journal?.deletionSummary(id) }
+                Button("Delete Game…", role: .destructive) {
+                    do { deletion = try services.journal?.deletionSummary(id) } catch { self.error = journalErrorText(error) }
+                }
             }
 
             if let error { Text(error).foregroundStyle(.red) }
         }
         .formStyle(.grouped)
         .task(id: services.changes.revision) { load() }
+        .onChange(of: focus) { old, _ in
+            // Leaving a field saves it, like pressing Return.
+            if old == .nameOverride { saveNameOverride() }
+            if old == .rating, ratingInput.trimmed != (game.rating.map(ratingText) ?? "") { setRating() }
+        }
         .sheet(item: $editing) { edit in
             PlaythroughSheet(services: services, game: id, edit: edit) {
                 editing = nil
@@ -168,6 +184,7 @@ struct GameDetailView: View {
 
     private func load() {
         guard let journal = services.journal else { return }
+        error = nil
         do {
             let game = try journal.game(id)
             self.game = game
@@ -178,8 +195,9 @@ struct GameDetailView: View {
             memberOf = Set(try journal.lists(containing: id).map(\.id))
             roms = try journal.roms(of: id)
             activity = try journal.activity(of: id)
-            nameOverride = try journal.nameOverride(id) ?? ""
-            ratingInput = game.rating.map(ratingText) ?? ""
+            // Never overwrite what I'm typing.
+            if focus != .nameOverride { nameOverride = try journal.nameOverride(id) ?? "" }
+            if focus != .rating { ratingInput = game.rating.map(ratingText) ?? "" }
         } catch JournalError.gameNotFound {
             self.game = nil
         } catch {
@@ -193,10 +211,16 @@ struct GameDetailView: View {
         do {
             try change(journal)
             error = nil
+            services.changes.changed()
         } catch {
             self.error = journalErrorText(error)
         }
-        services.changes.changed()
+    }
+
+    private func saveNameOverride() {
+        let name = nameOverride.trimmed
+        guard name != ((try? services.journal?.nameOverride(id)) ?? nil ?? "") else { return }
+        save { try $0.setNameOverride(id, name.isEmpty ? nil : name) }
     }
 
     private func setRating() {
@@ -229,10 +253,8 @@ private func deletionMessage(_ s: DeletionSummary) -> String {
     if s.playthroughs > 0 { parts.append("\(s.playthroughs) Playthrough\(s.playthroughs == 1 ? "" : "s")") }
     if s.lists > 0 { parts.append("its place in \(s.lists) List\(s.lists == 1 ? "" : "s")") }
     if s.missingROMs > 0 { parts.append("\(s.missingROMs) missing ROM\(s.missingROMs == 1 ? "" : "s") and their Activity") }
-    let what =
-        parts.isEmpty
-        ? "" : "This deletes " + parts.joined(separator: ", ") + ", plus its Intent, Childhood, IGDB link and any uploaded Cover. "
-    return what + "There's no undo; a backup is taken first."
+    parts.append("its Intent, Childhood, IGDB link and any uploaded Cover")
+    return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
 }
 
 private func playthroughTitle(_ d: PlaythroughDraft) -> String {
@@ -324,7 +346,7 @@ struct PlaythroughSheet: View {
             version = d.version ?? ""
             playedVia = d.playedVia ?? ""
             versions = (try? services.journal?.versionSuggestions(for: game)) ?? []
-            vias = (try? services.journal?.playedViaSuggestions()) ?? []
+            vias = (try? services.journal?.playedViaSuggestions(for: game)) ?? []
         }
     }
 

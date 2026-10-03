@@ -85,15 +85,17 @@ extension JournalStore {
         return seen
     }
 
-    /// "Played via" suggestions: every value I've used, alphabetically.
-    public func playedViaSuggestions() throws -> [String] {
-        try db.read { db in
-            try String.fetchAll(
-                db,
-                sql:
-                    "SELECT DISTINCT playedVia FROM playthrough WHERE playedVia IS NOT NULL AND playedVia != '' ORDER BY playedVia COLLATE NOCASE"
-            )
-        }
+    /// "Played via" suggestions: OpenEmu for a Game with ROMs, then every value I've used, alphabetically.
+    public func playedViaSuggestions(for game: GameID) throws -> [String] {
+        let openEmu = try roms(of: game).isEmpty ? [] : ["OpenEmu"]
+        return try openEmu
+            + db.read { db in
+                try String.fetchAll(
+                    db,
+                    sql:
+                        "SELECT DISTINCT playedVia FROM playthrough WHERE playedVia IS NOT NULL AND playedVia != '' ORDER BY playedVia COLLATE NOCASE"
+                )
+            }
     }
 
     public func deletionSummary(_ game: GameID) throws -> DeletionSummary {

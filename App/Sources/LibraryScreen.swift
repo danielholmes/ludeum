@@ -29,7 +29,14 @@ struct LibraryScreen: View {
                 CoversGrid(services: services, rows: rows, selection: $selection)
             } else {
                 Table(rows, selection: $selection) {
-                    TableColumn("Name", value: \.name)
+                    TableColumn("Name") { row in
+                        HStack(spacing: 4) {
+                            Text(row.name)
+                            if row.noROMInOpenEmu {
+                                Image(systemName: "externaldrive.badge.xmark").foregroundStyle(.secondary).help("No ROM in OpenEmu")
+                            }
+                        }
+                    }
                     TableColumn("Platform", value: \.platformName)
                     TableColumn("Rating") { Text($0.rating.map(ratingText) ?? "–") }.width(60)
                     TableColumn("Intent") { Text($0.intent.map(intentText) ?? "") }.width(70)

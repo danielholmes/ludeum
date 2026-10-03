@@ -59,6 +59,8 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let isPlaying: Bool
     /// The Outcomes of its finished and dropped Playthroughs, without repeats.
     public let outcomes: Set<Outcome>
+    /// It has ROMs, and every one is missing.
+    public let noROMInOpenEmu: Bool
 }
 
 extension JournalStore {
@@ -115,7 +117,9 @@ extension JournalStore {
                 COALESCE(g.nameOverride, g.igdbName, g.name) AS displayName, pl.name AS platformName,
                 r.rating AS currentRating,
                 EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playing,
-                (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes
+                (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
+                EXISTS (SELECT 1 FROM rom WHERE gameId = g.id)
+                    AND NOT EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AS noROM
             FROM game g
             JOIN platform pl ON pl.id = g.platformId
             LEFT JOIN ratingEntry r ON r.id = (SELECT id FROM ratingEntry WHERE gameId = g.id \(Self.ratingOrder) LIMIT 1)
@@ -129,7 +133,8 @@ extension JournalStore {
                     igdbGameId: row["igdbGameId"], rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) },
                     intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)), intentSetAt: row["intentSetAt"],
                     childhood: row["childhood"], isPlaying: row["playing"],
-                    outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }))
+                    outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }),
+                    noROMInOpenEmu: row["noROM"])
             }
         }
     }
