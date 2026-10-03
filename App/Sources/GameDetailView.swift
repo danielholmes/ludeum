@@ -42,6 +42,7 @@ struct GameDetailView: View {
     private func form(_ game: Game) -> some View {
         Form {
             Section {
+                CoverEditor(services: services, game: id, name: game.name)
                 Text(game.name).font(.title).bold()
                 if let platform { Text(platform.name).foregroundStyle(.secondary) }
                 if game.igdbGameId == nil, services.gameSearch != nil, platform != nil {
@@ -154,7 +155,13 @@ struct GameDetailView: View {
         }
         .sheet(isPresented: $linking) {
             if let search = services.gameSearch, let platform {
-                LinkGameSheet(search: search, game: game, platform: platform) { services.changes.changed() }
+                LinkGameSheet(search: search, game: game, platform: platform) {
+                    // IGDB always wins: a journal-owned Cover goes once the new link brings a cover.
+                    Task {
+                        try? await services.covers?.reconcile(id)
+                        services.changes.coverChanged()
+                    }
+                }
             }
         }
         .confirmationDialog(
