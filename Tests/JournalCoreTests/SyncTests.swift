@@ -198,7 +198,7 @@ final class RunningFlag: @unchecked Sendable {
         #expect(written["ZBOX"] as Int64 == metroid)
         #expect(written["ZFORMAT"] as Int == 3)
         let file = oe.folder.appending(path: "Artwork").appending(path: written["ZRELATIVEPATH"] as String)
-        #expect(try Data(contentsOf: file) == Data("jpeg:co1.jpg".utf8))
+        #expect(try Data(contentsOf: file) == FakeInternet.coverJPEG)
         #expect(rows.first { $0["Z_PK"] as Int64 == pending }?["ZBOXIMAGE"] as Int64? == nil)
         #expect(rows.first { $0["Z_PK"] as Int64 == mario }?["ZRELATIVEPATH"] as String? == "ART-\(mario)")
     }

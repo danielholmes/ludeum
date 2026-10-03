@@ -58,6 +58,8 @@ public struct SyncPreview: Sendable {
             case awaitingOpenVGDB
             /// IGDB's cover couldn't be downloaded this time.
             case downloadFailed
+            /// The Cover isn't an image ImageIO can read, so its size is unknown.
+            case unreadable
         }
 
         public let gameName: String
@@ -124,10 +126,14 @@ public final class OpenEmuSync: Sendable {
         guard failed.isEmpty else { throw SyncError.guardsFailed(failed) }
         var plan = try await plan(library: library)
         plan.deleting = plan.others.filter { deleting.contains($0.pk) }
+        // Planning downloads covers, which takes a while: check again right before writing.
+        let stillFailing = try guards(library: library)
+        guard stillFailing.isEmpty else { throw SyncError.guardsFailed(stillFailing) }
         let backupName = try backUpOpenEmu(library: library)
         try plan.write(library: library)
-        guard try integrityOK(library: library) else { throw SyncError.integrityFailedAfterWrite(backupName: backupName) }
+        // Record what was written before anything else can fail, so the journal matches OpenEmu.
         try plan.recordInJournal(journal)
+        guard try integrityOK(library: library) else { throw SyncError.integrityFailedAfterWrite(backupName: backupName) }
         plan.deleteReplacedFiles(library: library)
         return SyncResult(preview: plan.preview(failedGuards: []), backupName: backupName)
     }

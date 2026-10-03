@@ -60,6 +60,8 @@ struct SyncPlan {
     var syncedCovers: [Int64: (pk: Int64, key: String)] = [:]
     /// Files of replaced covers, deleted after the commit.
     var replacedFiles: [String] = []
+    /// New files whose write was skipped because the box art changed meanwhile, deleted after the commit.
+    var unusedFiles: [String] = []
 
     // MARK: Covers
 
@@ -78,9 +80,7 @@ struct SyncPlan {
                     forgottenCovers.append(row.romId)
                     continue
                 }
-                if let image, image.key != synced.key {
-                    coverWrites.append(write(game, row, image, replacing: synced.pk))
-                }
+                if let image, image.key != synced.key { add(write(game, row, image, replacing: synced.pk)) }
                 continue
             }
             guard image != nil || downloadFailed else { continue }
@@ -89,10 +89,19 @@ struct SyncPlan {
             } else if oe.status != 0 {
                 skippedCovers.append(.init(gameName: game.name, reason: .awaitingOpenVGDB))
             } else if let image {
-                coverWrites.append(write(game, row, image, replacing: nil))
+                add(write(game, row, image, replacing: nil))
             } else {
                 skippedCovers.append(.init(gameName: game.name, reason: .downloadFailed))
             }
+        }
+    }
+
+    /// A Cover whose size can't be read isn't written: OpenEmu needs its pixel width and height.
+    private mutating func add(_ write: CoverWrite) {
+        if write.width > 0, write.height > 0 {
+            coverWrites.append(write)
+        } else {
+            skippedCovers.append(.init(gameName: write.gameName, reason: .unreadable))
         }
     }
 
@@ -136,17 +145,19 @@ struct SyncPlan {
     /// complete main file. Cover files are written first and removed again if the transaction fails.
     mutating func write(library: URL) throws {
         let artwork = library.appending(path: "Artwork", directoryHint: .isDirectory)
-        for i in coverWrites.indices {
-            let name = UUID().uuidString
-            try coverWrites[i].jpeg.write(to: artwork.appending(path: name))
-            coverWrites[i].file = name
-        }
         let db = try DatabaseQueue(path: OpenEmuLibrary.databaseFile(in: library).path(percentEncoded: false))
         defer { try? db.close() }
         do {
+            for i in coverWrites.indices {
+                let name = UUID().uuidString
+                try coverWrites[i].jpeg.write(to: artwork.appending(path: name))
+                coverWrites[i].file = name
+            }
             try db.write { db in try writeTransaction(db) }
         } catch {
-            for write in coverWrites { try? FileManager.default.removeItem(at: artwork.appending(path: write.file)) }
+            for write in coverWrites where !write.file.isEmpty {
+                try? FileManager.default.removeItem(at: artwork.appending(path: write.file))
+            }
             throw error
         }
         try db.writeWithoutTransaction { try $0.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)") }
@@ -214,7 +225,13 @@ struct SyncPlan {
         // Covers: a new ZIMAGE row linked both ways, or Sync's own row updated in place.
         for i in coverWrites.indices {
             let w = coverWrites[i]
+            // Only while the game's box art is still Sync's row (to replace) or there is none (to add).
+            let current = try Int64?.fetchOne(db, sql: "SELECT ZBOXIMAGE FROM ZGAME WHERE Z_PK = ?", arguments: [w.openEmuGame]) ?? nil
             if let replacing = w.replacing {
+                guard current == replacing.pk else {
+                    unusedFiles.append(w.file)
+                    continue
+                }
                 let old = try String.fetchOne(db, sql: "SELECT ZRELATIVEPATH FROM ZIMAGE WHERE Z_PK = ?", arguments: [replacing.pk])
                 try db.execute(
                     sql: "UPDATE ZIMAGE SET ZRELATIVEPATH = ?, ZWIDTH = ?, ZHEIGHT = ?, Z_OPT = Z_OPT + 1 WHERE Z_PK = ?",
@@ -222,6 +239,10 @@ struct SyncPlan {
                 coverWrites[i].imagePK = replacing.pk
                 if let old { replacedFiles.append(old) }
             } else {
+                guard current == nil else {
+                    unusedFiles.append(w.file)
+                    continue
+                }
                 let pk = try nextKey(s.imageRoot)
                 try db.execute(
                     sql: """
@@ -252,7 +273,7 @@ struct SyncPlan {
                 }
             }
             for rom in forgottenCovers { try db.execute(sql: "DELETE FROM syncedCover WHERE romId = ?", arguments: [rom]) }
-            for w in coverWrites {
+            for w in coverWrites where w.imagePK != 0 {
                 try db.execute(sql: "DELETE FROM syncedCover WHERE openEmuImagePk = ? OR romId = ?", arguments: [w.imagePK, w.romId])
                 try db.execute(
                     sql: "INSERT INTO syncedCover (openEmuImagePk, romId, coverKey) VALUES (?, ?, ?)",
@@ -263,7 +284,7 @@ struct SyncPlan {
 
     func deleteReplacedFiles(library: URL) {
         let artwork = library.appending(path: "Artwork", directoryHint: .isDirectory)
-        for file in replacedFiles { try? FileManager.default.removeItem(at: artwork.appending(path: file)) }
+        for file in replacedFiles + unusedFiles { try? FileManager.default.removeItem(at: artwork.appending(path: file)) }
     }
 }
 

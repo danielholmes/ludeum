@@ -21,7 +21,8 @@ import SwiftUI
     /// Sync isn't available while an Import draft exists or an Import is running.
     var blockedByImport: String? {
         switch importModel.state {
-        case .idle, .running, .draft: "Commit the first Import before syncing."
+        case .idle, .draft: "Commit the first Import before syncing."
+        case .running: "The first Import is running. Sync once it's committed."
         case .committed: ImportModel.isRunning ? "An Import is running. Sync once it's done." : nil
         }
     }
@@ -54,6 +55,7 @@ import SwiftUI
     func run() {
         guard blockedByImport == nil, !syncing, let sync else { return }
         syncing = true
+        result = nil
         ImportModel.isRunning = true  // Import and Sync are exclusive
         let library = services.settings.openEmuLibrary
         let deleting = deleting
@@ -190,6 +192,7 @@ struct SyncPage: View {
         case .hasBoxArt: "OpenEmu has box art"
         case .awaitingOpenVGDB: "waiting for OpenEmu's game lookup"
         case .downloadFailed: "IGDB's cover couldn't be downloaded"
+        case .unreadable: "the Cover isn't a readable image"
         }
     }
 

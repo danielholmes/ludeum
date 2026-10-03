@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import UniformTypeIdentifiers
 
 @testable import JournalCore
 
@@ -110,7 +111,7 @@ final class FakeInternet: HTTPTransport, Sendable {
             switch host {
             case Hosts.twitch: return Self.token(&s)
             case Hosts.igdb: return Self.igdb(request, s)
-            case Hosts.igdbImages: return (200, [:], Data("jpeg:\(request.url!.lastPathComponent)".utf8))
+            case Hosts.igdbImages: return (200, [:], Self.coverJPEG)
             case Hosts.hasheous: return Self.hasheous(request, s)
             default: return (404, [:], Data())
             }
@@ -118,6 +119,9 @@ final class FakeInternet: HTTPTransport, Sendable {
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!
         return (body, response)
     }
+
+    /// What IGDB's image host serves: a real (tiny) JPEG, 10 × 14.
+    static let coverJPEG = testImage(width: 10, height: 14, type: .jpeg)
 
     enum Hosts {
         static let twitch = "id.twitch.tv"
