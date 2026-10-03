@@ -7,6 +7,8 @@ import JournalCore
 //   journal-import match-report <snapshot>  Match a snapshot of OpenEmu's database and print the counts.
 //   journal-import first-import <library> <journal folder> [--commit]
 //                                           The first Import into a scratch journal (OpenEmu is only read).
+//   journal-import sync <library COPY> <journal folder> [--write]
+//                                           Previews (or writes) a Sync into a copy of the library.
 //
 // Credentials come from the environment or a .env file in the current directory
 // (see scripts/setup-igdb.sh).
@@ -58,5 +60,11 @@ case "first-import" where CommandLine.arguments.count >= 4:
         library: URL(filePath: CommandLine.arguments[2], directoryHint: .isDirectory),
         journalFolder: URL(filePath: CommandLine.arguments[3], directoryHint: .isDirectory),
         commit: CommandLine.arguments.contains("--commit"), igdb: igdb, hasheous: hasheous)
+case "sync" where CommandLine.arguments.count >= 4:
+    let (igdb, _) = try clients()
+    try await syncRun(
+        library: URL(filePath: CommandLine.arguments[2], directoryHint: .isDirectory),
+        journalFolder: URL(filePath: CommandLine.arguments[3], directoryHint: .isDirectory),
+        write: CommandLine.arguments.contains("--write"), igdb: igdb)
 default: fail("usage: journal-import check | match-report <snapshot.sqlite> | first-import <library> <journal folder> [--commit]")
 }

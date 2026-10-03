@@ -5,6 +5,8 @@ import GRDB
 public struct JournalROM: Sendable, Equatable, Identifiable {
     public let id: Int64
     public let fileName: String
+    /// OpenEmu's name for it, or the file name when unknown.
+    public let name: String
     /// The ROM's Version text: stored by Import, else read from its name.
     public let version: String
     public let disc: Int?
@@ -52,7 +54,7 @@ extension JournalStore {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.id, r.fileName, r.version, r.discNumber, r.missing,
+                    SELECT r.id, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
                         a.playCount, a.lastPlayedAt, a.playTimeSeconds
                     FROM rom r
                     LEFT JOIN activitySnapshot a ON a.romId = r.id
@@ -64,7 +66,7 @@ extension JournalStore {
                 let fileName: String = row["fileName"]
                 let parsed = ROMName((fileName as NSString).deletingPathExtension)
                 return JournalROM(
-                    id: row["id"], fileName: fileName, version: row["version"] ?? parsed.version,
+                    id: row["id"], fileName: fileName, name: row["displayName"], version: row["version"] ?? parsed.version,
                     disc: row["discNumber"] ?? parsed.disc, missing: row["missing"], playCount: row["playCount"] ?? 0,
                     lastPlayedAt: row["lastPlayedAt"], playTimeSeconds: row["playTimeSeconds"] ?? 0)
             }

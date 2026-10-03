@@ -8,6 +8,7 @@ struct GamesJournalApp: App {
     private let journal: JournalStore?
     private let services: Services
     private let importModel: ImportModel
+    private let syncModel: SyncModel
 
     init() {
         let settings = AppSettings()
@@ -15,11 +16,12 @@ struct GamesJournalApp: App {
         journal = try? JournalStore(directory: AppSettings.appFolder, backups: settings.backups())
         services = Services(settings: settings, journal: journal)
         importModel = ImportModel(services: services)
+        syncModel = SyncModel(services: services, importModel: importModel)
     }
 
     var body: some Scene {
         WindowGroup("Games Journal", id: "main") {
-            MainWindow(services: services, importModel: importModel)
+            MainWindow(services: services, importModel: importModel, syncModel: syncModel)
                 .modifier(OpenSettingsWithoutCredentials(settings: settings))
                 .modifier(DailyBackupOnLaunch(journal: journal, backups: settings.backups()))
         }
