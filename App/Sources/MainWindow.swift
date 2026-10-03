@@ -23,7 +23,7 @@ struct MainWindow: View {
                     LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
                 }
             case .reviewQueue:
-                ReviewQueueScreen(services: services)
+                ReviewQueueScreen(services: services, checkAgain: importModel.importNow)
             case .importPage:
                 ImportPage(model: importModel)
             case let screen?:
@@ -38,6 +38,13 @@ struct MainWindow: View {
                 GameDetailPlaceholder()
             }
         }
+        .overlay(alignment: .bottom) {
+            if let summary = importModel.summary {
+                ImportSummaryBanner(summary: summary, open: { selectedGame = $0 }, dismiss: { importModel.summary = nil })
+                    .frame(maxWidth: 520)
+            }
+        }
+        .modifier(OngoingImportTriggers(model: importModel))
         .toolbar {
             Button("Add Game", systemImage: "plus") { adding = true }
                 .disabled(services.journal == nil)

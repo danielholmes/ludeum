@@ -7,6 +7,10 @@ public enum ImportError: Error, Equatable {
     case alreadyImported
     /// The answer is for a ROM that isn't in the draft.
     case unknownROM
+    /// Ongoing Imports start after the first Import is committed.
+    case firstImportNeeded
+    /// OpenEmu's store UUID changed: the library was rebuilt or replaced. Re-pointing the journal is out of v1.
+    case libraryReplaced
 }
 
 /// The answer for a `_Current` Game: when I started it, or that I'm not playing it.

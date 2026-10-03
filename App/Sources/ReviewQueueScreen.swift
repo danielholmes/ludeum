@@ -5,6 +5,8 @@ import SwiftUI
 /// The Review queue, Mail-style: item kinds with counts, that kind's items, and the selected item.
 struct ReviewQueueScreen: View {
     let services: Services
+    /// Re-reads OpenEmu (an ongoing Import).
+    let checkAgain: () -> Void
 
     enum Kind: String, CaseIterable, Identifiable {
         case namesAgree = "Names agree"
@@ -59,7 +61,7 @@ struct ReviewQueueScreen: View {
 
             Group {
                 if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
-                    DuplicateVersionsDetail(item: d) { reload() }
+                    DuplicateVersionsDetail(item: d, checkAgain: checkAgain)
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
                     ReviewItemDetail(services: services, item: item) { error = $0 }
                 } else {

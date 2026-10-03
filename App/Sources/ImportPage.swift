@@ -109,6 +109,66 @@ import SwiftUI
     /// True while the commit runs: the button is disabled and quitting asks first.
     private(set) var committing = false
 
+    // MARK: Ongoing Imports
+
+    /// The last ongoing Import's changes, shown until dismissed. Nil when it changed nothing.
+    var summary: OngoingImportResult?
+    /// When the last ongoing Import ran.
+    private(set) var lastImported: Date?
+    private(set) var importingNow = false
+    /// The running ongoing Import's phase and progress.
+    private(set) var ongoingProgress: (phase: ImportPhase, fraction: Double)?
+    private var ongoingTask: Task<Void, Never>?
+    /// A trigger (OpenEmu quitting, Check again) arrived mid-Import: run once more after it.
+    private var runAgain = false
+
+    /// An ongoing Import: at launch, when OpenEmu quits, and by hand. Only after the first Import,
+    /// never while a draft exists, and one at a time.
+    func importNow() {
+        guard state == .committed, let igdb = services.igdb, let hasheous = services.hasheous, let journal = services.journal else {
+            return
+        }
+        guard !importingNow, !Self.isRunning else {
+            runAgain = true
+            return
+        }
+        importingNow = true
+        Self.isRunning = true
+        let run = OngoingImport(
+            igdb: igdb, hasheous: hasheous, journal: journal, backups: services.settings.backups(),
+            snapshotFile: AppSettings.appFolder.appending(path: "OpenEmu snapshot.sqlite"))
+        let library = services.settings.openEmuLibrary
+        ongoingProgress = (.snapshot, 0)
+        ongoingTask = Task {
+            do {
+                let result = try await run.run(library: library) { phase, fraction in
+                    Task { @MainActor in self.ongoingProgress = (phase, fraction) }
+                }
+                if result.changedSomething { summary = result }
+                lastImported = Date()
+                error = nil
+                services.changes.changed()
+            } catch ImportError.libraryReplaced {
+                error =
+                    "OpenEmu's library was rebuilt or replaced (its store ID changed), so the Import stopped. Re-pointing the journal at a new library isn't supported yet."
+            } catch is CancellationError {
+                // Nothing was written: the Import writes in one step at the end.
+            } catch {
+                self.error = "Import failed: \(error.localizedDescription)"
+            }
+            importingNow = false
+            Self.isRunning = false
+            ongoingProgress = nil
+            if runAgain {
+                runAgain = false
+                importNow()
+            }
+        }
+    }
+
+    /// Cancels a running ongoing Import before it writes anything.
+    func cancelImport() { ongoingTask?.cancel() }
+
     func commit() {
         guard let draft, let firstImport, !committing else { return }
         committing = true
@@ -234,9 +294,23 @@ struct ImportPage: View {
             case .draft(let draft):
                 checklist(draft)
             case .committed:
-                ContentUnavailableView(
-                    "First Import committed", systemImage: "checkmark.circle",
-                    description: Text("Unmatched ROMs and suggestions are in the Review queue."))
+                ContentUnavailableView {
+                    Label("Up to date with OpenEmu", systemImage: "checkmark.circle")
+                } description: {
+                    Text(
+                        "Imports run at launch and each time OpenEmu quits."
+                            + (model.lastImported.map { " Last Import: \($0.formatted(date: .omitted, time: .shortened))." } ?? ""))
+                } actions: {
+                    if let progress = model.ongoingProgress {
+                        VStack {
+                            Text(phaseTitle(progress.phase))
+                            ProgressView(value: progress.fraction).frame(width: 240)
+                            Button("Cancel") { model.cancelImport() }
+                        }
+                    } else {
+                        Button("Import now") { model.importNow() }
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

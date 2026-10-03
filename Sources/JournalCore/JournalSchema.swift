@@ -74,6 +74,7 @@ enum JournalSchema {
                 t.column("openEmuPk", .integer).notNull().unique()
                 t.column("md5", .text).notNull()
                 t.column("fileName", .text).notNull()
+                t.column("name", .text)  // OpenEmu's name for it (ZGAME.ZNAME); the file name when unknown
                 t.column("systemId", .text).notNull()
                 t.column("missing", .boolean).notNull().defaults(to: false)
                 t.column("version", .text)
