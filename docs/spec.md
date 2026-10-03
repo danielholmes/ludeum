@@ -23,6 +23,18 @@ Phone or remote access; several Macs; a fork of OpenEmu; two-way sync; importing
 - One Mac. The journal database lives in `~/Library/Application Support/GamesJournal/`, with automatic dated backups in Dropbox (see [Backups](#backups)). The cache is a separate file in the same folder, excluded from backups.
 - Credentials live in the Keychain (see [Settings and credentials](#settings-and-credentials)). `.env` is only for the CLI and tests (see `scripts/setup-igdb.sh`).
 
+### App skeleton
+- **Project shape:** XcodeGen. A `project.yml` defines the app target, which depends on the local package's `JournalCore`. The generated `.xcodeproj` is gitignored. The app target sets warnings as errors, CI installs XcodeGen with brew, and the `swift build -warnings-as-errors` job stays.
+- **Signing:** the free Personal Team ("Apple Development"), a stable identity, so the Dropbox access prompt and Keychain access survive rebuilds. No restricted entitlements, so the 7-day profile expiry never matters. Keychain items use the file-based keychain, which needs no profile.
+- **No App Sandbox.** It's a personal app that reads and writes another app's Dropbox-backed database, so the sandbox would add friction (security-scoped bookmarks or exception entitlements) without protecting anything.
+- **Where work runs:** in-process. The app calls `JournalCore` from structured tasks off the main actor. `journal-import` stays a dev tool over the same `JournalCore` calls; the app never depends on it. There's no helper, so nothing runs while the app is closed.
+- **When background work runs:** only while the app is open. On launch, a low-priority refresh of expired cache entries, plus the daily backup if one is due. Covers are fetched on demand. Import and Sync run only when I start them.
+- **Overlap:** Import and Sync are exclusive; while one runs, the other can't start. The background refresh pauses during either, since they share the rate limiters. Editing the journal is allowed during the refresh, but not during the Import's write step.
+- **Progress and interruption:**
+  - Import shows phased, determinate progress (snapshot, lookups, matching, review). It can be cancelled, and nothing is written to the journal until I confirm at the end. Lookups already made survive in the cache, so a rerun is quick. Quitting mid-Import asks first.
+  - Sync is a preview, then one short transaction that can't be cancelled midway.
+  - The background refresh shows only a small status indicator. Its errors are logged, not shown as alerts.
+
 ### Games and identity
 - A Game is a title on one Platform. It can have one IGDB link or none ([ADR 0002](adr/0002-game-identity-is-journal-owned.md)).
 - Regions, revisions and fan translations belong to the same Game. Ports, and enhanced re-releases that IGDB lists separately, are separate Games.
@@ -187,9 +199,8 @@ Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome,
 Roughly in the order they block work:
 
 1. **Journal database schema:** tables for Game, ROM, Match, Rating history, Playthrough, List, Activity snapshots and Covers; migrations; how Partial dates are stored.
-2. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
-3. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search (the shared search from Adding Games), and assigning a ROM to an existing Game (fan translations).
-4. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+2. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search (the shared search from Adding Games), and assigning a ROM to an existing Game (fan translations).
+3. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
