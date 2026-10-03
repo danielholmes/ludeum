@@ -68,6 +68,24 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
 - **Activity:** read-only play stats summed across a Game's ROMs. A snapshot is saved at each Import so play time can be credited to a year.
 - **Cover:** the IGDB cover. If IGDB has none, OpenEmu's existing box art carried over at the first Import, or an image I upload. See [Covers](#covers).
 
+### Journal database schema
+GRDB over SQLite, with foreign keys on. Table and column names are as they'll appear in `JournalCore`.
+
+- **Conventions:** integer `INTEGER PRIMARY KEY` ids. A Partial date is one text column (`1996`, `1996-03`, `1996-03-17`, CHECKed for shape), so plain string order is the Partial date sort and "contains" is a prefix test. Timestamps are ISO-8601 UTC text (GRDB's `Date` encoding). A Rating history day is the local date as `YYYY-MM-DD` text. Ratings are integer tenths (0–100).
+- **`platform`** (IGDB platform id, name): copied from IGDB so names show without the cache.
+- **`game`**: `platformId` (required), `igdbGameId` (nullable, `UNIQUE(igdbGameId, platformId)`, set at most once), `igdbName` (refreshed with the cache record), `name` (hand-made or cleaned No-Intro) and `nameOverride`. The display name is `nameOverride ?? igdbName ?? name`, so the database alone (a backup, a cold cache) shows every name. Also `childhood`, `intent` (backlog/upNext, or null) and `intentSetAt` (null when undated). Intent keeps no history.
+- **The current Rating is derived**, never stored: it's the latest `ratingEntry`.
+- **`ratingEntry`**: `gameId`, `day`, `rating` (NULL = cleared to unrated), `imported`, `UNIQUE(gameId, day, imported)`, so re-rating on the import day adds a row beside the imported entry, and that row is current.
+- **`playthrough`**: `gameId`, `start`, `end`, `outcome` (finished/dropped, or null), `notes`, `version`, `playedVia`. A CHECK enforces "in progress needs a start". End ≥ start is checked in app code.
+- **`list`** (`name` UNIQUE) and **`listGame`**.
+- **`cover`**: `gameId` as PK, `jpeg` BLOB, width, height, `origin` (carried/uploaded), `sha256`. It holds journal-owned Covers only.
+- **`rom`**: one row per OpenEmu ROM: `openEmuPk` UNIQUE, `md5`, file name, OpenEmu system id, `missing`, `version` text, `discNumber`, `discLabel`. **The Match is columns on the ROM:** `gameId`, `matchKind` (automatic/confirmed/manual) and `matchedAt` are all null or all set (CHECK). An unmatched ROM is in the Review queue.
+- **Review queue suggestions are stored** on the ROM when the Import commits (`suggestedIgdbGameId`, `suggestionKind` checksum/name, `checksumIgdbGameId` for the crossed-out checksum game, `namesAgree`) and cleared on matching. Opening the queue makes no IGDB calls.
+- **`import`** (`startedAt`, `isFirst`) and **`activitySnapshot`** (`importId`, `romId`, `playCount`, `lastPlayedAt`, `playTimeSeconds`, PK `(importId, romId)`): rows only for ROMs present at that Import, so a missing ROM's last row stays its baseline.
+- **Sync bookkeeping:** `syncedCollection` holds `openEmuPk` plus either `listId` (ON DELETE SET NULL) or `special` (`_TODO`/`_TODO Next`/`_Current`/`_Completed`). A row with neither is a deleted List's collection, which the next Sync deletes without asking for its name. `syncedCover` holds `openEmuImagePk`, `romId` and `coverKey` (the IGDB `image_id` or the Cover's sha256). The OpenEmu store UUID sits in a one-row `openEmuLibrary` table.
+- **Deleting a Game** relies on `ON DELETE CASCADE` all the way down (Rating history, Playthroughs, List memberships, Cover, ROMs → Activity snapshots and synced covers). The app refuses before that while the Game has a present ROM.
+- **Migrations:** GRDB's `DatabaseMigrator`, like the cache. There's one `v1` migration, edited freely until the first real Import into the production database, then append-only, with a backup before migrating. `eraseDatabaseOnSchemaChange` is for development only.
+
 ### Deleting
 - **A Game with present ROMs can't be deleted.** The UI says to remove its ROMs in OpenEmu first. There's no "ignored ROM": unwanted ROMs are removed in OpenEmu.
 - **Deleting a Game** hard-deletes all its journal data (Rating history, Playthroughs, Intent, Childhood, List memberships, Activity snapshots, IGDB link, uploaded Cover) and its missing ROMs with their Matches. If one of those ROMs reappears, a later Import matches it again as new. Stars and Covers already synced stay in OpenEmu.
@@ -205,8 +223,7 @@ Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome,
 
 Roughly in the order they block work:
 
-1. **Journal database schema:** tables for Game, ROM, Match, Rating history, Playthrough, List, Activity snapshots and Covers; migrations; how Partial dates are stored.
-2. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+1. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
