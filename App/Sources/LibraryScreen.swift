@@ -62,60 +62,8 @@ struct LibraryScreen: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup {
-            Menu(
-                "Filter",
-                systemImage: filter == LibraryFilter() ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill"
-            ) {
-                Picker("Platform", selection: $filter.platformId) {
-                    Text("Any").tag(Int64?.none)
-                    ForEach(platforms) { Text($0.name).tag(Int64?.some($0.id)) }
-                }
-                Picker("Rating", selection: $filter.rating) {
-                    Text("Any").tag(RatingFilter?.none)
-                    Text("Unrated").tag(RatingFilter?.some(.unrated))
-                    ForEach([9, 8, 7, 6, 5], id: \.self) {
-                        Text("\($0).0 or more").tag(RatingFilter?.some(.atLeast(Rating(tenths: $0 * 10)!)))
-                    }
-                }
-                Picker("Intent", selection: $filter.intent) {
-                    Text("Any").tag(Intent??.none)
-                    Text("None").tag(Intent??.some(nil))
-                    Text("Backlog").tag(Intent??.some(.backlog))
-                    Text("Up next").tag(Intent??.some(.upNext))
-                }
-                if list == nil {
-                    Picker("List", selection: $filter.listId) {
-                        Text("Any").tag(Int64?.none)
-                        ForEach(lists, id: \.id) { Text($0.name).tag(Int64?.some($0.id)) }
-                    }
-                }
-                Picker("Played", selection: $filter.outcome) {
-                    Text("Any").tag(OutcomeFilter?.none)
-                    Text("Playing").tag(OutcomeFilter?.some(.playing))
-                    Text("Finished").tag(OutcomeFilter?.some(.finished))
-                    Text("Dropped").tag(OutcomeFilter?.some(.dropped))
-                    Text("Not played").tag(OutcomeFilter?.some(.notPlayed))
-                }
-                Picker("Childhood", selection: $filter.childhood) {
-                    Text("Any").tag(Bool?.none)
-                    Text("Childhood").tag(Bool?.some(true))
-                    Text("Not childhood").tag(Bool?.some(false))
-                }
-                Divider()
-                Button("Clear filters") { filter = LibraryFilter() }
-            }
-            Menu("Sort", systemImage: "arrow.up.arrow.down") {
-                Picker("Sort by", selection: $sort) {
-                    Text("Name").tag(LibrarySort.name)
-                    Text("Platform").tag(LibrarySort.platform)
-                    Text("Rating").tag(LibrarySort.rating)
-                    Text("Intent set").tag(LibrarySort.intentSet)
-                }
-                Picker("Order", selection: $ascending) {
-                    Text("Ascending").tag(true)
-                    Text("Descending").tag(false)
-                }
-            }
+            LibraryFilterMenu(filter: $filter, platforms: platforms, lists: list == nil ? lists : nil)
+            LibrarySortMenu(sort: Binding($sort), ascending: $ascending)
             Picker("View", selection: $showCovers) {
                 Label("Table", systemImage: "list.bullet").tag(false)
                 Label("Covers", systemImage: "square.grid.2x2").tag(true)
@@ -130,12 +78,105 @@ struct LibraryScreen: View {
         if let list { effective.listId = list.id }
         do {
             rows = try journal.library(effective, sort: sort, ascending: ascending)
-            platforms = try journal.usedPlatformIDs().compactMap { try journal.platform($0) }.sorted { $0.name < $1.name }
-            lists = try journal.lists()
+            (platforms, lists) = try filterChoices(journal)
             error = nil
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// The Platforms and Lists the filter menu offers.
+func filterChoices(_ journal: JournalStore) throws -> ([IGDBPlatform], [GameList]) {
+    (try journal.usedPlatformIDs().compactMap { try journal.platform($0) }.sorted { $0.name < $1.name }, try journal.lists())
+}
+
+/// The Library's filter menu, shared by the screens that filter like it.
+struct LibraryFilterMenu: View {
+    @Binding var filter: LibraryFilter
+    let platforms: [IGDBPlatform]
+    /// Nil hides the List filter (when showing one List).
+    let lists: [GameList]?
+    /// Top-rated offers only Platform, List and Childhood.
+    var ratedOnly = false
+
+    var body: some View {
+        Menu(
+            "Filter",
+            systemImage: filter == LibraryFilter() ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill"
+        ) {
+            Picker("Platform", selection: $filter.platformId) {
+                Text("Any").tag(Int64?.none)
+                ForEach(platforms) { Text($0.name).tag(Int64?.some($0.id)) }
+            }
+            if !ratedOnly {
+                Picker("Rating", selection: $filter.rating) {
+                    Text("Any").tag(RatingFilter?.none)
+                    Text("Unrated").tag(RatingFilter?.some(.unrated))
+                    ForEach([9, 8, 7, 6, 5], id: \.self) {
+                        Text("\($0).0 or more").tag(RatingFilter?.some(.atLeast(Rating(tenths: $0 * 10)!)))
+                    }
+                }
+                Picker("Intent", selection: $filter.intent) {
+                    Text("Any").tag(Intent??.none)
+                    Text("None").tag(Intent??.some(nil))
+                    Text("Backlog").tag(Intent??.some(.backlog))
+                    Text("Up next").tag(Intent??.some(.upNext))
+                }
+            }
+            if let lists {
+                Picker("List", selection: $filter.listId) {
+                    Text("Any").tag(Int64?.none)
+                    ForEach(lists, id: \.id) { Text($0.name).tag(Int64?.some($0.id)) }
+                }
+            }
+            if !ratedOnly {
+                Picker("Played", selection: $filter.outcome) {
+                    Text("Any").tag(OutcomeFilter?.none)
+                    Text("Playing").tag(OutcomeFilter?.some(.playing))
+                    Text("Finished").tag(OutcomeFilter?.some(.finished))
+                    Text("Dropped").tag(OutcomeFilter?.some(.dropped))
+                    Text("Not played").tag(OutcomeFilter?.some(.notPlayed))
+                }
+            }
+            Picker("Childhood", selection: $filter.childhood) {
+                Text("Any").tag(Bool?.none)
+                Text("Childhood").tag(Bool?.some(true))
+                Text("Not childhood").tag(Bool?.some(false))
+            }
+            Divider()
+            Button("Clear filters") { filter = LibraryFilter() }
+        }
+    }
+}
+
+/// The Library's sort menu. Nil is What to play next's "Default", offered only with `offersDefault`.
+struct LibrarySortMenu: View {
+    @Binding var sort: LibrarySort?
+    @Binding var ascending: Bool
+    var offersDefault = false
+
+    var body: some View {
+        Menu("Sort", systemImage: "arrow.up.arrow.down") {
+            Picker("Sort by", selection: $sort) {
+                if offersDefault { Text("Default").tag(LibrarySort?.none) }
+                ForEach(LibrarySort.allCases, id: \.self) { Text(sortText($0)).tag(LibrarySort?.some($0)) }
+            }
+            Picker("Order", selection: $ascending) {
+                Text("Ascending").tag(true)
+                Text("Descending").tag(false)
+            }
+            .disabled(sort == nil)
+        }
+    }
+}
+
+func sortText(_ sort: LibrarySort) -> String {
+    switch sort {
+    case .name: "Name"
+    case .platform: "Platform"
+    case .rating: "Rating"
+    case .intentSet: "Intent set"
     }
 }
 
