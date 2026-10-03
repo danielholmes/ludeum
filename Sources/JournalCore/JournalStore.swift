@@ -10,6 +10,9 @@ public enum JournalError: Error, Equatable {
     case listNameTaken
     case gameHasPresentROMs
     case gameNotFound
+    case nameRequired
+    /// A Game's IGDB link is never changed or removed.
+    case alreadyLinked
 }
 
 /// A Game as the journal shows it.
