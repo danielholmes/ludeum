@@ -1,0 +1,182 @@
+<!doctype html>
+<!-- PROTOTYPE, throwaway. Question (ticket "Version 1 screen layouts and navigation"): how are Library, Game detail,
+     What to play next, Year in review and Top-rated laid out, and how does the app navigate between them
+     (sidebar sections, Settings, the Review queue's place, Import/Sync)?
+     Three structurally different variants, switchable via ?variant=A|B|C or ←/→. In-memory state only; edits are stubs. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Screen Layouts Prototype</title>
+<style>
+:root{--bg:#f5f5f7;--panel:#fff;--side:#ebebef;--ink:#1d1d1f;--mute:#6e6e73;--line:#d2d2d7;--acc:#0a64d8;--ok:#1f883d;--warn:#b35900;--sel:#dbe8fb}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1e1e20;--panel:#2a2a2d;--side:#232326;--ink:#f2f2f4;--mute:#9a9aa0;--line:#3a3a3e;--acc:#4c9bff;--ok:#3fb950;--warn:#e3a33b;--sel:#1f3a5f}}
+:root[data-theme=dark]{--bg:#1e1e20;--panel:#2a2a2d;--side:#232326;--ink:#f2f2f4;--mute:#9a9aa0;--line:#3a3a3e;--acc:#4c9bff;--ok:#3fb950;--warn:#e3a33b;--sel:#1f3a5f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+button,select,input,textarea{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:3px 9px}
+button{cursor:pointer}button.p{background:var(--acc);border-color:var(--acc);color:#fff}
+.mute{color:var(--mute)}.small{font-size:11px}.tag{display:inline-block;font-size:11px;border-radius:4px;padding:0 5px;border:1px solid var(--line);color:var(--mute)}
+.badge{background:#e5484d;color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:auto}
+.win{max-width:1240px;margin:16px auto 80px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tb{padding:7px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;background:var(--side)}
+.tb .t{font-weight:600}.sp{flex:1}
+.cov{border-radius:4px;flex:none;display:flex;align-items:flex-end;padding:4px;color:#fff;font-size:10px;font-weight:600;text-shadow:0 1px 2px #0008}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:14px;padding:14px}
+.grid .g{cursor:pointer;border-radius:6px;padding:4px}.grid .g.on{background:var(--sel)}
+.grid .cov{width:100%;aspect-ratio:528/748}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}th{font-weight:600;color:var(--mute);font-size:12px;cursor:pointer}
+tr.on td{background:var(--sel)}tbody tr{cursor:pointer}
+h2{font-size:18px;margin:0 0 4px}h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin:16px 0 6px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--line);align-items:center}
+.row{display:flex;gap:10px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);cursor:pointer}.row:hover{background:var(--sel)}
+.row .cov{width:30px;height:42px}
+.rank{width:28px;text-align:right;font-weight:600;color:var(--mute)}
+.stat{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0 8px 8px 0}.stat b{display:block;font-size:20px}
+.field{display:grid;grid-template-columns:110px 1fr;gap:6px;align-items:center;margin:5px 0}
+.pt{border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0}
+.side{background:var(--side);padding:8px;border-right:1px solid var(--line);overflow:auto}
+.side .h{font-size:11px;color:var(--mute);font-weight:600;padding:10px 8px 3px}
+.side .i{padding:4px 8px;border-radius:6px;cursor:pointer;display:flex;gap:6px;align-items:center}.side .i.on{background:var(--sel)}
+.ph{border:2px dashed var(--line);border-radius:10px;padding:30px;text-align:center;color:var(--mute);margin:20px}
+/* A */
+.A{display:grid;grid-template-columns:200px 1fr 320px;height:680px}.A .main{overflow:auto}.A .insp{border-left:1px solid var(--line);padding:14px;overflow:auto}
+/* B */
+.B .tabs{display:flex;gap:2px;justify-content:center;flex:1}.B .tabs button{border:0;background:none;border-radius:6px}.B .tabs button.on{background:var(--panel);box-shadow:0 0 0 1px var(--line)}
+.B .body{height:640px;overflow:auto}.B .page{max-width:820px;margin:0 auto;padding:18px}
+/* C */
+.C .body{height:610px;overflow:auto}.C .status{display:flex;gap:14px;padding:6px 12px;border-top:1px solid var(--line);background:var(--side);font-size:12px;align-items:center}
+.C .views button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#sheet{position:fixed;inset:0;background:#0006;display:none;align-items:flex-start;justify-content:center;z-index:8;padding-top:40px}
+#sheet .m{background:var(--panel);border-radius:10px;width:640px;max-width:calc(100% - 32px);max-height:85vh;overflow:auto;box-shadow:0 10px 40px #0007}
+#sheet .m .tb{position:sticky;top:0}
+#sw{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111;color:#fff;border-radius:20px;padding:6px 10px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 16px #0006;z-index:9}
+#sw button{background:#333;color:#fff;border:0;border-radius:12px}
+@media (max-width:860px){.A{grid-template-columns:1fr;height:auto}.A .side{display:flex;flex-wrap:wrap}.A .side .h{width:100%}}
+</style></head><body>
+<div id="app"></div><div id="sheet"></div>
+<div id="sw"><button id="prev">←</button><span id="lbl"></span><button id="next">→</button></div>
+<script>
+// ---------- fake but realistic data ----------
+const LISTS=['Castlevania','Light Gun Games','Metroidvanias','Co-op with Sam'];
+const G=[
+ ['Super Metroid','SNES',9.7,null,'1994',[['2023-02','2023-03','Finished']],['Metroidvanias'],false,'#5b2a86',41,true],
+ ['Castlevania: Symphony of the Night','PlayStation',9.4,null,null,[['2021','2021','Finished']],['Castlevania','Metroidvanias'],false,'#7a1f2b',22],
+ ['The Legend of Zelda: Link\'s Awakening DX','Game Boy Color',9.0,null,null,[['1999','','Finished']],[],true,'#2f7a4d',12,true],
+ ['Hollow Knight','PC',9.4,null,null,[['2025-11','2026-01-14','Finished']],['Metroidvanias'],false,'#30343f',0],
+ ['Chrono Trigger','SNES',null,'upNext','2026-09-20',[],[],false,'#c46a1b',3],
+ ['Castlevania: Aria of Sorrow','Game Boy Advance',8.6,'upNext','2026-08-02',[],['Castlevania','Metroidvanias'],false,'#3b3f8c',0],
+ ['Halo 3','Xbox 360',7.8,'backlog','2025-05-11',[['2010','2010','Finished']],['Co-op with Sam'],false,'#3a5a2a',0],
+ ['Resident Evil 2','PlayStation',null,null,null,[['2026-09','','']],[],false,'#55211c',6],
+ ['Pokémon Red Version','Game Boy',6.0,'backlog',null,[],[],true,'#b8302f',58],
+ ['Duck Hunt','NES',5.0,null,null,[],['Light Gun Games'],true,'#4a7fb5',2],
+ ['Elden Ring','PC',null,null,null,[['2024-03','2024-06','Dropped']],[],false,'#7a6a3a',0],
+ ['Kirby Super Star','SNES',8.6,'backlog','2024-12-01',[],[],true,'#d16fa6',9],
+ ['Earthbound','SNES',null,'backlog','2026-02-10',[],[],false,'#2e8a8a',0],
+ ['Balatro','PC',8.2,null,null,[['2026-07-04','','']],[],false,'#1d5f8a',0],
+].map(([name,plat,r,intent,set,pts,lists,child,col,hrs,imp],i)=>({id:i,name,plat,r,intent,set,pts:pts.map(([s,e,o])=>({s,e,o})),lists,child,col,hrs,imp:!!imp,noRom:i==2}));
+const REVIEW=37, IMPORTED=new Date();
+const playing=g=>g.pts.some(p=>!p.o&&p.s);
+const fmt=r=>r==null?'—':r.toFixed(1);
+const cov=(g,w,h)=>`<div class="cov" style="background:linear-gradient(160deg,${g.col},#111);${w?`width:${w}px;height:${h}px`:''}">${w&&w<40?'':g.plat}</div>`;
+let S={sel:0,screen:'library',flt:{plat:'',list:''},sort:'name',year:'2026',sheet:null,view:'grid'};
+const filtered=()=>G.filter(g=>(!S.flt.plat||g.plat==S.flt.plat)&&(!S.flt.list||g.lists.includes(S.flt.list)));
+const sorted=a=>[...a].sort(S.sort=='rating'?(x,y)=>(y.r??-1)-(x.r??-1):S.sort=='intent'?(x,y)=>(y.set||'').localeCompare(x.set||''):(x,y)=>x.name.localeCompare(y.name));
+const plats=[...new Set(G.map(g=>g.plat))].sort();
+const filterBar=(extra='')=>`<div class="filters"><select onchange="S.flt.plat=this.value;R()"><option value="">All Platforms</option>${plats.map(p=>`<option ${S.flt.plat==p?'selected':''}>${p}</option>`).join('')}</select>
+ <select onchange="S.flt.list=this.value;R()"><option value="">All Lists</option>${LISTS.map(p=>`<option ${S.flt.list==p?'selected':''}>${p}</option>`).join('')}</select>
+ <select><option>Any Outcome</option><option>Finished</option><option>Dropped</option></select><label><input type="checkbox"> Childhood</label>
+ <span class="sp"></span>Sort <select onchange="S.sort=this.value;R()">${['name','rating','intent'].map(s=>`<option value="${s}" ${S.sort==s?'selected':''}>${{name:'Name',rating:'Rating',intent:'Intent set'}[s]}</option>`).join('')}</select>${extra}</div>`;
+
+// ---------- shared screen bodies (each variant frames them differently) ----------
+function gameDetail(g,compact){
+ const intentSel=`<select>${['None','Backlog','Up next'].map(x=>`<option ${({backlog:'Backlog',upNext:'Up next'}[g.intent]||'None')==x?'selected':''}>${x}</option>`).join('')}</select>`;
+ return `<div style="display:flex;gap:14px;align-items:flex-start">${cov(g,compact?90:150,compact?128:212)}<div style="flex:1">
+  <h2>${g.name}</h2><div class="mute">${g.plat} · IGDB linked${g.noRom?' · <span class="tag">no ROM in OpenEmu</span>':''}</div>
+  <div class="field" style="margin-top:10px"><span>Rating</span><span><input value="${g.r??''}" placeholder="unrated" style="width:70px"> ${g.imp?'<span class="tag">≈ imported</span>':''} <a href="#" class="small">history</a></span></div>
+  <div class="field"><span>Intent</span><span>${intentSel} ${g.set?`<span class="small mute">set ${g.set}</span>`:''}</span></div>
+  <div class="field"><span>Childhood</span><span><input type="checkbox" ${g.child?'checked':''}></span></div>
+  <div class="field"><span>Lists</span><span>${g.lists.map(l=>`<span class="tag">${l}</span>`).join(' ')||'<span class="mute">none</span>'} <button class="small">+</button></span></div></div></div>
+  <h3>Playthroughs <button class="small" style="float:right">+ Add</button></h3>
+  ${g.pts.map(p=>`<div class="pt"><b>${p.o||'In progress'}</b> <span class="mute">${p.s||'?'} → ${p.e||(p.o?'?':'now')}</span><div class="small mute">Version · Played via · notes</div></div>`).join('')||'<div class="mute">None yet.</div>'}
+  <h3>Activity</h3><div class="mute">${g.hrs?`Play time ${g.hrs} h (${Math.round(g.hrs*.6)} h before tracking) · last played 2026-09-28`:'No OpenEmu play time'}</div>
+  <h3>ROMs</h3><div class="small mute">${g.hrs?`${g.name} (USA).sfc · Automatic Match`:'None'}</div>
+  <div style="margin-top:14px"><button disabled title="Remove its ROMs in OpenEmu first">Delete Game…</button></div>`;
+}
+const listRow=(g,extra='',rank='')=>`<div class="row" onclick="openGame(${g.id})">${rank}${cov(g,30,42)}<div style="flex:1"><div>${g.name}</div><div class="small mute">${g.plat}</div></div>${extra}</div>`;
+function playNext(){
+ const pl=G.filter(playing),un=G.filter(g=>g.intent=='upNext'&&!playing(g)),bl=G.filter(g=>g.intent=='backlog'&&!playing(g));
+ const by=a=>[...a].sort((x,y)=>(y.set||'').localeCompare(x.set||''));
+ const start=g=>`<button class="small" onclick="event.stopPropagation()">Start playing</button>`;
+ return `<h3>Playing</h3>${pl.map(g=>listRow(g,`<span class="small mute">since ${g.pts.find(p=>!p.o).s}</span>`)).join('')}
+ <h3>Up next</h3>${by(un).map(g=>listRow(g,`<span class="small mute">${g.set||'undated'}</span> ${start(g)}`)).join('')}
+ <h3>Backlog</h3>${by(bl).map(g=>listRow(g,`<span class="small mute">${g.set||'undated'}</span> ${start(g)}`)).join('')}`;
+}
+function topRated(){
+ const a=filtered().filter(g=>g.r!=null).sort((x,y)=>y.r-x.r||x.name.localeCompare(y.name));let rk=0;
+ return a.map((g,i)=>{if(i==0||a[i-1].r!=g.r)rk=i+1;return listRow(g,`<b>${fmt(g.r)}</b>${g.imp?' <span class="tag">≈ imported</span>':''}`,`<span class="rank">${rk}</span>`)}).join('');
+}
+function yearReview(){
+ const y=S.year,end=G.flatMap(g=>g.pts.filter(p=>p.e&&p.e.startsWith(y)).map(p=>[g,p])),act=G.flatMap(g=>g.pts.filter(p=>p.s&&p.s<=y+'~'&&!(p.e&&p.e.startsWith(y))&&(!p.e||p.e>=y)).map(p=>[g,p]));
+ return `<div style="display:flex;gap:8px;align-items:center"><select onchange="S.year=this.value;R()">${['2026','2025','2024','2023','2021'].map(x=>`<option ${x==y?'selected':''}>${x}${x=='2026'?' (so far)':''}</option>`).join('')}</select></div>
+ <div style="margin-top:10px"><span class="stat"><b>${end.filter(e=>e[1].o=='Finished').length}</b>Finished</span><span class="stat"><b>${end.filter(e=>e[1].o=='Dropped').length}</b>Dropped</span><span class="stat"><b>${act.length}</b>Also played</span><span class="stat"><b>37 h</b>OpenEmu play time</span></div>
+ <h3>Finished &amp; Dropped</h3>${end.map(([g,p])=>listRow(g,`<span class="tag">${p.o}</span> <b>${fmt(g.r)}</b>`)).join('')||'<div class="mute">Nothing.</div>'}
+ <h3>Also played</h3>${act.map(([g])=>listRow(g)).join('')||'<div class="mute">Nothing.</div>'}
+ <h3>OpenEmu play time</h3>${G.filter(g=>g.hrs).slice(0,4).map(g=>listRow(g,`${Math.round(g.hrs/3)} h`)).join('')}
+ <div class="small mute" style="margin-top:8px">3 Playthroughs have no dates · <a href="#">show in Library</a></div>`;
+}
+const libGrid=()=>`<div class="grid">${sorted(filtered()).map(g=>`<div class="g ${S.sel==g.id?'on':''}" onclick="selGame(${g.id})" ondblclick="openGame(${g.id})">${cov(g)}<div class="small">${g.name}</div><div class="small mute">${fmt(g.r)}${playing(g)?' · Playing':''}</div></div>`).join('')}</div>`;
+const libTable=()=>`<table><thead><tr><th></th><th onclick="S.sort='name';R()">Name</th><th>Platform</th><th onclick="S.sort='rating';R()">Rating</th><th onclick="S.sort='intent';R()">Intent</th><th>Last Outcome</th><th>Lists</th></tr></thead><tbody>
+ ${sorted(filtered()).map(g=>`<tr class="${S.sel==g.id?'on':''}" onclick="selGame(${g.id})" ondblclick="openGame(${g.id})"><td>${cov(g,20,28)}</td><td>${g.name}${g.child?' <span class="tag">childhood</span>':''}</td><td>${g.plat}</td><td>${fmt(g.r)}</td><td>${({backlog:'Backlog',upNext:'Up next'})[g.intent]||''}</td><td>${playing(g)?'Playing':(g.pts.at(-1)?.o||'')}</td><td class="small mute">${g.lists.join(', ')}</td></tr>`).join('')}</tbody></table>`;
+const settings=()=>`<h2>Settings</h2><h3>IGDB</h3><div class="field"><span>Client ID</span><input value="••••••••"></div><div class="field"><span>Secret</span><input value="••••••••"></div><button>Test connection</button>
+ <h3>Hasheous</h3><div class="field"><span>Key (optional)</span><input></div><h3>Backups</h3><div class="field"><span>Folder</span><input value="~/Dropbox/Games Journal Backups/"></div><button>Back up now</button> <button>Restore from backup…</button>
+ <h3>OpenEmu</h3><div class="field"><span>Library</span><input value="~/Dropbox/OpenEmu/Game Library"></div>`;
+const reviewStub=()=>`<div class="ph">Review queue: the decided three-pane layout (Names agree 24 · Checksum suggestions 8 · No suggestion 5) lives here.<br><br><button class="p">Confirm all 24</button></div>`;
+const importStub=()=>`<div class="ph">Import now · last Import ${IMPORTED.toLocaleTimeString()} · 3 ROMs added, 1 sent to review<br><br>Sync to OpenEmu: preview, then one transaction. OpenEmu must be closed.<br><br><button>Import now</button> <button class="p">Sync…</button></div>`;
+
+// ---------- Variant A: source-list sidebar + content + inspector (Music/Photos) ----------
+function VA(){
+ const it=(k,label,b='')=>`<div class="i ${S.screen==k?'on':''}" onclick="go('${k}')">${label}${b}</div>`;
+ const g=G[S.sel];
+ let main={library:filterBar(` <button onclick="S.view=S.view=='grid'?'table':'grid';R()">${S.view=='grid'?'☰ List':'▦ Covers'}</button>`)+(S.view=='grid'?libGrid():libTable()),next:`<div style="padding:0 14px">${playNext()}</div>`,top:filterBar()+`<div style="padding:0 14px">${topRated()}</div>`,year:`<div style="padding:14px">${yearReview()}</div>`,review:reviewStub()}[S.screen]
+   ?? (S.screen.startsWith('list:')?(S.flt.list=S.screen.slice(5),filterBar()+libGrid()):'');
+ return `<div class="win"><div class="tb"><span class="t">Games Journal</span><span class="sp"></span><button>+ Add Game</button><button>⟳ Import now</button><button>Sync to OpenEmu…</button><button onclick="sheet('settings')">⚙︎</button></div>
+ <div class="A"><div class="side"><div class="h">Journal</div>${it('library','📚 Library')}${it('next','▶︎ What to play next')}${it('top','★ Top-rated')}${it('year','📅 Year in review')}
+ <div class="h">Lists</div>${LISTS.map(l=>it('list:'+l,'≡ '+l)).join('')}<div class="i mute">+ New List</div>
+ <div class="h">OpenEmu</div>${it('review','⚑ Review queue',`<span class="badge">${REVIEW}</span>`)}<div class="i mute small">Last Import ${IMPORTED.toLocaleTimeString()}</div></div>
+ <div class="main">${main}</div><div class="insp">${g?gameDetail(g,true):'<div class="mute">Select a Game</div>'}</div></div></div>`;
+}
+// ---------- Variant B: toolbar tabs, table library, Game detail pushed full-width ----------
+function VB(){
+ const tab=(k,l,b='')=>`<button class="${S.screen==k?'on':''}" onclick="go('${k}')">${l}${b?` <span class="badge">${b}</span>`:''}</button>`;
+ let body;
+ if(S.screen=='game')body=`<div class="page"><button onclick="go(S.back||'library')">‹ Back</button><div style="margin-top:12px">${gameDetail(G[S.sel])}</div></div>`;
+ else body={library:filterBar()+libTable(),next:`<div class="page">${playNext()}</div>`,top:filterBar()+`<div class="page">${topRated()}</div>`,year:`<div class="page">${yearReview()}</div>`,review:reviewStub(),openemu:importStub()}[S.screen];
+ return `<div class="win B"><div class="tb"><span class="t">Games Journal</span><div class="tabs">${tab('library','Library')}${tab('next','Play next')}${tab('top','Top-rated')}${tab('year','Year')}${tab('review','Review',REVIEW)}${tab('openemu','OpenEmu')}</div><button>+ Add</button><button onclick="sheet('settings')">⚙︎</button></div>
+ <div class="body">${body}</div></div>`;
+}
+// ---------- Variant C: one Library, everything else is a view of it; Game detail in its own window ----------
+function VC(){
+ const v=(k,l)=>`<button class="${S.screen==k?'on':''}" onclick="go('${k}')">${l}</button>`;
+ const body={library:libGrid(),next:`<div style="padding:0 14px">${playNext()}</div>`,top:`<div style="padding:0 14px">${topRated()}</div>`,year:`<div style="padding:14px">${yearReview()}</div>`}[S.screen]||libGrid();
+ return `<div class="win C"><div class="tb"><span class="views" style="display:flex;gap:4px">${v('library','All Games')}${v('next','Play next')}${v('top','Top-rated')}${v('year','Year in review')}</span><span class="sp"></span><input placeholder="Search Games" style="width:180px"><button>+ Add Game</button></div>
+ ${S.screen=='year'||S.screen=='next'?'':filterBar()}<div class="body">${body}</div>
+ <div class="status"><span>${G.length} Games</span><span class="sp"></span><span>Last Import ${IMPORTED.toLocaleTimeString()} <a href="#" onclick="sheet('import');return false">Import now</a></span><a href="#" onclick="sheet('review');return false">⚑ ${REVIEW} to review</a><a href="#" onclick="sheet('import');return false">Sync…</a><a href="#" onclick="sheet('settings');return false">⚙︎</a></div></div>`;
+}
+
+// ---------- plumbing ----------
+const V={A:['Sidebar + inspector',VA],B:['Tabs + pushed detail',VB],C:['One Library, detail window',VC]};
+const keys=Object.keys(V);let cur=new URLSearchParams(location.search).get('variant');if(!V[cur])cur='A';
+function go(k){S.back=S.screen;S.screen=k;if(!k.startsWith('list:')&&S.flt.list&&cur=='A'&&S.back.startsWith('list:'))S.flt.list='';R()}
+function selGame(i){S.sel=i;R()}
+function openGame(i){S.sel=i;if(cur=='A')R();else if(cur=='B'){S.back=S.screen;S.screen='game';R()}else sheet('game')}
+function sheet(k){S.sheet=k;R()}
+function R(){
+ document.getElementById('app').innerHTML=V[cur][1]();
+ document.getElementById('lbl').textContent=`${cur} (${V[cur][0]})`;
+ const sh=document.getElementById('sheet');
+ if(S.sheet){sh.style.display='flex';const c={game:gameDetail(G[S.sel]),settings:settings(),review:reviewStub(),import:importStub()}[S.sheet];
+  sh.innerHTML=`<div class="m"><div class="tb"><span class="t">${{game:G[S.sel].name,settings:'Settings',review:'Review queue',import:'Import & Sync'}[S.sheet]}</span><span class="sp"></span><button onclick="sheet(null)">Close</button></div><div style="padding:16px">${c}</div></div>`;}
+ else sh.style.display='none';
+}
+function cyc(d){cur=keys[(keys.indexOf(cur)+d+keys.length)%keys.length];history.replaceState(null,'','?variant='+cur);S.screen='library';S.sheet=null;S.flt.list='';R()}
+prev.onclick=()=>cyc(-1);next.onclick=()=>cyc(1);
+addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select,[contenteditable]'))return;if(e.key=='ArrowLeft')cyc(-1);if(e.key=='ArrowRight')cyc(1);if(e.key=='Escape')sheet(null)});
+R();
+</script></body></html>
