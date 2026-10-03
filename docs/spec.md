@@ -191,6 +191,13 @@ A nice-to-have: built after the rest of v1 works.
 - **IGDB credentials** are kept in the Keychain, along with the cached Twitch app token. If there are none at launch, Settings opens with a link to the Twitch developer console. This depends on a stable signing identity: without one, every rebuild asks for Keychain access again (see the packaging research).
 - **Hasheous key: not requested.** Hash lookups don't need one. The key unlocks Hasheous's metadata proxy, which we don't use, and its rate limits aren't published. There's an optional field (Keychain) in case anonymous lookups get throttled. `HASHEOUS_API_KEY` stays for the CLI.
 
+### Review queue
+- **Layout: three panes, Mail-style** (chosen from three variants on `prototype/review-queue`). A sidebar lists the item kinds with counts: Names agree, Checksum suggestions, Name suggestions, No suggestion, Duplicate Versions. The middle column lists that kind's items (ROM name, then the suggestion), and the right pane shows the selected item with its actions.
+- **Bulk confirm:** a "Confirm all N" button at the top of the Names agree list, covering name suggestions and related-record suggestions whose names agree. To keep one out, I answer it individually first.
+- **An item's detail:** the ROM name, its Platform and why it's here, then the suggestion with its cover, `game_type` and whether the names agree. For a related-record suggestion, the checksum's own game is shown crossed out above it.
+- **Actions on a ROM item:** Confirm (when there's a suggestion), Search IGDB… (the shared search from Adding Games), Assign to Game… (an existing Game, e.g. a fan translation; warns about Duplicate Versions) and Make by hand… (Platform pre-selected from the ROM's system).
+- **Duplicate Versions items** sit in the same three panes, with the detail and Check again described under First Import.
+
 ### Version 1 screens
 Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync; Settings.
 
@@ -199,8 +206,7 @@ Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome,
 Roughly in the order they block work:
 
 1. **Journal database schema:** tables for Game, ROM, Match, Rating history, Playthrough, List, Activity snapshots and Covers; migrations; how Partial dates are stored.
-2. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search (the shared search from Adding Games), and assigning a ROM to an existing Game (fan translations).
-3. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+2. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
@@ -209,4 +215,5 @@ Roughly in the order they block work:
 - `scripts/setup-igdb.sh`: the IGDB credentials wizard.
 - Branch `prototype/first-import`: a throwaway dry run of the first Import. Its verdict is in the commit message and folded into the decisions above.
 - Branch `prototype/openemu-write`: a throwaway spike that wrote a Sync into a copy of the OpenEmu library. Its verdict is in the commit message and folded into Sync to OpenEmu above.
+- Branch `prototype/review-queue`: three throwaway Review queue layouts (`prototypes/PROTOTYPE-review-queue.html`). Variant A won and is folded into Review queue above.
 - Branch `prototype/matching-rules`: a throwaway measurement of the matching rules against the dry run's snapshot (`journal-import prototype-matching-rules`). Its verdict is in the commit message and folded into First Import above.
