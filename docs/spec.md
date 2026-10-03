@@ -217,7 +217,7 @@ A nice-to-have: built after the rest of v1 works.
 - **Duplicate Versions items** sit in the same three panes, with the detail and Check again described under First Import.
 
 ### Import and Sync screens
-- **One full-window page each, not a sheet or wizard** (chosen from three variants on `prototype/import-sync`).
+- **One page each, shown in the main window's middle area (see Version 1 screens), not a sheet or wizard** (chosen from three variants on `prototype/import-sync`).
 - **Import page:** the left column holds the phase timeline (snapshot, lookups, matching, review), with each phase marked done, running or blocking, plus "Discard draft…". While the phases run, the main area shows determinate progress and Cancel. After that it shows a **"Before you can commit"** checklist of expandable cards:
   - *Start dates for `_Current`*: a table of the Games, with OpenEmu's last-played date as a hint. Each one takes "Started on…" with a Partial date, or "Not playing".
   - *Duplicate Versions*: the items described under First Import, with Check again.
