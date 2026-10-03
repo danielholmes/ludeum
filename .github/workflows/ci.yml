@@ -28,7 +28,7 @@ jobs:
             spm-${{ runner.os }}-xcode26.6-
 
       - name: Lint
-        run: swift format lint --strict --recursive Sources Tests Package.swift
+        run: swift format lint --strict --recursive Sources Tests App/Sources Package.swift
 
       - name: Build (warnings are errors)
         run: swift build --build-tests -Xswiftc -warnings-as-errors
