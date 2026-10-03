@@ -104,8 +104,14 @@ struct RestoreSheet: View {
     private func relaunch() {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, _ in
-            DispatchQueue.main.async { NSApp.terminate(nil) }
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
+            DispatchQueue.main.async {
+                if let error {
+                    self.error = "Restored, but couldn't relaunch (\(error.localizedDescription)). Quit and reopen Games Journal."
+                } else {
+                    NSApp.terminate(nil)
+                }
+            }
         }
     }
 }

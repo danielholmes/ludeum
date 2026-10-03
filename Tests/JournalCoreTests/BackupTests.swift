@@ -161,6 +161,26 @@ import Testing
         #expect(try names(copy).count == 1)
     }
 
+    @Test func aRefusedDeletionLeavesNoBackup() throws {
+        let journal = try JournalStore(directory: h.directory, clock: h.clock, timeZone: h.timeZone, backups: backups())
+        try journal.addPlatform(id: 19, name: "SNES")
+        let game = try journal.addGame(platformId: 19, name: "Super Metroid")
+        try journal.recordROM(game: game, openEmuPk: 1, md5: "aa", fileName: "sm.sfc", systemId: "openemu.system.snes", missing: false)
+
+        #expect(throws: JournalError.gameHasPresentROMs) { try journal.deleteGame(game) }
+        #expect(try backups().all().isEmpty)
+    }
+
+    @Test func restoreListsBackupsInTheFallbackToo() throws {
+        try FileManager.default.removeItem(at: dropbox)
+        _ = try backups().backUp(h.journal, operation: .manual)
+        try FileManager.default.createDirectory(at: dropbox, withIntermediateDirectories: true)
+        h.clock.advance(seconds: 60)
+        _ = try backups().backUp(h.journal, operation: .manual)
+
+        #expect(try backups().all().count == 2)
+    }
+
     @Test func restoreBacksUpFirstThenReplacesTheJournal() throws {
         _ = try h.addGame("Super Metroid")
         let before = try backups().backUp(h.journal, operation: .manual)

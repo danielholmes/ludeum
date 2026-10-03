@@ -96,16 +96,19 @@ public struct Backups: Sendable {
 
     var destination: URL { isUsingFallback ? fallback : folder }
 
-    /// Every backup in the folder backups currently go to, newest first.
+    /// Every backup, in the backup folder and the fallback, newest first. Restore lists them all.
     public func all() throws -> [Backup] {
-        let dir = destination
+        let folders = Set([folder, fallback].map(\.standardizedFileURL))
+        return try folders.flatMap(backups(in:)).sorted { ($0.date, $0.url.lastPathComponent) > ($1.date, $1.url.lastPathComponent) }
+    }
+
+    private func backups(in dir: URL) throws -> [Backup] {
         guard FileManager.default.fileExists(atPath: dir.path(percentEncoded: false)) else { return [] }
         return try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil).compactMap { url in
             BackupName.parse(url.lastPathComponent, timeZone: calendar.timeZone).map {
                 Backup(url: url, date: $0.date, operation: $0.operation)
             }
         }
-        .sorted { ($0.date, $0.url.lastPathComponent) > ($1.date, $1.url.lastPathComponent) }
     }
 
     /// Writes a backup under a temporary name, renames it so Dropbox never syncs a half-written
@@ -132,7 +135,10 @@ public struct Backups: Sendable {
             try? FileManager.default.removeItem(at: temporary)
             throw error
         }
-        for old in backupsToPrune(try all(), now: now, calendar: calendar) { try FileManager.default.removeItem(at: old.url) }
+        // Best effort: a backup Dropbox is holding on to mustn't fail the backup or the step it guards.
+        for old in backupsToPrune((try? backups(in: dir)) ?? [], now: now, calendar: calendar) {
+            try? FileManager.default.removeItem(at: old.url)
+        }
         return Backup(url: url, date: now, operation: operation)
     }
 

@@ -19,12 +19,16 @@ extension JournalStore {
     /// Hard-deletes a Game with all its journal data and its missing ROMs.
     /// Refused while it has a present ROM: those are removed in OpenEmu first.
     public func deleteGame(_ game: GameID) throws {
+        // Refuse before backing up, so a refused deletion leaves no backup behind.
+        if try db.read({ try hasPresentROMs($0, game) }) { throw JournalError.gameHasPresentROMs }
         try backups?.backUp(self, operation: .beforeDelete)
         try db.write { db in
-            let present = try Bool.fetchOne(
-                db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ? AND NOT missing)", arguments: [game])!
-            if present { throw JournalError.gameHasPresentROMs }
+            if try hasPresentROMs(db, game) { throw JournalError.gameHasPresentROMs }
             try db.execute(sql: "DELETE FROM game WHERE id = ?", arguments: [game])
         }
+    }
+
+    private func hasPresentROMs(_ db: Database, _ game: GameID) throws -> Bool {
+        try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ? AND NOT missing)", arguments: [game])!
     }
 }
