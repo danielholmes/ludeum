@@ -44,12 +44,22 @@ public enum OpenEmuLibrary {
     /// Where OpenEmu itself keeps its library.
     public static func databaseFile(in library: URL) -> URL { library.appending(path: "Library.storedata") }
 
+    /// Opens OpenEmu's store to read. A read-only connection can't open a WAL store whose -shm file
+    /// is gone (after a clean close), so that case falls back to a normal connection used only for reading.
+    static func openForReading(_ file: URL) throws -> DatabaseQueue {
+        var config = Configuration()
+        config.readonly = true
+        do {
+            return try DatabaseQueue(path: file.path(percentEncoded: false), configuration: config)
+        } catch let error as DatabaseError where error.resultCode == .SQLITE_CANTOPEN {
+            return try DatabaseQueue(path: file.path(percentEncoded: false))
+        }
+    }
+
     /// Copies OpenEmu's database with SQLite's backup API: safe while OpenEmu is running, and
     /// never writes to OpenEmu.
     public static func snapshot(library: URL, to file: URL) throws {
-        var config = Configuration()
-        config.readonly = true
-        let live = try DatabaseQueue(path: databaseFile(in: library).path(percentEncoded: false), configuration: config)
+        let live = try openForReading(databaseFile(in: library))
         try? FileManager.default.removeItem(at: file)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         let copy = try DatabaseQueue(path: file.path(percentEncoded: false))

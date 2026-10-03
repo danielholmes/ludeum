@@ -163,7 +163,7 @@ public enum ReviewError: Error, Equatable {
 }
 
 private func gameROM(_ rom: JournalROM) -> GameROM {
-    GameROM(id: Int(rom.id), name: rom.fileName, isPlaylist: isPlaylist(rom.fileName), isPresent: !rom.missing)
+    GameROM(id: Int(rom.id), name: rom.name, isPlaylist: isPlaylist(rom.fileName), isPresent: !rom.missing)
 }
 
 private func isPlaylist(_ fileName: String) -> Bool { (fileName as NSString).pathExtension.lowercased() == "m3u" }

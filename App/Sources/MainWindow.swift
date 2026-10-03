@@ -5,6 +5,7 @@ import SwiftUI
 struct MainWindow: View {
     let services: Services
     let importModel: ImportModel
+    let syncModel: SyncModel
     @State private var selectedGame: GameID?
     @State private var adding = false
     @State private var selection: Screen? = .library
@@ -24,6 +25,8 @@ struct MainWindow: View {
                 }
             case .reviewQueue:
                 ReviewQueueScreen(services: services, checkAgain: importModel.importNow)
+            case .syncPage:
+                SyncPage(model: syncModel)
             case .importPage:
                 ImportPage(model: importModel)
             case let screen?:

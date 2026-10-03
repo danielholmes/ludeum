@@ -11,7 +11,7 @@ import Testing
 
         let second = try await h.igdb.cover(imageID: "co1abc")
 
-        #expect(try Data(contentsOf: second) == Data("jpeg:co1abc.jpg".utf8))
+        #expect(try Data(contentsOf: second) == FakeInternet.coverJPEG)
         #expect(first == second)
         #expect(h.internet.sent(to: FakeInternet.Hosts.igdbImages).count == 1)
     }
