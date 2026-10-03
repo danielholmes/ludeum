@@ -47,11 +47,20 @@ public final class AppSettings: @unchecked Sendable {
         set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.openEmuLibrary) }
     }
 
+    /// Normally in Dropbox. When it isn't there, backups go to `Backups/` in the app's folder instead.
     public var backupFolder: URL {
         get {
-            folder(Keys.backupFolder) ?? .applicationSupportDirectory.appending(path: "GamesJournal/Backups", directoryHint: .isDirectory)
+            folder(Keys.backupFolder) ?? .homeDirectory.appending(path: "Dropbox/Games Journal Backups", directoryHint: .isDirectory)
         }
         set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.backupFolder) }
+    }
+
+    /// `~/Library/Application Support/GamesJournal/`: the journal database, the cache and the fallback `Backups/`.
+    public static let appFolder = URL.applicationSupportDirectory.appending(path: "GamesJournal", directoryHint: .isDirectory)
+
+    /// Backups into the current backup folder, falling back to `Backups/` in the app's folder.
+    public func backups() -> Backups {
+        Backups(folder: { [self] in backupFolder }, fallback: Self.appFolder.appending(path: "Backups", directoryHint: .isDirectory))
     }
 
     private func folder(_ key: String) -> URL? {

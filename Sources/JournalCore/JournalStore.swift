@@ -50,8 +50,11 @@ public final class JournalStore: Sendable {
     let db: DatabaseQueue
     let clock: TimeSource
     let calendar: Calendar
+    /// Where a backup is taken before every deletion of a Game, List or Playthrough.
+    let backups: Backups?
 
-    public init(directory: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current) throws {
+    public init(directory: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current, backups: Backups? = nil) throws {
+        self.backups = backups
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var config = Configuration()
         config.foreignKeysEnabled = true

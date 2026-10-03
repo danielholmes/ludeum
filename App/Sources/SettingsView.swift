@@ -2,9 +2,11 @@ import JournalCore
 import SwiftUI
 
 /// The ⌘, Settings window: IGDB credentials with "Test connection", the optional Hasheous key,
-/// the OpenEmu library and the backup folder. Backing up and restoring arrive with Backups.
+/// the OpenEmu library, and backups.
 struct SettingsView: View {
     let settings: AppSettings
+    /// Nil if the journal couldn't be opened, so there's nothing to back up or restore into.
+    let journal: JournalStore?
 
     @State private var clientID = ""
     @State private var clientSecret = ""
@@ -60,10 +62,12 @@ struct SettingsView: View {
                 Text("Hash lookups don't need a key. Set one only if anonymous lookups get throttled.").foregroundStyle(.secondary)
             }
 
-            Section("Folders") {
-                folderRow("OpenEmu library", openEmuLibrary, .openEmuLibrary)
-                folderRow("Backups", backupFolder, .backups)
+            Section("OpenEmu") {
+                folderRow("Library", openEmuLibrary, .openEmuLibrary)
             }
+
+            BackupsSection(journal: journal, backups: settings.backups()) { choosingFolder = .backups }
+                .id(backupFolder)
 
             if let saveError {
                 Text(saveError).foregroundStyle(.red)

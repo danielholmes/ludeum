@@ -53,6 +53,7 @@ extension JournalStore {
 
     /// Deletes the List. Its Games are untouched.
     public func deleteList(_ list: Int64) throws {
+        try backups?.backUp(self, operation: .beforeDelete)
         try db.write { db in
             try db.execute(sql: "DELETE FROM list WHERE id = ?", arguments: [list])
         }

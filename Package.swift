@@ -22,7 +22,7 @@ let package = Package(
         ),
         .testTarget(
             name: "JournalCoreTests",
-            dependencies: ["JournalCore"]
+            dependencies: ["JournalCore", .product(name: "GRDB", package: "GRDB.swift")]
         ),
     ]
 )

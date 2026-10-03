@@ -49,7 +49,7 @@ import Testing
 
     @Test func foldersHaveDefaultsAndCanBeChanged() {
         let s = settings()
-        #expect(s.backupFolder.lastPathComponent == "Backups")
+        #expect(s.backupFolder.path(percentEncoded: false).hasSuffix("/Dropbox/Games Journal Backups/"))
         #expect(s.openEmuLibrary == AppSettings.openEmuDefaultLibrary)
 
         s.backupFolder = URL(filePath: "/tmp/journal backups", directoryHint: .isDirectory)
