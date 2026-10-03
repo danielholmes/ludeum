@@ -216,6 +216,17 @@ A nice-to-have: built after the rest of v1 works.
 - **Actions on a ROM item:** Confirm (when there's a suggestion), Search IGDB… (the shared search from Adding Games), Assign to Game… (an existing Game, e.g. a fan translation; warns about Duplicate Versions) and Make by hand… (Platform pre-selected from the ROM's system).
 - **Duplicate Versions items** sit in the same three panes, with the detail and Check again described under First Import.
 
+### Import and Sync screens
+- **One full-window page each, not a sheet or wizard** (chosen from three variants on `prototype/import-sync`).
+- **Import page:** the left column holds the phase timeline (snapshot, lookups, matching, review), with each phase marked done, running or blocking, plus "Discard draft…". While the phases run, the main area shows determinate progress and Cancel. After that it shows a **"Before you can commit"** checklist of expandable cards:
+  - *Start dates for `_Current`*: a table of the Games, with OpenEmu's last-played date as a hint. Each one takes "Started on…" with a Partial date, or "Not playing".
+  - *Duplicate Versions*: the items described under First Import, with Check again.
+  
+  Below, under **"Not blocking"**, come the Review queue counts (answer now or after committing; they carry over) and a summary of what will be imported.
+- **Commit bar:** a sticky "Commit Import" button. While it's disabled, it says what it's waiting on ("5 start dates and 2 Duplicate Versions"). Once it's enabled, it says the commit can't be undone and a backup is taken first.
+- **Sync page:** the same shape. The left column lists the guards as ticks or warnings: OpenEmu closed, no conflicted copy, same library, integrity check. In the main area, each failing guard gets a red banner saying why and what to do. Then comes the preview: stars changed, the journal-owned collections with their membership changes, covers added and covers skipped (with the reason), and Games not synced (Duplicate Versions).
+- **Deleting other collections:** a card lists each OpenEmu collection the journal doesn't own, by name with its game count, each with its own "Delete" tick. An unticked collection is left alone and asked about again at the next Sync. With any ticked, the button turns destructive and names the count ("Sync and delete 2 collections"). It's disabled while a guard fails. After the write, the page shows the result and the name of OpenEmu's backup.
+
 ### Version 1 screens
 Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync; Settings.
 
@@ -234,3 +245,4 @@ Roughly in the order they block work:
 - Branch `prototype/openemu-write`: a throwaway spike that wrote a Sync into a copy of the OpenEmu library. Its verdict is in the commit message and folded into Sync to OpenEmu above.
 - Branch `prototype/review-queue`: three throwaway Review queue layouts (`prototypes/PROTOTYPE-review-queue.html`). Variant A won and is folded into Review queue above.
 - Branch `prototype/matching-rules`: a throwaway measurement of the matching rules against the dry run's snapshot (`journal-import prototype-matching-rules`). Its verdict is in the commit message and folded into First Import above.
+- Branch `prototype/import-sync`: three throwaway Import and Sync layouts (`prototypes/PROTOTYPE-import-sync.html`). Variant B won and is folded into Import and Sync screens above.
