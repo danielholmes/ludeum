@@ -20,8 +20,8 @@ Phone or remote access; several Macs; a fork of OpenEmu; two-way sync; importing
 ### Architecture
 - SwiftUI app plus the `JournalCore` Swift package, with GRDB/SQLite for storage ([ADR 0003](adr/0003-swiftui-not-go.md)). The `journal-import` CLI exists for development tasks.
 - The journal owns its data. OpenEmu only receives a one-way **Sync** ([ADR 0001](adr/0001-journal-owns-data-one-way-sync-to-openemu.md)).
-- One Mac. The journal database lives in `~/Library/Application Support/GamesJournal/`, with automatic dated backups copied to Dropbox. The cache is a separate file in the same folder, excluded from backups.
-- IGDB credentials: `.env` for development (see `scripts/setup-igdb.sh`). The app will later use the Keychain.
+- One Mac. The journal database lives in `~/Library/Application Support/GamesJournal/`, with automatic dated backups in Dropbox (see [Backups](#backups)). The cache is a separate file in the same folder, excluded from backups.
+- Credentials live in the Keychain (see [Settings and credentials](#settings-and-credentials)). `.env` is only for the CLI and tests (see `scripts/setup-igdb.sh`).
 
 ### Games and identity
 - A Game is a title on one Platform. It can have one IGDB link or none ([ADR 0002](adr/0002-game-identity-is-journal-owned.md)).
@@ -166,8 +166,21 @@ A nice-to-have: built after the rest of v1 works.
 - **Before tracking:** play time in the first Import's snapshot (381 h in my library) has no year and never appears here. Game detail shows it inside the total, e.g. "Play time 12 h 30 m (9 h before tracking)".
 - **Non-emulated Games** have no play time. The section is labelled "OpenEmu play time", and those Games appear through their Playthroughs only. There's no hand-typed hours field.
 
+### Backups
+- **When:** before every Import, Sync, and deletion of a Game, List or Playthrough, and otherwise at most once a day (on launch, or the first change of the day). There's no undo, so the backup just before a destructive step is the one that matters. "Back up now" is in Settings.
+- **How:** SQLite's backup API, written under a temporary name and then renamed, so Dropbox never syncs a half-written file. The cache isn't backed up.
+- **Where:** straight into a Dropbox folder, by default `~/Dropbox/Games Journal Backups/`, changeable in Settings. There's no extra local copy. If the folder isn't there, backups go to `Backups/` in the app's folder and the app shows a warning.
+- **Names:** dated, plus the operation that triggered them, e.g. `2026-10-02T1430-before-sync.sqlite`.
+- **How many are kept:** every backup from the last 7 days, then one a day for 30 days, then one a month forever. The database is a few MB, so this costs little and still covers a mistake noticed weeks later.
+- **Restore:** "Restore from backup…" in Settings lists the backups. It backs up the current state first, swaps the file and relaunches. Only the journal changes. Its OpenEmu bookkeeping (store UUID, `Z_PK`s) may now be stale, which the next Sync's guards and preview catch. Nothing is written to OpenEmu.
+
+### Settings and credentials
+- **Settings screen:** IGDB credentials (client ID and secret) with a "Test connection" button (the same check as `journal-import check`), an optional Hasheous key, the backup folder with "Back up now" and "Restore from backup…", and the OpenEmu library location.
+- **IGDB credentials** are kept in the Keychain, along with the cached Twitch app token. If there are none at launch, Settings opens with a link to the Twitch developer console. This depends on a stable signing identity: without one, every rebuild asks for Keychain access again (see the packaging research).
+- **Hasheous key: not requested.** Hash lookups don't need one. The key unlocks Hasheous's metadata proxy, which we don't use, and its rate limits aren't published. There's an optional field (Keychain) in case anonymous lookups get throttled. `HASHEOUS_API_KEY` stays for the CLI.
+
 ### Version 1 screens
-Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync.
+Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync; Settings.
 
 ## Fog: open questions
 
@@ -176,9 +189,7 @@ Roughly in the order they block work:
 1. **Journal database schema:** tables for Game, ROM, Match, Rating history, Playthrough, List, Activity snapshots and Covers; migrations; how Partial dates are stored.
 2. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
 3. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search (the shared search from Adding Games), and assigning a ROM to an existing Game (fan translations).
-4. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
-5. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
-6. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+4. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 
