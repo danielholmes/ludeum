@@ -230,11 +230,13 @@ A nice-to-have: built after the rest of v1 works.
 ### Version 1 screens
 Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync; Settings.
 
+## After v1
+
+Later enrichments, deliberately out of v1 and listed so they aren't lost: IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+
 ## Fog: open questions
 
-Roughly in the order they block work:
-
-1. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+None. Every v1 question is decided or ruled out.
 
 ## Built so far
 
