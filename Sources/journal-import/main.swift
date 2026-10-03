@@ -26,7 +26,7 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-let cacheDirectory = URL.applicationSupportDirectory.appending(path: "GamesJournal/cache", directoryHint: .isDirectory)
+let cacheDirectory = CacheStore.defaultDirectory
 
 func clients() throws -> (IGDBClient, HasheousClient) {
     let env = loadEnv()
@@ -41,24 +41,8 @@ func clients() throws -> (IGDBClient, HasheousClient) {
 func check() async throws {
     let (igdb, hasheous) = try clients()
     print("cache: \(cacheDirectory.path(percentEncoded: false))")
-
-    let search = IGDBSearch(name: "Super Mario World", platformID: 19)  // 19 = SNES
-    let ids = try await igdb.search([search])[search] ?? []
-    print("IGDB search '\(search.name)' on SNES → \(ids.prefix(5))")
-    guard let first = ids.first, let game = try await igdb.games(ids: [first])[first] else { fail("no IGDB result") }
-    print(
-        "  \(game.name ?? "?"): \(game.record["screenshots"]?.array?.count ?? 0) screenshots, "
-            + "\(game.record["artworks"]?.array?.count ?? 0) artworks, "
-            + "time to beat (normally): \(game.timeToBeat?["normally"]?.int.map { "\($0 / 3600)h" } ?? "n/a")")
-    if let coverID = game.record["cover"]?["image_id"]?.string {
-        print("  cover → \(try await igdb.cover(imageID: coverID).path(percentEncoded: false))")
-    }
-
-    // A public reference hash from Hasheous's own docs (Jumpman Junior, C64).
-    let result = try await hasheous.lookup(md5: "5d7550788a4d1b47ad81fbbbf5c615a9")
-    print(
-        "Hasheous 5d7550…c615a9 → IGDB game \(result.match?.igdbGameID.map(String.init) ?? "none"), "
-            + "platform \(result.match?.igdbPlatformID.map(String.init) ?? "none")")
+    // The same check as Settings' "Test connection".
+    print(try await ConnectionCheck.run(igdb: igdb, hasheous: hasheous).summary)
 }
 
 switch CommandLine.arguments.dropFirst().first {

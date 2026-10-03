@@ -41,17 +41,20 @@ public final class IGDBClient: Sendable {
     let clock: TimeSource
     let maxAge: TimeInterval
     let api: Throttle
+    let tokenStore: (any SecretStore)?
 
+    /// With a `tokenStore` (the app's Keychain), the Twitch token is kept there; otherwise in the cache.
     public init(
         credentials: IGDBCredentials, cache: CacheStore,
         transport: HTTPTransport = URLSessionTransport(), clock: TimeSource = SystemTimeSource(),
-        maxAge: TimeInterval = CacheStore.defaultMaxAge
+        maxAge: TimeInterval = CacheStore.defaultMaxAge, tokenStore: (any SecretStore)? = nil
     ) {
         self.credentials = credentials
         self.cache = cache
         self.transport = transport
         self.clock = clock
         self.maxAge = maxAge
+        self.tokenStore = tokenStore
         api = Throttle(requestsPerSecond: 3, transport: transport, clock: clock)
     }
 
@@ -158,11 +161,10 @@ public final class IGDBClient: Sendable {
         let expiresAt: Date
     }
 
-    /// The Twitch app access token, kept in the cache and replaced an hour before it expires.
+    /// The Twitch app access token, kept in the token store (or the cache) and replaced an hour before it expires.
     private func accessToken(replacingStored: Bool = false) async throws -> String {
-        let key = "twitch:token:\(credentials.clientID)"
-        if !replacingStored, let entry = try cache.entries([key])[key],
-            let stored = try? JSONDecoder().decode(StoredToken.self, from: entry.payload),
+        if !replacingStored, let payload = try storedToken(),
+            let stored = try? JSONDecoder().decode(StoredToken.self, from: payload),
             clock.now() < stored.expiresAt.addingTimeInterval(-3_600)
         {
             return stored.token
@@ -184,8 +186,21 @@ public final class IGDBClient: Sendable {
             throw HTTPStatusError(status: response.statusCode, url: request.url)
         }
         let stored = StoredToken(token: token, expiresAt: clock.now().addingTimeInterval(lifetime))
-        try cache.store([key: try JSONEncoder().encode(stored)])
+        try storeToken(try JSONEncoder().encode(stored))
         return token
+    }
+
+    private func storedToken() throws -> Data? {
+        if let tokenStore { return try tokenStore.secret(for: "twitch-token:\(credentials.clientID)").map { Data($0.utf8) } }
+        return try cache.entries(["twitch:token:\(credentials.clientID)"]).values.first?.payload
+    }
+
+    private func storeToken(_ payload: Data) throws {
+        if let tokenStore {
+            try tokenStore.setSecret(String(decoding: payload, as: UTF8.self), for: "twitch-token:\(credentials.clientID)")
+        } else {
+            try cache.store(["twitch:token:\(credentials.clientID)": payload])
+        }
     }
 
     /// Everything on the game, with the game's own sub-records expanded inline.
