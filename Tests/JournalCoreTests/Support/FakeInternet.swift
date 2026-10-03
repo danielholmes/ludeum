@@ -182,7 +182,7 @@ final class FakeInternet: HTTPTransport, Sendable {
 
     private static func searchResult(_ body: String, _ s: State) -> [[String: Any]] {
         let name = body.components(separatedBy: "search \"")[1].components(separatedBy: "\"")[0]
-        let platform = ids(after: "where platforms = (", in: body).first.map(String.init) ?? "any"
+        let platform = ids(after: "platforms = (", in: body).first.map(String.init) ?? "any"
         return (s.searches["\(platform):\(name)"] ?? []).map { ["id": $0] }
     }
 

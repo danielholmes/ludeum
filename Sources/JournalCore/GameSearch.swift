@@ -83,6 +83,12 @@ public struct GameSearch: Sendable {
         try journal.link(game, igdbGameId: result.igdbGameId, igdbName: result.name)
     }
 
+    /// The local file of a result's IGDB cover, downloaded once; nil if it has none.
+    public func cover(for result: GameSearchResult) async throws -> URL? {
+        guard let id = result.coverImageID else { return nil }
+        return try await igdb.cover(imageID: id)
+    }
+
     /// The Game holding this IGDB link, to say "Already linked to X".
     public func journalGame(igdbGameId: Int64, platformId: Int64) throws -> Game? {
         try journal.gameID(igdbGameId: igdbGameId, platformId: platformId).map(journal.game)

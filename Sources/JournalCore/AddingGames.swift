@@ -35,7 +35,7 @@ extension JournalStore {
     /// Games on `platformId` whose display name, own name or IGDB name agrees with `name` (the
     /// matching normalisation). Adding a Game by hand warns about these but never refuses.
     public func gamesWhoseNamesAgree(with name: String, platformId: Int64) throws -> [Game] {
-        let key = nameKey(name)
+        let key = nameKey(cleanName(name))
         guard !key.isEmpty else { return [] }
         let ids = try db.read { db in
             try Row.fetchAll(

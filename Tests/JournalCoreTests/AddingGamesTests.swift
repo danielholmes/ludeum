@@ -24,7 +24,9 @@ import Testing
 
         let search = IGDBSearch(name: "Celeste")
         #expect(try await h.igdb.search([search])[search] == [1, 2])
-        #expect(!h.internet.sent(to: FakeInternet.Hosts.igdb).last!.body.contains("where platforms"))
+        let body = h.internet.sent(to: FakeInternet.Hosts.igdb).last!.body
+        #expect(!body.contains("platforms ="))
+        #expect(body.contains("game_type != (1,2,7,13,14)"))
     }
 }
 
@@ -124,6 +126,7 @@ import Testing
 
         #expect(try j.journal.gamesWhoseNamesAgree(with: "lost vikings", platformId: 19).map(\.id) == [linked])
         #expect(try j.journal.gamesWhoseNamesAgree(with: "Lost Vikings 2", platformId: 19).isEmpty)
+        #expect(try j.journal.gamesWhoseNamesAgree(with: "Lost Vikings, The (U) [!]", platformId: 19).map(\.id) == [linked])
     }
 
     @Test func myPlatformsComeFirstInThePicker() {

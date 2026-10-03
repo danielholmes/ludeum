@@ -73,7 +73,7 @@ public final class IGDBClient: Sendable {
             let s = batch[0]
             let body = """
                 search "\(s.name.replacingOccurrences(of: "\"", with: "\\\""))"; \
-                fields id;\(s.platformID.map { " where platforms = (\($0));" } ?? "") limit 20;
+                fields id; where game_type != (1,2,7,13,14)\(s.platformID.map { " & platforms = (\($0))" } ?? ""); limit 20;
                 """
             let ids = (try JSONValue.decode(try await post("games", body)).array ?? []).compactMap { $0["id"]?.int }
             return [s: try JSONEncoder().encode(ids)]
