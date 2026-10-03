@@ -241,6 +241,7 @@ None. Every v1 question is decided or ruled out.
 ## Built so far
 
 - `JournalCore`: cache store, `IGDBClient` (games, search, covers, Twitch token handling), `HasheousClient`, throttling. 24 tests at the agreed boundaries. CI: lint, build with warnings as errors, tests.
+- `JournalStore` (`JournalCore`): the journal database's `v1` migration (every table in the schema above) and the journal's rules: Partial dates, Games and IGDB links, Rating history, Playthroughs, Intent, Childhood, Lists, deleting Games. Tested at the `JournalStore` and `PartialDate` seams.
 - `journal-import check`: a live check against IGDB and Hasheous.
 - `scripts/setup-igdb.sh`: the IGDB credentials wizard.
 - Branch `prototype/first-import`: a throwaway dry run of the first Import. Its verdict is in the commit message and folded into the decisions above.
