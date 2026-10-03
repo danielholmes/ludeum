@@ -5,16 +5,18 @@ import SwiftUI
 struct GamesJournalApp: App {
     private let settings: AppSettings
     private let journal: JournalStore?
+    private let services: Services
 
     init() {
         let settings = AppSettings()
         self.settings = settings
         journal = try? JournalStore(directory: AppSettings.appFolder, backups: settings.backups())
+        services = Services(settings: settings, journal: journal)
     }
 
     var body: some Scene {
         WindowGroup("Games Journal", id: "main") {
-            MainWindow(services: Services(settings: settings, journal: journal))
+            MainWindow(services: services)
                 .modifier(OpenSettingsWithoutCredentials(settings: settings))
                 .modifier(DailyBackupOnLaunch(journal: journal, backups: settings.backups()))
         }
