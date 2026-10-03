@@ -1,10 +1,18 @@
 import JournalCore
 import SwiftUI
 
+/// Counts changes to the journal. Views reload with `.task(id: changes.revision)`.
+@Observable @MainActor final class JournalChanges {
+    private(set) var revision = 0
+    func changed() { revision += 1 }
+}
+
 /// What the app's screens work with: the journal, and IGDB when credentials are set.
-struct Services {
+@MainActor struct Services {
     let settings: AppSettings
     let journal: JournalStore?
+    /// Bumped after every change to the journal, so the screens showing it reload.
+    let changes = JournalChanges()
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
 
@@ -402,40 +410,5 @@ struct LinkGameSheet: View {
         }
         .padding()
         .frame(width: 640, height: 520)
-    }
-}
-
-/// Game detail, until the editing slice: the Game's name and Platform, and "Link to IGDB…" for a hand-made Game.
-struct GameDetailView: View {
-    let services: Services
-    let id: GameID
-    @State private var game: Game?
-    @State private var platform: IGDBPlatform?
-    @State private var linking = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let game {
-                Text(game.name).font(.largeTitle)
-                if let platform { Text(platform.name).foregroundStyle(.secondary) }
-                if game.igdbGameId == nil, services.gameSearch != nil, platform != nil {
-                    Button("Link to IGDB…") { linking = true }
-                }
-            }
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .task(id: id) { load() }
-        .sheet(isPresented: $linking) {
-            if let search = services.gameSearch, let game, let platform {
-                LinkGameSheet(search: search, game: game, platform: platform) { load() }
-            }
-        }
-    }
-
-    private func load() {
-        game = try? services.journal?.game(id)
-        platform = game.flatMap { g in try? services.journal?.platform(g.platformId) }
     }
 }

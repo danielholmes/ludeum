@@ -7,22 +7,29 @@ struct MainWindow: View {
     @State private var selectedGame: GameID?
     @State private var adding = false
     @State private var selection: Screen? = .library
-    // Filled in by later slices; empty until the journal is wired up.
-    @State private var lists: [Screen] = []
+    @State private var lists: [GameList] = []
+    // Filled in by a later slice.
     @State private var reviewQueueCount = 0
 
     var body: some View {
         NavigationSplitView {
-            Sidebar(selection: $selection, lists: lists, reviewQueueCount: reviewQueueCount)
+            Sidebar(services: services, selection: $selection, lists: lists, reviewQueueCount: reviewQueueCount)
         } content: {
-            if let selection {
-                PlaceholderScreen(screen: selection)
-            } else {
+            switch selection {
+            case .library:
+                LibraryScreen(services: services, selection: $selectedGame)
+            case .list(let id, _):
+                if let list = lists.first(where: { $0.id == id }) {
+                    LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
+                }
+            case let screen?:
+                PlaceholderScreen(screen: screen)
+            case nil:
                 ContentUnavailableView("Nothing selected", systemImage: "sidebar.left")
             }
         } detail: {
             if let selectedGame {
-                GameDetailView(services: services, id: selectedGame).id(selectedGame)
+                GameDetailView(services: services, id: selectedGame) { self.selectedGame = nil }.id(selectedGame)
             } else {
                 GameDetailPlaceholder()
             }
@@ -32,23 +39,49 @@ struct MainWindow: View {
                 .disabled(services.journal == nil)
         }
         .sheet(isPresented: $adding) {
-            AddGameSheet(services: services) { selectedGame = $0 }
+            AddGameSheet(services: services) {
+                selectedGame = $0
+                services.changes.changed()
+            }
+        }
+        .task(id: services.changes.revision) {
+            lists = (try? services.journal?.lists()) ?? []
+            if case .list(let id, _) = selection, !lists.contains(where: { $0.id == id }) { selection = .library }
         }
     }
 }
 
 struct Sidebar: View {
+    let services: Services
     @Binding var selection: Screen?
-    let lists: [Screen]
+    let lists: [GameList]
     let reviewQueueCount: Int
+
+    @State private var naming: ListNaming?
+    @State private var deleting: GameList?
+    @State private var error: String?
 
     var body: some View {
         List(selection: $selection) {
             Section("Journal") {
                 ForEach(Screen.journal, id: \.self) { row($0) }
             }
-            Section("Lists") {
-                ForEach(lists, id: \.self) { row($0) }
+            Section {
+                ForEach(lists, id: \.id) { list in
+                    row(.list(id: list.id, name: list.name))
+                        .contextMenu {
+                            Button("Rename…") { naming = ListNaming(list: list, name: list.name) }
+                            Button("Delete…", role: .destructive) { deleting = list }
+                        }
+                }
+            } header: {
+                HStack {
+                    Text("Lists")
+                    Spacer()
+                    Button("New List", systemImage: "plus") { naming = ListNaming(list: nil, name: "") }
+                        .labelStyle(.iconOnly).buttonStyle(.borderless)
+                        .disabled(services.journal == nil)
+                }
             }
             Section("OpenEmu") {
                 row(.reviewQueue)
@@ -58,10 +91,83 @@ struct Sidebar: View {
             }
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+        .sheet(item: $naming) { naming in
+            ListNameSheet(naming: naming) { name in
+                save {
+                    if let list = naming.list {
+                        try $0.renameList(list.id, name)
+                    } else {
+                        let id = try $0.createList(name)
+                        selection = .list(id: id, name: name)
+                    }
+                }
+                return error
+            }
+        }
+        .confirmationDialog(
+            "Delete the List \(deleting?.name ?? "")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
+        ) {
+            Button("Delete List", role: .destructive) { if let list = deleting { save { try $0.deleteList(list.id) } } }
+        } message: {
+            Text(
+                "Its Games stay in the journal. The next Sync deletes its collection in OpenEmu. There's no undo; a backup is taken first.")
+        }
+        .alert("Couldn't change the List", isPresented: Binding(get: { error != nil && naming == nil }, set: { if !$0 { error = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(error ?? "")
+        }
     }
 
     private func row(_ screen: Screen) -> some View {
         Label(screen.title, systemImage: screen.systemImage).tag(screen)
+    }
+
+    private func save(_ change: (JournalStore) throws -> Void) {
+        guard let journal = services.journal else { return }
+        do {
+            try change(journal)
+            error = nil
+        } catch {
+            self.error = journalErrorText(error)
+        }
+        services.changes.changed()
+    }
+}
+
+struct ListNaming: Identifiable {
+    /// Nil for a new List.
+    let list: GameList?
+    let name: String
+    var id: Int64 { list?.id ?? -1 }
+}
+
+/// Naming a new List, or renaming one. `save` returns an error to show, or nil when done.
+struct ListNameSheet: View {
+    let naming: ListNaming
+    let save: (String) -> String?
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var error: String?
+
+    var body: some View {
+        Form {
+            TextField("Name", text: $name)
+            if let error { Text(error).foregroundStyle(.red) }
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                Button(naming.list == nil ? "Create" : "Rename") {
+                    error = save(name.trimmed)
+                    if error == nil { dismiss() }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(name.trimmed.isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 320)
+        .onAppear { name = naming.name }
     }
 }
 
