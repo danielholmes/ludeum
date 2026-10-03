@@ -18,7 +18,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         var games: [Int: String] = [:]
         var gameFields: [Int: Data] = [:]  // extra record fields, as a JSON object
         var timeToBeat: [Int: Int] = [:]
-        var searches: [String: [Int]] = [:]  // "<platform>:<name>" → ids
+        var searches: [String: [Int]] = [:]  // "<platform or any>:<name>" → ids
+        var platforms: [[String: Any]] = []
         var maxGamesPerResponse = Int.max  // larger game batches get "413 Payload Too Large"
         // Twitch
         var tokenLifetime: Int = 5_000_000
@@ -55,8 +56,13 @@ final class FakeInternet: HTTPTransport, Sendable {
         }
     }
 
-    func addSearch(_ name: String, platform: Int, results: [Int]) {
-        state.withLock { $0.searches["\(platform):\(name)"] = results }
+    /// A search on one platform, or with `platform: nil` on every platform.
+    func addSearch(_ name: String, platform: Int?, results: [Int]) {
+        state.withLock { $0.searches["\(platform.map(String.init) ?? "any"):\(name)"] = results }
+    }
+
+    func addPlatform(_ id: Int, _ name: String, abbreviation: String? = nil) {
+        state.withLock { $0.platforms.append(["id": id, "name": name, "abbreviation": abbreviation as Any? ?? NSNull()]) }
     }
 
     func addHash(md5: String, game: Int, platform: Int) {
@@ -137,6 +143,9 @@ final class FakeInternet: HTTPTransport, Sendable {
         switch request.url?.path() {
         case "/v4/games" where body.contains("search \""):
             return (200, [:], try! JSONSerialization.data(withJSONObject: searchResult(body, s)))
+        case "/v4/platforms":
+            let offset = Int(body.components(separatedBy: "offset ").dropFirst().first?.prefix { $0.isNumber } ?? "0") ?? 0
+            return (200, [:], try! JSONSerialization.data(withJSONObject: Array(s.platforms.dropFirst(offset).prefix(500))))
         case "/v4/multiquery" where body.contains("search \""):
             // Like real IGDB: multiquery silently ignores `search` and returns nothing at all.
             return (200, [:], Data("[]".utf8))
@@ -173,7 +182,7 @@ final class FakeInternet: HTTPTransport, Sendable {
 
     private static func searchResult(_ body: String, _ s: State) -> [[String: Any]] {
         let name = body.components(separatedBy: "search \"")[1].components(separatedBy: "\"")[0]
-        let platform = ids(after: "where platforms = (", in: body).first ?? 0
+        let platform = ids(after: "where platforms = (", in: body).first.map(String.init) ?? "any"
         return (s.searches["\(platform):\(name)"] ?? []).map { ["id": $0] }
     }
 

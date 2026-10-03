@@ -10,19 +10,19 @@ public struct IGDBCredentials: Sendable {
     }
 }
 
-/// A name search for games on one IGDB platform.
+/// A name search for games on one IGDB platform, or on every platform.
 public struct IGDBSearch: Sendable, Hashable {
     public let name: String
-    public let platformID: Int
+    public let platformID: Int?
 
-    public init(name: String, platformID: Int) {
+    public init(name: String, platformID: Int? = nil) {
         self.name = name
         self.platformID = platformID
     }
 
     var cacheKey: String {
         let normalised = name.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return "igdb:search:\(platformID):\(normalised)"
+        return "igdb:search:\(platformID.map(String.init) ?? "any"):\(normalised)"
     }
 }
 
@@ -73,12 +73,30 @@ public final class IGDBClient: Sendable {
             let s = batch[0]
             let body = """
                 search "\(s.name.replacingOccurrences(of: "\"", with: "\\\""))"; \
-                fields id; where platforms = (\(s.platformID)); limit 20;
+                fields id;\(s.platformID.map { " where platforms = (\($0));" } ?? "") limit 20;
                 """
             let ids = (try JSONValue.decode(try await post("games", body)).array ?? []).compactMap { $0["id"]?.int }
             return [s: try JSONEncoder().encode(ids)]
         }
         return try payloads.mapValues { try JSONDecoder().decode([Int].self, from: $0) }
+    }
+
+    /// Every IGDB platform: the journal's Platforms. Cached as one entry, like any other record.
+    public func platforms() async throws -> [IGDBPlatform] {
+        let payloads = try await cache.resolve(["all"], key: Self.platformsKey, maxAge: maxAge, batchSize: 1) { _ in
+            var all: [IGDBPlatform] = []
+            while true {
+                let body = "fields id, name, abbreviation; sort id asc; limit 500; offset \(all.count);"
+                let page = (try JSONValue.decode(try await post("platforms", body)).array ?? []).compactMap { p -> IGDBPlatform? in
+                    guard let id = p["id"]?.int, let name = p["name"]?.string else { return nil }
+                    return IGDBPlatform(id: Int64(id), name: name, abbreviation: p["abbreviation"]?.string)
+                }
+                all += page
+                if page.count < 500 { break }
+            }
+            return ["all": try JSONEncoder().encode(all)]
+        }
+        return try JSONDecoder().decode([IGDBPlatform].self, from: payloads["all"] ?? Data("[]".utf8))
     }
 
     /// A local file holding the cover image, downloaded once.
@@ -97,6 +115,7 @@ public final class IGDBClient: Sendable {
     }
 
     static func gameKey(_ id: Int) -> String { "igdb:game:\(id)" }
+    static func platformsKey(_: String) -> String { "igdb:platforms:all" }
     /// Fully expanded records are large: IGDB answers 413 for ~250 at once but is fine with 100.
     static let maxBatch = 100
 

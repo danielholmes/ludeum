@@ -1,7 +1,11 @@
+import JournalCore
 import SwiftUI
 
 /// The main window: sidebar, the selected screen, and the Game detail pane.
 struct MainWindow: View {
+    let services: Services
+    @State private var selectedGame: GameID?
+    @State private var adding = false
     @State private var selection: Screen? = .library
     // Filled in by later slices; empty until the journal is wired up.
     @State private var lists: [Screen] = []
@@ -17,7 +21,18 @@ struct MainWindow: View {
                 ContentUnavailableView("Nothing selected", systemImage: "sidebar.left")
             }
         } detail: {
-            GameDetailPlaceholder()
+            if let selectedGame {
+                GameDetailView(services: services, id: selectedGame).id(selectedGame)
+            } else {
+                GameDetailPlaceholder()
+            }
+        }
+        .toolbar {
+            Button("Add Game", systemImage: "plus") { adding = true }
+                .disabled(services.journal == nil)
+        }
+        .sheet(isPresented: $adding) {
+            AddGameSheet(services: services) { selectedGame = $0 }
         }
     }
 }

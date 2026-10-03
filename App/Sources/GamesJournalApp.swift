@@ -14,7 +14,7 @@ struct GamesJournalApp: App {
 
     var body: some Scene {
         WindowGroup("Games Journal", id: "main") {
-            MainWindow()
+            MainWindow(services: Services(settings: settings, journal: journal))
                 .modifier(OpenSettingsWithoutCredentials(settings: settings))
                 .modifier(DailyBackupOnLaunch(journal: journal, backups: settings.backups()))
         }
