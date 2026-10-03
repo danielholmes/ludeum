@@ -42,6 +42,7 @@ struct GameDetailView: View {
     private func form(_ game: Game) -> some View {
         Form {
             Section {
+                CoverEditor(services: services, game: id, name: game.name)
                 Text(game.name).font(.title).bold()
                 if let platform { Text(platform.name).foregroundStyle(.secondary) }
                 if game.igdbGameId == nil, services.gameSearch != nil, platform != nil {

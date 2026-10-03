@@ -183,25 +183,9 @@ private struct CoversGrid: View {
 private struct CoverTile: View {
     let services: Services
     let row: LibraryRow
-    @State private var image: NSImage?
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(.quaternary)
-            if let image {
-                Image(nsImage: image).resizable().scaledToFill()
-            } else {
-                Text(row.name).font(.caption).foregroundStyle(.secondary).padding(6).multilineTextAlignment(.center)
-            }
-        }
-        .frame(width: 120, height: 160)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .task(id: row.igdbGameId) {
-            guard let igdbId = row.igdbGameId.map(Int.init), let igdb = services.igdb,
-                let imageID = try? await igdb.games(ids: [igdbId])[igdbId]?.record["cover"]?["image_id"]?.string,
-                let file = try? await igdb.cover(imageID: imageID)
-            else { return }
-            image = NSImage(contentsOf: file)
-        }
+        CoverView(services: services, game: row.id, name: row.name)
+            .frame(width: 120, height: 160)
     }
 }

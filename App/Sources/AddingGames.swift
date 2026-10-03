@@ -32,6 +32,8 @@ import SwiftUI
         guard let igdb, let journal else { return nil }
         return GameSearch(igdb: igdb, journal: journal)
     }
+
+    var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb) } }
 }
 
 /// The one IGDB search component: a search box, an optional Platform filter, and results with
