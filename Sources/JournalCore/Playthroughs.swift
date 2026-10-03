@@ -73,6 +73,7 @@ extension JournalStore {
     }
 
     public func deletePlaythrough(_ id: Int64) throws {
+        try backups?.backUp(self, operation: .beforeDelete)
         try db.write { db in
             try db.execute(sql: "DELETE FROM playthrough WHERE id = ?", arguments: [id])
         }
