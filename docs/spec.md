@@ -219,6 +219,16 @@ A nice-to-have: built after the rest of v1 works.
 ### Version 1 screens
 Library (filter and sort by Platform, Rating, Intent, Intent set, List, Outcome, Childhood); Game detail (editing); What to play next; Year in review; Top-rated; Import, Review queue and Sync; Settings.
 
+- **Layout: one window with a sidebar, the selected screen, and Game detail on the right**, like Music or Photos (chosen from three variants on `prototype/screen-layouts`).
+- **Sidebar sections:**
+  - **Journal:** Library, What to play next, Top-rated, Year in review.
+  - **Lists:** one entry per List, which opens the Library filtered to that List, plus "New List".
+  - **OpenEmu:** Review queue with a count badge, and when the last Import ran.
+- **Game detail is the right-hand pane:** selecting a Game in any screen shows its Game detail there for editing, without leaving that screen. It holds the Cover, name and Platform, Rating (with "≈ imported" and the history), Intent with when it was set, Childhood, Lists, Playthroughs, Activity, ROMs and Delete. A new Game opens there after it's added.
+- **Library:** the filter and sort bar on top, then either a cover grid or a sortable table (Name, Platform, Rating, Intent, last Outcome, Lists), switched with a toggle. Top-rated has the same filter bar. What to play next and Year in review fill the middle pane as specified above.
+- **Toolbar:** Add Game, Import now, Sync to OpenEmu… and Settings.
+- **The Review queue** takes over the middle and right panes with its own three panes. **Settings** is the standard macOS Settings window (⌘,).
+
 ## Fog: open questions
 
 Roughly in the order they block work:
@@ -234,3 +244,4 @@ Roughly in the order they block work:
 - Branch `prototype/openemu-write`: a throwaway spike that wrote a Sync into a copy of the OpenEmu library. Its verdict is in the commit message and folded into Sync to OpenEmu above.
 - Branch `prototype/review-queue`: three throwaway Review queue layouts (`prototypes/PROTOTYPE-review-queue.html`). Variant A won and is folded into Review queue above.
 - Branch `prototype/matching-rules`: a throwaway measurement of the matching rules against the dry run's snapshot (`journal-import prototype-matching-rules`). Its verdict is in the commit message and folded into First Import above.
+- Branch `prototype/screen-layouts`: three throwaway screen and navigation layouts (`prototypes/PROTOTYPE-screen-layouts.html`). Variant A won and is folded into Version 1 screens above.
