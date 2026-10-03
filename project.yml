@@ -1,0 +1,35 @@
+name: GamesJournal
+options:
+  bundleIdPrefix: org.danielholmes
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+packages:
+  GamesJournal:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+targets:
+  GamesJournal:
+    type: application
+    platform: macOS
+    sources: [App/Sources]
+    configFiles:
+      Debug: App/Config/Signing.xcconfig
+      Release: App/Config/Signing.xcconfig
+    dependencies:
+      - package: GamesJournal
+        product: JournalCore
+    settings:
+      base:
+        PRODUCT_NAME: Games Journal
+        PRODUCT_BUNDLE_IDENTIFIER: org.danielholmes.GamesJournal
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
