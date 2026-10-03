@@ -96,10 +96,10 @@ public final class Matcher: Sendable {
         var out: [Int: MatchResult] = [:]
         for rom in roms {
             func agree(_ g: IGDBGame) -> Bool { namesAgree(romName: rom.name, openVGDBTitle: rom.openVGDBTitle, game: g) }
-            if let id = checksumGame[rom.id], let game = games[id] {
-                if agree(game) {
+            if let id = checksumGame[rom.id] {
+                if let game = games[id], agree(game) {
                     out[rom.id] = .automatic(gameID: id)
-                } else if let related = relatedIDs(game).compactMap({ games[$0] }).first(where: agree) {
+                } else if let related = games[id].flatMap({ relatedIDs($0).compactMap { games[$0] }.first(where: agree) }) {
                     out[rom.id] = .suggestion(Suggestion(gameID: related.id, source: .relatedRecord, namesAgree: true))
                 } else {
                     out[rom.id] = .suggestion(Suggestion(gameID: id, source: .checksum, namesAgree: false))

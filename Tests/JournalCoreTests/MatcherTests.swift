@@ -79,6 +79,15 @@ import Testing
                 == .suggestion(Suggestion(gameID: 8, source: .nameSearch, namesAgree: true)))
     }
 
+    @Test func aChecksumGameIGDBDoesntKnowIsStillTheSuggestion() async throws {
+        let h = try Harness()
+        h.internet.addHash(md5: "aa", game: 404, platform: 19)
+
+        #expect(
+            try await match(h, rom("Lost Game (USA)", md5: "aa"))
+                == .suggestion(Suggestion(gameID: 404, source: .checksum, namesAgree: false)))
+    }
+
     @Test func nothingFoundIsNoSuggestion() async throws {
         let h = try Harness()
         #expect(try await match(h, rom("Unknown Homebrew")) == .noSuggestion)

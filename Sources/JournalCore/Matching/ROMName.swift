@@ -35,11 +35,8 @@ public struct ROMName: Sendable, Hashable {
             let wasAfterDisc = afterDisc
             afterDisc = false
             if square {
-                if matches(t, #"^T[+-]"#) {
-                    parts.append(t)
-                } else if !matches(t, Self.dumpFlag) && !matches(t, Self.serial) {
-                    parts.append(t)
-                }
+                // GoodTools translations (`[T+Eng]`) stay: they're part of the Version.
+                if !matches(t, Self.dumpFlag) && !matches(t, Self.serial) { parts.append(t) }
                 continue
             }
             if let n = t.wholeMatch(of: /Disc (\d+)/) {
