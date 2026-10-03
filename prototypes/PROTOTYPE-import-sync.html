@@ -1,0 +1,186 @@
+<!doctype html>
+<!-- PROTOTYPE, throwaway. Question (ticket "Import and Sync screens"): what do the first Import (phased progress,
+     _Current start dates, the confirm step, Duplicate Versions pause) and Sync (preview, confirming other OpenEmu
+     collections' deletion by name, guard failures) screens look like?
+     Three structurally different variants, switchable via ?variant=A|B|C or ←/→; Import/Sync via the titlebar toggle.
+     In-memory state only. Data: real _Current games and collections from the local OpenEmu snapshot; counts per spec. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Import Sync Prototype</title>
+<style>
+:root{--bg:#f5f5f7;--panel:#fff;--side:#ebebef;--ink:#1d1d1f;--mute:#6e6e73;--line:#d2d2d7;--acc:#0a64d8;--ok:#1f883d;--warn:#b35900;--bad:#c4302b;--sel:#dbe8fb;--warnbg:#fff4e5;--badbg:#fdecea}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1e1e20;--panel:#2a2a2d;--side:#232326;--ink:#f2f2f4;--mute:#9a9aa0;--line:#3a3a3e;--acc:#4c9bff;--ok:#3fb950;--warn:#e3a33b;--bad:#ff6b61;--sel:#1f3a5f;--warnbg:#3a2c16;--badbg:#3d1e1c}}
+:root[data-theme=dark]{--bg:#1e1e20;--panel:#2a2a2d;--side:#232326;--ink:#f2f2f4;--mute:#9a9aa0;--line:#3a3a3e;--acc:#4c9bff;--ok:#3fb950;--warn:#e3a33b;--bad:#ff6b61;--sel:#1f3a5f;--warnbg:#3a2c16;--badbg:#3d1e1c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:4px 10px;cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}button.d{background:var(--bad);border-color:var(--bad);color:#fff}button:disabled{opacity:.4;cursor:default}
+input,select{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:3px 6px}
+.mute{color:var(--mute)}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.win{max-width:1180px;margin:16px auto 80px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative}
+.titlebar{padding:8px 14px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;background:var(--side);flex-wrap:wrap}
+.titlebar b{flex:1}
+.seg button{border-radius:0;margin-left:-1px}.seg button:first-child{border-radius:6px 0 0 6px}.seg button:last-child{border-radius:0 6px 6px 0}.seg button.on{background:var(--sel)}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc);transition:width .2s}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}th{font-weight:500;color:var(--mute);font-size:12px}
+.note{border-radius:8px;padding:8px 10px;margin:8px 0}.note.w{background:var(--warnbg)}.note.b{background:var(--badbg)}
+.box{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0}
+.sim{max-width:1180px;margin:10px auto 0;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0 16px}
+.sim label{display:flex;gap:4px;align-items:center}
+.fake{opacity:.35;filter:blur(1px);pointer-events:none;padding:14px;display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.fake i{display:block;height:120px;border-radius:6px;background:linear-gradient(135deg,#8a8fa0,#c9ccd6)}
+/* A sheet */
+.sheetwrap{position:absolute;inset:44px 0 0 0;display:flex;justify-content:center;align-items:flex-start;background:#0003}
+.sheet{width:620px;max-width:calc(100% - 24px);background:var(--panel);border:1px solid var(--line);border-top:0;border-radius:0 0 12px 12px;box-shadow:0 12px 32px #0004;padding:18px 20px}
+.steps{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}.steps span{font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);color:var(--mute)}.steps span.on{background:var(--acc);border-color:var(--acc);color:#fff}.steps span.done{color:var(--ok);border-color:var(--ok)}
+.foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;align-items:center}.foot .l{margin-right:auto}
+/* B dashboard */
+.B{display:grid;grid-template-columns:230px 1fr;min-height:600px}
+.B .tl{background:var(--side);padding:14px;border-right:1px solid var(--line)}
+.B .tl div{display:flex;gap:8px;align-items:center;padding:6px 0}.B .tl .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);flex:none;display:grid;place-items:center;font-size:11px}
+.B .tl .dot.done{background:var(--ok);border-color:var(--ok);color:#fff}.B .tl .dot.run{border-color:var(--acc)}.B .tl .dot.block{background:var(--warn);border-color:var(--warn);color:#fff}
+.B .main{padding:16px 20px}
+.B .card{border:1px solid var(--line);border-radius:10px;margin:10px 0}.B .card>h4{margin:0;padding:10px 12px;display:flex;gap:8px;align-items:center;cursor:pointer}.B .card>h4 .r{margin-left:auto;font-weight:400}
+.B .card>.body{padding:0 12px 12px}
+.B .commit{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:center}
+/* C three panes */
+.C{display:grid;grid-template-columns:220px 320px 1fr;height:620px}
+.C .side{background:var(--side);padding:8px;border-right:1px solid var(--line);overflow:auto}
+.C .side h5{margin:10px 8px 4px;font-size:11px;text-transform:uppercase;color:var(--mute);letter-spacing:.04em}
+.C .side div{padding:5px 8px;border-radius:6px;cursor:pointer;display:flex;gap:6px}.C .side div span{margin-left:auto;color:var(--mute)}.C .side div.on{background:var(--sel)}
+.C .list{border-right:1px solid var(--line);overflow:auto}.C .row{padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer}.C .row.on{background:var(--sel)}
+.C .detail{padding:14px;overflow:auto}
+.pop{position:absolute;top:44px;right:12px;width:400px;max-width:calc(100% - 24px);background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px #0005;padding:14px;z-index:3;max-height:560px;overflow:auto}
+#sw{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111;color:#fff;border-radius:20px;padding:6px 10px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 16px #0006;z-index:9}
+#sw button{background:#333;color:#fff;border:0;border-radius:12px}
+@media (max-width:800px){.B,.C{grid-template-columns:1fr;height:auto}.fake{grid-template-columns:repeat(3,1fr)}}
+</style></head><body>
+<div class="sim" id="sim"></div>
+<div id="app"></div>
+<div id="sw"><button id="prev">←</button><span id="lbl"></span><button id="next">→</button></div>
+<script>
+// ---------- data ----------
+const CURRENT=['Spyro the Dragon','Bugs Bunny & Taz: Time Busters',"Mario's Picross",'Adventures of Lolo','Mole Mania','Super Mario Bros. 3','Geronimo Stilton in the Kingdom of Fantasy'];
+const LASTPLAYED=['2026-09-28','2026-07-14','2026-09-30','2026-05-02','2026-08-19','2026-09-11','2025-12-24'];
+const DV=[
+ {game:'Double Dragon III: The Sacred Stones',plat:'NES',roms:[
+   {v:'(Japan)',file:'Double Dragon III - The Rosetta Stone (Japan).nes',stars:0,cols:['Double Dragon'],time:'0:12'},
+   {v:'(USA)',file:'Double Dragon III - The Sacred Stones (USA).nes',stars:3,cols:['Double Dragon','NES hard','_TODO'],time:'2:41'}]},
+ {game:'Sweet Home',plat:'NES',roms:[
+   {v:'(Japan) [T-En by Gaijin Productions v1.0]',file:'Sweet Home (Japan) [T-En by Gaijin].nes',stars:4,cols:['Survival Horror'],time:'5:03'},
+   {v:'(Japan) [T-En by Pacnsacdave v1.1]',file:'Sweet Home (Japan) [T-En by Pacnsacdave].nes',stars:0,cols:[],time:'0:20'}]}];
+const PHASES=[['Snapshot','Reading OpenEmu’s library (1,309 ROMs)'],['Lookups','Hasheous and IGDB, 1,309 ROMs'],['Matching','Names and checksums'],['Review','Your answers']];
+const SYNC={stars:412,cols:[['_TODO',94,'+3 −1'],['_TODO Next',18,'+1'],['_Current',7,'+1 −2'],['_Completed',77,'+2'],['Mario Universe',48,'renamed from Mario'],['Survival Horror',24,'+1']],covers:9,coversSkipped:[['Bomberman Hero','still awaiting OpenVGDB lookup'],['Mole Mania','IGDB cover couldn’t be downloaded']],skipped:['Double Dragon III: The Sacred Stones','Sweet Home'],
+ del:[['Halloween picks',6],['Couch co-op',11]]};
+const GUARDS=[['oe','OpenEmu is running','Quit OpenEmu, then try again.'],['conf','Dropbox conflicted copy next to Library.storedata','“Library (Daniel’s conflicted copy 2026-10-01).storedata” sits next to the store. Resolve it in Finder first.'],['uuid','This isn’t the library the journal Imported','The store’s UUID changed (library rebuilt or replaced). Re-pointing the journal is out of v1.']];
+// ---------- state ----------
+let S;function reset(){S={mode:S?.mode||'import',phase:0,prog:0,running:false,dates:CURRENT.map(()=>({kind:'',val:''})),dv:DV.map(()=>false),checking:false,committed:false,step:0,
+ sync:{guard:{oe:false,conf:false,uuid:false},del:{},stage:'preview',typed:''},selC:'progress',selRow:0,pop:false,open:{dates:true,dv:true}}}
+reset();
+const blocked=()=>S.dv.filter(x=>!x).length, unanswered=()=>S.dates.filter(d=>!(d.kind==='np'||(d.kind==='d'&&d.val))).length, canCommit=()=>S.phase>=3&&!blocked()&&!unanswered();
+function run(){if(S.running)return;S.running=true;const t=setInterval(()=>{S.prog+=7;if(S.prog>=100){S.prog=0;S.phase++;if(S.phase>=3){clearInterval(t);S.running=false;S.phase=3}}render()},90)}
+function checkAgain(){S.checking=true;render();setTimeout(()=>{S.checking=false;S.dv=S.dv.map((x,i)=>x||window['rm'+i]);render()},700)}
+const guardFails=()=>GUARDS.filter(g=>S.sync.guard[g[0]]);
+const delCount=()=>SYNC.del.filter(d=>S.sync.del[d[0]]).length;
+function syncNow(){S.sync.stage='running';render();setTimeout(()=>{S.sync.stage='done';render()},900)}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// shared bits (content, not layout)
+function phaseLine(){return S.phase<3?`<div>${PHASES[S.phase][0]}: <span class="mute">${PHASES[S.phase][1]}</span></div><div class="bar"><i style="width:${S.prog}%"></i></div><div class="mute" style="font-size:12px">Step ${S.phase+1} of 4 · Nothing is written to the journal until you commit. Lookups are cached, so cancelling and rerunning is quick.</div>`:''}
+function dateRows(){return `<table><tr><th>Game in _Current</th><th>Last played (OpenEmu)</th><th>Started</th></tr>${CURRENT.map((g,i)=>{const d=S.dates[i];return `<tr><td>${esc(g)}</td><td class="mute">${LASTPLAYED[i]}</td><td>
+ <select onchange="S.dates[${i}].kind=this.value;render()"><option value="" ${!d.kind?'selected':''}>Choose…</option><option value="d" ${d.kind==='d'?'selected':''}>Started on…</option><option value="np" ${d.kind==='np'?'selected':''}>Not playing</option></select>
+ ${d.kind==='d'?`<input style="width:110px" placeholder="2026 / 2026-09 / 2026-09-14" value="${d.val}" oninput="S.dates[${i}].val=this.value;document.querySelectorAll('[data-cnt]').forEach(e=>e.textContent=unanswered())" onchange="render()">`:''}</td></tr>`}).join('')}</table>
+ <div class="mute" style="font-size:12px">A Partial date: a year, a month or a day. “Not playing” creates no Playthrough.</div>`}
+function dvBlock(i){const d=DV[i];if(S.dv[i])return `<div class="box"><b class="ok">✓ ${esc(d.game)}</b> <span class="mute">now has one Version.</span></div>`;
+ return `<div class="box"><b>${esc(d.game)}</b> <span class="mute">${d.plat} · ${d.roms.length} present ROMs</span>
+ <table><tr><th>Version</th><th>OpenEmu data you’d lose</th><th></th></tr>${d.roms.map(r=>`<tr><td>${esc(r.v)}<div class="mono mute">${esc(r.file)}</div></td><td>${'★'.repeat(r.stars)||'<span class=mute>no stars</span>'}<br>${r.cols.join(', ')||'<span class=mute>no collections</span>'}<br><span class="mute">${r.time} played</span></td><td><button>Show in Finder</button></td></tr>`).join('')}</table>
+ <label class="mute" style="font-size:12px"><input type="checkbox" onchange="window.rm${i}=this.checked"> <i>simulate: I removed one in OpenEmu</i></label></div>`}
+function dvNote(){return `<div class="note w">Remove all but one Version in OpenEmu, then press <b>Check again</b>. Real exceptions (a Game that genuinely needs two Versions) need a code change.</div>`}
+function reviewLine(){return `<div class="box">Review queue: <b>1,165</b> ROMs matched automatically · <b>259</b> to review <span class="mute">(you can do these now or after committing; they carry over)</span></div>`}
+function importSummary(){return `<table><tr><td>Games created</td><td>907 matched + 259 waiting in Review queue</td></tr><tr><td>Playthroughs</td><td>${S.dates.filter(d=>d.kind==='d').length} in progress, 75 Finished (from _Completed)</td></tr><tr><td>Intents</td><td>94 Backlog, 18 Up next</td></tr><tr><td>Lists</td><td>48 from your other collections</td></tr><tr><td>Missing ROMs</td><td>150 orphaned entries, imported as missing</td></tr></table>`}
+function committedView(){return `<div class="box"><b class="ok">✓ Imported.</b> The journal now owns this data; ongoing Imports run at launch and when OpenEmu quits. <span class="mute">Backup taken: 2026-10-03T1512-before-import.sqlite</span></div>`}
+function guardBlock(){const f=guardFails();return f.length?f.map(g=>`<div class="note b"><b>Can’t Sync: ${g[1]}.</b> ${g[2]}</div>`).join(''):''}
+function syncPreviewRows(){return `<table>
+ <tr><td>Stars</td><td>${SYNC.stars} games change stars</td></tr>
+ <tr><td>Collections</td><td>${SYNC.cols.map(c=>`${c[0]} <span class="mute">(${c[1]}, ${c[2]})</span>`).join('<br>')}<br><span class="mute">42 more unchanged</span></td></tr>
+ <tr><td>Covers</td><td>${SYNC.covers} added · ${SYNC.coversSkipped.length} skipped this time<br>${SYNC.coversSkipped.map(c=>`<span class="mute">${c[0]}: ${c[1]}</span>`).join('<br>')}</td></tr>
+ <tr><td>Not synced</td><td>${SYNC.skipped.map(s=>`${s} <span class="warn">Duplicate Versions</span>`).join('<br>')}</td></tr></table>`}
+function delChecks(){return SYNC.del.map(d=>`<label style="display:flex;gap:6px;padding:3px 0"><input type="checkbox" ${S.sync.del[d[0]]?'checked':''} onchange="S.sync.del['${d[0]}']=this.checked;render()"> Delete <b>${d[0]}</b> <span class="mute">(${d[1]} games, made in OpenEmu)</span></label>`).join('')+`<div class="mute" style="font-size:12px">Unticked collections are left alone this time and asked about again next Sync. Smart collections and folders are never touched.</div>`}
+function syncDone(){return S.sync.stage==='done'?`<div class="box"><b class="ok">✓ Synced.</b> Integrity check passed before and after. ${delCount()} collections deleted. <span class="mute">OpenEmu backup: 2026-10-03T1520-before-sync.sqlite</span></div>`:S.sync.stage==='running'?`<div class="box">Writing… <span class="mute">one transaction, can’t be cancelled</span><div class="bar"><i style="width:70%"></i></div></div>`:''}
+const fake=()=>`<div class="fake">${'<i></i>'.repeat(12)}</div>`;
+const modeSeg=()=>`<span class="seg"><button class="${S.mode==='import'?'on':''}" onclick="S.mode='import';render()">Import</button><button class="${S.mode==='sync'?'on':''}" onclick="S.mode='sync';render()">Sync</button></span>`;
+
+// ---------- Variant A: modal sheet wizard, one step at a time ----------
+function VA(){let body,steps,foot;
+ if(S.mode==='import'){steps=['Reading','Start dates','Duplicate Versions','Commit'];
+  if(S.committed){body=committedView();foot=`<button class="p" onclick="reset();render()">Done</button>`}
+  else if(S.step===0){body=`<h3 style="margin-top:0">First Import from OpenEmu</h3>${S.phase<3?phaseLine():'<div class="ok">✓ Read 1,309 ROMs.</div>'+reviewLine()}`;
+   foot=S.phase<3?`<button onclick="reset();render()">Cancel</button><button class="p" ${S.running?'disabled':''} onclick="run()">${S.running?'Working…':'Start'}</button>`:`<button class="l">Discard draft</button><button onclick="">Save and close</button><button class="p" onclick="S.step=1;render()">Continue</button>`}
+  else if(S.step===1){body=`<h3 style="margin-top:0">When did you start these?</h3><p class="mute">These 7 Games are in <b>_Current</b>. An in-progress Playthrough needs a start date.</p>${dateRows()}`;
+   foot=`<span class="l mute"><span data-cnt>${unanswered()}</span> left</span><button onclick="S.step=0;render()">Back</button><button class="p" ${unanswered()?'disabled':''} onclick="S.step=2;render()">Continue</button>`}
+  else if(S.step===2){body=`<h3 style="margin-top:0">${blocked()?`${blocked()} Games have Duplicate Versions`:'No Duplicate Versions'}</h3>${blocked()?dvNote():''}${DV.map((_,i)=>dvBlock(i)).join('')}<p class="mute" style="font-size:12px">You can close this sheet; the draft is saved and resumes next time.</p>`;
+   foot=`<button class="l" onclick="">Save and close</button><button onclick="S.step=1;render()">Back</button><button ${S.checking?'disabled':''} onclick="checkAgain()">${S.checking?'Checking…':'Check again'}</button><button class="p" ${blocked()?'disabled':''} onclick="S.step=3;render()">Continue</button>`}
+  else{body=`<h3 style="margin-top:0">Commit the Import?</h3>${importSummary()}<div class="note w">This can’t be undone. A backup is taken first.</div>`;
+   foot=`<button onclick="S.step=2;render()">Back</button><button class="p" onclick="S.committed=true;render()">Commit Import</button>`}
+  steps=steps.map((s,i)=>`<span class="${S.committed||i<S.step?'done':i===S.step?'on':''}">${i+1}. ${s}</span>`).join('');
+ }else{steps=['Checks','Preview','Collections to delete','Sync'];const f=guardFails();let st=S.sync.stage==='preview'?(S.step>3?0:S.step):3;
+  if(f.length){st=0;body=`<h3 style="margin-top:0">Sync to OpenEmu</h3>${guardBlock()}`;foot=`<button onclick="">Close</button><button class="p" onclick="render()">Check again</button>`}
+  else if(S.sync.stage!=='preview'){body=syncDone();foot=`<button class="p" ${S.sync.stage==='running'?'disabled':''} onclick="reset();S.mode='sync';render()">Done</button>`}
+  else if(st<=1){st=1;body=`<h3 style="margin-top:0">This Sync will change</h3>${syncPreviewRows()}`;foot=`<button>Cancel</button><button class="p" onclick="S.step=2;render()">Continue</button>`}
+  else{body=`<h3 style="margin-top:0">Collections the journal doesn’t own</h3><p class="mute">These were made in OpenEmu after the Import. Tick each one to delete it.</p>${delChecks()}<div class="note w">OpenEmu’s database is backed up first. The write is one short transaction.</div>`;
+   foot=`<button onclick="S.step=1;render()">Back</button><button class="p" onclick="syncNow()">Sync${delCount()?` and delete ${delCount()}`:''}</button>`}
+  steps=steps.map((s,i)=>`<span class="${i<st?'done':i===st?'on':''}">${s}</span>`).join('')}
+ return `<div class="titlebar"><b>Games Journal: Library</b>${modeSeg()}</div>${fake()}${fake()}<div class="sheetwrap"><div class="sheet"><div class="steps">${steps}</div>${body}<div class="foot">${foot}</div></div></div>`}
+
+// ---------- Variant B: one page, phase timeline + blocker checklist ----------
+function VB(){let tl,main;
+ if(S.mode==='import'){const ph=PHASES.map((p,i)=>{const done=i<S.phase||(i===3&&S.committed);const blk=i===3&&S.phase===3&&!canCommit()&&!S.committed;return `<div><span class="dot ${done?'done':blk?'block':i===S.phase?'run':''}">${done?'✓':blk?'!':''}</span>${p[0]}</div>`}).join('');
+  tl=`<b>First Import</b><div class="mute" style="font-size:12px;margin-bottom:8px">Draft · saved ${S.phase?'just now':'—'}</div>${ph}<hr style="border:0;border-top:1px solid var(--line)"><button style="width:100%">Discard draft…</button>`;
+  if(S.committed)main=committedView();
+  else if(S.phase<3)main=`<h2 style="margin-top:0">Reading your OpenEmu library</h2>${S.phase||S.prog?phaseLine():'<p class="mute">Takes a snapshot; never writes to OpenEmu.</p>'}<div class="foot" style="justify-content:flex-start"><button class="p" ${S.running?'disabled':''} onclick="run()">${S.running?'Working…':'Start Import'}</button>${S.running?'<button onclick="reset();render()">Cancel</button>':''}</div>`;
+  else{const card=(k,ok,title,right,inner)=>`<div class="card"><h4 onclick="S.open.${k}=!S.open.${k};render()"><span class="${ok?'ok':'warn'}">${ok?'✓':'●'}</span>${title}<span class="r mute">${right}</span></h4>${S.open[k]?`<div class="body">${inner}</div>`:''}</div>`;
+   main=`<h2 style="margin-top:0">Before you can commit</h2>
+   ${card('dates',!unanswered(),'Start dates for _Current',`<span data-cnt>${unanswered()}</span> of 7 left`,dateRows())}
+   ${card('dv',!blocked(),'Duplicate Versions',blocked()?`${blocked()} Games blocking`:'none',(blocked()?dvNote():'')+DV.map((_,i)=>dvBlock(i)).join('')+`<button ${S.checking?'disabled':''} onclick="checkAgain()">${S.checking?'Checking…':'Check again'}</button>`)}
+   <h2>Not blocking</h2>${reviewLine()}<div class="card"><h4>Will be imported<span class="r mute"></span></h4><div class="body">${importSummary()}</div></div>
+   <div class="commit"><button class="p" ${canCommit()?'':'disabled'} onclick="S.committed=true;render()">Commit Import</button><span class="mute">${canCommit()?'Can’t be undone. A backup is taken first.':`Waiting on ${[unanswered()?unanswered()+' start dates':'',blocked()?blocked()+' Duplicate Versions':''].filter(Boolean).join(' and ')}`}</span></div>`}
+ }else{const f=guardFails();
+  tl=`<b>Sync to OpenEmu</b><div class="mute" style="font-size:12px;margin-bottom:8px">Last synced 2026-09-28</div>${GUARDS.map(g=>`<div><span class="dot ${S.sync.guard[g[0]]?'block':'done'}">${S.sync.guard[g[0]]?'!':'✓'}</span><span style="font-size:12px">${g[0]==='oe'?'OpenEmu closed':g[0]==='conf'?'No conflicted copy':'Same library'}</span></div>`).join('')}<div><span class="dot done">✓</span><span style="font-size:12px">Integrity check</span></div>`;
+  main=`<h2 style="margin-top:0">Changes for OpenEmu</h2>${guardBlock()}${syncDone()}
+   <div class="card"><h4>Will change</h4><div class="body">${syncPreviewRows()}</div></div>
+   <div class="card"><h4><span class="warn">●</span>Collections the journal doesn’t own<span class="r mute">${delCount()} of ${SYNC.del.length} to delete</span></h4><div class="body">${delChecks()}</div></div>
+   <div class="commit"><button class="${delCount()?'d':'p'}" ${f.length||S.sync.stage!=='preview'?'disabled':''} onclick="syncNow()">Sync${delCount()?` and delete ${delCount()} collections`:''}</button><span class="mute">${f.length?'Fix the checks on the left first.':'Backs up OpenEmu first; one short transaction.'}</span></div>`}
+ return `<div class="titlebar"><b>Games Journal</b>${modeSeg()}</div><div class="B"><div class="tl">${tl}</div><div class="main">${main}</div></div>`}
+
+// ---------- Variant C: Import draft lives in the Review queue's three panes; Sync is a toolbar popover ----------
+function VC(){const side=[['progress','Progress',S.phase<3?Math.round((S.phase*100+S.prog)/4)+'%':'✓'],['dates','Start dates',unanswered()||'✓'],['dv','Duplicate Versions',blocked()||'✓']];
+ const rq=[['Names agree',227],['Checksum suggestions',26],['Name suggestions',1],['No suggestion',35]];
+ let list='',detail='';
+ if(S.committed){detail=committedView()}
+ else if(S.selC==='progress'){detail=`<h3 style="margin-top:0">Import draft</h3>${S.phase<3?(S.phase||S.prog?phaseLine():'<p class=mute>Snapshot, lookups, matching, then your answers.</p>')+`<button class="p" ${S.running?'disabled':''} onclick="run()">${S.running?'Working…':'Start'}</button>`:'<div class="ok">✓ Read 1,309 ROMs.</div>'+reviewLine()}`}
+ else if(S.selC==='dates'){list=CURRENT.map((g,i)=>{const d=S.dates[i];return `<div class="row ${S.selRow===i?'on':''}" onclick="S.selRow=${i};render()">${esc(g)}<div class="mute" style="font-size:12px">${d.kind==='np'?'Not playing':d.kind==='d'&&d.val?'Started '+esc(d.val):'—'}</div></div>`}).join('');
+  const i=S.selRow,d=S.dates[i];detail=`<h3 style="margin-top:0">${esc(CURRENT[i])}</h3><p class="mute">In _Current · last played ${LASTPLAYED[i]}</p>
+   <div class="box">Started <input id="cd" placeholder="2026 / 2026-09 / 2026-09-14" value="${d.kind==='d'?d.val:''}"> <button class="p" onclick="S.dates[${i}]={kind:'d',val:document.getElementById('cd').value};S.selRow=Math.min(6,${i}+1);render()">Set</button> <button onclick="S.dates[${i}]={kind:'np',val:''};S.selRow=Math.min(6,${i}+1);render()">Not playing</button></div>`}
+ else if(S.selC==='dv'){list=DV.map((d,i)=>`<div class="row ${S.selRow===i?'on':''}" onclick="S.selRow=${i};render()">${esc(d.game)}<div class="mute" style="font-size:12px">${S.dv[i]?'resolved':d.roms.length+' Versions'}</div></div>`).join('');
+  const i=Math.min(S.selRow,1);detail=dvNote()+dvBlock(i)+`<button ${S.checking?'disabled':''} onclick="checkAgain()">${S.checking?'Checking…':'Check again'}</button>`}
+ else{list=`<div class="row mute">(Review queue items, as on the Review queue prototype)</div>`;detail='<p class="mute">Review queue detail pane.</p>'}
+ const f=guardFails();
+ const pop=S.pop?`<div class="pop"><b>Sync to OpenEmu</b>${f.length?guardBlock()+'<button onclick="render()">Check again</button>':S.sync.stage!=='preview'?syncDone():`<div style="margin:8px 0">${SYNC.stars} star changes · 52 collections · ${SYNC.covers} covers<br><span class="warn">2 Games not synced (Duplicate Versions)</span> <a href="#" class="mute">details</a></div>
+   <div class="box"><b>Delete collections made in OpenEmu?</b><div class="mute" style="font-size:12px">Type a name to tick it, or tick it.</div>${delChecks()}</div>
+   <div class="foot"><button onclick="S.pop=false;render()">Cancel</button><button class="${delCount()?'d':'p'}" onclick="syncNow()">Sync${delCount()?` and delete ${delCount()}`:''}</button></div>`}</div>`:'';
+ return `<div class="titlebar"><b>Games Journal: Review</b>${S.committed?'':`<button class="p" ${canCommit()?'':'disabled'} onclick="S.committed=true;render()" title="${canCommit()?'':'Answer start dates and clear Duplicate Versions first'}">Commit Import</button>`}<button ${!S.committed?'disabled title="Not available while an Import draft exists"':''} onclick="S.pop=!S.pop;S.mode='sync';render()">Sync…</button></div>${pop}
+ <div class="C"><div class="side">${S.committed?'':`<h5>Import draft</h5>${side.map(s=>`<div class="${S.selC===s[0]?'on':''}" onclick="S.selC='${s[0]}';S.selRow=0;render()">${s[1]}<span class="${s[2]==='✓'?'ok':''}">${s[2]}</span></div>`).join('')}`}
+ <h5>Review queue</h5>${rq.map(r=>`<div class="${S.selC===r[0]?'on':''}" onclick="S.selC='${r[0]}';render()">${r[0]}<span>${S.phase<3&&!S.committed?'…':r[1]}</span></div>`).join('')}</div>
+ <div class="list">${list}</div><div class="detail">${detail}</div></div>`}
+
+// ---------- simulator controls (not part of the design) ----------
+function sim(){document.getElementById('sim').innerHTML=`<b>Simulate:</b> ${GUARDS.map(g=>`<label><input type="checkbox" ${S.sync.guard[g[0]]?'checked':''} onchange="S.sync.guard['${g[0]}']=this.checked;render()">${g[1].split(' ').slice(0,3).join(' ')}</label>`).join('')}
+ <button onclick="S.phase=3;S.prog=0;render()">Skip to answers</button><button onclick="const m=S.mode;reset();S.mode=m;S.committed=m==='sync';render()">Reset</button>${V==='C'?'<button onclick="S.committed=true;render()">Pretend committed (enables Sync)</button>':''}`}
+
+// ---------- switcher ----------
+const VS={A:['A','Sheet wizard'],B:['B','One page with blocker checklist'],C:['C','Inside the Review queue']},KEYS=Object.keys(VS);
+let V=new URLSearchParams(location.search).get('variant');if(!VS[V])V='A';
+function go(d){V=KEYS[(KEYS.indexOf(V)+d+KEYS.length)%KEYS.length];const u=new URL(location);u.searchParams.set('variant',V);history.replaceState(null,'',u);render()}
+document.getElementById('prev').onclick=()=>go(-1);document.getElementById('next').onclick=()=>go(1);
+addEventListener('keydown',e=>{if(e.target.matches('input,textarea,select,[contenteditable]'))return;if(e.key==='ArrowLeft')go(-1);if(e.key==='ArrowRight')go(1)});
+function render(){document.getElementById('lbl').textContent=`${VS[V][0]} (${VS[V][1]})`;document.getElementById('app').innerHTML=`<div class="win">${{A:VA,B:VB,C:VC}[V]()}</div>`;sim()}
+render();
+</script></body></html>
