@@ -109,10 +109,15 @@ extension JournalStore {
                 if collections.contains(SpecialCollection.completed) {
                     try db.execute(sql: "INSERT INTO playthrough (gameId, outcome) VALUES (?, 'finished')", arguments: [game])
                 }
-                for rom in planned.roms where rom.collections.contains(SpecialCollection.current) {
-                    if case .started(let start) = plan.startAnswers[rom.pk] {
-                        try db.execute(sql: "INSERT INTO playthrough (gameId, start) VALUES (?, ?)", arguments: [game, start.text])
+                // One in-progress Playthrough per Game, from its lowest `Z_PK` ROM answered "Started on…".
+                let starts = planned.roms.compactMap { rom -> PartialDate? in
+                    guard rom.collections.contains(SpecialCollection.current), case .started(let start) = plan.startAnswers[rom.pk] else {
+                        return nil
                     }
+                    return start
+                }
+                if let start = starts.first {
+                    try db.execute(sql: "INSERT INTO playthrough (gameId, start) VALUES (?, ?)", arguments: [game, start.text])
                 }
                 for name in collections.subtracting(SpecialCollection.all).sorted() {
                     try db.execute(sql: "INSERT OR IGNORE INTO listGame (listId, gameId) VALUES (?, ?)", arguments: [try list(name), game])

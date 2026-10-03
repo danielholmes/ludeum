@@ -16,15 +16,19 @@ import SwiftUI
     private var task: Task<Void, Never>?
     private let services: Services
 
-    /// True while the phases run: quitting asks first.
+    /// True while the phases or the commit run: quitting asks first.
     static var isRunning = false
 
     init(services: Services) {
         self.services = services
         if (try? services.journal?.firstImportDone()) == true {
             state = .committed
-        } else if let draft = try? firstImport?.loadDraft() {
-            state = .draft(draft)
+        } else {
+            do {
+                if let draft = try firstImport?.loadDraft() { state = .draft(draft) }
+            } catch {
+                self.error = "The saved Import draft couldn't be read (\(error.localizedDescription)). Discard it and start again."
+            }
         }
     }
 
@@ -58,11 +62,10 @@ import SwiftUI
         Self.isRunning = true
         task = Task {
             do {
-                let draft = try await Task.detached(priority: .userInitiated) {
-                    try await work(firstImport) { phase, fraction in
-                        Task { @MainActor in if case .running = self.state { self.state = .running(phase, fraction) } }
-                    }
-                }.value
+                // FirstImport's work runs off the main actor, and cancelling this task cancels it.
+                let draft = try await work(firstImport) { phase, fraction in
+                    Task { @MainActor in self.advance(phase, fraction) }
+                }
                 state = .draft(draft)
             } catch is CancellationError {
                 state = previous
@@ -72,6 +75,13 @@ import SwiftUI
             }
             Self.isRunning = false
         }
+    }
+
+    /// Progress only moves forward: updates can arrive out of order.
+    private func advance(_ phase: ImportPhase, _ fraction: Double) {
+        guard case .running(let current, let done) = state else { return }
+        let order = ImportPhase.allCases
+        if (order.firstIndex(of: phase)!, fraction) > (order.firstIndex(of: current)!, done) { state = .running(phase, fraction) }
     }
 
     /// Cancels the running phases. Lookups already made stay in the cache, so a rerun is quick.
@@ -96,8 +106,13 @@ import SwiftUI
         }
     }
 
+    /// True while the commit runs: the button is disabled and quitting asks first.
+    private(set) var committing = false
+
     func commit() {
-        guard let draft, let firstImport else { return }
+        guard let draft, let firstImport, !committing else { return }
+        committing = true
+        Self.isRunning = true
         Task {
             do {
                 try await firstImport.commit(draft)
@@ -106,6 +121,8 @@ import SwiftUI
             } catch {
                 self.error = error.localizedDescription
             }
+            committing = false
+            Self.isRunning = false
         }
     }
 }
@@ -249,6 +266,7 @@ struct ImportPage: View {
                         .font(.callout).foregroundStyle(.secondary)
                     ForEach(blockers.duplicateVersions) { item in
                         VStack(alignment: .leading, spacing: 4) {
+                            Text(item.name).font(.headline)
                             ForEach(item.roms, id: \.pk) { DuplicateROMRow(rom: $0) }
                         }
                         .padding(.vertical, 4)
@@ -287,7 +305,8 @@ struct ImportPage: View {
             )
             .foregroundStyle(.secondary)
             Spacer()
-            Button("Commit Import") { model.commit() }.buttonStyle(.borderedProminent).disabled(!waiting.isEmpty)
+            if model.committing { ProgressView().controlSize(.small) }
+            Button("Commit Import") { model.commit() }.buttonStyle(.borderedProminent).disabled(!waiting.isEmpty || model.committing)
         }
     }
 }

@@ -100,6 +100,7 @@ import Testing
 
         #expect(draft.blockers.duplicateVersions.count == 1)
         #expect(draft.blockers.duplicateVersions[0].roms.map(\.name) == ["Super Metroid (Japan)", "Super Metroid (USA)"])
+        #expect(draft.blockers.duplicateVersions[0].name == "Super Metroid")
         await #expect(throws: ImportError.blocked) { try await firstImport.commit(draft) }
     }
 
@@ -118,6 +119,35 @@ import Testing
         #expect(draft.library.roms.map(\.pk) == [metroid, mario])
         #expect(draft.matches[mario] == .automatic(gameID: 1070))
         #expect(draft.startAnswers[metroid] == .notPlaying)
+    }
+
+    @Test func aReplacedLibraryIsMatchedAfresh() async throws {
+        let metroid = try oe.addROM("Super Metroid (USA)", md5: "aa", collections: ["_Current"])
+        var draft = try await start()
+        try firstImport.answer(&draft, start: .notPlaying, forROM: metroid)
+        try oe.replaceStore(uuid: "STORE-2")
+
+        draft = try await firstImport.checkAgain(draft, library: oe.folder) { _, _ in }
+
+        #expect(draft.library.storeUUID == "STORE-2")
+        #expect(draft.startAnswers.isEmpty)
+    }
+
+    @Test func aGameWithTwoCurrentROMsGetsOnePlaythrough() async throws {
+        let disc1 = try oe.addROM("Final Fantasy VII (USA) (Disc 1)", md5: "f1", system: "openemu.system.psx", collections: ["_Current"])
+        let disc2 = try oe.addROM("Final Fantasy VII (USA) (Disc 2)", md5: "f2", system: "openemu.system.psx", collections: ["_Current"])
+        h.internet.addGame(427, "Final Fantasy VII", fields: ["platforms": [["id": 7, "name": "PlayStation"]]])
+        h.internet.addPlatform(7, "PlayStation")
+        h.internet.addHash(md5: "f1", game: 427, platform: 7)
+        h.internet.addHash(md5: "f2", game: 427, platform: 7)
+        var draft = try await start()
+        try firstImport.answer(&draft, start: .started(PartialDate("2026-08")!), forROM: disc1)
+        try firstImport.answer(&draft, start: .started(PartialDate("2026-09")!), forROM: disc2)
+
+        try await firstImport.commit(draft)
+
+        let game = try #require(try j.journal.library(LibraryFilter(), sort: .name, ascending: true).first)
+        #expect(try j.journal.playthroughs(game.id).map(\.draft.start) == [PartialDate("2026-08")])
     }
 
     // MARK: Committing

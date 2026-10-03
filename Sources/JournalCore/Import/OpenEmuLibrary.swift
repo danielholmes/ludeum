@@ -70,14 +70,24 @@ public enum OpenEmuLibrary {
         let artwork = library.appending(path: "Artwork", directoryHint: .isDirectory)
         return try db.read { db in
             let uuid = try String.fetchOne(db, sql: "SELECT Z_UUID FROM Z_METADATA") ?? ""
+            // Core Data numbers its entities per model version, and names the Collection's many-to-many
+            // table after them (Z_2GAMES with Z_2COLLECTIONS and Z_7GAMES in my library), so read them.
+            func entity(_ name: String) throws -> Int {
+                guard let n = try Int.fetchOne(db, sql: "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = ?", arguments: [name]) else {
+                    throw DatabaseError(message: "OpenEmu's library has no \(name) entity")
+                }
+                return n
+            }
+            let collection = try entity("Collection")
+            let game = try entity("Game")
             var collections: [Int64: [String]] = [:]
             for row in try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT j.Z_7GAMES AS game, c.ZNAME AS name FROM Z_2GAMES j
-                    JOIN ZABSTRACTCOLLECTION c ON c.Z_PK = j.Z_2COLLECTIONS
-                    WHERE c.Z_ENT = 2 AND c.ZNAME IS NOT NULL  -- 2 is a regular Collection (Z_PRIMARYKEY), not a smart one
-                    """)
+                    SELECT j.Z_\(game)GAMES AS game, c.ZNAME AS name FROM Z_\(collection)GAMES j
+                    JOIN ZABSTRACTCOLLECTION c ON c.Z_PK = j.Z_\(collection)COLLECTIONS
+                    WHERE c.Z_ENT = ? AND c.ZNAME IS NOT NULL
+                    """, arguments: [collection])
             {
                 collections[row["game"], default: []].append(row["name"])
             }

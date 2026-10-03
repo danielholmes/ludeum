@@ -112,6 +112,8 @@ public struct CurrentGame: Sendable, Equatable, Identifiable {
 /// A Game with two or more present ROMs that aren't Discs of one Version.
 public struct DuplicateVersionsItem: Sendable, Equatable, Identifiable {
     public let igdbGameId: Int64
+    /// The Game, by its first ROM's cleaned name.
+    public var name: String { cleanName(roms[0].name) }
     /// Its present ROMs, each with its Version text, file and OpenEmu data.
     public let roms: [OpenEmuROMRecord]
     public var id: Int64 { roms[0].pk }
@@ -182,9 +184,12 @@ public final class FirstImport: Sendable {
     public func checkAgain(
         _ draft: ImportDraft, library: URL, progress: @escaping @Sendable (ImportPhase, Double) -> Void
     ) async throws -> ImportDraft {
+        guard try !journal.firstImportDone() else { throw ImportError.alreadyImported }
         let snapshot = try takeSnapshot(library: library, progress: progress)
         let old = Dictionary(uniqueKeysWithValues: draft.library.roms.map { ($0.pk, $0.md5) })
-        let kept = Set(snapshot.roms.filter { old[$0.pk] == $0.md5 }.map(\.pk))
+        // A new store UUID is a rebuilt or replaced library: its Z_PKs mean nothing, so match it afresh.
+        let sameStore = snapshot.storeUUID == draft.library.storeUUID
+        let kept = sameStore ? Set(snapshot.roms.filter { old[$0.pk] == $0.md5 }.map(\.pk)) : []
         var next = ImportDraft(
             library: snapshot, matches: draft.matches.filter { kept.contains($0.key) },
             platforms: draft.platforms.filter { kept.contains($0.key) }, startAnswers: draft.startAnswers.filter { kept.contains($0.key) })

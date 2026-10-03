@@ -28,9 +28,12 @@ final class FakeOpenEmu {
                     CREATE TABLE ZROM (Z_PK INTEGER PRIMARY KEY, ZPLAYCOUNT INTEGER, ZGAME INTEGER, ZLASTPLAYED TIMESTAMP,
                         ZPLAYTIME FLOAT, ZLOCATION VARCHAR, ZMD5 VARCHAR);
                     CREATE TABLE ZABSTRACTCOLLECTION (Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, ZNAME VARCHAR);
-                    CREATE TABLE Z_2GAMES (Z_2COLLECTIONS INTEGER, Z_7GAMES INTEGER);
+                    -- Entity numbers unlike the real store's (Collection 2, Game 7), so nothing can hardcode them.
+                    CREATE TABLE Z_PRIMARYKEY (Z_ENT INTEGER PRIMARY KEY, Z_NAME VARCHAR);
+                    INSERT INTO Z_PRIMARYKEY VALUES (3, 'Collection'), (5, 'SmartCollection'), (9, 'Game');
+                    CREATE TABLE Z_3GAMES (Z_3COLLECTIONS INTEGER, Z_9GAMES INTEGER);
                     INSERT INTO Z_METADATA VALUES (1, ?, NULL);
-                    INSERT INTO ZABSTRACTCOLLECTION VALUES (1000, 4, 'Recently Added');
+                    INSERT INTO ZABSTRACTCOLLECTION VALUES (1000, 5, 'Recently Added');
                     """, arguments: [storeUUID])
         }
     }
@@ -71,21 +74,26 @@ final class FakeOpenEmu {
             for collection in collections {
                 try db.execute(
                     sql:
-                        "INSERT INTO ZABSTRACTCOLLECTION (Z_ENT, ZNAME) SELECT 2, ? WHERE NOT EXISTS (SELECT 1 FROM ZABSTRACTCOLLECTION WHERE ZNAME = ?)",
+                        "INSERT INTO ZABSTRACTCOLLECTION (Z_ENT, ZNAME) SELECT 3, ? WHERE NOT EXISTS (SELECT 1 FROM ZABSTRACTCOLLECTION WHERE ZNAME = ?)",
                     arguments: [collection, collection])
                 try db.execute(
-                    sql: "INSERT INTO Z_2GAMES SELECT Z_PK, ? FROM ZABSTRACTCOLLECTION WHERE ZNAME = ?", arguments: [pk, collection])
+                    sql: "INSERT INTO Z_3GAMES SELECT Z_PK, ? FROM ZABSTRACTCOLLECTION WHERE ZNAME = ?", arguments: [pk, collection])
             }
         }
         return pk
     }
 
     /// Removes a ROM from OpenEmu (row and file), as removing it in OpenEmu would.
+    /// OpenEmu's library rebuilt: a new store UUID.
+    func replaceStore(uuid: String) throws {
+        try db.write { try $0.execute(sql: "UPDATE Z_METADATA SET Z_UUID = ?", arguments: [uuid]) }
+    }
+
     func removeROM(_ pk: Int64) throws {
         try db.write { db in
             try db.execute(sql: "DELETE FROM ZROM WHERE Z_PK = ?", arguments: [pk])
             try db.execute(sql: "DELETE FROM ZGAME WHERE Z_PK = ?", arguments: [pk])
-            try db.execute(sql: "DELETE FROM Z_2GAMES WHERE Z_7GAMES = ?", arguments: [pk])
+            try db.execute(sql: "DELETE FROM Z_3GAMES WHERE Z_9GAMES = ?", arguments: [pk])
         }
     }
 }
