@@ -11,6 +11,8 @@ public final class CacheStore: Sendable {
 
     /// How long a cached entry stays fresh unless a client says otherwise.
     public static let defaultMaxAge: TimeInterval = 60 * 86_400
+    /// Shared by the app and `journal-import`.
+    public static let defaultDirectory = URL.applicationSupportDirectory.appending(path: "GamesJournal/cache", directoryHint: .isDirectory)
 
     let db: DatabaseQueue
     let directory: URL

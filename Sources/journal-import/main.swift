@@ -26,7 +26,7 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-let cacheDirectory = URL.applicationSupportDirectory.appending(path: "GamesJournal/cache", directoryHint: .isDirectory)
+let cacheDirectory = CacheStore.defaultDirectory
 
 func clients() throws -> (IGDBClient, HasheousClient) {
     let env = loadEnv()

@@ -1,6 +1,7 @@
 import Foundation
 
 /// The app's settings: secrets in a `SecretStore` (the Keychain), folder locations in user defaults.
+/// Sendable because `UserDefaults` and every `SecretStore` are thread-safe.
 public final class AppSettings: @unchecked Sendable {
     public let secrets: any SecretStore
     let defaults: UserDefaults

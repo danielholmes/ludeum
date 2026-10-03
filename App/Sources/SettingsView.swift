@@ -11,7 +11,10 @@ struct SettingsView: View {
     @State private var hasheousKey = ""
     @State private var openEmuLibrary: URL?
     @State private var backupFolder: URL?
+    @State private var needsCredentials = false
     @State private var check: CheckState = .idle
+    /// Bumped by every edit, so a test that finishes after one doesn't report on values no longer shown.
+    @State private var checkGeneration = 0
     @State private var saveError: String?
     @State private var choosingFolder: Folder?
 
@@ -29,7 +32,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                if settings.needsCredentials {
+                if needsCredentials {
                     Text(
                         "Games Journal needs IGDB credentials: register an app in the [Twitch developer console](https://dev.twitch.tv/console/apps) and paste its client ID and secret here."
                     )
@@ -38,6 +41,7 @@ struct SettingsView: View {
                 TextField("Client ID", text: $clientID)
                 SecureField("Client secret", text: $clientSecret)
                 HStack {
+                    Button("Save", action: save).keyboardShortcut(.defaultAction)
                     Button("Test connection", action: testConnection)
                         .disabled(clientID.isEmpty || clientSecret.isEmpty || check == .running)
                     checkStatus
@@ -69,9 +73,10 @@ struct SettingsView: View {
         .frame(width: 520)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear(perform: load)
-        .onChange(of: clientID) { save() }
-        .onChange(of: clientSecret) { save() }
-        .onChange(of: hasheousKey) { save() }
+        .onSubmit(save)
+        .onChange(of: clientID) { edited() }
+        .onChange(of: clientSecret) { edited() }
+        .onChange(of: hasheousKey) { edited() }
         .fileImporter(
             isPresented: Binding(get: { choosingFolder != nil }, set: { if !$0 { choosingFolder = nil } }),
             allowedContentTypes: [.folder]
@@ -109,6 +114,12 @@ struct SettingsView: View {
         hasheousKey = settings.hasheousKey ?? hasheousKey
         openEmuLibrary = settings.openEmuLibrary
         backupFolder = settings.backupFolder
+        needsCredentials = settings.needsCredentials
+    }
+
+    private func edited() {
+        check = .idle
+        checkGeneration += 1
     }
 
     private func save() {
@@ -117,6 +128,7 @@ struct SettingsView: View {
             try settings.setIGDBCredentials(IGDBCredentials(clientID: clientID, clientSecret: clientSecret))
             try settings.setHasheousKey(hasheousKey)
             saveError = nil
+            needsCredentials = settings.needsCredentials
         } catch {
             saveError = "Couldn't save to the Keychain: \(error)"
         }
@@ -124,22 +136,20 @@ struct SettingsView: View {
 
     private func testConnection() {
         check = .running
+        checkGeneration += 1
+        let generation = checkGeneration
         let credentials = IGDBCredentials(clientID: clientID, clientSecret: clientSecret)
         let key = hasheousKey.isEmpty ? nil : hasheousKey
         Task {
             do {
-                let cache = try CacheStore(directory: AppDirectories.cache)
+                let cache = try CacheStore(directory: CacheStore.defaultDirectory)
                 let igdb = IGDBClient(credentials: credentials, cache: cache, tokenStore: settings.secrets)
                 let hasheous = HasheousClient(cache: cache, apiKey: key)
-                check = .passed(try await ConnectionCheck.run(igdb: igdb, hasheous: hasheous).summary)
+                let summary = try await ConnectionCheck.run(igdb: igdb, hasheous: hasheous).summary
+                if generation == checkGeneration { check = .passed(summary) }
             } catch {
-                check = .failed(String(describing: error))
+                if generation == checkGeneration { check = .failed(String(describing: error)) }
             }
         }
     }
-}
-
-enum AppDirectories {
-    /// Shared with `journal-import`.
-    static let cache = URL.applicationSupportDirectory.appending(path: "GamesJournal/cache", directoryHint: .isDirectory)
 }
