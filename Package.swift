@@ -18,7 +18,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "journal-import",
-            dependencies: ["JournalCore"]
+            dependencies: ["JournalCore", .product(name: "GRDB", package: "GRDB.swift")]
         ),
         .testTarget(
             name: "JournalCoreTests",
