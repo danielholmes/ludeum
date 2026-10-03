@@ -1,0 +1,198 @@
+<!doctype html>
+<!-- PROTOTYPE, throwaway. Question (ticket "Review queue UX"): how should the Review queue look and behave?
+     Three structurally different variants, switchable via ?variant=A|B|C or ←/→. In-memory state only.
+     Data: real ROMs from prototype-output/matching-rules-report.md and first-import-report.md. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Review Queue Prototype</title>
+<style>
+:root{--bg:#f5f5f7;--panel:#fff;--side:#ebebef;--ink:#1d1d1f;--mute:#6e6e73;--line:#d2d2d7;--acc:#0a64d8;--ok:#1f883d;--warn:#b35900;--bad:#c4302b;--sel:#dbe8fb}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1e1e20;--panel:#2a2a2d;--side:#232326;--ink:#f2f2f4;--mute:#9a9aa0;--line:#3a3a3e;--acc:#4c9bff;--ok:#3fb950;--warn:#e3a33b;--bad:#ff6b61;--sel:#1f3a5f}}
+:root[data-theme=dark]{--bg:#1e1e20;--panel:#2a2a2d;--side:#232326;--ink:#f2f2f4;--mute:#9a9aa0;--line:#3a3a3e;--acc:#4c9bff;--ok:#3fb950;--warn:#e3a33b;--bad:#ff6b61;--sel:#1f3a5f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:4px 10px;cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}button:disabled{opacity:.4;cursor:default}
+input{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:5px 8px;width:100%}
+.mute{color:var(--mute)}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.tag{display:inline-block;font-size:11px;border-radius:4px;padding:0 5px;border:1px solid var(--line);color:var(--mute)}
+.agree{color:var(--ok)}.disagree{color:var(--warn)}.bad{color:var(--bad)}
+.win{max-width:1180px;margin:16px auto 80px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.titlebar{padding:8px 14px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;background:var(--side)}
+.titlebar b{flex:1}
+.banner{padding:6px 14px;background:var(--sel);font-size:12px}
+.chip{border-radius:12px;padding:2px 9px}.chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.res{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:6px;cursor:pointer}.res:hover{background:var(--sel)}
+.cov{width:28px;height:38px;border-radius:3px;background:linear-gradient(135deg,#8a8fa0,#c9ccd6);flex:none}
+.box{border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+/* A */
+.A{display:grid;grid-template-columns:210px 330px 1fr;height:640px}
+.A .side{background:var(--side);padding:8px;border-right:1px solid var(--line)}
+.A .side div{padding:5px 8px;border-radius:6px;cursor:pointer;display:flex}.A .side div span{margin-left:auto;color:var(--mute)}
+.A .side div.on{background:var(--sel)}
+.A .list{border-right:1px solid var(--line);overflow:auto}
+.A .row{padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer}.A .row.on{background:var(--sel)}
+.A .detail{padding:14px;overflow:auto}
+/* B */
+.B{padding:14px 18px;max-height:700px;overflow:auto}
+.B h3{margin:18px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute)}
+.B .card{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0}
+.B .bulk{border:2px solid var(--ok);border-radius:10px;padding:12px}
+/* C */
+.C{padding:20px;display:grid;grid-template-columns:1fr 260px;gap:20px;min-height:560px}
+.C .focus{border:1px solid var(--line);border-radius:12px;padding:20px}
+.C .prog{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:6px 0 14px}.C .prog i{display:block;height:100%;background:var(--acc)}
+.C kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px;font-family:ui-monospace,monospace}
+.C .vs{display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:8px;margin:14px 0}
+.C .vs>div{border:1px solid var(--line);border-radius:8px;padding:12px}
+/* switcher */
+#sw{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111;color:#fff;border-radius:20px;padding:6px 10px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 16px #0006;z-index:9}
+#sw button{background:#333;color:#fff;border:0;border-radius:12px}
+#modal{position:fixed;inset:0;background:#0006;display:none;align-items:center;justify-content:center;z-index:8}
+#modal .m{background:var(--panel);border-radius:10px;width:560px;max-width:calc(100% - 32px);padding:16px;max-height:80vh;overflow:auto}
+@media (max-width:800px){.A{grid-template-columns:1fr;height:auto}.C{grid-template-columns:1fr}.B .card{grid-template-columns:1fr}}
+</style></head><body>
+<div id="app"></div><div id="modal"></div>
+<div id="sw"><button id="prev">←</button><span id="lbl"></span><button id="next">→</button></div>
+<script>
+// ---------- data (real examples; counts per spec) ----------
+const PLAT={gb:'Game Boy',gbc:'Game Boy Color',nes:'NES',snes:'SNES',psx:'PlayStation',gba:'Game Boy Advance',ngc:'GameCube',n64:'Nintendo 64',md:'Mega Drive'};
+let id=0;const I=o=>({id:++id,state:'open',...o});
+const bulkName=[
+ ['gb','Bomberman GB (USA, Europe) (SGB Enhanced)','Bomberman GB',1994],
+ ['gb','Bugs Bunny - Crazy Castle II (U) [!]','The Bugs Bunny Crazy Castle 2',1991],
+ ['gb','Bugs Bunny Crazy Castle, The (USA, Europe)','The Bugs Bunny Crazy Castle',1989],
+ ['gb','Dragon Warrior Monsters 2 - Tara\'s Adventure (USA) (SGB Enhanced)','Dragon Warrior Monsters 2: Tara\'s Adventure',2001],
+ ['gb','Godzilla - The Series - Monster Wars (USA) (En,Fr,De)','Godzilla The Series: Monster Wars',2000],
+ ['gb','Jurassic Park Part 2 - The Chaos Continues (USA, Europe) (En,Fr,De,It)','Jurassic Park Part 2: The Chaos Continues',1994],
+ ['gb','Lost World, The - Jurassic Park (USA, Europe) (SGB Enhanced)','The Lost World: Jurassic Park',1997],
+ ['gb','Mega Man - Dr. Wily\'s Revenge (E) [!]','Mega Man: Dr. Wily\'s Revenge',1991],
+ ['md','Toy Story (Europe)','Disney\'s Toy Story',1995],
+].map(([s,r,g,y])=>I({kind:'name',bulk:true,sys:s,rom:r,sug:{name:g,year:y,type:'Main Game'},why:'Name search; names agree'}));
+const bulkRelated=[
+ ['gb','Harvest Moon GB (USA) (SGB Enhanced)','Harvest Moon GBC','Remaster','Harvest Moon GB','parent_game'],
+ ['nes','Holy Diver (Japan)','Holy Diver Collector’s Edition','Main Game','Holy Diver','version_parent'],
+ ['psx','Resident Evil 2 - Dual Shock Ver. (USA) (Disc 1) (Leon)','Resident Evil 2','Main Game','Resident Evil 2: Dual Shock Ver.','expanded_games'],
+ ['psx','Resident Evil 2 - Dual Shock Ver. (USA) (Disc 2) (Claire)','Resident Evil 2','Main Game','Resident Evil 2: Dual Shock Ver.','expanded_games'],
+].map(([s,r,cg,ct,g,rel])=>I({kind:'related',bulk:true,sys:s,rom:r,checksum:{name:cg,type:ct},sug:{name:g,type:'via '+rel},why:'Checksum found '+cg+'; a related record\'s name agrees'}));
+const checksum=[
+ ['gb','Army Men - Air Combat (USA, Europe) (En,Fr,De)','Army Men','Port'],
+ ['snes','Super Star Wars - Return of the Jedi (USA)','Super Star Wars','Main Game'],
+ ['gb','Resident Evil GB','Resident Evil: Grim Beginnings','Main Game'],
+ ['snes','Wizards & Warriors Chapter X - The Fortress of Fear (USA, Europe)','Wizards & Warriors X: Fortress of Fear','Main Game'],
+ ['gba','Lilo & Stitch (USA)','Disney\'s Lilo & Stitch 2: Hämsterviel Havoc','Main Game'],
+ ['gb','Battletoads-Double Dragon (USA)','Battletoads','Main Game'],
+ ['gba','Colin McRae Rally 2 # GBA','Colin McRae Rally 2.0','Port'],
+].map(([s,r,g,t])=>I({kind:'checksum',sys:s,rom:r,sug:{name:g,type:t},why:'Checksum found this game, but the names disagree'}));
+const nameDis=[I({kind:'name',sys:'gb',rom:'Itchy & Scratchy - Miniature Golf Madness (U)',sug:{name:'The Simpsons: Itchy & Scratchy in Miniature Golf Madness',type:'Main Game'},why:'Name search; top candidate\'s name disagrees'})];
+const none=['Castlevania - The Adventure (USA) - bofner patch','Castlevania OoS GBc build 1.0.2','Chainbreak','My Friendly Little Island Deluxe','Star Hawk (Europe)','Swordbird Song - Iron Owl Tower 3.1','ucity']
+ .map(r=>I({kind:'none',sys:'gb',rom:r,why:'No checksum game, no name candidate'}));
+const dupes=[
+ I({kind:'dupe',game:'Double Dragon III: The Sacred Stones',sys:'nes',roms:[['USA','Double Dragon 3 - The Sacred Stones (U).nes','★★★★','_Completed','3h 10m'],['Japan','Double Dragon III - The Rosetta Stone (Japan).nes','—','—','12m']]}),
+ I({kind:'dupe',game:'Sweet Home',sys:'nes',roms:[['English v2.0 · [TheSiege]','Sweet Home (English v2.0)[TheSiege].nes','★★★★★','_Childhood Played','6h 02m'],['English v1.0 · [Gaijin Productions]','Sweet Home (English v1.0)[Gaijin Productions].nes','—','—','0m']]}),
+];
+const ITEMS=[...bulkName,...bulkRelated,...checksum,...nameDis,...none,...dupes];
+const EXTRA_BULK=227-bulkName.length-bulkRelated.length; // the rest of the bulk-confirmable items, not listed individually
+const GAMES=['Castlevania: The Adventure','Castlevania II: Belmont\'s Revenge','Super Mario Land','Pokémon Red Version','Link\'s Awakening','Wario Land','Kirby\'s Dream Land','Metroid II'];
+const SEARCH=q=>[
+ {name:q.replace(/\(.*$/,'').replace(/ - /,': ').trim(),year:1989,type:'Main Game',plats:['gb']},
+ {name:q.split(' ')[0]+' Legends',year:1997,type:'Main Game',plats:['gb','gbc']},
+ {name:q.split(' ')[0]+' Collection',year:2005,type:'Bundle',plats:['gba']},
+];
+const kindLabel={name:'Name suggestion',related:'Related record',checksum:'Checksum suggestion',none:'No suggestion',dupe:'Duplicate Versions'};
+const open=()=>ITEMS.filter(x=>x.state==='open');
+const isBulk=x=>x.bulk;
+let bulkDone=false;
+const log=[];
+function act(it,what){it.state='done';it.answer=what;log.unshift(`${it.rom||it.game} → ${what}`);render()}
+function bulkConfirm(list){list.forEach(x=>{x.state='done';x.answer='Confirmed '+x.sug.name});bulkDone=true;log.unshift(`Bulk-confirmed ${list.length+EXTRA_BULK} suggestions`);render()}
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const cnt=k=>open().filter(k).length;
+const counts=()=>({bulk:(bulkDone?0:EXTRA_BULK)+cnt(isBulk),checksum:cnt(x=>x.kind==='checksum'),name:cnt(x=>x.kind==='name'&&!x.bulk),none:cnt(x=>x.kind==='none'),dupe:cnt(x=>x.kind==='dupe')});
+
+// ---------- shared pieces ----------
+function sugBox(it){
+ if(it.kind==='dupe')return dupeBox(it);
+ let h=`<div class="mono">${esc(it.rom)}</div><div class="mute">${PLAT[it.sys]} · ${esc(it.why)}</div>`;
+ if(it.kind==='related')h+=`<div class="box"><div class="mute">Checksum's game: <s>${esc(it.checksum.name)}</s> <span class="tag">${it.checksum.type}</span> <span class="disagree">names disagree</span></div><div style="display:flex;gap:8px;margin-top:6px"><div class="cov"></div><div><b>${esc(it.sug.name)}</b> <span class="tag">${it.sug.type}</span><div class="agree">✓ names agree</div></div></div></div>`;
+ else if(it.sug)h+=`<div class="box" style="display:flex;gap:8px"><div class="cov"></div><div><b>${esc(it.sug.name)}</b> ${it.sug.year?`<span class="mute">(${it.sug.year})</span>`:''} <span class="tag">${it.sug.type}</span><div class="${it.bulk?'agree':'disagree'}">${it.bulk?'✓ names agree':'⚠ names disagree'}</div></div></div>`;
+ else h+=`<div class="box mute">No suggestion. Search IGDB, assign to an existing Game, or make one by hand.</div>`;
+ return h;
+}
+function actions(it){
+ if(it.kind==='dupe')return `<button class="p" onclick="act(byId(${it.id}),'Checked again: still duplicate')">Check again</button>`;
+ return (it.sug?`<button class="p" onclick="act(byId(${it.id}),'Confirmed '+byId(${it.id}).sug.name.replace(/'/g,''))">Confirm</button> `:'')+
+ `<button onclick="searchModal(${it.id})">Search IGDB…</button> <button onclick="assignModal(${it.id})">Assign to Game…</button> <button onclick="handModal(${it.id})">Make by hand…</button>`;
+}
+function dupeBox(it){
+ return `<b>${esc(it.game)}</b> <span class="mute">${PLAT[it.sys]}</span>
+ <table style="margin:8px 0"><tr><th>Version</th><th>File</th><th>Stars</th><th>Collections</th><th>Play time</th><th></th></tr>
+ ${it.roms.map(r=>`<tr><td>${esc(r[0])}</td><td class="mono">${esc(r[1])}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td><button>Show in Finder</button></td></tr>`).join('')}</table>
+ <div class="mute">Remove all but one Version in OpenEmu, then Check again. This Game isn't synced until then. Real exceptions need a code change.</div>`;
+}
+const byId=i=>ITEMS.find(x=>x.id===i);
+function modal(h){const m=document.getElementById('modal');m.innerHTML=`<div class="m">${h}<div style="text-align:right;margin-top:10px"><button onclick="closeModal()">Cancel</button></div></div>`;m.style.display='flex'}
+function closeModal(){document.getElementById('modal').style.display='none'}
+function searchModal(i){const it=byId(i);const sys=it.sys;
+ modal(`<b>Search IGDB</b> <span class="mute">(the Adding Games search; clicking a result Matches the ROM)</span>
+ <div class="mono mute" style="margin:6px 0">${esc(it.rom)}</div>
+ <input id="q" value="${esc(it.rom.replace(/\s*[\(\[].*$/,''))}" oninput="drawRes(${i})">
+ <div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap"><button class="chip on">${PLAT[sys]}</button>${sys==='gb'?'<button class="chip">Game Boy Color</button>':''}<button class="chip">Different platform…</button></div>
+ <div id="res"></div>`);drawRes(i)}
+function drawRes(i){const q=document.getElementById('q').value;document.getElementById('res').innerHTML=SEARCH(q).map(r=>`<div class="res" onclick="closeModal();act(byId(${i}),'Matched ${esc(r.name).replace(/'/g,'')}')"><div class="cov"></div><div><b>${esc(r.name)}</b> <span class="mute">(${r.year})</span> <span class="tag">${r.type}</span></div></div>`).join('')}
+function assignModal(i){modal(`<b>Assign to an existing Game</b> <span class="mute">(e.g. a fan translation)</span><input placeholder="Filter my Games" style="margin:8px 0">
+ ${GAMES.map(g=>`<div class="res" onclick="closeModal();act(byId(${i}),'Assigned to ${g.replace(/'/g,'')}')"><div class="cov"></div>${esc(g)}</div>`).join('')}<div class="mute" style="margin-top:6px">Warns (doesn't block) if the Game would then have Duplicate Versions.</div>`)}
+function handModal(i){const it=byId(i);modal(`<b>Make a Game by hand</b><div style="margin:8px 0"><input value="${esc(it.rom.replace(/\s*[\(\[].*$/,''))}"></div>
+ <div style="display:flex;gap:6px"><button class="chip on">${PLAT[it.sys]}</button>${it.sys==='gb'?'<button class="chip">Game Boy Color</button>':''}<button class="chip">Other…</button></div>
+ <div style="text-align:right;margin-top:10px"><button class="p" onclick="closeModal();act(byId(${i}),'Hand-made Game')">Create Game</button></div>`)}
+const shell=(body,extra='')=>`<div class="win"><div class="titlebar"><b>Review queue</b><span class="mute">${open().length+(bulkDone?0:EXTRA_BULK)} items</span>${extra}</div>
+ <div class="banner">First Import draft · items left here carry over into the journal's Review queue on commit</div>${body}</div>
+ ${log.length?`<div style="max-width:1180px;margin:-70px auto 80px" class="mute">Last: ${esc(log[0])}</div>`:''}`;
+
+// ---------- Variant A: Mail-style three panes ----------
+let aCat='bulk',aSel=null;
+const CATS=[['bulk','Names agree',isBulk],['checksum','Checksum suggestions',x=>x.kind==='checksum'],['name','Name suggestions',x=>x.kind==='name'&&!x.bulk],['none','No suggestion',x=>x.kind==='none'],['dupe','Duplicate Versions',x=>x.kind==='dupe']];
+function A(){const c=counts();const cat=CATS.find(k=>k[0]===aCat);const list=open().filter(cat[2]);
+ if(!list.find(x=>x.id===aSel))aSel=list[0]?.id;const sel=byId(aSel);
+ const side=CATS.map(([k,l])=>`<div class="${k===aCat?'on':''}" onclick="aCat='${k}';aSel=null;render()">${l}<span>${c[k]}</span></div>`).join('');
+ const rows=list.map(x=>`<div class="row ${x.id===aSel?'on':''}" onclick="aSel=${x.id};render()"><div class="mono">${esc(x.rom||x.game)}</div><div class="mute">${x.sug?'→ '+esc(x.sug.name):kindLabel[x.kind]}</div></div>`).join('')||'<div class="mute" style="padding:12px">Nothing left here.</div>';
+ const head=aCat==='bulk'&&list.length?`<div style="padding:8px 10px;border-bottom:1px solid var(--line)"><button class="p" onclick="bulkConfirm(open().filter(isBulk))">Confirm all ${c.bulk}</button></div>`:'';
+ return shell(`<div class="A"><div class="side">${side}</div><div class="list">${head}${rows}</div><div class="detail">${sel?sugBox(sel)+'<div style="margin-top:10px">'+actions(sel)+'</div>':''}</div></div>`)}
+
+// ---------- Variant B: one scrolling page, sections with inline actions ----------
+function B(){const c=counts();const sec=(t,f)=>{const l=open().filter(f);return l.length?`<h3>${t} · ${l.length}</h3>`+l.map(x=>x.kind==='dupe'?`<div class="box">${dupeBox(x)}<div style="margin-top:6px">${actions(x)}</div></div>`:
+  `<div class="card"><div class="mono">${esc(x.rom)}<div class="mute">${PLAT[x.sys]}</div></div><div>${x.sug?`<b>${esc(x.sug.name)}</b> <span class="tag">${x.sug.type}</span>${x.checksum?`<div class="mute">checksum: <s>${esc(x.checksum.name)}</s></div>`:''}`:'<span class="mute">—</span>'}</div><div style="white-space:nowrap">${actions(x).replace('Search IGDB…','Search…').replace('Assign to Game…','Assign…').replace('Make by hand…','By hand…')}</div></div>`).join(''):''};
+ const bl=open().filter(isBulk);
+ const bulk=bl.length?`<div class="bulk"><b>${c.bulk} suggestions whose names agree</b> <span class="mute">(including ${bulkRelated.filter(x=>x.state==='open').length} through a related record)</span>
+  <div style="margin:8px 0"><button class="p" onclick="bulkConfirm(open().filter(isBulk))">Confirm all ${c.bulk}</button> <details style="display:inline"><summary class="mute" style="display:inline;cursor:pointer">Review the list first</summary>${bl.map(x=>`<div class="card"><div class="mono">${esc(x.rom)}</div><div><b>${esc(x.sug.name)}</b></div><div><button onclick="x=byId(${x.id});x.bulk=false;x.kind=x.kind==='related'?'checksum':'name';render()">Take out</button></div></div>`).join('')}<div class="mute">…and ${EXTRA_BULK} more</div></details></div></div>`:'';
+ return shell(`<div class="B">${sec('Duplicate Versions (blocks the commit)',x=>x.kind==='dupe')}${bulk}${sec('Checksum suggestions',x=>x.kind==='checksum')}${sec('Name suggestions',x=>x.kind==='name'&&!x.bulk)}${sec('No suggestion',x=>x.kind==='none')}</div>`)}
+
+// ---------- Variant C: one item at a time, keyboard triage ----------
+let cIdx=0;
+function C(){const c=counts();const bl=open().filter(isBulk);
+ const rest=open().filter(x=>!x.bulk);const total=ITEMS.length+EXTRA_BULK;const done=total-open().length-(bulkDone?0:EXTRA_BULK);
+ let main;
+ if(bl.length)main=`<div class="mute">Step 1 of 2</div><h2 style="margin:4px 0">Confirm the easy ones</h2><p>${c.bulk} suggestions have names that agree with the ROM. Confirm them all now, then go through the other ${rest.length} one at a time.</p>
+  <button class="p" onclick="bulkConfirm(open().filter(isBulk))">Confirm ${c.bulk} <kbd>⏎</kbd></button> <button onclick="open().filter(isBulk).forEach(x=>x.bulk=false);bulkDone=true;render()">Go through them one by one</button>`;
+ else if(rest.length){if(cIdx>=rest.length)cIdx=0;const x=rest[cIdx];
+  main=`<div class="mute">Step 2 of 2 · ${cIdx+1} of ${rest.length} · ${kindLabel[x.kind]}</div>`+(x.kind==='dupe'?`<div style="margin-top:10px">${dupeBox(x)}</div>`:
+  `<div class="vs"><div><div class="mute">ROM</div><div class="mono">${esc(x.rom)}</div><div class="mute">${PLAT[x.sys]}</div></div><div style="text-align:center;font-size:20px">→</div><div>${x.sug?`<div class="mute">${x.kind==='checksum'?'Checksum says':'Suggestion'}</div><div style="display:flex;gap:8px"><div class="cov"></div><div><b>${esc(x.sug.name)}</b> <span class="tag">${x.sug.type}</span><div class="disagree">⚠ names disagree</div></div></div>`:'<div class="mute">No suggestion</div>'}</div></div>`)+
+  `<div>${actions(x)} <button onclick="cIdx++;render()">Skip <kbd>K</kbd></button></div>
+  <div class="mute" style="margin-top:12px">${x.sug?'<kbd>Y</kbd> confirm · ':''}<kbd>S</kbd> search · <kbd>A</kbd> assign · <kbd>H</kbd> by hand · <kbd>K</kbd> skip</div>`}
+ else main='<h2>All done 🎉</h2>';
+ const side=`<b>Left</b>${[['Names agree','bulk'],['Duplicate Versions','dupe'],['Checksum','checksum'],['Name','name'],['No suggestion','none']].map(([l,k])=>`<div style="display:flex"><span>${l}</span><span class="mute" style="margin-left:auto">${c[k]}</span></div>`).join('')}
+  <hr style="border:0;border-top:1px solid var(--line)"><b>Recent</b>${log.slice(0,6).map(l=>`<div class="mute" style="font-size:12px">${esc(l)}</div>`).join('')}`;
+ return shell(`<div class="C"><div><div class="prog"><i style="width:${100*done/total}%"></i></div><div class="focus">${main}</div></div><div>${side}</div></div>`)}
+document.addEventListener('keydown',e=>{if(V!=='C'||e.target.closest('input')||document.getElementById('modal').style.display==='flex')return;
+ const rest=open().filter(x=>!x.bulk);const x=rest[cIdx];const k=e.key.toLowerCase();
+ if(open().some(isBulk)&&k==='enter')return bulkConfirm(open().filter(isBulk));
+ if(!x)return;if(k==='k'){cIdx++;render()}else if(k==='y'&&x.sug)act(x,'Confirmed '+x.sug.name);else if(k==='s'&&x.kind!=='dupe')searchModal(x.id);else if(k==='a'&&x.kind!=='dupe')assignModal(x.id);else if(k==='h'&&x.kind!=='dupe')handModal(x.id)});
+
+// ---------- switcher ----------
+const VS={A:'Three panes (Mail-style)',B:'One page, sections',C:'One at a time (triage)'};const KEYS=Object.keys(VS);
+let V=new URLSearchParams(location.search).get('variant');if(!VS[V])V='A';
+function go(d){V=KEYS[(KEYS.indexOf(V)+d+KEYS.length)%KEYS.length];const u=new URL(location);u.searchParams.set('variant',V);history.replaceState(null,'',u);render()}
+prev.onclick=()=>go(-1);next.onclick=()=>go(1);
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,[contenteditable]'))return;if(e.key==='ArrowLeft')go(-1);if(e.key==='ArrowRight')go(1)});
+function render(){document.getElementById('app').innerHTML={A,B,C}[V]();lbl.textContent=`${V} (${VS[V]})`}
+render();
+</script></body></html>
