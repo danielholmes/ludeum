@@ -16,6 +16,7 @@ final class FakeInternet: HTTPTransport, Sendable {
     struct State {
         // IGDB
         var games: [Int: String] = [:]
+        var gameFields: [Int: Data] = [:]  // extra record fields, as a JSON object
         var timeToBeat: [Int: Int] = [:]
         var searches: [String: [Int]] = [:]  // "<platform>:<name>" → ids
         var maxGamesPerResponse = Int.max  // larger game batches get "413 Payload Too Large"
@@ -42,6 +43,15 @@ final class FakeInternet: HTTPTransport, Sendable {
         state.withLock {
             $0.games[id] = name
             if let s = normallySeconds { $0.timeToBeat[id] = s }
+        }
+    }
+
+    /// A game whose record carries extra fields, e.g. `game_type`, `alternative_names` or `parent_game`.
+    func addGame(_ id: Int, _ name: String, fields: [String: Any]) {
+        let data = try! JSONSerialization.data(withJSONObject: fields)
+        state.withLock {
+            $0.games[id] = name
+            $0.gameFields[id] = data
         }
     }
 
@@ -143,7 +153,11 @@ final class FakeInternet: HTTPTransport, Sendable {
             switch block.endpoint {
             case "games":
                 result = ids(after: "where id = (", in: block.text).compactMap { id in
-                    s.games[id].map { ["id": id, "name": $0, "screenshots": [["id": id * 10, "image_id": "sc\(id)"]]] }
+                    s.games[id].map { name in
+                        let extra = s.gameFields[id].flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                        return extra.merging(["id": id, "name": name, "screenshots": [["id": id * 10, "image_id": "sc\(id)"]]]) { a, _ in a
+                        }
+                    }
                 }
             case "game_time_to_beats":
                 result = ids(after: "where game_id = (", in: block.text).compactMap { id in
