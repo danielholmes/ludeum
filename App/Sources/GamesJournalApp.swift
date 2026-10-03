@@ -3,20 +3,23 @@ import SwiftUI
 
 @main
 struct GamesJournalApp: App {
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     private let settings: AppSettings
     private let journal: JournalStore?
     private let services: Services
+    private let importModel: ImportModel
 
     init() {
         let settings = AppSettings()
         self.settings = settings
         journal = try? JournalStore(directory: AppSettings.appFolder, backups: settings.backups())
         services = Services(settings: settings, journal: journal)
+        importModel = ImportModel(services: services)
     }
 
     var body: some Scene {
         WindowGroup("Games Journal", id: "main") {
-            MainWindow(services: services)
+            MainWindow(services: services, importModel: importModel)
                 .modifier(OpenSettingsWithoutCredentials(settings: settings))
                 .modifier(DailyBackupOnLaunch(journal: journal, backups: settings.backups()))
         }

@@ -44,7 +44,7 @@ import Testing
 
         #expect(
             try await match(h, rom("Resident Evil 2 - Dual Shock Ver. (USA) (Disc 1) (Leon)", md5: "aa", system: "openemu.system.psx"))
-                == .suggestion(Suggestion(gameID: 2, source: .relatedRecord, namesAgree: true)))
+                == .suggestion(Suggestion(gameID: 2, source: .relatedRecord, namesAgree: true, checksumGameID: 1)))
     }
 
     @Test func withNoChecksumGameTheFirstAgreeingSearchCandidateIsSuggested() async throws {

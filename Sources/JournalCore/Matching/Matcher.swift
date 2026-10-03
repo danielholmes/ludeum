@@ -25,7 +25,7 @@ public struct OpenEmuROM: Sendable, Hashable {
     }
 }
 
-public enum MatchResult: Sendable, Hashable {
+public enum MatchResult: Sendable, Hashable, Codable {
     /// The checksum identifies the game *and* the names agree (ADR 0004).
     case automatic(gameID: Int)
     /// For the Review queue to confirm.
@@ -34,8 +34,8 @@ public enum MatchResult: Sendable, Hashable {
     case noSuggestion
 }
 
-public struct Suggestion: Sendable, Hashable {
-    public enum Source: Sendable, Hashable {
+public struct Suggestion: Sendable, Hashable, Codable {
+    public enum Source: String, Sendable, Hashable, Codable {
         /// The checksum's own game, whose names disagree.
         case checksum
         /// A related record of the checksum's game, whose name agrees.
@@ -48,11 +48,14 @@ public struct Suggestion: Sendable, Hashable {
     public let source: Source
     /// Names agree, so the Review queue can bulk-confirm it.
     public let namesAgree: Bool
+    /// For a related-record suggestion, the checksum's own game (shown crossed out).
+    public let checksumGameID: Int?
 
-    public init(gameID: Int, source: Source, namesAgree: Bool) {
+    public init(gameID: Int, source: Source, namesAgree: Bool, checksumGameID: Int? = nil) {
         self.gameID = gameID
         self.source = source
         self.namesAgree = namesAgree
+        self.checksumGameID = checksumGameID
     }
 }
 
@@ -76,11 +79,13 @@ public final class Matcher: Sendable {
         self.hasheous = hasheous
     }
 
-    /// Every ROM's result, keyed by ROM id.
-    public func match(_ roms: [OpenEmuROM]) async throws -> [Int: MatchResult] {
+    /// Every ROM's result, keyed by ROM id. `progress` gets (ROMs looked up, total); it can be cancelled.
+    public func match(_ roms: [OpenEmuROM], progress: @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> [Int: MatchResult] {
         var checksumGame: [Int: Int] = [:]
         var candidates: [Int: [Int]] = [:]
-        for rom in roms {
+        for (i, rom) in roms.enumerated() {
+            try Task.checkCancellation()
+            progress(i, roms.count)
             if let game = try await checksumGameID(rom) {
                 checksumGame[rom.id] = game
             } else {
@@ -100,7 +105,7 @@ public final class Matcher: Sendable {
                 if let game = games[id], agree(game) {
                     out[rom.id] = .automatic(gameID: id)
                 } else if let related = games[id].flatMap({ relatedIDs($0).compactMap { games[$0] }.first(where: agree) }) {
-                    out[rom.id] = .suggestion(Suggestion(gameID: related.id, source: .relatedRecord, namesAgree: true))
+                    out[rom.id] = .suggestion(Suggestion(gameID: related.id, source: .relatedRecord, namesAgree: true, checksumGameID: id))
                 } else {
                     out[rom.id] = .suggestion(Suggestion(gameID: id, source: .checksum, namesAgree: false))
                 }

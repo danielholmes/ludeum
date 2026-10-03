@@ -116,6 +116,15 @@ enum JournalSchema {
                 t.primaryKey("id", .integer).check { $0 == 1 }
                 t.column("storeUUID", .text).notNull()
             }
+            // An unmatched ROM's OpenEmu data from the first Import, applied when the Review queue
+            // resolves it: stars (0–5), collection names (JSON array) and a `_Current` start date
+            // answer (a Partial date, or 'notPlaying').
+            try db.create(table: "heldOpenEmuData") { t in
+                t.primaryKey("romId", .integer).references("rom", onDelete: .cascade)
+                t.column("stars", .integer).notNull()
+                t.column("collections", .text).notNull()
+                t.column("currentStart", .text)
+            }
         }
         return migrator
     }
