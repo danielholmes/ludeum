@@ -39,14 +39,14 @@ extension JournalStore {
 
     @discardableResult
     public func createList(_ name: String) throws -> Int64 {
-        try writeListName { db in
+        try write(uniqueViolation: .listNameTaken) { db in
             try db.execute(sql: "INSERT INTO list (name) VALUES (?)", arguments: [name])
             return db.lastInsertedRowID
         }
     }
 
     public func renameList(_ list: Int64, _ name: String) throws {
-        try writeListName { db in
+        try write(uniqueViolation: .listNameTaken) { db in
             try db.execute(sql: "UPDATE list SET name = ? WHERE id = ?", arguments: [name, list])
         }
     }
@@ -86,14 +86,6 @@ extension JournalStore {
     public func games(in list: Int64) throws -> [GameID] {
         try db.read { db in
             try GameID.fetchAll(db, sql: "SELECT gameId FROM listGame WHERE listId = ? ORDER BY gameId", arguments: [list])
-        }
-    }
-
-    private func writeListName<T>(_ body: (Database) throws -> T) throws -> T {
-        do {
-            return try db.write(body)
-        } catch let error as DatabaseError where error.extendedResultCode == .SQLITE_CONSTRAINT_UNIQUE {
-            throw JournalError.listNameTaken
         }
     }
 }

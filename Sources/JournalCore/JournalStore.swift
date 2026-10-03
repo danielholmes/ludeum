@@ -77,15 +77,20 @@ public final class JournalStore: Sendable {
     /// Adds a Game. `name` is a hand-typed or cleaned No-Intro name; a linked Game also has IGDB's name.
     @discardableResult
     public func addGame(platformId: Int64, name: String, igdbGameId: Int64? = nil, igdbName: String? = nil) throws -> GameID {
-        try db.write { db in
-            do {
-                try db.execute(
-                    sql: "INSERT INTO game (platformId, name, igdbGameId, igdbName) VALUES (?, ?, ?, ?)",
-                    arguments: [platformId, name, igdbGameId, igdbName])
-            } catch let error as DatabaseError where error.extendedResultCode == .SQLITE_CONSTRAINT_UNIQUE {
-                throw JournalError.igdbLinkTaken
-            }
+        try write(uniqueViolation: .igdbLinkTaken) { db in
+            try db.execute(
+                sql: "INSERT INTO game (platformId, name, igdbGameId, igdbName) VALUES (?, ?, ?, ?)",
+                arguments: [platformId, name, igdbGameId, igdbName])
             return db.lastInsertedRowID
+        }
+    }
+
+    /// A write whose UNIQUE constraint failure means `error`.
+    func write<T>(uniqueViolation error: JournalError, _ body: (Database) throws -> T) throws -> T {
+        do {
+            return try db.write(body)
+        } catch let dbError as DatabaseError where dbError.extendedResultCode == .SQLITE_CONSTRAINT_UNIQUE {
+            throw error
         }
     }
 

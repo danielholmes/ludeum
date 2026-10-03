@@ -22,7 +22,8 @@ extension JournalStore {
         try db.write { db in
             let current = try Row.fetchOne(
                 db, sql: "SELECT rating FROM ratingEntry WHERE gameId = ? \(Self.ratingOrder) LIMIT 1", arguments: [game])
-            if (current?["rating"] as Int?) == rating?.tenths, current != nil || rating == nil { return }
+            let currentTenths: Int? = current?["rating"]  // nil when unrated or no history yet
+            if currentTenths == rating?.tenths { return }
             try db.execute(
                 sql: """
                     INSERT INTO ratingEntry (gameId, day, rating, imported) VALUES (?, ?, ?, 0)
@@ -31,12 +32,13 @@ extension JournalStore {
         }
     }
 
-    /// Records a Rating brought over from OpenEmu stars, dated today and never replaced.
+    /// Records a Rating brought over from OpenEmu stars, dated today and never replaced
+    /// (a second import the same day is ignored).
     public func importRating(_ game: GameID, _ rating: Rating) throws {
         let day = today()
         try db.write { db in
             try db.execute(
-                sql: "INSERT INTO ratingEntry (gameId, day, rating, imported) VALUES (?, ?, ?, 1)",
+                sql: "INSERT OR IGNORE INTO ratingEntry (gameId, day, rating, imported) VALUES (?, ?, ?, 1)",
                 arguments: [game, day, rating.tenths])
         }
     }
