@@ -44,15 +44,6 @@ extension JournalStore {
                     "INSERT INTO openEmuLibrary (id, storeUUID) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET storeUUID = excluded.storeUUID",
                 arguments: [plan.storeUUID])
 
-            var lists: [String: Int64] = [:]
-            func list(_ name: String) throws -> Int64 {
-                if let id = lists[name] { return id }
-                try db.execute(sql: "INSERT OR IGNORE INTO list (name) VALUES (?)", arguments: [name])
-                let id = try Int64.fetchOne(db, sql: "SELECT id FROM list WHERE name = ?", arguments: [name])!
-                lists[name] = id
-                return id
-            }
-
             func insertROM(_ rom: OpenEmuROMRecord, game: GameID?) throws -> Int64 {
                 let parsed = ROMName(rom.name)
                 try db.execute(
@@ -94,39 +85,17 @@ extension JournalStore {
                 }
                 for rom in planned.roms { _ = try insertROM(rom, game: game) }
 
-                // OpenEmu data, merged across the Game's ROMs.
-                let collections = Set(planned.roms.flatMap(\.collections))
-                let intent: Intent? =
-                    collections.contains(SpecialCollection.upNext)
-                    ? .upNext : collections.contains(SpecialCollection.backlog) ? .backlog : nil
-                if let intent {
-                    // Undated, and never over Intent the Game already has.
-                    try db.execute(sql: "UPDATE game SET intent = ? WHERE id = ? AND intent IS NULL", arguments: [intent.rawValue, game])
-                }
-                if collections.contains(SpecialCollection.childhood) {
-                    try db.execute(sql: "UPDATE game SET childhood = 1 WHERE id = ?", arguments: [game])
-                }
-                if collections.contains(SpecialCollection.completed) {
-                    try db.execute(sql: "INSERT INTO playthrough (gameId, outcome) VALUES (?, 'finished')", arguments: [game])
-                }
-                // One in-progress Playthrough per Game, from its lowest `Z_PK` ROM answered "Started on…".
-                let starts = planned.roms.compactMap { rom -> PartialDate? in
-                    guard rom.collections.contains(SpecialCollection.current), case .started(let start) = plan.startAnswers[rom.pk] else {
+                // OpenEmu data, merged across the Game's ROMs. One in-progress Playthrough per Game, from
+                // its lowest `Z_PK` ROM answered "Started on…".
+                let start = planned.roms.lazy.compactMap { rom -> PartialDate? in
+                    guard rom.collections.contains(SpecialCollection.current), case .started(let s) = plan.startAnswers[rom.pk] else {
                         return nil
                     }
-                    return start
-                }
-                if let start = starts.first {
-                    try db.execute(sql: "INSERT INTO playthrough (gameId, start) VALUES (?, ?)", arguments: [game, start.text])
-                }
-                for name in collections.subtracting(SpecialCollection.all).sorted() {
-                    try db.execute(sql: "INSERT OR IGNORE INTO listGame (listId, gameId) VALUES (?, ?)", arguments: [try list(name), game])
-                }
-                if let stars = planned.roms.map(\.stars).max(), stars > 0 {
-                    try db.execute(
-                        sql: "INSERT OR IGNORE INTO ratingEntry (gameId, day, rating, imported) VALUES (?, ?, ?, 1)",
-                        arguments: [game, day, min(stars, 5) * 20])
-                }
+                    return s
+                }.first
+                try Self.applyOpenEmuData(
+                    db, game: game, stars: planned.roms.map(\.stars).max() ?? 0, collections: Set(planned.roms.flatMap(\.collections)),
+                    start: start, day: day)
                 if let cover = planned.carriedCover {
                     try db.execute(
                         sql: "INSERT OR IGNORE INTO cover (gameId, jpeg, width, height, origin, sha256) VALUES (?, ?, ?, ?, 'carried', ?)",
@@ -157,4 +126,52 @@ extension JournalStore {
             }
         }
     }
+}
+
+extension JournalStore {
+    /// Applies a Game's OpenEmu data, from the first Import or a resolved Review queue item: the
+    /// collections as Intent (undated, never over Intent it has), Childhood, a Finished Playthrough,
+    /// an in-progress one from a `_Current` start date, and Lists; stars ×2 as an imported Rating.
+    static func applyOpenEmuData(_ db: Database, game: GameID, stars: Int, collections: Set<String>, start: PartialDate?, day: String)
+        throws
+    {
+        let intent: Intent? =
+            collections.contains(SpecialCollection.upNext) ? .upNext : collections.contains(SpecialCollection.backlog) ? .backlog : nil
+        if let intent {
+            try db.execute(sql: "UPDATE game SET intent = ? WHERE id = ? AND intent IS NULL", arguments: [intent.rawValue, game])
+        }
+        if collections.contains(SpecialCollection.childhood) {
+            try db.execute(sql: "UPDATE game SET childhood = 1 WHERE id = ?", arguments: [game])
+        }
+        if collections.contains(SpecialCollection.completed),
+            try !Bool.fetchOne(
+                db, sql: "SELECT EXISTS (SELECT 1 FROM playthrough WHERE gameId = ? AND outcome = 'finished')", arguments: [game])!
+        {
+            try db.execute(sql: "INSERT INTO playthrough (gameId, outcome) VALUES (?, 'finished')", arguments: [game])
+        }
+        if collections.contains(SpecialCollection.current), let start,
+            try !Bool.fetchOne(
+                db, sql: "SELECT EXISTS (SELECT 1 FROM playthrough WHERE gameId = ? AND outcome IS NULL)", arguments: [game])!
+        {
+            try db.execute(sql: "INSERT INTO playthrough (gameId, start) VALUES (?, ?)", arguments: [game, start.text])
+        }
+        for name in collections.subtracting(SpecialCollection.all).sorted() {
+            try db.execute(sql: "INSERT OR IGNORE INTO list (name) VALUES (?)", arguments: [name])
+            try db.execute(
+                sql: "INSERT OR IGNORE INTO listGame (listId, gameId) SELECT id, ? FROM list WHERE name = ?", arguments: [game, name])
+        }
+        if stars > 0 {
+            try db.execute(
+                sql: "INSERT OR IGNORE INTO ratingEntry (gameId, day, rating, imported) VALUES (?, ?, ?, 1)",
+                arguments: [game, day, min(stars, 5) * 20])
+        }
+    }
+}
+
+/// A Game's Platform for a ROM: the first of its OpenEmu system's IGDB platforms the IGDB game is on,
+/// else the system's most likely one (`openemu.system.gb` covers Game Boy and Game Boy Color).
+func gamePlatform(system: String, game: IGDBGame?) -> Int64 {
+    let candidates = openEmuSystemPlatforms[system] ?? []
+    let listed = Set((game?.record["platforms"]?.array ?? []).compactMap { $0["id"]?.int ?? $0.int })
+    return Int64(candidates.first(where: listed.contains) ?? candidates.first ?? 0)
 }

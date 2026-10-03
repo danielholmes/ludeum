@@ -9,7 +9,6 @@ struct MainWindow: View {
     @State private var adding = false
     @State private var selection: Screen? = .library
     @State private var lists: [GameList] = []
-    // Filled in by a later slice.
     @State private var reviewQueueCount = 0
 
     var body: some View {
@@ -23,6 +22,8 @@ struct MainWindow: View {
                 if let list = lists.first(where: { $0.id == id }) {
                     LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
                 }
+            case .reviewQueue:
+                ReviewQueueScreen(services: services)
             case .importPage:
                 ImportPage(model: importModel)
             case let screen?:
@@ -49,6 +50,7 @@ struct MainWindow: View {
         }
         .task(id: services.changes.revision) {
             lists = (try? services.journal?.lists()) ?? []
+            reviewQueueCount = (try? services.journal?.reviewQueue().count) ?? 0
             if case .list(let id, _) = selection, !lists.contains(where: { $0.id == id }) { selection = .library }
         }
     }
