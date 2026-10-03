@@ -109,6 +109,44 @@ import SwiftUI
     /// True while the commit runs: the button is disabled and quitting asks first.
     private(set) var committing = false
 
+    // MARK: Ongoing Imports
+
+    /// The last ongoing Import's changes, shown until dismissed. Nil when it changed nothing.
+    var summary: OngoingImportResult?
+    /// When the last ongoing Import ran.
+    private(set) var lastImported: Date?
+    private(set) var importingNow = false
+
+    /// An ongoing Import: at launch, when OpenEmu quits, and by hand. Only after the first Import,
+    /// never while a draft exists, and one at a time.
+    func importNow() {
+        guard state == .committed, !importingNow, !Self.isRunning, let igdb = services.igdb, let hasheous = services.hasheous,
+            let journal = services.journal
+        else { return }
+        importingNow = true
+        Self.isRunning = true
+        let run = OngoingImport(
+            igdb: igdb, hasheous: hasheous, journal: journal, backups: services.settings.backups(),
+            snapshotFile: AppSettings.appFolder.appending(path: "OpenEmu snapshot.sqlite"))
+        let library = services.settings.openEmuLibrary
+        Task {
+            do {
+                let result = try await run.run(library: library)
+                if result.changedSomething { summary = result }
+                lastImported = Date()
+                error = nil
+                services.changes.changed()
+            } catch ImportError.libraryReplaced {
+                error =
+                    "OpenEmu's library was rebuilt or replaced (its store ID changed), so the Import stopped. Re-pointing the journal at a new library isn't supported yet."
+            } catch {
+                self.error = "Import failed: \(error.localizedDescription)"
+            }
+            importingNow = false
+            Self.isRunning = false
+        }
+    }
+
     func commit() {
         guard let draft, let firstImport, !committing else { return }
         committing = true
@@ -234,9 +272,15 @@ struct ImportPage: View {
             case .draft(let draft):
                 checklist(draft)
             case .committed:
-                ContentUnavailableView(
-                    "First Import committed", systemImage: "checkmark.circle",
-                    description: Text("Unmatched ROMs and suggestions are in the Review queue."))
+                ContentUnavailableView {
+                    Label("Up to date with OpenEmu", systemImage: "checkmark.circle")
+                } description: {
+                    Text(
+                        "Imports run at launch and each time OpenEmu quits."
+                            + (model.lastImported.map { " Last Import: \($0.formatted(date: .omitted, time: .shortened))." } ?? ""))
+                } actions: {
+                    Button(model.importingNow ? "Importing…" : "Import now") { model.importNow() }.disabled(model.importingNow)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

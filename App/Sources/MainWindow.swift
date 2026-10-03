@@ -38,6 +38,13 @@ struct MainWindow: View {
                 GameDetailPlaceholder()
             }
         }
+        .overlay(alignment: .bottom) {
+            if let summary = importModel.summary {
+                ImportSummaryBanner(summary: summary, open: { selectedGame = $0 }, dismiss: { importModel.summary = nil })
+                    .frame(maxWidth: 520)
+            }
+        }
+        .modifier(OngoingImportTriggers(model: importModel))
         .toolbar {
             Button("Add Game", systemImage: "plus") { adding = true }
                 .disabled(services.journal == nil)

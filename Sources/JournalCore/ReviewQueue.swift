@@ -51,11 +51,15 @@ extension JournalStore {
     public func reviewQueue() throws -> ReviewQueueItems {
         var items = ReviewQueueItems()
         let rows = try db.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM rom WHERE gameId IS NULL ORDER BY fileName COLLATE NOCASE, id")
+            try Row.fetchAll(
+                db,
+                sql:
+                    "SELECT *, COALESCE(name, fileName) AS displayName FROM rom WHERE gameId IS NULL ORDER BY displayName COLLATE NOCASE, id"
+            )
         }
         for row in rows {
             let item = ReviewItem(
-                romId: row["id"], romName: row["fileName"], systemId: row["systemId"], missing: row["missing"],
+                romId: row["id"], romName: row["displayName"], systemId: row["systemId"], missing: row["missing"],
                 suggestedIgdbGameId: row["suggestedIgdbGameId"],
                 suggestionKind: (row["suggestionKind"] as String?).flatMap(ReviewItem.SuggestionKind.init(rawValue:)),
                 checksumIgdbGameId: row["checksumIgdbGameId"], namesAgree: row["namesAgree"] ?? false)
@@ -82,9 +86,12 @@ extension JournalStore {
     /// Whether Matching this ROM to the Game would give it Duplicate Versions. It warns, never blocks.
     public func wouldHaveDuplicateVersions(_ game: GameID, adding rom: Int64) throws -> Bool {
         guard
-            let item = try db.read({ db in try Row.fetchOne(db, sql: "SELECT fileName, missing FROM rom WHERE id = ?", arguments: [rom]) })
+            let item = try db.read({ db in
+                try Row.fetchOne(
+                    db, sql: "SELECT fileName, COALESCE(name, fileName) AS displayName, missing FROM rom WHERE id = ?", arguments: [rom])
+            })
         else { return false }
-        let added = GameROM(id: Int(rom), name: item["fileName"], isPlaylist: isPlaylist(item["fileName"]), isPresent: !item["missing"])
+        let added = GameROM(id: Int(rom), name: item["displayName"], isPlaylist: isPlaylist(item["fileName"]), isPresent: !item["missing"])
         return hasDuplicateVersions(try roms(of: game).map(gameROM) + [added])
     }
 

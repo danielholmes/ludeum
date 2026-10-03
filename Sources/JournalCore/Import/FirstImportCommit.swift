@@ -48,12 +48,12 @@ extension JournalStore {
                 let parsed = ROMName(rom.name)
                 try db.execute(
                     sql: """
-                        INSERT INTO rom (openEmuPk, md5, fileName, systemId, missing, version, discNumber, discLabel,
+                        INSERT INTO rom (openEmuPk, md5, fileName, name, systemId, missing, version, discNumber, discLabel,
                             gameId, matchKind, matchedAt)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                     arguments: [
-                        rom.pk, rom.md5, rom.file?.lastPathComponent ?? rom.name, rom.system, !rom.isPresent, parsed.version,
+                        rom.pk, rom.md5, rom.file?.lastPathComponent ?? rom.name, rom.name, rom.system, !rom.isPresent, parsed.version,
                         parsed.disc, parsed.discLabel, game, game == nil ? nil : "automatic", game == nil ? nil : now,
                     ])
                 let romId = db.lastInsertedRowID
