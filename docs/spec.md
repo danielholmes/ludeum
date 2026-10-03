@@ -103,6 +103,11 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
   - **Discard draft** throws the draft and my answers away; the next Import starts fresh. A committed draft has no undo.
 - **Orphaned OpenEmu entries** (the ROM file is missing; 150 of them, 60 holding data) are imported with the ROM marked missing.
 - **Ongoing Imports:** new ROMs go through the same matching. A ROM that disappears is marked missing, and its last Activity is kept. A new ROM (or a Review queue answer) that gives an existing Game Duplicate Versions is still Matched; the Game gets a Duplicate Versions item in the Review queue, keeps its journal data and stays editable, but isn't synced. Each ongoing Import re-checks it.
+  - **When they run:** at app launch, each time OpenEmu quits while the journal is open (so snapshots line up with play sessions), and by hand with "Import now". The journal never watches OpenEmu's database files.
+  - **Activity snapshots:** each Import stores a snapshot row only for ROMs that are new or whose Activity changed since their last snapshot.
+  - **What I'm told:** Automatic Matches are added silently. The Review queue carries a count badge. After an Import that changed something, a dismissible in-app summary lists ROMs added, matched, sent to review and gone missing (linking to their Games). An Import that changed nothing shows nothing. No system notifications.
+  - **Reappearing ROMs:** a ROM that comes back with the same OpenEmu `Z_PK` or MD5 rejoins its old Game with its old Match, without review.
+  - **A changed store UUID** (library rebuilt or replaced): the Import refuses and explains why, as Sync does. Re-pointing the journal at a new library is out of v1.
 
 ### Covers
 - **IGDB covers stay in the cache.** The journal stores only the IGDB link. The cover comes from the cached record's `image_id` at IGDB's `cover_big_2x` size (528×748 JPEG), downloaded on demand into the cache's images folder. A Cover not yet downloaded shows a placeholder. If IGDB changes a cover, the journal follows it at the next refresh, and a wiped cache downloads it again.
