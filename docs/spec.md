@@ -242,7 +242,9 @@ None. Every v1 question is decided or ruled out.
 
 - `JournalCore`: cache store, `IGDBClient` (games, search, covers, Twitch token handling), `HasheousClient`, throttling. 24 tests at the agreed boundaries. CI: lint, build with warnings as errors, tests.
 - `JournalStore` (`JournalCore`): the journal database's `v1` migration (every table in the schema above) and the journal's rules: Partial dates, Games and IGDB links, Rating history, Playthroughs, Intent, Childhood, Lists, deleting Games. Tested at the `JournalStore` and `PartialDate` seams.
+- `Matcher` (`JournalCore`): the first-Import matching rules (Hasheous with the NES/SNES header retry, names agree, Automatic vs suggestions, related records, excluded `game_type`s), Version text and Discs (`ROMName`), and Duplicate Versions. Tested at the `Matcher`, `namesAgree`, `ROMName` and `versions(of:)` seams.
 - `journal-import check`: a live check against IGDB and Hasheous.
+- `journal-import match-report <snapshot>`: runs the `Matcher` over an OpenEmu snapshot. On my library: 1196 ROMs, 907 Automatic, 4 related-record and 26 checksum suggestions, 222 bulk-confirmable and 2 other name suggestions, 35 with nothing, 2 Duplicate Versions.
 - `scripts/setup-igdb.sh`: the IGDB credentials wizard.
 - Branch `prototype/first-import`: a throwaway dry run of the first Import. Its verdict is in the commit message and folded into the decisions above.
 - Branch `prototype/openemu-write`: a throwaway spike that wrote a Sync into a copy of the OpenEmu library. Its verdict is in the commit message and folded into Sync to OpenEmu above.
