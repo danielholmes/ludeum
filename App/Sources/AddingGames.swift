@@ -36,6 +36,11 @@ import SwiftUI
 
     var hasheous: HasheousClient? { cache.map { HasheousClient(cache: $0, apiKey: settings.hasheousKey) } }
 
+    var reviewQueue: ReviewQueue? {
+        guard let igdb, let journal else { return nil }
+        return ReviewQueue(journal: journal, igdb: igdb)
+    }
+
     var gameSearch: GameSearch? {
         guard let igdb, let journal else { return nil }
         return GameSearch(igdb: igdb, journal: journal)

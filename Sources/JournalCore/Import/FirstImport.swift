@@ -219,19 +219,11 @@ public final class FirstImport: Sendable {
             let result = results[Int(rom.pk)] ?? .noSuggestion
             draft.matches[rom.pk] = result
             if case .automatic(let id) = result {
-                draft.platforms[rom.pk] = platform(for: rom.system, game: records[id])
+                draft.platforms[rom.pk] = gamePlatform(system: rom.system, game: records[id])
             }
         }
         progress(.matching, 1)
         progress(.review, 1)
-    }
-
-    /// The Game's Platform: the first of the system's IGDB platforms the game is on, else the
-    /// system's most likely one (`openemu.system.gb` covers Game Boy and Game Boy Color).
-    private func platform(for system: String, game: IGDBGame?) -> Int64 {
-        let candidates = openEmuSystemPlatforms[system] ?? []
-        let listed = Set((game?.record["platforms"]?.array ?? []).compactMap { $0["id"]?.int ?? $0.int })
-        return Int64(candidates.first(where: listed.contains) ?? candidates.first ?? 0)
     }
 
     func save(_ draft: ImportDraft) throws {
