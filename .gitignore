@@ -1,5 +1,6 @@
 .env
 .build/
 .swiftpm/
-*.xcodeproj/xcuserdata/
 prototype-output/
+*.xcodeproj/
+App/Config/Local.xcconfig

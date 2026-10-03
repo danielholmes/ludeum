@@ -35,3 +35,24 @@ jobs:
 
       - name: Test
         run: swift test --skip-build
+
+  app:
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen
+
+      # No Local.xcconfig in CI, so the app is ad-hoc signed.
+      - name: Build app (warnings are errors)
+        run: xcodebuild -project GamesJournal.xcodeproj -scheme GamesJournal -configuration Debug -derivedDataPath .build/xcode build
+
+      - name: Check signature
+        run: codesign --verify --verbose ".build/xcode/Build/Products/Debug/Games Journal.app"

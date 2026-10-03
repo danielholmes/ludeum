@@ -1,0 +1,8 @@
+// Defaults to ad-hoc signing so the app builds anywhere (CI included).
+// Local.xcconfig (gitignored, copy from Local.xcconfig.example) switches to
+// the Personal Team, a stable identity the Keychain and Dropbox prompts remember.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"
