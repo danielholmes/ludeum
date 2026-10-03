@@ -11,7 +11,7 @@ struct ReviewQueueScreen: View {
         case checksum = "Checksum suggestions"
         case name = "Name suggestions"
         case noSuggestion = "No suggestion"
-        case duplicates = "Duplicate Versions"
+        case duplicateVersions = "Duplicate Versions"
         var id: Self { self }
     }
 
@@ -20,6 +20,8 @@ struct ReviewQueueScreen: View {
     @State private var selection: Int64?
     @State private var error: String?
     @State private var confirmingAll = false
+    /// Suggested IGDB games' names, for the middle column.
+    @State private var suggestionNames: [Int64: String] = [:]
 
     var body: some View {
         HSplitView {
@@ -33,7 +35,7 @@ struct ReviewQueueScreen: View {
                     Button("Confirm all \(items.namesAgree.count)") { confirmingAll = true }.padding(8)
                 }
                 List(selection: $selection) {
-                    if kind == .duplicates {
+                    if kind == .duplicateVersions {
                         ForEach(items.duplicateVersions) { d in
                             VStack(alignment: .leading) {
                                 Text(d.game.name)
@@ -45,7 +47,7 @@ struct ReviewQueueScreen: View {
                         ForEach(romItems) { item in
                             VStack(alignment: .leading) {
                                 Text(item.romName)
-                                Text(item.suggestedIgdbGameId.map { "Suggests IGDB #\($0)" } ?? "Search IGDB by hand")
+                                Text(item.suggestedIgdbGameId.map { suggestionNames[$0] ?? "IGDB #\($0)" } ?? "Search IGDB by hand")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                             .tag(item.romId)
@@ -56,7 +58,7 @@ struct ReviewQueueScreen: View {
             .frame(minWidth: 240, idealWidth: 300)
 
             Group {
-                if kind == .duplicates, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
+                if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
                     DuplicateVersionsDetail(item: d) { reload() }
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
                     ReviewItemDetail(services: services, item: item) { error = $0 }
@@ -70,7 +72,10 @@ struct ReviewQueueScreen: View {
         .overlay(alignment: .bottom) {
             if let error { Text(error).foregroundStyle(.white).padding(8).background(.red, in: .rect(cornerRadius: 6)).padding() }
         }
-        .task(id: services.changes.revision) { reload() }
+        .task(id: services.changes.revision) {
+            reload()
+            await loadSuggestionNames()
+        }
         .onChange(of: kind) { selection = nil }
         .confirmationDialog("Confirm all \(items.namesAgree.count) suggestions whose names agree?", isPresented: $confirmingAll) {
             Button("Confirm all") { confirmAll() }
@@ -85,7 +90,7 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions
         case .name: items.nameSuggestions
         case .noSuggestion: items.noSuggestion
-        case .duplicates, nil: []
+        case .duplicateVersions, nil: []
         }
     }
 
@@ -95,7 +100,7 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions.count
         case .name: items.nameSuggestions.count
         case .noSuggestion: items.noSuggestion.count
-        case .duplicates: items.duplicateVersions.count
+        case .duplicateVersions: items.duplicateVersions.count
         }
     }
 
@@ -105,6 +110,12 @@ struct ReviewQueueScreen: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func loadSuggestionNames() async {
+        let ids = (items.namesAgree + items.checksumSuggestions + items.nameSuggestions).compactMap(\.suggestedIgdbGameId)
+        guard let igdb = services.igdb, !ids.isEmpty, let games = try? await igdb.games(ids: ids.map(Int.init)) else { return }
+        suggestionNames = games.reduce(into: [:]) { $0[Int64($1.key)] = $1.value.name }
     }
 
     private func confirmAll() {
@@ -130,6 +141,8 @@ private struct ReviewItemDetail: View {
     @State private var suggestion: IGDBGame?
     @State private var checksumGame: IGDBGame?
     @State private var platforms: [IGDBPlatform] = []
+    /// Every IGDB platform, for Make by hand's "any other Platform".
+    @State private var allPlatforms: [IGDBPlatform] = []
     @State private var searching = false
     @State private var assigning = false
     @State private var makingByHand = false
@@ -181,18 +194,15 @@ private struct ReviewItemDetail: View {
             AssignToGameSheet(services: services) { game in
                 let assign = { act { try services.journal?.assign(item, to: game) } }
                 if (try? services.journal?.wouldHaveDuplicateVersions(game, adding: item.romId)) == true {
-                    duplicateWarning = assign
+                    warnAfterSheetCloses(assign)
                 } else {
                     assign()
                 }
             }
         }
         .sheet(isPresented: $makingByHand) {
-            MakeByHandSheet(name: cleanName(item.romName), platforms: platforms) { name, platform in
-                act {
-                    try services.journal?.addPlatform(id: platform.id, name: platform.name)
-                    _ = try services.journal?.makeByHand(item, name: name, platformId: platform.id)
-                }
+            MakeByHandSheet(name: cleanName(item.romName), platforms: platforms, allPlatforms: allPlatforms) { name, platform in
+                act { _ = try services.journal?.makeByHand(item, name: name, platform: platform) }
             }
         }
         .confirmationDialog(
@@ -209,21 +219,33 @@ private struct ReviewItemDetail: View {
         switch (item.suggestionKind, item.namesAgree, item.checksumIgdbGameId) {
         case (nil, _, _): "Nothing matched its checksum or name."
         case (.checksum, true, _?): "Its checksum's game has a related record whose name agrees."
-        case (.checksum, _, _): "Its checksum matched, but the names don't agree."
+        case (.checksum, true, nil): "Its checksum matched and the names agree."
+        case (.checksum, false, _): "Its checksum matched, but the names don't agree."
         case (.name, true, _): "Found by name search, and the names agree."
         case (.name, false, _): "Found by name search, but the names don't agree."
         }
     }
 
     private func load() async {
+        suggestion = nil
+        checksumGame = nil
         let ids = openEmuSystemPlatforms[item.systemId] ?? []
         let all = (try? await services.igdb?.platforms()) ?? []
+        allPlatforms = all
         platforms = ids.compactMap { id in all.first { $0.id == Int64(id) } }
         guard let igdb = services.igdb else { return }
         let wanted = [item.suggestedIgdbGameId, item.checksumIgdbGameId].compactMap { $0.map(Int.init) }
         let games = (try? await igdb.games(ids: wanted)) ?? [:]
         suggestion = item.suggestedIgdbGameId.flatMap { games[Int($0)] }
         checksumGame = item.checksumIgdbGameId.flatMap { games[Int($0)] }
+    }
+
+    /// A sheet that's closing can't present the warning, so it waits a moment.
+    private func warnAfterSheetCloses(_ match: @escaping () -> Void) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            duplicateWarning = match
+        }
     }
 
     private func confirm() {
@@ -341,7 +363,9 @@ private struct AssignToGameSheet: View {
 /// Make by hand…: a Game with no IGDB link, its Platform pre-selected from the ROM's system.
 private struct MakeByHandSheet: View {
     @State var name: String
+    /// The ROM's system's platforms, offered first.
     let platforms: [IGDBPlatform]
+    let allPlatforms: [IGDBPlatform]
     let make: (String, IGDBPlatform) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var platform: IGDBPlatform?
@@ -349,8 +373,17 @@ private struct MakeByHandSheet: View {
     var body: some View {
         Form {
             TextField("Name", text: $name)
-            Picker("Platform", selection: $platform) {
-                ForEach(platforms) { Text($0.name).tag(IGDBPlatform?.some($0)) }
+            LabeledContent("Platform") {
+                HStack {
+                    if !platforms.isEmpty {
+                        Picker("Platform", selection: $platform) {
+                            ForEach(platforms) { Text($0.name).tag(IGDBPlatform?.some($0)) }
+                            if let platform, !platforms.contains(platform) { Text(platform.name).tag(IGDBPlatform?.some(platform)) }
+                        }
+                        .labelsHidden()
+                    }
+                    PlatformMenu(title: "Other…", platforms: allPlatforms, used: Set(platforms.map(\.id))) { platform = $0 }
+                }
             }
             HStack {
                 Spacer()
@@ -386,11 +419,14 @@ private struct DuplicateVersionsDetail: View {
                     VStack(alignment: .leading) {
                         Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
                         Text(rom.fileName).font(.caption)
-                        Text("Played \(rom.playCount) times").font(.caption).foregroundStyle(.secondary)
+                        Text("Played \(rom.playCount) times, \(Int(rom.playTimeSeconds / 60)) min").font(.caption).foregroundStyle(
+                            .secondary)
                     }
                 }
             }
             Button("Check again", action: checkAgain)
+            Text("Check again uses the last Import. Run an Import after removing ROMs in OpenEmu.").font(.caption).foregroundStyle(
+                .secondary)
         }
         .formStyle(.grouped)
     }

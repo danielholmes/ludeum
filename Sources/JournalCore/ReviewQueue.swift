@@ -95,11 +95,13 @@ extension JournalStore {
 
     /// Make by hand…: a new Game with no IGDB link, Matched to the ROM.
     @discardableResult
-    public func makeByHand(_ item: ReviewItem, name: String, platformId: Int64) throws -> GameID {
+    public func makeByHand(_ item: ReviewItem, name: String, platform: IGDBPlatform) throws -> GameID {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw JournalError.nameRequired }
         return try db.write { db in
-            try db.execute(sql: "INSERT INTO game (platformId, name) VALUES (?, ?)", arguments: [platformId, name])
+            try db.execute(
+                sql: "INSERT INTO platform (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING", arguments: [platform.id, platform.name])
+            try db.execute(sql: "INSERT INTO game (platformId, name) VALUES (?, ?)", arguments: [platform.id, name])
             let game = db.lastInsertedRowID
             try Self.match(db, rom: item.romId, to: game, kind: "manual", day: today(), now: clock.now())
             return game
@@ -139,7 +141,7 @@ extension JournalStore {
         if let held = try Row.fetchOne(db, sql: "SELECT * FROM heldOpenEmuData WHERE romId = ?", arguments: [rom]) {
             let collections = (try? JSONDecoder().decode([String].self, from: Data((held["collections"] as String).utf8))) ?? []
             try applyOpenEmuData(
-                db, game: game, stars: held["stars"], collections: Set(collections),
+                db, game: game, stars: held["stars"] ?? 0, collections: Set(collections),
                 start: (held["currentStart"] as String?).flatMap(PartialDate.init), day: day)
             try db.execute(sql: "DELETE FROM heldOpenEmuData WHERE romId = ?", arguments: [rom])
         }
@@ -188,12 +190,20 @@ public struct ReviewQueue: Sendable {
         return try journal.wouldHaveDuplicateVersions(game, adding: item.romId)
     }
 
-    /// Confirm all: every item whose names agree. Returns how many were confirmed.
+    /// Confirm all: every item whose names agree, skipping any answered meanwhile. Returns how many it confirmed.
     public func confirmAll() async throws -> Int {
         let items = try journal.reviewQueue().namesAgree
         _ = try await igdb.games(ids: items.compactMap(\.suggestedIgdbGameId).map(Int.init))  // one batch, then cached
-        for item in items { try await confirm(item) }
-        return items.count
+        var confirmed = 0
+        for item in items {
+            do {
+                try await confirm(item)
+                confirmed += 1
+            } catch ReviewError.alreadyMatched {
+                // Answered on its own meanwhile.
+            }
+        }
+        return confirmed
     }
 
     /// A result from Search IGDB…: a manual Match.

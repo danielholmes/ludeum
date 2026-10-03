@@ -123,11 +123,10 @@ import Testing
     }
 
     @Test func makingAGameByHandMatchesTheROM() throws {
-        try j.journal.addPlatform(id: 19, name: "SNES")
         let rom = try unmatched(4, "Hermano 1.1 jam", stars: 5)
         let item = try #require(try j.journal.reviewQueue().noSuggestion.first)
 
-        let game = try j.journal.makeByHand(item, name: "Hermano", platformId: 19)
+        let game = try j.journal.makeByHand(item, name: "Hermano", platform: IGDBPlatform(id: 33, name: "Game Boy"))
 
         #expect(try match(rom) == (game, "manual"))
         #expect(try j.journal.game(game).rating == Rating(tenths: 100))
@@ -143,6 +142,25 @@ import Testing
         let item = try #require(try j.journal.reviewQueue().namesAgree.first)
 
         #expect(try await queue.confirmWouldGiveDuplicateVersions(item))
+    }
+
+    @Test func aSecondCompletedROMDoesntAddAnotherFinishedPlaythrough() throws {
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        let game = try j.journal.addGame(platformId: 19, name: "Sweet Home", igdbGameId: 70, igdbName: "Sweet Home")
+        try unmatched(1, "Sweet Home (Japan)", collections: ["_Completed"])
+        try unmatched(2, "Sweet Home (Japan) [T+Eng]", collections: ["_Completed"])
+
+        for item in try j.journal.reviewQueue().noSuggestion { try j.journal.assign(item, to: game) }
+
+        #expect(try j.journal.playthroughs(game).count == 1)
+    }
+
+    @Test func confirmAllSkipsItemsAnsweredMeanwhile() async throws {
+        try unmatched(1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
+        let stale = try #require(try j.journal.reviewQueue().namesAgree.first)
+        try await queue.confirm(stale)
+
+        #expect(try await queue.confirmAll() == 0)
     }
 
     @Test func duplicateVersionsItemsListPresentROMsOfOneGame() throws {

@@ -143,7 +143,10 @@ extension JournalStore {
         if collections.contains(SpecialCollection.childhood) {
             try db.execute(sql: "UPDATE game SET childhood = 1 WHERE id = ?", arguments: [game])
         }
-        if collections.contains(SpecialCollection.completed) {
+        if collections.contains(SpecialCollection.completed),
+            try !Bool.fetchOne(
+                db, sql: "SELECT EXISTS (SELECT 1 FROM playthrough WHERE gameId = ? AND outcome = 'finished')", arguments: [game])!
+        {
             try db.execute(sql: "INSERT INTO playthrough (gameId, outcome) VALUES (?, 'finished')", arguments: [game])
         }
         if collections.contains(SpecialCollection.current), let start,
