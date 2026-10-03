@@ -92,10 +92,17 @@ Non-emulated Games (PC, Xbox, …) and Games I don't have a ROM for yet are adde
   - Normalising: lowercase; fold diacritics; `&` → `and`; split into words on anything but letters and digits; roman numerals II–XX become digits (not I, V or X); drop `and`, every `the`, and a leading `a`/`an`; drop a leading `Disney's`, `Disney-Pixar's`, `James Bond`, `Tom Clancy's` or `Sid Meier's`; join the words.
 - **Versions** aren't parsed into fields. A Version is described by the ROM name's tags as written (region, languages, revision, dev status, translation and so on), without the Disc and its label, GoodTools dump flags (`[!]`, `[a]`, `[b]`…) and file artefacts. Real names mix No-Intro, Redump, GoodTools, scene and ad-hoc forms, and a Version is only ever shown or suggested as text.
 - **Discs:** the present ROMs of one Game that each carry a `(Disc N)`, with no number repeated, are the Discs of one Version, whatever else their names say (Gran Turismo 2's two Discs come from different DAT versions). An `.m3u` playlist ROM of that Game belongs to the same Version. The free-form flag straight after `(Disc N)` is the disc label.
-- **Start dates for `_Current`:** an in-progress Playthrough needs a start date, so the first Import lists the `_Current` Games (7 in my library) and asks for each one's start date (a Partial date). For any of them I can choose "Not playing" instead, and no Playthrough is created. The Import doesn't finish until every one is answered.
+- **Start dates for `_Current`:** an in-progress Playthrough needs a start date, so the first Import lists the `_Current` Games (7 in my library) and asks for each one's start date (a Partial date). For any of them I can choose "Not playing" instead, and no Playthrough is created. The Import draft can't be committed until every one is answered.
 - **Duplicate Versions** (2 or more *present* ROMs on one Game that aren't Discs of one Version) block the first Import until I remove ROMs in OpenEmu. There's no exceptions mechanism, and the UI should say that real exceptions need a code change. With these rules my library has 2: Double Dragon III (Japan and USA) and Sweet Home (two translations).
+- **The first Import is staged, as an Import draft.** Nothing becomes journal data until the draft is committed, in one step. The draft (the OpenEmu snapshot plus my answers so far) is saved, so quitting the app resumes it. While a draft exists, Sync and ongoing Imports aren't available.
+  - **Committing** needs only two things: no Duplicate Versions, and every `_Current` start date answered. Unmatched ROMs and pending suggestions carry over into the journal's Review queue as ordinary items, their ROMs imported unmatched with their OpenEmu data held until they're resolved.
+  - **Duplicate Versions items** show the Game and one row per present ROM: its Version text, file name, OpenEmu data (stars, collections, play time, so I see what I'd lose) and "Show in Finder". Below: remove all but one Version in OpenEmu (exceptions need a code change), and **Check again**. There's no in-app resolve.
+  - **Check again** (on those items and on the Import screen) re-reads OpenEmu into the draft. Answers whose ROM (`Z_PK` + MD5) is still present are kept; answers for ROMs that have gone are dropped; new ROMs go through matching. The last re-read is the baseline committed (store UUID, Activity snapshot, stars and collections).
+  - **A ROM removed before the commit** is dropped entirely: never a missing ROM, its OpenEmu data never imported. Orphaned entries (row kept, file gone) are still imported as missing and don't count towards Duplicate Versions.
+  - **Confirming a suggestion or assigning a ROM to a Game** that would then have Duplicate Versions warns but doesn't block, and the result blocks the commit like any other.
+  - **Discard draft** throws the draft and my answers away; the next Import starts fresh. A committed draft has no undo.
 - **Orphaned OpenEmu entries** (the ROM file is missing; 150 of them, 60 holding data) are imported with the ROM marked missing.
-- **Ongoing Imports:** new ROMs go through the same matching. A ROM that disappears is marked missing, and its last Activity is kept.
+- **Ongoing Imports:** new ROMs go through the same matching. A ROM that disappears is marked missing, and its last Activity is kept. A new ROM (or a Review queue answer) that gives an existing Game Duplicate Versions is still Matched; the Game gets a Duplicate Versions item in the Review queue, keeps its journal data and stays editable, but isn't synced. Each ongoing Import re-checks it.
 
 ### Covers
 - **IGDB covers stay in the cache.** The journal stores only the IGDB link. The cover comes from the cached record's `image_id` at IGDB's `cover_big_2x` size (528×748 JPEG), downloaded on demand into the cache's images folder. A Cover not yet downloaded shows a placeholder. If IGDB changes a cover, the journal follows it at the next refresh, and a wiped cache downloads it again.
@@ -112,7 +119,7 @@ Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The
 - **Collections:** each List, plus `_TODO`, `_TODO Next`, `_Current` and `_Completed` built from Intent and Playthroughs, are owned by the journal and overwritten. Other regular collections are deleted after I confirm them by name. Smart collections and collection folders are left alone.
 - **Covers:** written only for games that have no box art in OpenEmu and whose OpenEmu status is 0. A game still waiting for its OpenVGDB lookup (status 3) is skipped until a later Sync, because the lookup can replace its box art. Each OpenEmu game row gets its own file and `ZIMAGE` row (`ZBOX` is one-to-one). If an IGDB cover can't be downloaded, that Cover is skipped for this Sync, and it isn't an error.
 - **Replacing a Cover Sync wrote:** when the Game's Cover changes (e.g. an upload replaced by IGDB's cover on linking), Sync replaces it, but only while the OpenEmu game's `ZBOXIMAGE` still points at the `ZIMAGE` row Sync wrote. If I've changed the box art in OpenEmu, it's left alone and the journal forgets its record. A Game whose Cover goes away leaves OpenEmu's box art as it is: Sync never deletes box art.
-- A Game with unresolved Duplicate Versions isn't synced.
+- A Game with unresolved Duplicate Versions isn't synced; the Sync preview lists it as skipped, and why.
 - **Guards:** Sync refuses to run while OpenEmu (`org.openemu.OpenEmu`) is running, if a Dropbox "conflicted copy" sits next to the store, or if the store's UUID isn't the one Imported. It runs `PRAGMA integrity_check` before and after. There's no waiting for Dropbox: on one Mac the local files are the truth.
 - **Backup:** SQLite's backup API, taken while OpenEmu is closed (the store is WAL, so copying `Library.storedata` alone can lose data).
 - **Writing, the way Core Data would:**
@@ -164,10 +171,9 @@ Roughly in the order they block work:
 1. **Journal database schema:** tables for Game, ROM, Match, Rating history, Playthrough, List, Activity snapshots and Covers; migrations; how Partial dates are stored.
 2. **App skeleton:** Xcode project versus SwiftPM-only; how the app hosts `JournalCore`; where Import, Sync and background work run; signing for personal use.
 3. **Review queue UX:** layout for bulk confirm, the checksum-suggestion view, manual IGDB search (the shared search from Adding Games), and assigning a ROM to an existing Game (fan translations).
-4. **Duplicate Versions flow:** how the first Import pauses and resumes while I remove ROMs in OpenEmu.
-5. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
-6. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
-7. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
+4. **Backups:** how often journal backups are copied to Dropbox and how many are kept.
+5. **Credentials in the app:** moving from `.env` to the Keychain; a settings screen; whether to request a Hasheous app key.
+6. **Later enrichments** (deliberately out of v1, listed so they aren't lost): IGDB screenshots and artwork, series, similar games and time-to-beat on screen; ScreenScraper for manuals and box, cart and disc scans; Steam playtime; RetroAchievements; SteamGridDB for PC art.
 
 ## Built so far
 

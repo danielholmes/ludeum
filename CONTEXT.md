@@ -86,6 +86,10 @@ _Avoid_: Artwork, box image, thumbnail
 Reading ROMs and Activity from OpenEmu into the journal. Import never changes OpenEmu.
 _Avoid_: Scan, pull
 
+**Import draft**:
+The first Import before I commit it: OpenEmu's snapshot plus my answers so far, none of it journal data yet. It can't be committed while any Game has Duplicate Versions or a `_Current` Game lacks a start date, and it can be discarded.
+_Avoid_: Pending import, staging
+
 **Sync**:
 Writing the journal's data into OpenEmu: Ratings as stars, Lists plus Intent and Playthrough state as collections, and Covers for games that have no box art in OpenEmu. The journal owns the stars and the regular collections, and replaces whatever OpenEmu had.
 _Avoid_: Push, export
