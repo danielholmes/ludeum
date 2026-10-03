@@ -4,7 +4,13 @@ import SwiftUI
 /// Counts changes to the journal. Views reload with `.task(id: changes.revision)`.
 @Observable @MainActor final class JournalChanges {
     private(set) var revision = 0
+    /// Bumped only when a Cover changes, so the covers view doesn't refetch on every edit.
+    private(set) var coverRevision = 0
     func changed() { revision += 1 }
+    func coverChanged() {
+        coverRevision += 1
+        revision += 1
+    }
 }
 
 /// What the app's screens work with: the journal, and IGDB when credentials are set.

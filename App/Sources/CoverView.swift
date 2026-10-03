@@ -20,7 +20,7 @@ struct CoverView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        .task(id: CoverKey(game: game, revision: services.changes.revision)) {
+        .task(id: CoverKey(game: game, revision: services.changes.coverRevision)) {
             image = await loadCover(services, game)
         }
     }
@@ -82,35 +82,42 @@ struct CoverEditor: View {
 
     private func drop(_ providers: [NSItemProvider]) -> Bool {
         guard canUpload, let provider = providers.first else { return false }
-        if provider.canLoadObject(ofClass: URL.self) {
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                if let url { Task { @MainActor in upload(url) } }
+                Task { @MainActor in
+                    if let url, url.isFileURL { upload(url) } else { error = "Couldn't read that file." }
+                }
             }
         } else {
+            // An image dragged from a browser or another app arrives as image data.
             provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
-                if let data { Task { @MainActor in change { try await $0.upload(data, for: game) } } }
+                Task { @MainActor in
+                    if let data { change { try await $0.upload(data, for: game) } } else { error = "Couldn't read that image." }
+                }
             }
         }
         return true
     }
 
+    /// Reads and normalises off the main thread.
     private func upload(_ url: URL) {
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else {
-            error = "Couldn't read that file."
-            return
+        change { covers in
+            let data = try await Task.detached(priority: .userInitiated) {
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                return try Data(contentsOf: url)
+            }.value
+            try await covers.upload(data, for: game)
         }
-        change { try await $0.upload(data, for: game) }
     }
 
-    private func change(_ action: @escaping (Covers) async throws -> Void) {
+    private func change(_ action: @escaping @Sendable (Covers) async throws -> Void) {
         guard let covers = services.covers else { return }
         Task {
             do {
                 try await action(covers)
                 error = nil
-                services.changes.changed()
+                services.changes.coverChanged()
             } catch CoverError.notAnImage {
                 error = "That isn't an image macOS can read."
             } catch CoverError.igdbHasACover {

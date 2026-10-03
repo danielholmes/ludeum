@@ -100,7 +100,7 @@ public struct Covers: Sendable {
     let journal: JournalStore
     let igdb: IGDBClient?
 
-    /// Without an IGDB client (no credentials), linked Games fall back to their journal Cover.
+    /// Without an IGDB client (no credentials), linked Games show their journal Cover, if any, and can't upload.
     public init(journal: JournalStore, igdb: IGDBClient?) {
         self.journal = journal
         self.igdb = igdb
@@ -110,14 +110,20 @@ public struct Covers: Sendable {
     /// IGDB has made redundant.
     public func cover(for game: GameID) async throws -> CoverSource {
         if let imageID = try await igdbCoverID(game), let igdb {
+            // Download first, so a failed download never costs the journal's Cover.
+            let file = try await igdb.cover(imageID: imageID)
             try journal.deleteCover(game)
-            return .igdb(try await igdb.cover(imageID: imageID))
+            return .igdb(file)
         }
         return try journal.journalCover(game).map(CoverSource.journal) ?? .placeholder
     }
 
     /// Upload, replace and remove are offered only while the Game has no IGDB cover.
-    public func canUpload(for game: GameID) async throws -> Bool { try await igdbCoverID(game) == nil }
+    /// Without an IGDB client a linked Game might have an IGDB cover, so uploading waits for one.
+    public func canUpload(for game: GameID) async throws -> Bool {
+        if igdb == nil, try journal.game(game).igdbGameId != nil { return false }
+        return try await igdbCoverID(game) == nil
+    }
 
     public func upload(_ image: Data, for game: GameID) async throws {
         guard try await canUpload(for: game) else { throw CoverError.igdbHasACover }

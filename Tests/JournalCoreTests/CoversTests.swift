@@ -45,6 +45,26 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(a.sha256.count == 64)
     }
 
+    @Test func transparencyBecomesWhiteNotBlack() throws {
+        let context = CGContext(
+            data: nil, width: 10, height: 10, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        let png = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(png, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+        CGImageDestinationFinalize(destination)
+
+        let cover = try CoverImage.normalise(png as Data)
+
+        let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithData(cover.jpeg as CFData, nil)!, 0, nil)!
+        let pixel = CGContext(
+            data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        pixel.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let red = pixel.data!.load(as: UInt8.self)
+        #expect(red > 240)
+    }
+
     @Test func somethingThatIsntAnImageIsRefused() {
         #expect(throws: CoverError.notAnImage) { try CoverImage.normalise(Data("not an image".utf8)) }
     }
@@ -128,6 +148,28 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         _ = try await covers.cover(for: game)
 
         #expect(try j.journal.journalCover(game) == nil)
+    }
+
+    @Test func withoutIGDBALinkedGameCantUpload() async throws {
+        let game = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
+        let hand = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
+        let offline = Covers(journal: j.journal, igdb: nil)
+
+        #expect(try await !offline.canUpload(for: game))
+        #expect(try await offline.canUpload(for: hand))
+    }
+
+    @Test func aFailedDownloadKeepsTheJournalCover() async throws {
+        h.internet.addGame(5, "Obscure Homebrew")
+        let game = try j.journal.addGame(platformId: 19, name: "Obscure Homebrew", igdbGameId: 5, igdbName: "Obscure Homebrew")
+        try await covers.upload(upload, for: game)
+        h.internet.addGame(5, "Obscure Homebrew", fields: ["cover": ["image_id": "co5"]])
+        try h.cache.store(["igdb:game:5": Data(#"{"id":5,"name":"Obscure Homebrew","cover":{"image_id":"co5"}}"#.utf8)])
+        h.internet.setDown(FakeInternet.Hosts.igdbImages, true)
+
+        await #expect(throws: (any Error).self) { try await covers.cover(for: game) }
+
+        #expect(try j.journal.journalCover(game) != nil)
     }
 
     @Test func aCoverGoesWithItsGame() async throws {
