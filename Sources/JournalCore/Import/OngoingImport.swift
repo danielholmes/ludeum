@@ -15,11 +15,12 @@ public struct OngoingImportResult: Sendable, Equatable {
     public var matched: [ImportedROM] = []
     /// New ROMs waiting in the Review queue.
     public var sentToReview: [ImportedROM] = []
-    /// ROMs that came back and rejoined their old Game.
+    /// Missing ROMs that came back and rejoined their old Game, silently.
     public var returned: [ImportedROM] = []
     public var goneMissing: [ImportedROM] = []
 
-    public var changedSomething: Bool { !(matched.isEmpty && sentToReview.isEmpty && returned.isEmpty && goneMissing.isEmpty) }
+    /// Whether the summary has anything to say: ROMs added, matched, sent to review or gone missing.
+    public var changedSomething: Bool { !(matched.isEmpty && sentToReview.isEmpty && goneMissing.isEmpty) }
 }
 
 /// An Import after the first: at launch, when OpenEmu quits, and by hand.
@@ -40,8 +41,11 @@ public final class OngoingImport: Sendable {
 
     /// Reads OpenEmu and brings the journal up to date. Refused before the first Import, and when
     /// the library was rebuilt or replaced (a new store UUID).
-    public func run(library: URL) async throws -> OngoingImportResult {
+    public func run(library: URL, progress: @escaping @Sendable (ImportPhase, Double) -> Void = { _, _ in }) async throws
+        -> OngoingImportResult
+    {
         guard try journal.firstImportDone() else { throw ImportError.firstImportNeeded }
+        progress(.snapshot, 0)
         try OpenEmuLibrary.snapshot(library: library, to: snapshotFile)
         let snapshot = try OpenEmuLibrary.read(snapshot: snapshotFile, library: library)
         guard try journal.openEmuStoreUUID() == snapshot.storeUUID else { throw ImportError.libraryReplaced }
@@ -49,12 +53,13 @@ public final class OngoingImport: Sendable {
         // Which snapshot ROMs the journal already knows: by Z_PK, else (for one re-added in OpenEmu) by MD5.
         let known = try journal.knownROMs()
         let byPK = Dictionary(known.map { ($0.openEmuPk, $0) }, uniquingKeysWith: { a, _ in a })
-        let snapshotPKs = Set(snapshot.roms.map(\.pk))
-        var byMD5 = Dictionary(grouping: known.filter { !snapshotPKs.contains($0.openEmuPk) }, by: \.md5)
+        // Rows OpenEmu no longer has under the same Z_PK and MD5 can be claimed by MD5.
+        let snapshotKeys = Set(snapshot.roms.map { "\($0.pk):\($0.md5)" })
+        var byMD5 = Dictionary(grouping: known.filter { !snapshotKeys.contains("\($0.openEmuPk):\($0.md5)") }, by: \.md5)
         var plan = OngoingImportPlan()
         var newROMs: [OpenEmuROMRecord] = []
         for rom in snapshot.roms {
-            if let row = byPK[rom.pk] {
+            if let row = byPK[rom.pk], row.md5 == rom.md5 {
                 plan.seen.append((row, rom))
             } else if let row = byMD5[rom.md5]?.popLast() {
                 plan.seen.append((row, rom))
@@ -65,7 +70,11 @@ public final class OngoingImport: Sendable {
         let seenIDs = Set(plan.seen.map(\.0.id))
         plan.gone = known.filter { !$0.missing && !seenIDs.contains($0.id) }
 
-        let results = try await matcher.match(newROMs.map(\.matcherROM))
+        progress(.lookups, 0)
+        let results = try await matcher.match(newROMs.map(\.matcherROM)) { done, total in
+            progress(.lookups, total == 0 ? 1 : Double(done) / Double(total))
+        }
+        progress(.matching, 0)
         let automatic = results.values.compactMap { if case .automatic(let id) = $0 { id } else { nil } }
         let records = try await igdb.games(ids: Array(Set(automatic)))
         let platformNames = automatic.isEmpty ? [:] : Dictionary(uniqueKeysWithValues: try await igdb.platforms().map { ($0.id, $0.name) })
@@ -83,6 +92,8 @@ public final class OngoingImport: Sendable {
         }
 
         let touchesROMs = !newROMs.isEmpty || !plan.gone.isEmpty || plan.seen.contains { $0.0.missing || $0.0.openEmuPk != $0.1.pk }
+        try Task.checkCancellation()
+        progress(.review, 1)
         if touchesROMs { try backups?.backUp(journal, operation: .beforeImport) }
         return try journal.applyOngoingImport(plan)
     }
@@ -148,8 +159,16 @@ extension JournalStore {
                     sql:
                         "SELECT playCount, lastPlayedAt, playTimeSeconds FROM activitySnapshot WHERE romId = ? ORDER BY importId DESC LIMIT 1",
                     arguments: [romId])
-                if let last, last["playCount"] as Int == rom.playCount, last["lastPlayedAt"] as Date? == rom.lastPlayedAt,
-                    last["playTimeSeconds"] as Double == rom.playTimeSeconds
+                // Stored dates keep milliseconds and OpenEmu's don't stop there, so compare to the millisecond.
+                func same(_ a: Date?, _ b: Date?) -> Bool {
+                    switch (a, b) {
+                    case (nil, nil): true
+                    case (let a?, let b?): abs(a.timeIntervalSince(b)) < 0.001
+                    default: false
+                    }
+                }
+                if let last, last["playCount"] as Int == rom.playCount, same(last["lastPlayedAt"], rom.lastPlayedAt),
+                    abs((last["playTimeSeconds"] as Double) - rom.playTimeSeconds) < 0.001
                 {
                     return
                 }
@@ -176,8 +195,8 @@ extension JournalStore {
             }
 
             for (known, rom) in plan.seen {
-                // A ROM that comes back rejoins its old Game with its old Match.
-                if known.missing && rom.isPresent || known.openEmuPk != rom.pk {
+                // A missing ROM that comes back rejoins its old Game with its old Match, silently.
+                if known.missing && rom.isPresent {
                     result.returned.append(ImportedROM(romName: known.fileName, game: known.gameId))
                 }
                 try db.execute(

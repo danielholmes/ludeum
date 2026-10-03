@@ -108,10 +108,38 @@ import Testing
 
         #expect(result.returned.map(\.romName) == ["Super Metroid (USA)"])
         #expect(result.sentToReview.isEmpty)
+        #expect(!result.changedSomething)
         let row = try #require(try romRow(openEmuPk: again))
         #expect(row["gameId"] as GameID == game)
         #expect(row["missing"] as Bool == false)
         #expect(row["matchKind"] as String == "automatic")
+    }
+
+    @Test func anOrphanedEntryWhoseFileReturnsIsPresentAgainSilently() async throws {
+        let metroid = try oe.addROM("Super Metroid (USA)", md5: "aa")
+        try await firstImport()
+        let file = oe.folder.appending(path: "roms/openemu.system.snes/\(metroid)-rom.sfc")
+        let parked = h.directory.appending(path: "parked.sfc")
+        try FileManager.default.moveItem(at: file, to: parked)
+        #expect(try await ongoing.run(library: oe.folder).goneMissing.count == 1)
+        try FileManager.default.moveItem(at: parked, to: file)
+
+        let result = try await ongoing.run(library: oe.folder)
+
+        #expect(try romRow(openEmuPk: metroid)?["missing"] as Bool? == false)
+        #expect(result.returned.count == 1)
+        #expect(!result.changedSomething)
+    }
+
+    @Test func unchangedActivityWithAPreciseLastPlayedDateAddsNoSnapshot() async throws {
+        try oe.addROM(
+            "Super Metroid (USA)", md5: "aa", playCount: 3, playTime: 1234.567891,
+            lastPlayed: Date(timeIntervalSinceReferenceDate: 673000972.183634))
+        try await firstImport()
+
+        _ = try await ongoing.run(library: oe.folder)
+
+        #expect(try snapshotCount() == 1)
     }
 
     @Test func activityIsSnapshottedOnlyWhenItChanged() async throws {

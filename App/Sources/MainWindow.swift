@@ -23,7 +23,7 @@ struct MainWindow: View {
                     LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
                 }
             case .reviewQueue:
-                ReviewQueueScreen(services: services)
+                ReviewQueueScreen(services: services, checkAgain: importModel.importNow)
             case .importPage:
                 ImportPage(model: importModel)
             case let screen?:

@@ -21,7 +21,6 @@ struct ImportSummaryBanner: View {
             if expanded {
                 section("Matched", summary.matched)
                 section("Sent to the Review queue", summary.sentToReview)
-                section("Back in OpenEmu", summary.returned)
                 section("Gone missing", summary.goneMissing)
             }
         }
@@ -36,7 +35,6 @@ struct ImportSummaryBanner: View {
             added > 0
                 ? "\(added) ROM\(added == 1 ? "" : "s") added (\(summary.matched.count) matched, \(summary.sentToReview.count) to review)"
                 : nil,
-            summary.returned.isEmpty ? nil : "\(summary.returned.count) back",
             summary.goneMissing.isEmpty ? nil : "\(summary.goneMissing.count) gone missing",
         ]
         .compactMap { $0 }
