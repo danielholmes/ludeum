@@ -34,6 +34,8 @@ import SwiftUI
         return IGDBClient(credentials: credentials, cache: cache, tokenStore: settings.secrets)
     }
 
+    var hasheous: HasheousClient? { cache.map { HasheousClient(cache: $0, apiKey: settings.hasheousKey) } }
+
     var gameSearch: GameSearch? {
         guard let igdb, let journal else { return nil }
         return GameSearch(igdb: igdb, journal: journal)

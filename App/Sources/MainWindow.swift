@@ -4,6 +4,7 @@ import SwiftUI
 /// The main window: sidebar, the selected screen, and the Game detail pane.
 struct MainWindow: View {
     let services: Services
+    let importModel: ImportModel
     @State private var selectedGame: GameID?
     @State private var adding = false
     @State private var selection: Screen? = .library
@@ -22,6 +23,8 @@ struct MainWindow: View {
                 if let list = lists.first(where: { $0.id == id }) {
                     LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
                 }
+            case .importPage:
+                ImportPage(model: importModel)
             case let screen?:
                 PlaceholderScreen(screen: screen)
             case nil:

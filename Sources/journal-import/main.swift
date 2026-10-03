@@ -5,6 +5,8 @@ import JournalCore
 //
 //   journal-import check                    Live check of IGDB and Hasheous through the real cache.
 //   journal-import match-report <snapshot>  Match a snapshot of OpenEmu's database and print the counts.
+//   journal-import first-import <library> <journal folder> [--commit]
+//                                           The first Import into a scratch journal (OpenEmu is only read).
 //
 // Credentials come from the environment or a .env file in the current directory
 // (see scripts/setup-igdb.sh).
@@ -50,5 +52,11 @@ case "check": try await check()
 case "match-report" where CommandLine.arguments.count == 3:
     let (igdb, hasheous) = try clients()
     try await matchReport(snapshot: URL(filePath: CommandLine.arguments[2]), igdb: igdb, hasheous: hasheous)
-default: fail("usage: journal-import check | match-report <snapshot.sqlite>")
+case "first-import" where CommandLine.arguments.count >= 4:
+    let (igdb, hasheous) = try clients()
+    try await firstImportRun(
+        library: URL(filePath: CommandLine.arguments[2], directoryHint: .isDirectory),
+        journalFolder: URL(filePath: CommandLine.arguments[3], directoryHint: .isDirectory),
+        commit: CommandLine.arguments.contains("--commit"), igdb: igdb, hasheous: hasheous)
+default: fail("usage: journal-import check | match-report <snapshot.sqlite> | first-import <library> <journal folder> [--commit]")
 }
