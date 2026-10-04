@@ -9,6 +9,9 @@ struct MainWindow: View {
     @State private var selectedGame: GameID?
     @State private var adding = false
     @State private var selection: Screen? = .library
+    /// A filter another screen asked the Library to open with, bumping `libraryRequest` to apply it.
+    @State private var libraryFilter = LibraryFilter()
+    @State private var libraryRequest = 0
     @State private var lists: [GameList] = []
     @State private var reviewQueueCount = 0
 
@@ -18,7 +21,8 @@ struct MainWindow: View {
         } content: {
             switch selection {
             case .library:
-                LibraryScreen(services: services, selection: $selectedGame)
+                LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter)
+                    .id(libraryRequest)
             case .list(let id, _):
                 if let list = lists.first(where: { $0.id == id }) {
                     LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
@@ -27,6 +31,12 @@ struct MainWindow: View {
                 WhatToPlayNextScreen(services: services, selection: $selectedGame)
             case .topRated:
                 TopRatedScreen(services: services, selection: $selectedGame)
+            case .yearInReview:
+                YearInReviewScreen(services: services, selection: $selectedGame) { filter in
+                    libraryFilter = filter
+                    libraryRequest += 1
+                    selection = .library
+                }
             case .reviewQueue:
                 ReviewQueueScreen(services: services, checkAgain: importModel.importNow)
                     .disabled(services.work.journalLocked)
@@ -53,6 +63,7 @@ struct MainWindow: View {
                     .frame(maxWidth: 520)
             }
         }
+        .onChange(of: selection) { if selection != .library { libraryFilter = LibraryFilter() } }
         .modifier(OngoingImportTriggers(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
         .toolbar {

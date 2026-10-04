@@ -7,6 +7,8 @@ struct LibraryScreen: View {
     /// Set when showing one List: its Games, with the List filter fixed.
     var list: GameList?
     @Binding var selection: GameID?
+    /// Where to start, e.g. Year in review's "no dates" link.
+    var initialFilter = LibraryFilter()
 
     @State private var filter = LibraryFilter()
     @State private var sort = LibrarySort.name
@@ -46,6 +48,7 @@ struct LibraryScreen: View {
             }
         }
         .navigationTitle(list?.name ?? "Library")
+        .onAppear { filter = initialFilter }
         .toolbar { toolbar }
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, list: list?.id)) {
             load()
@@ -144,6 +147,7 @@ struct LibraryFilterMenu: View {
                 Text("Childhood").tag(Bool?.some(true))
                 Text("Not childhood").tag(Bool?.some(false))
             }
+            Toggle("Playthroughs with no dates", isOn: $filter.undatedPlaythroughs)
             Divider()
             Button("Clear filters") { filter = LibraryFilter() }
         }
