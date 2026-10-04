@@ -60,7 +60,13 @@ public final class IGDBClient: Sendable {
 
     /// Full records for the given IGDB game ids. Ids IGDB doesn't know are absent.
     public func games(ids: [Int]) async throws -> [Int: IGDBGame] {
-        let payloads = try await cache.resolve(ids, key: Self.gameKey, maxAge: maxAge, batchSize: Self.maxBatch) { batch in
+        try await games(ids: ids, servesStale: true)
+    }
+
+    func games(ids: [Int], servesStale: Bool) async throws -> [Int: IGDBGame] {
+        let payloads = try await cache.resolve(
+            ids, key: Self.gameKey, maxAge: maxAge, batchSize: Self.maxBatch, servesStale: servesStale
+        ) { batch in
             try await fetchGames(ids: batch).mapValues { try $0.record.encoded() }
         }
         return try payloads.reduce(into: [:]) { $0[$1.key] = IGDBGame(id: $1.key, record: try JSONValue.decode($1.value)) }
@@ -69,7 +75,13 @@ public final class IGDBClient: Sendable {
     /// IGDB game ids matching each name search on its platform, best match first.
     /// One request per search: IGDB's multiquery endpoint silently ignores `search`.
     public func search(_ searches: [IGDBSearch]) async throws -> [IGDBSearch: [Int]] {
-        let payloads = try await cache.resolve(searches, key: \.cacheKey, maxAge: maxAge, batchSize: 1) { batch in
+        try await search(searches, servesStale: true)
+    }
+
+    func search(_ searches: [IGDBSearch], servesStale: Bool) async throws -> [IGDBSearch: [Int]] {
+        let payloads = try await cache.resolve(
+            searches, key: \.cacheKey, maxAge: maxAge, batchSize: 1, servesStale: servesStale
+        ) { batch in
             let s = batch[0]
             let body = """
                 search "\(s.name.replacingOccurrences(of: "\"", with: "\\\""))"; \
@@ -83,7 +95,13 @@ public final class IGDBClient: Sendable {
 
     /// Every IGDB platform: the journal's Platforms. Cached as one entry, like any other record.
     public func platforms() async throws -> [IGDBPlatform] {
-        let payloads = try await cache.resolve(["all"], key: Self.platformsKey, maxAge: maxAge, batchSize: 1) { _ in
+        try await platforms(servesStale: true)
+    }
+
+    func platforms(servesStale: Bool) async throws -> [IGDBPlatform] {
+        let payloads = try await cache.resolve(
+            ["all"], key: Self.platformsKey, maxAge: maxAge, batchSize: 1, servesStale: servesStale
+        ) { _ in
             var all: [IGDBPlatform] = []
             while true {
                 let body = "fields id, name, abbreviation; sort id asc; limit 500; offset \(all.count);"

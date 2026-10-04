@@ -56,6 +56,10 @@ import SwiftUI
             error = "Set up IGDB in Settings first."
             return
         }
+        guard services.work.begin(.importing) else {
+            error = "Wait for the running Import or Sync to finish."
+            return
+        }
         let previous = state
         state = .running(.snapshot, 0)
         error = nil
@@ -74,6 +78,7 @@ import SwiftUI
                 self.error = error.localizedDescription
             }
             Self.isRunning = false
+            services.work.end(.importing)
         }
     }
 
@@ -132,6 +137,8 @@ import SwiftUI
             runAgain = true
             return
         }
+        // A Sync is running: OpenEmu is closed for it, so there's nothing new to Import yet.
+        guard services.work.begin(.importing) else { return }
         importingNow = true
         Self.isRunning = true
         let run = OngoingImport(
@@ -142,7 +149,11 @@ import SwiftUI
         ongoingTask = Task {
             do {
                 let result = try await run.run(library: library) { phase, fraction in
-                    Task { @MainActor in self.ongoingProgress = (phase, fraction) }
+                    Task { @MainActor in
+                        self.ongoingProgress = (phase, fraction)
+                        // `.review` is reported just before the backup and the write.
+                        if phase == .review { self.services.work.lockJournal(true) }
+                    }
                 }
                 if result.changedSomething { summary = result }
                 lastImported = Date()
@@ -158,6 +169,7 @@ import SwiftUI
             }
             importingNow = false
             Self.isRunning = false
+            services.work.end(.importing)
             ongoingProgress = nil
             if runAgain {
                 runAgain = false
@@ -171,8 +183,13 @@ import SwiftUI
 
     func commit() {
         guard let draft, let firstImport, !committing else { return }
+        guard services.work.begin(.importing) else {
+            error = "Wait for the running Import or Sync to finish."
+            return
+        }
         committing = true
         Self.isRunning = true
+        services.work.lockJournal(true)
         Task {
             do {
                 try await firstImport.commit(draft)
@@ -183,6 +200,7 @@ import SwiftUI
             }
             committing = false
             Self.isRunning = false
+            services.work.end(.importing)
         }
     }
 }
