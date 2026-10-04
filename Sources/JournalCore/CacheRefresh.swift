@@ -40,7 +40,7 @@ public struct CacheRefresh: Sendable {
         for key in keys {
             let parts = key.split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false).map(String.init)
             switch (parts.first, parts.count > 1 ? parts[1] : nil) {
-            case ("igdb", "game"):
+            case ("igdb", "game") where parts.count == 3:
                 if let id = Int(parts[2]) { gameIDs.append(id) }
             case ("igdb", "search") where parts.count == 4:
                 guard let igdb else { continue }
@@ -49,7 +49,7 @@ public struct CacheRefresh: Sendable {
             case ("igdb", "platforms"):
                 guard let igdb else { continue }
                 steps.append((1, key, { _ = try await igdb.platforms(servesStale: false) }))
-            case ("hasheous", "md5"):
+            case ("hasheous", "md5") where parts.count == 3:
                 let hasheous = hasheous
                 steps.append((1, key, { _ = try await hasheous.lookup(md5: parts[2], servesStale: false) }))
             default:

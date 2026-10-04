@@ -148,12 +148,11 @@ import SwiftUI
         ongoingProgress = (.snapshot, 0)
         ongoingTask = Task {
             do {
+                let work = services.work
                 let result = try await run.run(library: library) { phase, fraction in
-                    Task { @MainActor in
-                        self.ongoingProgress = (phase, fraction)
-                        // `.review` is reported just before the backup and the write.
-                        if phase == .review { self.services.work.lockJournal(true) }
-                    }
+                    Task { @MainActor in self.ongoingProgress = (phase, fraction) }
+                } writing: {
+                    await MainActor.run { work.lockJournal(true) }
                 }
                 if result.changedSomething { summary = result }
                 lastImported = Date()

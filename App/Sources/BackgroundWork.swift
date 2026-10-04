@@ -24,8 +24,9 @@ import os
     }
 
     func end(_ work: ExclusiveWork) {
+        guard gate.current == work else { return }
         gate.end(work)
-        exclusive = gate.current
+        exclusive = nil
         journalLocked = false
     }
 
@@ -85,7 +86,8 @@ struct CacheRefreshOnLaunch: ViewModifier {
         content.task {
             guard !Self.started else { return }
             Self.started = true
-            await services.work.refreshCache(services: services)
+            // Not tied to the window: closing it mustn't stop the refresh.
+            Task { await services.work.refreshCache(services: services) }
         }
     }
 }
