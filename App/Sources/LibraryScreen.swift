@@ -7,10 +7,7 @@ struct LibraryScreen: View {
     /// Set when showing one List: its Games, with the List filter fixed.
     var list: GameList?
     @Binding var selection: GameID?
-    /// Where to start, e.g. Year in review's "no dates" link.
-    var initialFilter = LibraryFilter()
-
-    @State private var filter = LibraryFilter()
+    @State private var filter: LibraryFilter
     @State private var sort = LibrarySort.name
     @State private var ascending = true
     @State private var showCovers = false
@@ -18,6 +15,14 @@ struct LibraryScreen: View {
     @State private var platforms: [IGDBPlatform] = []
     @State private var lists: [GameList] = []
     @State private var error: String?
+
+    /// `initialFilter` is where to start, e.g. Year in review's "no dates" link.
+    init(services: Services, list: GameList? = nil, selection: Binding<GameID?>, initialFilter: LibraryFilter = LibraryFilter()) {
+        self.services = services
+        self.list = list
+        _selection = selection
+        _filter = State(initialValue: initialFilter)
+    }
 
     var body: some View {
         Group {
@@ -48,7 +53,6 @@ struct LibraryScreen: View {
             }
         }
         .navigationTitle(list?.name ?? "Library")
-        .onAppear { filter = initialFilter }
         .toolbar { toolbar }
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, list: list?.id)) {
             load()

@@ -161,6 +161,18 @@ import Testing
         #expect(try h.journal.playTimeBeforeTracking(game) == 100 * 3600)
     }
 
+    @Test func aROMUnchangedForSeveralImportsComparesWithItsLastSnapshot() throws {
+        let game = try h.addGame()
+        let r = try rom(game)
+        try imports(["2024-03-01T10:00", "2024-06-01T10:00", "2024-09-01T10:00", "2025-02-01T10:00"])
+        try snapshot(1, r, hours: 1)
+        try snapshot(2, r, hours: 2)
+        try snapshot(4, r, hours: 5, lastPlayed: "2025-01-20T20:00")
+
+        #expect(try hours(2024) == [1])
+        #expect(try hours(2025) == [3])
+    }
+
     @Test func straddlingNewYearGoesToTheLastPlayedYear() throws {
         let game = try h.addGame()
         let a = try rom(game)

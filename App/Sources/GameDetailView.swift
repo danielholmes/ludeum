@@ -119,7 +119,8 @@ struct GameDetailView: View {
                         LabeledContent(
                             "Play time",
                             value: playTime(activity.playTimeSeconds)
-                                + (beforeTracking > 0 ? " (\(playTime(beforeTracking)) before tracking)" : ""))
+                                + (beforeTracking > 0
+                                    ? " (\(playTime(min(beforeTracking, activity.playTimeSeconds))) before tracking)" : ""))
                         if let last = activity.lastPlayedAt {
                             LabeledContent("Last played", value: last.formatted(date: .abbreviated, time: .omitted))
                         }

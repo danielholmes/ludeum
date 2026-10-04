@@ -167,6 +167,7 @@ extension JournalStore {
         try db.read { db in
             let imports = try Row.fetchAll(db, sql: "SELECT id, startedAt, isFirst FROM import ORDER BY startedAt, id")
             let importIDs = imports.map { $0["id"] as Int64 }
+            let order = Dictionary(uniqueKeysWithValues: importIDs.enumerated().map { ($1, $0) })
             let importAt = Dictionary(uniqueKeysWithValues: imports.map { ($0["id"] as Int64, $0["startedAt"] as Date) })
             let firstImports = Set(imports.filter { $0["isFirst"] }.map { $0["id"] as Int64 })
             let rows = try Row.fetchAll(
@@ -178,7 +179,7 @@ extension JournalStore {
                     """)
             var credits: [GameID: [Int: Double]] = [:]
             for (_, snapshots) in Dictionary(grouping: rows, by: { $0["romId"] as Int64 }) {
-                let ordered = snapshots.sorted { importIDs.firstIndex(of: $0["importId"])! < importIDs.firstIndex(of: $1["importId"])! }
+                let ordered = snapshots.sorted { order[$0["importId"] as Int64, default: 0] < order[$1["importId"] as Int64, default: 0] }
                 var previous: (at: Date, seconds: Double)?
                 for s in ordered {
                     let importId: Int64 = s["importId"]
@@ -189,7 +190,7 @@ extension JournalStore {
                     // A ROM first seen later: from zero, since the Import before this one.
                     let base =
                         previous
-                        ?? importIDs.firstIndex(of: importId).flatMap { $0 > 0 ? (importAt[importIDs[$0 - 1]]!, 0) : nil }
+                        ?? order[importId].flatMap { $0 > 0 ? (importAt[importIDs[$0 - 1]]!, 0) : nil }
                         ?? (at, 0)
                     let added = seconds - base.seconds
                     guard added > 0 else { continue }
