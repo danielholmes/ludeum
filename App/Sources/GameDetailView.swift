@@ -16,6 +16,8 @@ struct GameDetailView: View {
     @State private var memberOf: Set<Int64> = []
     @State private var roms: [JournalROM] = []
     @State private var activity: Activity?
+    /// Play time in the first Import's snapshot, which has no year.
+    @State private var beforeTracking: Double = 0
     @State private var nameOverride = ""
     @State private var ratingInput = ""
     @State private var editing: PlaythroughEdit?
@@ -113,7 +115,12 @@ struct GameDetailView: View {
                 } else {
                     if roms.allSatisfy(\.missing) { Text("No ROM in OpenEmu").foregroundStyle(.orange) }
                     if let activity {
-                        LabeledContent("Played", value: "\(activity.playCount) times, \(playTime(activity.playTimeSeconds))")
+                        LabeledContent("Played", value: "\(activity.playCount) times")
+                        LabeledContent(
+                            "Play time",
+                            value: playTime(activity.playTimeSeconds)
+                                + (beforeTracking > 0
+                                    ? " (\(playTime(min(beforeTracking, activity.playTimeSeconds))) before tracking)" : ""))
                         if let last = activity.lastPlayedAt {
                             LabeledContent("Last played", value: last.formatted(date: .abbreviated, time: .omitted))
                         }
@@ -202,6 +209,7 @@ struct GameDetailView: View {
             memberOf = Set(try journal.lists(containing: id).map(\.id))
             roms = try journal.roms(of: id)
             activity = try journal.activity(of: id)
+            beforeTracking = try journal.playTimeBeforeTracking(id)
             // Never overwrite what I'm typing.
             if focus != .nameOverride { nameOverride = try journal.nameOverride(id) ?? "" }
             if focus != .rating { ratingInput = game.rating.map(ratingText) ?? "" }

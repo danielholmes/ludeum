@@ -10,11 +10,14 @@ public struct LibraryFilter: Sendable, Equatable {
     public var listId: Int64?
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
+    /// Only Games with a Playthrough that has no dates (Year in review's footer links here).
+    public var undatedPlaythroughs: Bool
 
     public init(
         platformId: Int64? = nil, rating: RatingFilter? = nil, intent: Intent?? = nil, listId: Int64? = nil,
-        outcome: OutcomeFilter? = nil, childhood: Bool? = nil
+        outcome: OutcomeFilter? = nil, childhood: Bool? = nil, undatedPlaythroughs: Bool = false
     ) {
+        self.undatedPlaythroughs = undatedPlaythroughs
         self.platformId = platformId
         self.rating = rating
         self.intent = intent
@@ -106,6 +109,9 @@ extension JournalStore {
         if let childhood = filter.childhood {
             conditions.append("g.childhood = ?")
             arguments.append(childhood)
+        }
+        if filter.undatedPlaythroughs {
+            conditions.append("EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.start IS NULL AND p.end IS NULL)")
         }
         let direction = ascending ? "ASC" : "DESC"
         let name = "displayName COLLATE NOCASE ASC"
