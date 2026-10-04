@@ -54,9 +54,14 @@ import SwiftUI
 
     func run() {
         guard blockedByImport == nil, !syncing, let sync else { return }
+        // Import and Sync are exclusive, and the background refresh waits for the Sync.
+        guard services.work.begin(.syncing) else {
+            error = "Wait for the running Import to finish."
+            return
+        }
         syncing = true
         result = nil
-        ImportModel.isRunning = true  // Import and Sync are exclusive
+        ImportModel.isRunning = true  // quitting asks first
         let library = services.settings.openEmuLibrary
         let deleting = deleting
         Task {
@@ -74,6 +79,7 @@ import SwiftUI
             }
             syncing = false
             ImportModel.isRunning = false
+            services.work.end(.syncing)
             refresh()
         }
     }

@@ -29,6 +29,7 @@ struct MainWindow: View {
                 TopRatedScreen(services: services, selection: $selectedGame)
             case .reviewQueue:
                 ReviewQueueScreen(services: services, checkAgain: importModel.importNow)
+                    .disabled(services.work.journalLocked)
             case .syncPage:
                 SyncPage(model: syncModel)
             case .importPage:
@@ -41,6 +42,7 @@ struct MainWindow: View {
         } detail: {
             if let selectedGame {
                 GameDetailView(services: services, id: selectedGame) { self.selectedGame = nil }.id(selectedGame)
+                    .disabled(services.work.journalLocked)
             } else {
                 GameDetailPlaceholder()
             }
@@ -52,9 +54,13 @@ struct MainWindow: View {
             }
         }
         .modifier(OngoingImportTriggers(model: importModel))
+        .modifier(CacheRefreshOnLaunch(services: services))
         .toolbar {
-            Button("Add Game", systemImage: "plus") { adding = true }
-                .disabled(services.journal == nil)
+            ToolbarItem(placement: .status) { RefreshStatus(work: services.work) }
+            ToolbarItem {
+                Button("Add Game", systemImage: "plus") { adding = true }
+                    .disabled(services.journal == nil || services.work.journalLocked)
+            }
         }
         .sheet(isPresented: $adding) {
             AddGameSheet(services: services) {
@@ -92,6 +98,7 @@ struct Sidebar: View {
                             Button("Rename…") { naming = ListNaming(list: list, name: list.name) }
                             Button("Delete…", role: .destructive) { deleting = list }
                         }
+                        .disabled(services.work.journalLocked)
                 }
             } header: {
                 HStack {
@@ -99,7 +106,7 @@ struct Sidebar: View {
                     Spacer()
                     Button("New List", systemImage: "plus") { naming = ListNaming(list: nil, name: "") }
                         .labelStyle(.iconOnly).buttonStyle(.borderless)
-                        .disabled(services.journal == nil)
+                        .disabled(services.journal == nil || services.work.journalLocked)
                 }
             }
             Section("OpenEmu") {

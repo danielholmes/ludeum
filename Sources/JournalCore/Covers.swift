@@ -81,6 +81,20 @@ extension JournalStore {
         }
     }
 
+    func gamesWithJournalCover(linkedTo igdbGameIDs: [Int64]) throws -> [GameID] {
+        try db.read { db in
+            try igdbGameIDs.chunked(900).flatMap { chunk in
+                try GameID.fetchAll(
+                    db,
+                    sql: """
+                        SELECT game.id FROM game JOIN cover ON cover.gameId = game.id
+                        WHERE game.igdbGameId IN (\(chunk.map { _ in "?" }.joined(separator: ",")))
+                        """,
+                    arguments: StatementArguments(chunk))
+            }
+        }
+    }
+
     public func deleteCover(_ game: GameID) throws {
         try db.write { db in try db.execute(sql: "DELETE FROM cover WHERE gameId = ?", arguments: [game]) }
     }
@@ -139,6 +153,11 @@ public struct Covers: Sendable {
     /// a link, or a refresh brings a cover to its record.
     public func reconcile(_ game: GameID) async throws {
         if try await igdbCoverID(game) != nil { try journal.deleteCover(game) }
+    }
+
+    /// Reconciles every Game linked to one of `igdbGameIDs` that has a journal-owned Cover.
+    public func reconcile(igdbGameIDs: [Int]) async throws {
+        for game in try journal.gamesWithJournalCover(linkedTo: igdbGameIDs.map(Int64.init)) { try await reconcile(game) }
     }
 
     /// The `image_id` of IGDB's cover for a linked Game, from the cached record.

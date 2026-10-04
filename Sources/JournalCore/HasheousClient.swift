@@ -41,8 +41,14 @@ public final class HasheousClient: Sendable {
 
     /// Looks up a ROM by MD5. "Not found" is a successful answer and is cached like a match.
     public func lookup(md5: String) async throws -> HasheousResult {
+        try await lookup(md5: md5, servesStale: true)
+    }
+
+    func lookup(md5: String, servesStale: Bool) async throws -> HasheousResult {
         let md5 = md5.lowercased()
-        let payloads = try await cache.resolve([md5], key: Self.md5Key, maxAge: maxAge, batchSize: 1) { _ in
+        let payloads = try await cache.resolve(
+            [md5], key: Self.md5Key, maxAge: maxAge, batchSize: 1, servesStale: servesStale
+        ) { _ in
             [md5: try await fetch(md5: md5)]
         }
         let record = try JSONValue.decode(payloads[md5]!)

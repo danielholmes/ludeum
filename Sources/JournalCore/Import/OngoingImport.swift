@@ -40,8 +40,12 @@ public final class OngoingImport: Sendable {
     }
 
     /// Reads OpenEmu and brings the journal up to date. Refused before the first Import, and when
-    /// the library was rebuilt or replaced (a new store UUID).
-    public func run(library: URL, progress: @escaping @Sendable (ImportPhase, Double) -> Void = { _, _ in }) async throws
+    /// the library was rebuilt or replaced (a new store UUID). `writing` is awaited just before the
+    /// write step (the backup and the one transaction), so the app can stop journal edits first.
+    public func run(
+        library: URL, progress: @escaping @Sendable (ImportPhase, Double) -> Void = { _, _ in },
+        writing: @Sendable () async -> Void = {}
+    ) async throws
         -> OngoingImportResult
     {
         guard try journal.firstImportDone() else { throw ImportError.firstImportNeeded }
@@ -94,6 +98,7 @@ public final class OngoingImport: Sendable {
         let touchesROMs = !newROMs.isEmpty || !plan.gone.isEmpty || plan.seen.contains { $0.0.missing || $0.0.openEmuPk != $0.1.pk }
         try Task.checkCancellation()
         progress(.review, 1)
+        await writing()
         if touchesROMs { try backups?.backUp(journal, operation: .beforeImport) }
         return try journal.applyOngoingImport(plan)
     }

@@ -38,9 +38,10 @@ public final class CacheStore: Sendable {
     /// otherwise fetched in batches via `fetch`. Each batch is stored as soon as it arrives,
     /// so an interrupted run resumes where it stopped. If a batch fails and every item in
     /// it has an expired copy, those copies are served instead. Items `fetch` doesn't
-    /// return are absent from the result and not cached.
+    /// return are absent from the result and not cached. With `servesStale` false (a refresh),
+    /// a failed batch always throws.
     func resolve<Item: Hashable>(
-        _ items: [Item], key: (Item) -> String, maxAge: TimeInterval, batchSize: Int,
+        _ items: [Item], key: (Item) -> String, maxAge: TimeInterval, batchSize: Int, servesStale: Bool = true,
         fetch: ([Item]) async throws -> [Item: Data]
     ) async throws -> [Item: Data] {
         let unique = Array(Set(items))
@@ -58,7 +59,7 @@ public final class CacheStore: Sendable {
                 try store(Dictionary(uniqueKeysWithValues: fetched.map { (key($0.key), $0.value) }))
                 result.merge(fetched) { _, new in new }
             } catch {
-                guard batch.allSatisfy({ stale[$0] != nil }) else { throw error }
+                guard servesStale, batch.allSatisfy({ stale[$0] != nil }) else { throw error }
                 for item in batch { result[item] = stale[item] }
             }
         }
@@ -77,6 +78,14 @@ public final class CacheStore: Sendable {
                 }
             }
             return out
+        }
+    }
+
+    /// Keys of entries older than `maxAge`, oldest first.
+    func expiredKeys(maxAge: TimeInterval) throws -> [String] {
+        let cutoff = clock.now().addingTimeInterval(-maxAge).timeIntervalSince1970
+        return try db.read { db in
+            try String.fetchAll(db, sql: "SELECT key FROM entry WHERE fetched_at < ? ORDER BY fetched_at", arguments: [cutoff])
         }
     }
 

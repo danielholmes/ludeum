@@ -19,6 +19,8 @@ import SwiftUI
     let journal: JournalStore?
     /// Bumped after every change to the journal, so the screens showing it reload.
     let changes = JournalChanges()
+    /// The launch refresh, Import and Sync exclusivity, and the journal's edit lock.
+    let work = BackgroundWork()
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
 
