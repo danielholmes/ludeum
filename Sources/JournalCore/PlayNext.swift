@@ -22,19 +22,13 @@ public struct PlayNext<Item> {
 extension PlayNext: Equatable where Item: Equatable {}
 extension PlayNext: Sendable where Item: Sendable {}
 
-/// A Game on Top-rated, with its rank. Ties share a rank (1, 2, 2, 4).
-public struct TopRatedRow: Sendable, Equatable, Identifiable {
-    public let rank: Int
-    public let game: LibraryRow
-    public var id: GameID { game.id }
-}
-
 extension JournalStore {
     /// What to play next, filtered like the Library. With no `sort`, Playing goes by the latest
     /// in-progress start and Up next and Backlog by when the Intent was set, newest first, with
     /// undated Intent last; ties go by name.
     public func whatToPlayNext(_ filter: LibraryFilter, sort: LibrarySort?, ascending: Bool) throws -> PlayNext<LibraryRow> {
-        let rows = try library(filter, sort: sort ?? .intentSet, ascending: sort == nil ? false : ascending)
+        // With no sort, rows come by name and the stable sorts below keep name order for ties.
+        let rows = try library(filter, sort: sort ?? .name, ascending: sort == nil ? true : ascending)
         var next = PlayNext<LibraryRow>(playing: [], upNext: [], backlog: [])
         for row in rows {
             if row.isPlaying {
@@ -48,10 +42,18 @@ extension JournalStore {
         if sort == nil {
             // Every in-progress Playthrough has a start, so `playingSince` is always set here.
             next.playing.sort { a, b in
-                let since = (a.playingSince?.text ?? "", b.playingSince?.text ?? "")
-                if since.0 != since.1 { return since.0 > since.1 }
-                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+                guard let a = a.playingSince, let b = b.playingSince else { return false }
+                return a > b
             }
+            let newestIntentFirst = { (a: LibraryRow, b: LibraryRow) -> Bool in
+                switch (a.intentSetAt, b.intentSetAt) {
+                case (let a?, let b?): a > b
+                case (_?, nil): true
+                default: false
+                }
+            }
+            next.upNext.sort(by: newestIntentFirst)
+            next.backlog.sort(by: newestIntentFirst)
         }
         return next
     }
@@ -63,17 +65,5 @@ extension JournalStore {
                 sql: "INSERT INTO playthrough (gameId, start) VALUES (?, ?)", arguments: [game, today()])
             try db.execute(sql: "UPDATE game SET intent = NULL, intentSetAt = NULL WHERE id = ?", arguments: [game])
         }
-    }
-
-    /// Every rated Game matching `filter`, by current Rating, highest first; ties by name.
-    /// A Rating of 0.0 counts; unrated Games never appear.
-    public func topRated(_ filter: LibraryFilter) throws -> [TopRatedRow] {
-        let rows = try library(filter, sort: .rating, ascending: false).filter { $0.rating != nil }
-        var ranked: [TopRatedRow] = []
-        for (index, row) in rows.enumerated() {
-            let rank = index > 0 && rows[index - 1].rating == row.rating ? ranked[index - 1].rank : index + 1
-            ranked.append(TopRatedRow(rank: rank, game: row))
-        }
-        return ranked
     }
 }
