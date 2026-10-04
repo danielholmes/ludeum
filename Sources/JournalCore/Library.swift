@@ -52,11 +52,15 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let platformName: String
     public let igdbGameId: Int64?
     public let rating: Rating?
+    /// The current Rating was brought over from OpenEmu stars ("≈ imported").
+    public let ratingImported: Bool
     public let intent: Intent?
     public let intentSetAt: Date?
     public let childhood: Bool
     /// Playing: a Playthrough in progress.
     public let isPlaying: Bool
+    /// The latest start among its in-progress Playthroughs.
+    public let playingSince: PartialDate?
     /// The Outcomes of its finished and dropped Playthroughs, without repeats.
     public let outcomes: Set<Outcome>
     /// It has ROMs, and every one is missing.
@@ -115,8 +119,9 @@ extension JournalStore {
         let sql = """
             SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood,
                 COALESCE(g.nameOverride, g.igdbName, g.name) AS displayName, pl.name AS platformName,
-                r.rating AS currentRating,
+                r.rating AS currentRating, COALESCE(r.imported, 0) AS ratingImported,
                 EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playing,
+                (SELECT MAX(start) FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playingSince,
                 (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
                 EXISTS (SELECT 1 FROM rom WHERE gameId = g.id)
                     AND NOT EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AS noROM
@@ -131,8 +136,10 @@ extension JournalStore {
                 LibraryRow(
                     id: row["id"], name: row["displayName"], platformId: row["platformId"], platformName: row["platformName"],
                     igdbGameId: row["igdbGameId"], rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) },
+                    ratingImported: row["ratingImported"],
                     intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)), intentSetAt: row["intentSetAt"],
                     childhood: row["childhood"], isPlaying: row["playing"],
+                    playingSince: (row["playingSince"] as String?).flatMap(PartialDate.init),
                     outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }),
                     noROMInOpenEmu: row["noROM"])
             }
