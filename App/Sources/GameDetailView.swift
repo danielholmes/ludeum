@@ -239,28 +239,21 @@ struct GameDetailView: View {
     /// ▶ Play in the Platform's Emulator (else OpenEmu), and beside it the Emulator's settings and
     /// OpenEmu as the other way to play.
     @ViewBuilder private var playControls: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             if let emulator {
-                Button {
-                    play(in: emulator)
-                } label: {
-                    Label("Play", systemImage: "play.fill")
-                }
-                .buttonStyle(.borderedProminent).help("Play in \(emulator.name)")
+                // ▶ Play in the Emulator; its menu also plays in OpenEmu.
                 Menu {
-                    Picker("Run-ahead", selection: runAheadFrames) {
-                        Text("Default (0 frames)").tag(Int?.none)
-                        ForEach(EmulatorSettings.runAheadRange, id: \.self) { frames in
-                            Text("\(frames) frame\(frames == 1 ? "" : "s")").tag(Int?.some(frames))
-                        }
-                    }
-                    Divider()
                     Button("Play in OpenEmu", action: playInOpenEmu)
                 } label: {
-                    Text("\(emulator.name) · Run-ahead \(emulatorSettings.runAheadFrames ?? 0)")
+                    Label("Play", systemImage: "play.fill")
+                } primaryAction: {
+                    play(in: emulator)
                 }
-                .menuStyle(.borderlessButton).fixedSize()
-                .help("Frames \(emulator.name) runs ahead to hide input lag, set on every Play; or play in OpenEmu")
+                .menuStyle(.button).buttonStyle(.borderedProminent).fixedSize()
+                .help("Play in \(emulator.name)")
+                EmulatorSettingsButton(emulator: emulator, settings: emulatorSettings) { settings in
+                    save { try $0.setEmulatorSettings(id, settings) }
+                }
             } else {
                 Button(action: playInOpenEmu) { Label("Play", systemImage: "play.fill") }
                     .buttonStyle(.borderedProminent).help("Play in OpenEmu")
@@ -313,16 +306,6 @@ struct GameDetailView: View {
     }
 
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
-
-    private var runAheadFrames: Binding<Int?> {
-        Binding(
-            get: { emulatorSettings.runAheadFrames },
-            set: { frames in
-                var settings = emulatorSettings
-                settings.runAheadFrames = frames
-                save { try $0.setEmulatorSettings(id, settings) }
-            })
-    }
 
     /// The file a Play opens: the playlist of a multi-disc Version, else the first present ROM. Nil
     /// (with the error shown) when it can't be found.
