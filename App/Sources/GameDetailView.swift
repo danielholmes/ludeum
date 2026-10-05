@@ -158,7 +158,7 @@ struct GameDetailView: View {
                     let all = facts.screenshots
                     let collapsed = !allScreenshots && all.count > limit
                     let shown = collapsed ? Array(all.prefix(limit - 1)) : all
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
                         ForEach(shown, id: \.self) { imageID in
                             ScreenshotImage(igdb: igdb, imageID: imageID, large: false)
                                 .aspectRatio(16 / 9, contentMode: .fit)
