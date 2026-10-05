@@ -54,11 +54,6 @@ struct MainWindow: View {
                 if let list = lists.first(where: { $0.id == id }) {
                     LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
                 }
-            case .finished, .childhood:
-                if let screen = selection, let filter = screen.shortcutFilter {
-                    LibraryScreen(services: services, selection: $selectedGame, initialFilter: filter, title: screen.title, bar: .count).id(
-                        selection)
-                }
             case .whatToPlayNext:
                 WhatToPlayNextScreen(services: services, selection: $selectedGame)
             case .topRated:
@@ -97,7 +92,14 @@ struct MainWindow: View {
                     .frame(maxWidth: 520)
             }
         }
-        .onChange(of: selection) { if selection != .library { libraryFilter = LibraryFilter() } }
+        .onChange(of: selection) {
+            // A shortcut is the Library with its filter as the only pill.
+            if let filter = selection?.shortcutFilter {
+                showInLibrary(filter)
+            } else if selection != .library {
+                libraryFilter = LibraryFilter()
+            }
+        }
         .modifier(OngoingImportTriggers(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
         .toolbar {

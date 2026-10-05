@@ -7,8 +7,7 @@ struct LibraryScreen: View {
     /// Set when showing one List: its Games, with the List filter fixed.
     var list: GameList?
     var title: String?
-    /// How the bar above the Games works: the Library adds and removes filters as pills; Finished and
-    /// Childhood just count; the rest (Platforms, Lists, Pinned) say what they're showing.
+    /// How the bar above the Games works: the Library adds and removes filters as pills; the rest (Platforms, Lists, Pinned) say what they're showing.
     var bar = Bar.summary
     @Binding var selection: GameID?
     @State private var filter: LibraryFilter
@@ -85,7 +84,6 @@ struct LibraryScreen: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             switch bar {
             case .summary: FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count)
-            case .count: LibraryBar(count: rows.count, filter: nil, platforms: [], lists: [], genres: [], themes: [])
             case .filters:
                 LibraryBar(
                     count: rows.count, filter: $filter, platforms: platforms, lists: lists,
@@ -191,7 +189,7 @@ struct LibraryScreen: View {
 }
 
 extension LibraryScreen {
-    enum Bar { case filters, count, summary }
+    enum Bar { case filters, summary }
 }
 
 /// The Platforms and Lists the filter menu offers.
