@@ -54,7 +54,7 @@ final class FakeOpenEmu {
     @discardableResult
     func addROM(
         _ name: String, md5: String, system: String = "openemu.system.snes", fileName: String? = "rom.sfc",
-        stars: Int = 0, collections: [String] = [], playCount: Int = 0, playTime: Double = 0, lastPlayed: Date? = nil,
+        stars: Int = 0, collections: [String] = [],
         boxArt: Data? = nil, title: String? = nil, status: Int = 0
     ) throws -> Int64 {
         let pk = nextPK
@@ -82,7 +82,7 @@ final class FakeOpenEmu {
             try db.execute(
                 sql: "INSERT INTO ZROM VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)",
                 arguments: [
-                    pk, Self.rom, playCount, pk, lastPlayed?.timeIntervalSinceReferenceDate, playTime,
+                    pk, Self.rom, 0, pk, nil, 0,
                     location.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed), md5.uppercased(),
                 ])
             try db.execute(

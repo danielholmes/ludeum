@@ -72,10 +72,6 @@ _Avoid_: Childhood Played
 A named, unordered group of Games that I curate, e.g. "Castlevania" or "Light Gun Games". A Game can be in many Lists.
 _Avoid_: Collection, tag
 
-**Activity**:
-Play statistics recorded automatically by an emulator (play count, last played, total play time), totalled across a Game's ROMs. Read-only. The journal saves a snapshot of it at each Import so play time can be credited to the year it happened. Tracking begins at the first Import: the play time in that first snapshot has no year.
-_Avoid_: Stats, history
-
 **Cover**:
 The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else its OpenEmu Box art, else IGDB's Cover art. A Game can have no Cover at all.
 _Avoid_: Artwork, box image, thumbnail
@@ -91,10 +87,24 @@ _Avoid_: Box art
 **Screenshot**:
 An image of a game being played, or its title screen. From IGDB (several per game) and libretro-thumbnails (one gameplay shot and one title screen).
 
+### Playing
+
+**Emulator**:
+The app a Platform's Games are played in, e.g. MesenCE for NES. Each Platform has at most one.
+_Avoid_: Core, player
+
+**Emulator settings**:
+The few settings of a Game's Emulator that the journal chooses on each Play, e.g. run-ahead frames. A Game without its own value gets the Emulator's default. Every Play sets all of them, so one Game's settings never carry into the next.
+_Avoid_: Config, overrides
+
+**Play**:
+Opening a Game's present ROM in its Platform's Emulator. Play never changes journal data.
+_Avoid_: Launch, run
+
 ### Working with OpenEmu
 
 **Import**:
-Reading ROMs and Activity from OpenEmu into the journal. Import never changes OpenEmu.
+Reading ROMs from OpenEmu into the journal. Import never changes OpenEmu.
 _Avoid_: Scan, pull
 
 **Import draft**:

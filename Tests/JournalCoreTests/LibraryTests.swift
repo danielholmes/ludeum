@@ -100,29 +100,15 @@ import Testing
             game: game, openEmuPk: pk, md5: "\(pk)", fileName: fileName, systemId: "openemu.system.psx", missing: missing)
     }
 
-    @Test func romsShowTheirVersionAndLatestActivity() throws {
+    @Test func romsShowTheirVersion() throws {
         try rom(1, "Resident Evil 2 (USA) (Disc 1) (Leon).chd")
         try rom(2, "Resident Evil 2 (Japan).chd", missing: true)
-        try h.journal.db.write { db in
-            try db.execute(sql: "INSERT INTO import (id, startedAt, isFirst) VALUES (1, ?, 1), (2, ?, 0)", arguments: [Date(), Date()])
-            try db.execute(
-                sql: """
-                    INSERT INTO activitySnapshot (importId, romId, playCount, playTimeSeconds) VALUES
-                    (1, 1, 2, 600), (2, 1, 5, 3600), (1, 2, 1, 60)
-                    """)
-        }
-
         let roms = try h.journal.roms(of: game)
 
         #expect(roms.map(\.fileName) == ["Resident Evil 2 (USA) (Disc 1) (Leon).chd", "Resident Evil 2 (Japan).chd"])
         #expect(roms[0].version == "USA")
         #expect(roms[0].disc == 1)
-        #expect(roms[0].playCount == 5)
-        #expect(roms[0].playTimeSeconds == 3600)
         #expect(roms[1].missing)
-        let total = try h.journal.activity(of: game)
-        #expect(total.playCount == 6)
-        #expect(total.playTimeSeconds == 3660)
     }
 
     @Test func versionSuggestionsComeFromTheGamesROMNames() throws {

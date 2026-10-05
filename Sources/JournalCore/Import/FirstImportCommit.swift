@@ -30,13 +30,12 @@ extension JournalStore {
 
     /// Writes the first Import in one transaction: Games and their ROMs, OpenEmu's collections as
     /// Intent, Playthroughs, Childhood and Lists, stars ×2 as imported Ratings,
-    /// unmatched ROMs with their suggestions and held data, and the first Activity snapshot.
+    /// unmatched ROMs with their suggestions and held data.
     func commitFirstImport(_ plan: FirstImportPlan) throws {
         let now = clock.now()
         let day = today()
         try db.write { db in
             try db.execute(sql: "INSERT INTO import (startedAt, isFirst) VALUES (?, 1)", arguments: [now])
-            let importId = db.lastInsertedRowID
             try db.execute(
                 sql:
                     "INSERT INTO openEmuLibrary (id, storeUUID) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET storeUUID = excluded.storeUUID",
@@ -54,15 +53,7 @@ extension JournalStore {
                         rom.pk, rom.md5, rom.file?.lastPathComponent ?? rom.name, rom.name, rom.system, !rom.isPresent, parsed.version,
                         parsed.disc, parsed.discLabel, game, game == nil ? nil : "automatic", game == nil ? nil : now,
                     ])
-                let romId = db.lastInsertedRowID
-                // Activity snapshots only for ROMs present at this Import.
-                if rom.isPresent {
-                    try db.execute(
-                        sql:
-                            "INSERT INTO activitySnapshot (importId, romId, playCount, lastPlayedAt, playTimeSeconds) VALUES (?, ?, ?, ?, ?)",
-                        arguments: [importId, romId, rom.playCount, rom.lastPlayedAt, rom.playTimeSeconds])
-                }
-                return romId
+                return db.lastInsertedRowID
             }
 
             for planned in plan.games {

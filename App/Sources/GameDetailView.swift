@@ -412,7 +412,7 @@ private func deletionMessage(_ s: DeletionSummary) -> String {
     if s.ratingEntries > 0 { parts.append("its Rating history (\(s.ratingEntries))") }
     if s.playthroughs > 0 { parts.append("\(s.playthroughs) Playthrough\(s.playthroughs == 1 ? "" : "s")") }
     if s.lists > 0 { parts.append("its place in \(s.lists) List\(s.lists == 1 ? "" : "s")") }
-    if s.missingROMs > 0 { parts.append("\(s.missingROMs) missing ROM\(s.missingROMs == 1 ? "" : "s") and their Activity") }
+    if s.missingROMs > 0 { parts.append("\(s.missingROMs) missing ROM\(s.missingROMs == 1 ? "" : "s")") }
     parts.append("its Intent, Childhood, IGDB link and any uploaded Cover")
     return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
 }

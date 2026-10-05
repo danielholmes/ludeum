@@ -19,9 +19,6 @@ public struct OpenEmuROMRecord: Codable, Sendable, Hashable {
     public let stars: Int
     /// The regular collections it's in, by name.
     public let collections: [String]
-    public let playCount: Int
-    public let lastPlayedAt: Date?
-    public let playTimeSeconds: Double
     /// OpenEmu's box art, under the library's `Artwork/`.
     public let boxArt: URL?
     /// Its `ZIMAGE.Z_PK`, to tell OpenEmu's own box art from a Cover Sync wrote.
@@ -106,8 +103,7 @@ public enum OpenEmuLibrary {
             let roms = try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.Z_PK AS pk, r.ZMD5 AS md5, r.ZLOCATION AS location, r.ZPLAYCOUNT AS playCount,
-                        r.ZLASTPLAYED AS lastPlayed, r.ZPLAYTIME AS playTime,
+                    SELECT r.Z_PK AS pk, r.ZMD5 AS md5, r.ZLOCATION AS location,
                         g.Z_PK AS game, g.ZNAME AS name, g.ZGAMETITLE AS title, g.ZRATING AS rating,
                         s.ZSYSTEMIDENTIFIER AS system, i.ZRELATIVEPATH AS art, i.Z_PK AS artPk
                     FROM ZROM r JOIN ZGAME g ON r.ZGAME = g.Z_PK JOIN ZSYSTEM s ON g.ZSYSTEM = s.Z_PK
@@ -125,9 +121,7 @@ public enum OpenEmuLibrary {
                     openVGDBTitle: row["title"], system: row["system"], file: file,
                     isPresent: file.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false,
                     stars: row["rating"] ?? 0, collections: (collections[row["game"]] ?? []).sorted(),
-                    playCount: row["playCount"] ?? 0,
-                    lastPlayedAt: (row["lastPlayed"] as Double?).map(Date.init(timeIntervalSinceReferenceDate:)),
-                    playTimeSeconds: row["playTime"] ?? 0, boxArt: art.map { artwork.appending(path: $0) }, boxArtImagePk: row["artPk"])
+                    boxArt: art.map { artwork.appending(path: $0) }, boxArtImagePk: row["artPk"])
             }
             return OpenEmuLibrarySnapshot(storeUUID: uuid, roms: roms)
         }

@@ -46,10 +46,7 @@ import Testing
     // MARK: Reading OpenEmu
 
     @Test func theSnapshotCarriesWhatTheImportNeeds() async throws {
-        let played = Date(timeIntervalSince1970: 1_700_000_000)
-        try oe.addROM(
-            "Super Metroid (Japan, USA)", md5: "aa", stars: 5, collections: ["_TODO", "Metroid"], playCount: 3, playTime: 600,
-            lastPlayed: played)
+        try oe.addROM("Super Metroid (Japan, USA)", md5: "aa", stars: 5, collections: ["_TODO", "Metroid"])
         try oe.addROM("Gone (USA)", md5: "cc", fileName: nil)
 
         let draft = try await start()
@@ -59,8 +56,6 @@ import Testing
         #expect(metroid.md5 == "aa")
         #expect(metroid.stars == 5)
         #expect(Set(metroid.collections) == ["_TODO", "Metroid"])
-        #expect(metroid.playCount == 3)
-        #expect(metroid.lastPlayedAt == played)
         #expect(metroid.isPresent)
         #expect(!draft.library.roms[1].isPresent)
     }
@@ -153,10 +148,8 @@ import Testing
     // MARK: Committing
 
     @Test func committingCreatesTheJournal() async throws {
-        let played = Date(timeIntervalSince1970: 1_700_000_000)
         let metroid = try oe.addROM(
-            "Super Metroid (USA)", md5: "aa", stars: 4, collections: ["_TODO Next", "_Current", "Metroid", "_Childhood Played"],
-            playCount: 3, playTime: 600, lastPlayed: played)
+            "Super Metroid (USA)", md5: "aa", stars: 4, collections: ["_TODO Next", "_Current", "Metroid", "_Childhood Played"])
         try oe.addROM("Super Mario World (USA)", md5: "bb", stars: 3, collections: ["_Completed", "_TODO", "Mario"])
         var draft = try await start()
         try firstImport.answer(&draft, start: .started(PartialDate("2026-09")!), forROM: metroid)
@@ -179,7 +172,6 @@ import Testing
         #expect(try j.journal.playthroughs(smw.id).first?.draft == PlaythroughDraft(outcome: .finished))
         #expect(smw.rating == Rating(tenths: 60))
         #expect(Set(try j.journal.lists().map(\.name)) == ["Metroid", "Mario"])
-        #expect(try j.journal.roms(of: sm.id).first?.playCount == 3)
         #expect(try j.journal.firstImportDone())
         #expect(try firstImport.loadDraft() == nil)
         #expect(try backups.all().first?.operation == .beforeImport)
@@ -209,8 +201,8 @@ import Testing
         #expect(rows[1]["suggestedIgdbGameId"] as Int64? == nil)
     }
 
-    @Test func orphanedEntriesAreImportedAsMissingWithoutActivity() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa", fileName: nil, stars: 5, playCount: 9)
+    @Test func orphanedEntriesAreImportedAsMissing() async throws {
+        try oe.addROM("Super Metroid (USA)", md5: "aa", fileName: nil, stars: 5)
         let draft = try await start()
 
         try await firstImport.commit(draft)
@@ -218,8 +210,6 @@ import Testing
         let game = try #require(try j.journal.library(LibraryFilter(), sort: .name, ascending: true).first)
         #expect(game.noROMInOpenEmu)
         #expect(game.rating == Rating(tenths: 100))
-        let snapshots = try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM activitySnapshot")! }
-        #expect(snapshots == 0)
     }
 
     @Test func nothingIsCarriedIntoTheJournalOpenEmusBoxArtIsCached() async throws {

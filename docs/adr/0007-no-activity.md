@@ -1,0 +1,3 @@
+# No Activity
+
+The journal no longer records play statistics (play count, last played, play time). They came only from OpenEmu, and OpenEmu sees a small slice of my play: phone, real consoles and PC never reported any, so the totals and Year in Review's play-time credit were misleading rather than merely incomplete. Timing how long a launched emulator stays open was considered and rejected for the same reason. Dropping it also removes something tying the journal to OpenEmu, which I'm trialling replacing with per-Platform emulators the journal launches itself. When I played something is recorded by Playthroughs.

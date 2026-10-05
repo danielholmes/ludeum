@@ -185,6 +185,10 @@ enum JournalSchema {
                     WHERE systemId = 'openemu.system.gb' AND (fileName LIKE '%.gbc' OR fileName LIKE '%[C]%')
                     """)
         }
+        // Activity is gone (ADR 0007).
+        migrator.registerMigration("v7 no activity") { db in
+            try db.drop(table: "activitySnapshot")
+        }
         return migrator
     }
 }

@@ -26,7 +26,6 @@ func firstImportRun(library: URL, journalFolder: URL, commit: Bool, igdb: IGDBCl
     let counts = try await DatabaseQueue(path: journalFolder.appending(path: "journal.sqlite").path(percentEncoded: false)).read { db in
         try [
             "game", "rom", "rom WHERE gameId IS NULL", "rom WHERE missing", "list", "playthrough", "ratingEntry", "cover",
-            "activitySnapshot",
         ]
         .map { "\($0): \(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM \($0)")!)" }
     }

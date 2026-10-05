@@ -8,8 +8,7 @@ public struct ImportedROM: Sendable, Equatable {
     public let game: GameID?
 }
 
-/// What an ongoing Import changed. Activity alone doesn't count: an Import that changed nothing
-/// else shows nothing.
+/// What an ongoing Import changed. An Import that changed nothing shows nothing.
 public struct OngoingImportResult: Sendable, Equatable {
     /// New ROMs Matched automatically (added silently, but listed in the summary).
     public var matched: [ImportedROM] = []
@@ -158,39 +157,12 @@ extension JournalStore {
         }
     }
 
-    /// Writes an ongoing Import in one transaction: new ROMs, returning and missing ROMs, and
-    /// Activity snapshot rows for ROMs that are new or whose Activity changed.
+    /// Writes an ongoing Import in one transaction: new ROMs, returning and missing ROMs,.
     func applyOngoingImport(_ plan: OngoingImportPlan) throws -> OngoingImportResult {
         let now = clock.now()
         return try db.write { db in
             var result = OngoingImportResult()
             try db.execute(sql: "INSERT INTO import (startedAt, isFirst) VALUES (?, 0)", arguments: [now])
-            let importId = db.lastInsertedRowID
-
-            func snapshotIfChanged(_ romId: Int64, _ rom: OpenEmuROMRecord) throws {
-                guard rom.isPresent else { return }
-                let last = try Row.fetchOne(
-                    db,
-                    sql:
-                        "SELECT playCount, lastPlayedAt, playTimeSeconds FROM activitySnapshot WHERE romId = ? ORDER BY importId DESC LIMIT 1",
-                    arguments: [romId])
-                // Stored dates keep milliseconds and OpenEmu's don't stop there, so compare to the millisecond.
-                func same(_ a: Date?, _ b: Date?) -> Bool {
-                    switch (a, b) {
-                    case (nil, nil): true
-                    case (let a?, let b?): abs(a.timeIntervalSince(b)) < 0.001
-                    default: false
-                    }
-                }
-                if let last, last["playCount"] as Int == rom.playCount, same(last["lastPlayedAt"], rom.lastPlayedAt),
-                    abs((last["playTimeSeconds"] as Double) - rom.playTimeSeconds) < 0.001
-                {
-                    return
-                }
-                try db.execute(
-                    sql: "INSERT INTO activitySnapshot (importId, romId, playCount, lastPlayedAt, playTimeSeconds) VALUES (?, ?, ?, ?, ?)",
-                    arguments: [importId, romId, rom.playCount, rom.lastPlayedAt, rom.playTimeSeconds])
-            }
 
             func insertROM(_ rom: OpenEmuROMRecord, game: GameID?) throws -> Int64 {
                 let parsed = ROMName(rom.name)
@@ -204,9 +176,7 @@ extension JournalStore {
                         parsed.disc,
                         parsed.discLabel, game, game == nil ? nil : "automatic", game == nil ? nil : now,
                     ])
-                let id = db.lastInsertedRowID
-                try snapshotIfChanged(id, rom)
-                return id
+                return db.lastInsertedRowID
             }
 
             for (known, rom) in plan.seen {
@@ -218,7 +188,6 @@ extension JournalStore {
                     sql: "UPDATE rom SET openEmuPk = ?, md5 = ?, missing = ? WHERE id = ?",
                     arguments: [rom.pk, rom.md5, !rom.isPresent, known.id])
                 if !known.missing && !rom.isPresent { result.goneMissing.append(ImportedROM(romName: known.fileName, game: known.gameId)) }
-                try snapshotIfChanged(known.id, rom)
             }
             for known in plan.gone {
                 try db.execute(sql: "UPDATE rom SET missing = 1 WHERE id = ?", arguments: [known.id])

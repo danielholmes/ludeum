@@ -39,28 +39,23 @@ import Testing
         try j.journal.db.read { try Row.fetchOne($0, sql: "SELECT * FROM rom WHERE openEmuPk = ?", arguments: [openEmuPk]) }
     }
 
-    func snapshotCount() throws -> Int {
-        try j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM activitySnapshot")! }
-    }
-
     @Test func itNeedsTheFirstImport() async throws {
         await #expect(throws: ImportError.firstImportNeeded) { try await ongoing.run(library: oe.folder) }
     }
 
     @Test func anImportThatChangedNothingSaysNothing() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa", playCount: 1)
+        try oe.addROM("Super Metroid (USA)", md5: "aa")
         try await firstImport()
 
         let result = try await ongoing.run(library: oe.folder)
 
         #expect(!result.changedSomething)
-        #expect(try snapshotCount() == 1)
     }
 
     @Test func aNewROMIsMatchedAutomaticallyAndSilently() async throws {
         try oe.addROM("Super Metroid (USA)", md5: "aa")
         try await firstImport()
-        let mario = try oe.addROM("Super Mario World (USA)", md5: "bb", playCount: 2)
+        let mario = try oe.addROM("Super Mario World (USA)", md5: "bb")
 
         let result = try await ongoing.run(library: oe.folder)
 
@@ -82,8 +77,8 @@ import Testing
         #expect(try j.journal.reviewQueue().noSuggestion.map(\.romName) == ["Unknown Homebrew"])
     }
 
-    @Test func aROMThatDisappearsIsMarkedMissingAndKeepsItsLastActivity() async throws {
-        let metroid = try oe.addROM("Super Metroid (USA)", md5: "aa", playCount: 4, playTime: 900)
+    @Test func aROMThatDisappearsIsMarkedMissing() async throws {
+        let metroid = try oe.addROM("Super Metroid (USA)", md5: "aa")
         try await firstImport()
         try oe.removeROM(metroid)
 
@@ -91,8 +86,6 @@ import Testing
 
         #expect(result.goneMissing.map(\.romName) == ["Super Metroid (USA)"])
         #expect(try romRow(openEmuPk: metroid)?["missing"] as Bool? == true)
-        let game = try #require(result.goneMissing.first?.game)
-        #expect(try j.journal.activity(of: game).playCount == 4)
     }
 
     @Test func aROMThatComesBackRejoinsItsGameWithoutReview() async throws {
@@ -129,31 +122,6 @@ import Testing
         #expect(try romRow(openEmuPk: metroid)?["missing"] as Bool? == false)
         #expect(result.returned.count == 1)
         #expect(!result.changedSomething)
-    }
-
-    @Test func unchangedActivityWithAPreciseLastPlayedDateAddsNoSnapshot() async throws {
-        try oe.addROM(
-            "Super Metroid (USA)", md5: "aa", playCount: 3, playTime: 1234.567891,
-            lastPlayed: Date(timeIntervalSinceReferenceDate: 673000972.183634))
-        try await firstImport()
-
-        _ = try await ongoing.run(library: oe.folder)
-
-        #expect(try snapshotCount() == 1)
-    }
-
-    @Test func activityIsSnapshottedOnlyWhenItChanged() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa", playCount: 1, playTime: 60)
-        let mario = try oe.addROM("Super Mario World (USA)", md5: "bb", playCount: 1, playTime: 60)
-        try await firstImport()
-        try await oe.db.write { try $0.execute(sql: "UPDATE ZROM SET ZPLAYCOUNT = 2, ZPLAYTIME = 600 WHERE Z_PK = ?", arguments: [mario]) }
-
-        let result = try await ongoing.run(library: oe.folder)
-
-        #expect(try snapshotCount() == 3)
-        #expect(!result.changedSomething)  // Activity alone isn't worth a summary
-        let game = try #require(try romRow(openEmuPk: mario)?["gameId"] as GameID?)
-        #expect(try j.journal.activity(of: game).playTimeSeconds == 600)
     }
 
     @Test func aNewVersionOfAGameIsMatchedAndShowsAsDuplicateVersions() async throws {

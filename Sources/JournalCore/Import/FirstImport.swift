@@ -102,14 +102,11 @@ public struct ImportBlockers: Sendable, Equatable {
 public struct CurrentGame: Sendable, Equatable, Identifiable {
     public let romPK: Int64
     public let name: String
-    /// OpenEmu's last-played date, shown as a hint.
-    public let lastPlayedAt: Date?
     public var id: Int64 { romPK }
 
     init(rom: OpenEmuROMRecord) {
         romPK = rom.pk
         name = rom.name
-        lastPlayedAt = rom.lastPlayedAt
     }
 }
 

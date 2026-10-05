@@ -414,12 +414,7 @@ private struct StartDateRow: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading) {
-                Text(rom.name)
-                if let last = rom.lastPlayedAt {
-                    Text("Last played \(last.formatted(date: .abbreviated, time: .omitted))").font(.caption).foregroundStyle(.secondary)
-                }
-            }
+            Text(rom.name)
             Spacer()
             TextField("Started on", text: $text, prompt: Text("YYYY-MM")).frame(width: 110).onSubmit(start)
                 .foregroundStyle(invalid ? .red : .primary)
@@ -466,7 +461,6 @@ private struct DuplicateROMRow: View {
         var parts: [String] = []
         if rom.stars > 0 { parts.append("\(rom.stars)★ in OpenEmu") }
         if !rom.collections.isEmpty { parts.append(rom.collections.joined(separator: ", ")) }
-        if rom.playTimeSeconds > 0 { parts.append("played \(Int(rom.playTimeSeconds / 60)) min") }
         return parts.isEmpty ? "No OpenEmu data" : parts.joined(separator: " · ")
     }
 }

@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-/// A ROM as Game detail shows it, with its latest Activity.
+/// A ROM as Game detail shows it.
 public struct JournalROM: Sendable, Equatable, Identifiable {
     public let id: Int64
     /// The ROM's `Z_PK` in OpenEmu's library.
@@ -13,16 +13,6 @@ public struct JournalROM: Sendable, Equatable, Identifiable {
     public let version: String
     public let disc: Int?
     public let missing: Bool
-    public let playCount: Int
-    public let lastPlayedAt: Date?
-    public let playTimeSeconds: Double
-}
-
-/// A Game's Activity: play stats summed across its ROMs, from each ROM's latest snapshot.
-public struct Activity: Sendable, Equatable {
-    public let playCount: Int
-    public let lastPlayedAt: Date?
-    public let playTimeSeconds: Double
 }
 
 /// What deleting a Game takes with it, for the confirmation.
@@ -56,11 +46,8 @@ extension JournalStore {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.id, r.openEmuPk, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
-                        a.playCount, a.lastPlayedAt, a.playTimeSeconds
+                    SELECT r.id, r.openEmuPk, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing
                     FROM rom r
-                    LEFT JOIN activitySnapshot a ON a.romId = r.id
-                        AND a.importId = (SELECT MAX(importId) FROM activitySnapshot WHERE romId = r.id)
                     WHERE r.gameId = ?
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
                     """, arguments: [game]
@@ -69,17 +56,9 @@ extension JournalStore {
                 let parsed = ROMName((fileName as NSString).deletingPathExtension)
                 return JournalROM(
                     id: row["id"], openEmuPk: row["openEmuPk"], fileName: fileName, name: row["displayName"], version: row["version"] ?? parsed.version,
-                    disc: row["discNumber"] ?? parsed.disc, missing: row["missing"], playCount: row["playCount"] ?? 0,
-                    lastPlayedAt: row["lastPlayedAt"], playTimeSeconds: row["playTimeSeconds"] ?? 0)
+                    disc: row["discNumber"] ?? parsed.disc, missing: row["missing"])
             }
         }
-    }
-
-    public func activity(of game: GameID) throws -> Activity {
-        let roms = try roms(of: game)
-        return Activity(
-            playCount: roms.map(\.playCount).reduce(0, +), lastPlayedAt: roms.compactMap(\.lastPlayedAt).max(),
-            playTimeSeconds: roms.map(\.playTimeSeconds).reduce(0, +))
     }
 
     /// Version suggestions for a Playthrough: the Game's ROMs' Versions, without repeats.

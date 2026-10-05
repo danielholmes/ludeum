@@ -560,8 +560,6 @@ private struct DuplicateVersionsDetail: View {
                     VStack(alignment: .leading) {
                         Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
                         Text(rom.fileName).font(.caption)
-                        Text("Played \(rom.playCount) times, \(Int(rom.playTimeSeconds / 60)) min").font(.caption).foregroundStyle(
-                            .secondary)
                     }
                 }
             }
