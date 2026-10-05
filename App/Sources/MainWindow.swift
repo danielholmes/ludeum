@@ -102,6 +102,11 @@ struct Sidebar: View {
             Section("Journal") {
                 ForEach(Screen.journal, id: \.self) { row($0) }
             }
+            Section("OpenEmu") {
+                row(.reviewQueue, badge: reviewQueueCount)
+                row(.importPage)
+                row(.syncPage)
+            }
             Section {
                 ForEach(lists, id: \.id) { list in
                     row(.list(id: list.id, name: list.name))
@@ -116,15 +121,9 @@ struct Sidebar: View {
                     Text("Lists")
                     Spacer()
                     Button("New List", systemImage: "plus") { naming = ListNaming(list: nil, name: "") }
-                        .labelStyle(.iconOnly).buttonStyle(.borderless)
+                        .labelStyle(.iconOnly).buttonStyle(.hover)
                         .disabled(services.journal == nil || services.work.journalLocked)
                 }
-            }
-            Section("OpenEmu") {
-                row(.reviewQueue)
-                    .badge(reviewQueueCount)
-                row(.importPage)
-                row(.syncPage)
             }
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
@@ -155,8 +154,9 @@ struct Sidebar: View {
         }
     }
 
-    private func row(_ screen: Screen) -> some View {
-        Label(screen.title, systemImage: screen.systemImage).tag(screen)
+    private func row(_ screen: Screen, badge: Int = 0) -> some View {
+        // The badge goes inside the tag: a badge outside it hides the tag, and the row can't be selected.
+        Label(screen.title, systemImage: screen.systemImage).badge(badge).tag(screen)
     }
 
     private func save(_ change: (JournalStore) throws -> Void) {

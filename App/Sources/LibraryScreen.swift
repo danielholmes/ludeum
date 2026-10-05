@@ -10,7 +10,8 @@ struct LibraryScreen: View {
     @State private var filter: LibraryFilter
     @State private var sort = LibrarySort.name
     @State private var ascending = true
-    @State private var showCovers = false
+    // Remembered across screens and launches, shared by the Library and every List.
+    @AppStorage("libraryShowsCovers") private var showCovers = false
     @State private var rows: [LibraryRow] = []
     @State private var platforms: [IGDBPlatform] = []
     @State private var lists: [GameList] = []

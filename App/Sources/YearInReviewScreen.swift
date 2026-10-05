@@ -81,7 +81,7 @@ struct YearInReviewScreen: View {
                     f.undatedPlaythroughs = true
                     openLibrary(f)
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.hoverLink)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,7 +153,7 @@ struct YearInReviewScreen: View {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
                     ForEach(r.playTime) { entry in
                         GridRow {
-                            Button(entry.game.name) { selection = entry.game.id }.buttonStyle(.link)
+                            Button(entry.game.name) { selection = entry.game.id }.buttonStyle(.hoverLink)
                             Text(entry.game.platformName).foregroundStyle(.secondary)
                             Text(hoursText(entry.seconds)).monospacedDigit().gridColumnAlignment(.trailing)
                         }

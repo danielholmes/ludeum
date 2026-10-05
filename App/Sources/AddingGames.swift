@@ -182,7 +182,7 @@ private struct PlatformChips: View {
                 .controlSize(.small)
                 .tint(chip.game == nil ? nil : .green)
             }
-            Button("Different platform…", action: differentPlatform).buttonStyle(.borderless).controlSize(.small)
+            Button("Different platform…", action: differentPlatform).buttonStyle(.hover).controlSize(.small)
         }
     }
 }

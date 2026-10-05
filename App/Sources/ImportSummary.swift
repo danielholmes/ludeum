@@ -15,13 +15,20 @@ struct ImportSummaryBanner: View {
             HStack {
                 Label(headline, systemImage: "square.and.arrow.down").bold()
                 Spacer()
-                Button(expanded ? "Hide" : "Details") { expanded.toggle() }.buttonStyle(.borderless)
-                Button("Dismiss", systemImage: "xmark", action: dismiss).labelStyle(.iconOnly).buttonStyle(.borderless)
+                Button(expanded ? "Hide" : "Details") { expanded.toggle() }.buttonStyle(.hover)
+                Button("Dismiss", systemImage: "xmark", action: dismiss).labelStyle(.iconOnly).buttonStyle(.hover)
             }
             if expanded {
-                section("Matched", summary.matched)
-                section("Sent to the Review queue", summary.sentToReview)
-                section("Gone missing", summary.goneMissing)
+                // An Import can touch a thousand ROMs: scroll rather than grow the window off-screen.
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        section("Matched", summary.matched)
+                        section("Sent to the Review queue", summary.sentToReview)
+                        section("Gone missing", summary.goneMissing)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 300)
             }
         }
         .padding(10)
@@ -46,7 +53,7 @@ struct ImportSummaryBanner: View {
             Text(title).font(.caption).foregroundStyle(.secondary)
             ForEach(Array(roms.enumerated()), id: \.offset) { _, rom in
                 if let game = rom.game {
-                    Button(rom.romName) { open(game) }.buttonStyle(.link)
+                    Button(rom.romName) { open(game) }.buttonStyle(.hoverLink)
                 } else {
                     Text(rom.romName)
                 }

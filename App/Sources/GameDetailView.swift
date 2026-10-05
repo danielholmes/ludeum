@@ -70,7 +70,7 @@ struct GameDetailView: View {
                         if entry.imported { Text("imported").font(.caption).foregroundStyle(.secondary) }
                         Spacer()
                         Button("Delete", systemImage: "trash") { save { try $0.deleteRatingEntry(entry.id) } }
-                            .labelStyle(.iconOnly).buttonStyle(.borderless)
+                            .labelStyle(.iconOnly).buttonStyle(.hover)
                     }
                 }
             }
@@ -100,8 +100,8 @@ struct GameDetailView: View {
                             if let details = playthroughDetails(p.draft) { Text(details).font(.caption).foregroundStyle(.secondary) }
                         }
                         Spacer()
-                        Button("Edit") { editing = PlaythroughEdit(id: p.id, draft: p.draft) }.buttonStyle(.borderless)
-                        Button("Delete", systemImage: "trash") { deletingPlaythrough = p }.labelStyle(.iconOnly).buttonStyle(.borderless)
+                        Button("Edit") { editing = PlaythroughEdit(id: p.id, draft: p.draft) }.buttonStyle(.hover)
+                        Button("Delete", systemImage: "trash") { deletingPlaythrough = p }.labelStyle(.iconOnly).buttonStyle(.hover)
                     }
                 }
                 Button("Add Playthrough…") { editing = PlaythroughEdit(id: nil, draft: PlaythroughDraft()) }
