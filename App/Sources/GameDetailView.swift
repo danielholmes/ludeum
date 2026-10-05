@@ -15,8 +15,6 @@ struct GameDetailView: View {
     @State private var platform: IGDBPlatform?
     @State private var history: [RatingEntry] = []
     @State private var playthroughs: [Playthrough] = []
-    @State private var allLists: [GameList] = []
-    @State private var memberOf: Set<Int64> = []
     @State private var roms: [JournalROM] = []
     @State private var emulatorSettings = EmulatorSettings()
     @State private var showingHistory = false
@@ -80,7 +78,7 @@ struct GameDetailView: View {
                 }
             }
 
-            Section("Intent and Lists") {
+            Section("Intent") {
                 HStack {
                     Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
                         Text("None").tag(Intent?.none)
@@ -91,31 +89,6 @@ struct GameDetailView: View {
                     .help(game.intentSetAt.map { "Set \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
                     Toggle("Childhood", isOn: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
                         .toggleStyle(.checkbox).fixedSize()
-                }
-                LabeledContent("Lists") {
-                    // Current Lists as removable pills, then a menu of the rest.
-                    FlowLayout(spacing: 6) {
-                        ForEach(allLists.filter { memberOf.contains($0.id) }, id: \.id) { list in
-                            HStack(spacing: 4) {
-                                Text(list.name)
-                                Button("Remove from \(list.name)", systemImage: "xmark") {
-                                    save { try $0.removeFromList(list.id, id) }
-                                }
-                                .labelStyle(.iconOnly).buttonStyle(.hover).imageScale(.small)
-                            }
-                            .padding(.leading, 8).padding(.vertical, 2)
-                            .background(.quaternary, in: .capsule)
-                        }
-                        let others = allLists.filter { !memberOf.contains($0.id) }
-                        if !others.isEmpty {
-                            Menu("Add to List") {
-                                ForEach(others, id: \.id) { list in
-                                    Button(list.name) { save { try $0.addToList(list.id, id) } }
-                                }
-                            }
-                            .menuStyle(.borderlessButton).fixedSize().controlSize(.small)
-                        }
-                    }
                 }
             }
 
@@ -272,8 +245,6 @@ struct GameDetailView: View {
             platform = try journal.platform(game.platformId)
             history = try journal.ratingHistory(id)
             playthroughs = try journal.playthroughs(id)
-            allLists = try journal.lists()
-            memberOf = Set(try journal.lists(containing: id).map(\.id))
             roms = try journal.roms(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
         } catch JournalError.gameNotFound {
