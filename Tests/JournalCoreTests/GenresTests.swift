@@ -186,6 +186,6 @@ import Testing
 
         #expect(try sorted(ascending: false) == ["Donkey Kong Country", "Super Metroid", "Super Mario World", "Hand-made", "Unreleased"])
         #expect(try sorted(ascending: true) == ["Super Mario World", "Donkey Kong Country", "Super Metroid", "Hand-made", "Unreleased"])
-        #expect(!LibrarySort.year.defaultAscending)
+        #expect(LibrarySort.year.defaultAscending)
     }
 }

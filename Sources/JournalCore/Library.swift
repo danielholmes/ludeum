@@ -68,11 +68,11 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     /// applies it; without facts the order is by name.
     case year
 
-    /// The order choosing this sort starts in: A–Z for names and Platforms, best and newest first otherwise.
+    /// The order choosing this sort starts in: A–Z for names and Platforms, oldest first for years, best and newest first otherwise.
     public var defaultAscending: Bool {
         switch self {
-        case .name, .platform: true
-        case .rating, .intentSet, .year: false
+        case .name, .platform, .year: true
+        case .rating, .intentSet: false
         }
     }
 }
