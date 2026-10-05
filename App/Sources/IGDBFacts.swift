@@ -157,12 +157,20 @@ func timeToBeatText(_ t: TimeToBeat) -> String? {
 /// IGDB's keywords, at the foot of a game's page.
 struct KeywordsSection: View {
     let keywords: [String]
+    @State private var showingAll = false
 
     var body: some View {
         Section("Keywords") {
             FlowLayout(spacing: 4) {
-                ForEach(keywords, id: \.self) { k in
+                let limit = 10
+                let collapsed = !showingAll && keywords.count > limit
+                ForEach(collapsed ? Array(keywords.prefix(limit)) : keywords, id: \.self) { k in
                     Text(k).font(.subheadline).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
+                }
+                if collapsed {
+                    Button("+\(keywords.count - limit) more") { showingAll = true }
+                        .buttonStyle(.plain).font(.subheadline).foregroundStyle(.secondary)
+                        .padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
                 }
             }
         }
