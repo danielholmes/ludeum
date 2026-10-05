@@ -12,7 +12,8 @@ import Testing
         #expect(Emulator.of(platformId: 4) == .ares)  // Nintendo 64
         #expect(Emulator.of(platformId: 20) == .melonDS)  // Nintendo DS
         #expect(Emulator.of(platformId: 78) == .ares)  // Sega CD
-        #expect(Emulator.of(platformId: 32) == nil)  // Saturn
+        #expect(Emulator.of(platformId: 32) == .ymir)  // Saturn
+        #expect(Emulator.of(platformId: 11) == nil)  // Xbox
     }
 
     @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() throws {
@@ -83,6 +84,11 @@ import Testing
 @Test func aresPlaysSegaCDGamesAsMegaCD() throws {
     let rom = URL(filePath: "/Games/SegaCD/Sonic CD (USA).cue")
     #expect(try Emulator.ares.arguments(rom: rom, platformId: 78, settings: EmulatorSettings()).prefix(2) == ["--system", "Mega CD"])
+}
+
+@Test func ymirJustOpensTheDisc() throws {
+    let rom = URL(filePath: "/Games/Saturn/Panzer Dragoon Saga (USA) (Disc 1).cue")
+    #expect(try Emulator.ymir.arguments(rom: rom, platformId: 32, settings: EmulatorSettings()) == [rom.path(percentEncoded: false)])
 }
 
 @Test func melonDSJustOpensTheGame() throws {
