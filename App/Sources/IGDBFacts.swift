@@ -114,12 +114,18 @@ struct ScreenshotsSection: View {
                     Button {
                         showingAll = true
                     } label: {
-                        Label("\(screenshots.count - shown.count) more", systemImage: "plus")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                        // The next screenshot, dimmed, under "+N more".
+                        ScreenshotImage(igdb: igdb, imageID: screenshots[shown.count], large: false)
+                            .aspectRatio(16 / 9, contentMode: .fit)
+                            .frame(minWidth: 0)
+                            .overlay(Color.black.opacity(0.55))
+                            .overlay {
+                                Label("\(screenshots.count - shown.count) more", systemImage: "plus")
+                                    .font(.headline).foregroundStyle(.white)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
                     .buttonStyle(.plain)
-                    .aspectRatio(16 / 9, contentMode: .fit)
                 }
             }
         }
