@@ -78,6 +78,10 @@ struct LibraryScreen: View {
                         }
                     }
                     TableColumn("Platform", value: \.platformName)
+                    TableColumn("Year", sortUsing: KeyPathComparator(\LibraryRow.yearSortKey)) {
+                        Text($0.releaseYear.map(String.init) ?? "")
+                    }
+                    .width(50)
                     TableColumn("Rating", sortUsing: KeyPathComparator(\LibraryRow.ratingSortKey)) {
                         Text($0.rating.map(ratingText) ?? "–")
                     }.width(60)
@@ -121,7 +125,7 @@ struct LibraryScreen: View {
             get: {
                 let order: SortOrder = ascending ? .forward : .reverse
                 return switch sort {
-                case .year: []
+                case .year: [KeyPathComparator(\LibraryRow.yearSortKey, order: order)]
                 case .name: [KeyPathComparator(\LibraryRow.name, order: order)]
                 case .platform: [KeyPathComparator(\LibraryRow.platformName, order: order)]
                 case .rating: [KeyPathComparator(\LibraryRow.ratingSortKey, order: order)]
@@ -136,6 +140,7 @@ struct LibraryScreen: View {
                     case \LibraryRow.platformName: .platform
                     case \LibraryRow.ratingSortKey: .rating
                     case \LibraryRow.intentSetSortKey: .intentSet
+                    case \LibraryRow.yearSortKey: .year
                     default: nil
                     }
                 guard let chosen else { return }
@@ -204,8 +209,10 @@ struct LibraryScreen: View {
                 guard !Task.isCancelled else { return }
                 rows = found
                 loaded = true
-                // The Add filter menu's genres and themes can follow.
-                if bar == .filters { facts = await services.memory.facts(services) }
+                // The Year column and the Add filter menu's genres and themes can follow.
+                facts = await services.memory.facts(services)
+                guard !Task.isCancelled else { return }
+                rows = found.withReleaseYears(facts)
             } else {
                 // A search also matches companies, franchises and series, and Year sorts by IGDB's release
                 // year: both live in the cache.
@@ -688,6 +695,8 @@ extension LibraryRow {
     var ratingSortKey: Int { rating?.tenths ?? -1 }
     /// For the table's Intent column: when the Intent was set, undated or none first.
     var intentSetSortKey: Date { intentSetAt ?? .distantPast }
+    /// For the table's Year column (the Library sorts it, with no year last).
+    var yearSortKey: Int { releaseYear ?? 0 }
 }
 
 /// Runs `work` on a background thread. Cancelling the caller cancels it, so work that checks

@@ -98,6 +98,8 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let outcomes: Set<Outcome>
     /// It has ROMs, and every one is missing.
     public let noROMInOpenEmu: Bool
+    /// IGDB's first release year, when the rows came with IGDB's facts (`withReleaseYears(_:)`).
+    public var releaseYear: Int? = nil
 }
 
 extension JournalStore {

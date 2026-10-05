@@ -187,5 +187,9 @@ import Testing
         #expect(try sorted(ascending: false) == ["Donkey Kong Country", "Super Metroid", "Super Mario World", "Hand-made", "Unreleased"])
         #expect(try sorted(ascending: true) == ["Super Mario World", "Donkey Kong Country", "Super Metroid", "Hand-made", "Unreleased"])
         #expect(LibrarySort.year.defaultAscending)
+        let rows = try j.journal.library(LibraryFilter(), sort: .name, ascending: true, facts: facts)
+        #expect(rows.map(\.releaseYear) == [1994, nil, 1990, 1994, nil])  // every sort carries the year
+        let plain = try j.journal.library(LibraryFilter(), sort: .name, ascending: true)
+        #expect(plain.withReleaseYears(facts) == rows)
     }
 }

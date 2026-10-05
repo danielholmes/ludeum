@@ -28,6 +28,17 @@ extension Array where Element == LibraryRow {
     }
 }
 
+extension [LibraryRow] {
+    /// The rows with IGDB's release year filled in from the facts.
+    public func withReleaseYears(_ facts: [Int64: GameFacts]) -> [LibraryRow] {
+        map { row in
+            var row = row
+            row.releaseYear = row.igdbGameId.flatMap { facts[$0]?.releaseYear }
+            return row
+        }
+    }
+}
+
 extension LibraryFilter {
     /// Whether it filters on facts from the cache, which `having(_:in:)` applies.
     public var usesIGDBFacts: Bool { genre != nil || theme != nil || franchise != nil || series != nil || company != nil }
@@ -50,10 +61,10 @@ extension JournalStore {
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts]) throws
         -> [LibraryRow]
     {
-        let rows = try matching(filter, sort: sort, ascending: ascending, facts: facts)
+        let rows = try matching(filter, sort: sort, ascending: ascending, facts: facts).withReleaseYears(facts)
         guard sort == .year else { return rows }
         // Newest (or oldest) first; Games IGDB has no year for go last, by name as they came.
-        func year(_ row: LibraryRow) -> Int? { row.igdbGameId.flatMap { facts[$0]?.releaseYear } }
+        func year(_ row: LibraryRow) -> Int? { row.releaseYear }
         struct Dated {
             let index: Int
             let year: Int
