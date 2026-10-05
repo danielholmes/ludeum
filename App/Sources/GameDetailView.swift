@@ -58,13 +58,13 @@ struct GameDetailView: View {
                             Text(game.name).font(.title).bold()
                             Spacer()
                             if !roms.isEmpty, !roms.allSatisfy(\.missing) {
-                                if let emulator = Emulator.of(platformId: game.platformId) {
+                                if let emulator {
                                     Button("Play in \(emulator.name)", systemImage: "play.fill") { play(in: emulator) }
                                         .labelStyle(.iconOnly).buttonStyle(.hover).help("Play in \(emulator.name)")
                                 }
                                 Button(
                                     "Play in OpenEmu",
-                                    systemImage: Emulator.of(platformId: game.platformId) == nil ? "play.fill" : "play.rectangle",
+                                    systemImage: emulator == nil ? "play.fill" : "play.rectangle",
                                     action: playInOpenEmu)
                                     .labelStyle(.iconOnly).buttonStyle(.hover).help("Play in OpenEmu")
                             }
@@ -217,7 +217,7 @@ struct GameDetailView: View {
                 }
             }
 
-            if let emulator = Emulator.of(platformId: game.platformId) {
+            if let emulator {
                 Section(emulator.name) {
                     Picker("Run-ahead", selection: runAheadFrames) {
                         Text("Default (0 frames)").tag(Int?.none)
@@ -225,7 +225,7 @@ struct GameDetailView: View {
                             Text("\(frames) frame\(frames == 1 ? "" : "s")").tag(Int?.some(frames))
                         }
                     }
-                    .help("Frames MesenCE runs ahead to hide input lag. Set on every Play.")
+                    .help("Frames \(emulator.name) runs ahead to hide input lag. Set on every Play.")
                 }
             }
 
@@ -378,6 +378,9 @@ struct GameDetailView: View {
         }
     }
 
+    /// The Emulator this Game's Platform is played in, if any.
+    private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
+
     private var runAheadFrames: Binding<Int?> {
         Binding(
             get: { emulatorSettings.runAheadFrames },
@@ -422,6 +425,7 @@ struct GameDetailView: View {
         }
     }
 
+    /// Opens the Game's ROM in OpenEmu, which plays it.
     private func playInOpenEmu() {
         guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.openemu.OpenEmu") else {
             error = "OpenEmu isn't installed."

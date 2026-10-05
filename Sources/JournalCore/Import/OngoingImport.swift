@@ -157,7 +157,7 @@ extension JournalStore {
         }
     }
 
-    /// Writes an ongoing Import in one transaction: new ROMs, returning and missing ROMs,.
+    /// Writes an ongoing Import in one transaction: new ROMs, returning and missing ROMs.
     func applyOngoingImport(_ plan: OngoingImportPlan) throws -> OngoingImportResult {
         let now = clock.now()
         return try db.write { db in

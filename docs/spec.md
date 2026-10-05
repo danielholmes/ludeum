@@ -72,6 +72,7 @@ GRDB over SQLite, with foreign keys on. Table and column names are as they'll ap
 
 - **Conventions:** integer `INTEGER PRIMARY KEY` ids. A Partial date is one text column (`1996`, `1996-03`, `1996-03-17`, CHECKed for shape), so plain string order is the Partial date sort and "contains" is a prefix test. Timestamps are ISO-8601 UTC text (GRDB's `Date` encoding). A Rating history day is the local date as `YYYY-MM-DD` text. Ratings are integer tenths (0–100).
 - **`platform`** (IGDB platform id, name): copied from IGDB so names show without the cache.
+- **`game.runAheadFrames`** (nullable integer, 0–10): the Game's own Emulator setting.
 - **`game`**: `platformId` (required), `igdbGameId` (nullable, `UNIQUE(igdbGameId, platformId)`, set at most once), `igdbName` (refreshed with the cache record), `name` (hand-made or cleaned No-Intro) and `nameOverride`. The display name is `nameOverride ?? igdbName ?? name`, so the database alone (a backup, a cold cache) shows every name. Also `childhood`, `intent` (backlog/upNext, or null) and `intentSetAt` (null when undated). Intent keeps no history.
 - **The current Rating is derived**, never stored: it's the latest `ratingEntry`.
 - **`ratingEntry`**: `gameId`, `day`, `rating` (NULL = cleared to unrated), `imported`, `UNIQUE(gameId, day, imported)`, so re-rating on the import day adds a row beside the imported entry, and that row is current.
@@ -177,6 +178,13 @@ Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The
 - **IGDB** (Twitch app token): the full game record, with every useful sub-record expanded plus time-to-beat. Fetched in batches of 100 (halved if IGDB answers 413). One request per name search, since multiquery ignores `search`. At most 3 requests a second.
 - **Hasheous:** MD5 → IGDB game and platform. "Not found" is cached. At most 1 request a second. An optional app key can be set with `HASHEOUS_API_KEY`.
 - **Cache:** entries keyed as `source:kind:id`, fresh for 60 days. An expired entry is still used if refreshing it fails. Only successful answers are cached. Images never expire. Runs can be interrupted and resumed.
+
+### Playing in an Emulator (trial)
+A phased trial of replacing OpenEmu as the player (ADR 0008). OpenEmu stays the library and Import source.
+
+- **Emulators** are hard-coded per Platform in `Emulator.of(platformId:)`, not settings: MesenCE for NES and Family Computer.
+- **Play** (Game detail only) opens the Game's present ROM where it is in OpenEmu's library: the multi-disc playlist, else the first present ROM. It never changes journal data. A running MesenCE gets the ROM in its open window.
+- **Emulator settings:** run-ahead frames, 0–10, stored as `game.runAheadFrames` (null is the default, 0). Every Play passes the full set plus `--doNotSaveSettings`, so MesenCE's own preferences are never changed and one Game's settings never carry into the next.
 
 ### What to play next and Top-rated
 - **What to play next** is a plain view, with no ranking or suggestions. It has three sections: **Playing**, **Up next** and **Backlog**. Each Game appears once, in the first section that fits (a Game that's Playing and Up next shows under Playing).
