@@ -37,6 +37,8 @@ struct MainWindow: View {
             Sidebar(
                 services: services, selection: $selection, lists: lists, platforms: platformCounts, pins: pins,
                 reviewQueueCount: reviewQueueCount)
+            // The sidebar is always shown: no toggle to hide it.
+            .toolbar(removing: .sidebarToggle)
         } content: {
             switch selection {
             case .library:
