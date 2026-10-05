@@ -20,7 +20,7 @@ struct IGDBScreen: View {
         VStack(alignment: .leading, spacing: 8) {
             if let search = services.gameSearch {
                 IGDBSearchView(
-                    search: search, platforms: platforms, usedPlatforms: used, query: $query, browse: { shown = $0 }, choose: { _, _ in })
+                    search: search, platforms: platforms, usedPlatforms: used, query: $query, browse: { shown = $0 }, revision: services.changes.revision, choose: { _, _ in })
             } else {
                 ContentUnavailableView(
                     "IGDB isn't set up", systemImage: "key", description: Text("Add IGDB credentials in Settings to search."))

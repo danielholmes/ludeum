@@ -81,6 +81,21 @@ import Testing
         #expect(game.platformId == 19)
     }
 
+    @Test func resultsSortByNameOrByReleaseDateWithUndatedLast() async throws {
+        h.internet.addGame(1, "Metroid II", fields: ["first_release_date": 690_000_000])
+        h.internet.addGame(2, "Metroid", fields: ["first_release_date": 520_000_000])
+        h.internet.addGame(3, "metroid fan game", fields: [:])
+        h.internet.addGame(4, "Metroid Fusion", fields: ["first_release_date": 1_037_000_000])
+        h.internet.addSearch("metroid", platform: nil, results: [1, 2, 3, 4])
+        let results = try await search.search("metroid")
+
+        #expect(GameSearchSort.name.sorted(results, ascending: true).map(\.name) == ["Metroid", "metroid fan game", "Metroid Fusion", "Metroid II"])
+        #expect(GameSearchSort.releaseDate.sorted(results, ascending: false).map(\.igdbGameId) == [4, 1, 2, 3])
+        #expect(GameSearchSort.releaseDate.sorted(results, ascending: true).map(\.igdbGameId) == [2, 1, 4, 3])
+        #expect(GameSearchSort.name.defaultAscending)
+        #expect(!GameSearchSort.releaseDate.defaultAscending)
+    }
+
     @Test func chipsAreReadAgainFromTheLibraryIncludingADifferentPlatform() async throws {
         h.internet.addGame(1103, "Super Metroid", fields: ["platforms": [snes, wii]])
         h.internet.addSearch("metroid", platform: nil, results: [1103])

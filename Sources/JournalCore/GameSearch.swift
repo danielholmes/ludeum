@@ -32,11 +32,35 @@ public struct GameSearchResult: Sendable, Hashable, Identifiable {
     public let igdbGameId: Int64
     public let name: String
     public let year: Int?
+    /// IGDB's first release date, for sorting.
+    public var releaseDate: Date? = nil
     /// IGDB's `game_type` label when it isn't a main game, e.g. "Mod" or "Remaster".
     public let gameType: String?
     public let coverImageID: String?
     public let chips: [PlatformChip]
     public var id: Int64 { igdbGameId }
+}
+
+/// How IGDB search results are ordered. Undated results go last either way.
+public enum GameSearchSort: String, CaseIterable, Sendable {
+    case name
+    case releaseDate
+
+    /// Names A–Z; release dates newest first.
+    public var defaultAscending: Bool { self == .name }
+
+    public func sorted(_ results: [GameSearchResult], ascending: Bool) -> [GameSearchResult] {
+        switch self {
+        case .name:
+            let byName = results.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            return ascending ? byName : byName.reversed()
+        case .releaseDate:
+            let dated = results.filter { $0.releaseDate != nil }.sorted { a, b in
+                ascending ? a.releaseDate! < b.releaseDate! : a.releaseDate! > b.releaseDate!
+            }
+            return dated + results.filter { $0.releaseDate == nil }
+        }
+    }
 }
 
 /// A platform an IGDB game is on. `game` is set when that IGDB game and platform is
@@ -120,12 +144,11 @@ public struct GameSearch: Sendable {
         let chips = try platforms.map {
             PlatformChip(platform: $0, game: try journal.gameID(igdbGameId: Int64(game.id), platformId: $0.id))
         }
-        let year = game.record["first_release_date"]?.number.map {
-            Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: Date(timeIntervalSince1970: $0)).year!
-        }
+        let released = game.record["first_release_date"]?.number.map { Date(timeIntervalSince1970: $0) }
+        let year = released.map { Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: $0).year! }
         let type = game.record["game_type"]?.int ?? 0
         return GameSearchResult(
-            igdbGameId: Int64(game.id), name: game.name ?? "Game \(game.id)", year: year,
+            igdbGameId: Int64(game.id), name: game.name ?? "Game \(game.id)", year: year, releaseDate: released,
             gameType: type == 0 ? nil : gameTypeNames[type] ?? "Other", coverImageID: game.record["cover"]?["image_id"]?.string,
             chips: chips)
     }

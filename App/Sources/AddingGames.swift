@@ -67,6 +67,8 @@ struct IGDBSearchView: View {
     var linking = false
     /// Browsing (the IGDB screen): results are selectable and list their platforms; a selected one is shown in full.
     var browse: ((GameSearchResult?) -> Void)? = nil
+    /// The journal's change count: browsing re-reads which results are in the Library when it changes.
+    var revision = 0
     /// A chip was chosen: the result and the platform (a listed one, or one from "Different platform…").
     let choose: (GameSearchResult, IGDBPlatform) -> Void
 
@@ -77,6 +79,10 @@ struct IGDBSearchView: View {
     /// Bumped by each search, so only the latest one's answer is shown.
     @State private var generation = 0
     @State private var selected: Int64?
+    /// Browsing: each result's chips as the Library is now.
+    @State private var current: [Int64: [PlatformChip]] = [:]
+    @State private var sort = GameSearchSort.name
+    @State private var ascending = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -92,10 +98,24 @@ struct IGDBSearchView: View {
                     }
                     .frame(maxWidth: 200)
                 }
+                if browse != nil {
+                    Menu("Sort", systemImage: "arrow.up.arrow.down") {
+                        // Choosing a sort also sets its usual order; Order can still flip it.
+                        Picker("Sort by", selection: Binding(get: { sort }, set: { sort = $0; ascending = $0.defaultAscending })) {
+                            Text("Name").tag(GameSearchSort.name)
+                            Text("Release date").tag(GameSearchSort.releaseDate)
+                        }
+                        Picker("Order", selection: $ascending) {
+                            Text("Ascending").tag(true)
+                            Text("Descending").tag(false)
+                        }
+                    }
+                    .fixedSize()
+                }
                 if searching { ProgressView().controlSize(.small) }
             }
             if let error { Text(error).foregroundStyle(.red) }
-            List(results, selection: browse == nil ? .constant(nil) : $selected) { result in
+            List(browse == nil ? results : sort.sorted(results, ascending: ascending), selection: browse == nil ? .constant(nil) : $selected) { result in
                 HStack(alignment: .top, spacing: 8) {
                     ResultCover(search: search, result: result)
                     VStack(alignment: .leading, spacing: 4) {
@@ -109,8 +129,13 @@ struct IGDBSearchView: View {
                         if linking, let platform = platformFilter {
                             Button("Link") { choose(result, platform) }.controlSize(.small)
                         } else if browse != nil {
-                            Text(result.chips.map { $0.platform.abbreviation ?? $0.platform.name }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
+                            let chips = current[result.id] ?? result.chips
+                            HStack(spacing: 6) {
+                                if chips.contains(where: { $0.game != nil }) {
+                                    Label("In Library", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.green)
+                                }
+                                Text(chips.map { chipText($0) }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                            }
                         } else {
                             PlatformChips(
                                 result: result, choose: { choose(result, $0) }, differentPlatform: { choosingPlatformFor = result })
@@ -128,6 +153,10 @@ struct IGDBSearchView: View {
         }
         .onAppear { if !query.isEmpty { run() } }
         .onChange(of: selected) { browse?(results.first { $0.id == selected }) }
+        .task(id: CurrentChipsKey(results: results.map(\.id), revision: revision)) {
+            guard browse != nil else { return }
+            current = Dictionary(uniqueKeysWithValues: results.map { ($0.id, (try? search.currentChips(for: $0)) ?? $0.chips) })
+        }
     }
 
     private func run() {
@@ -149,6 +178,17 @@ struct IGDBSearchView: View {
             searching = false
         }
     }
+}
+
+private struct CurrentChipsKey: Equatable {
+    let results: [Int64]
+    let revision: Int
+}
+
+/// A platform's short name, ticked when it's in the Library.
+private func chipText(_ chip: PlatformChip) -> String {
+    let name = chip.platform.abbreviation ?? chip.platform.name
+    return chip.game == nil ? name : "\(name) ✓"
 }
 
 /// A result's IGDB cover, from the cache (downloaded once).
