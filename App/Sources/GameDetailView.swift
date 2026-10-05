@@ -59,14 +59,11 @@ struct GameDetailView: View {
                             Spacer()
                             if !roms.isEmpty, !roms.allSatisfy(\.missing) {
                                 if let emulator {
-                                    Button("Play in \(emulator.name)", systemImage: "play.fill") { play(in: emulator) }
-                                        .labelStyle(.iconOnly).buttonStyle(.hover).help("Play in \(emulator.name)")
+                                    Button { play(in: emulator) } label: { Label(emulator.name, systemImage: "play.fill") }
+                                        .labelStyle(.titleAndIcon).buttonStyle(.hover).help("Play in \(emulator.name)")
                                 }
-                                Button(
-                                    "Play in OpenEmu",
-                                    systemImage: emulator == nil ? "play.fill" : "play.rectangle",
-                                    action: playInOpenEmu)
-                                    .labelStyle(.iconOnly).buttonStyle(.hover).help("Play in OpenEmu")
+                                Button(action: playInOpenEmu) { Label("OpenEmu", systemImage: "play.fill") }
+                                    .labelStyle(.titleAndIcon).buttonStyle(.hover).help("Play in OpenEmu")
                             }
                             Button("Edit Game", systemImage: "pencil") { editingGame = true }
                                 .labelStyle(.iconOnly).buttonStyle(.hover).help("Name, Cover, IGDB link and deleting")
