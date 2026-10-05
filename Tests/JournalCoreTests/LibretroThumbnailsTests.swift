@@ -71,6 +71,28 @@ import Testing
         #expect(h.internet.sent(to: FakeInternet.Hosts.libretro).count == 1)
     }
 
+    @Test func anImageTheCDNHasntCaughtUpWithComesFromGitHub() async throws {
+        h.internet.addLibretro("Sony_-_PlayStation", ["Evil Dead - Hail to the King (USA)"])
+        let path = "Sony - PlayStation/Named_Boxarts/Evil Dead - Hail to the King (USA).png"
+        _ = h.internet.state.withLock { $0.libretroCDNMissing.insert(path) }
+
+        let file = try await h.libretro.image(path)
+
+        #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
+        #expect(h.internet.sent(to: FakeInternet.Hosts.githubRaw).count == 1)
+    }
+
+    @Test func aSymlinkFromGitHubIsntTakenForAnImage() async throws {
+        h.internet.addLibretro("Sony_-_PlayStation", ["X (USA) (Disc 2)"])
+        let path = "Sony - PlayStation/Named_Boxarts/X (USA) (Disc 2).png"
+        h.internet.state.withLock {
+            $0.libretroCDNMissing.insert(path)
+            $0.libretroSymlinks.insert(path)
+        }
+
+        await #expect(throws: HTTPStatusError.self) { try await h.libretro.image(path) }
+    }
+
     @Test func aMissingImageThrows() async throws {
         await #expect(throws: HTTPStatusError.self) { try await h.libretro.image("Sony - PlayStation/Named_Boxarts/Nope.png") }
     }

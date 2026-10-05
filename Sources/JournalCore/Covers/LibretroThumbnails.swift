@@ -16,7 +16,7 @@ public struct LibretroNames: Sendable, Equatable {
 
 /// libretro-thumbnails: box scans, snaps and title screens named by No-Intro and Redump names.
 /// Each system's file listing comes from GitHub (one request per repo, cached); images come from
-/// `thumbnails.libretro.com`, which follows the repos' per-disc symlinks.
+/// `thumbnails.libretro.com`, which follows the repos' per-disc symlinks, else from GitHub when the CDN lags.
 public final class LibretroThumbnails: Sendable {
     let cache: CacheStore
     let api: Throttle
@@ -92,14 +92,29 @@ public final class LibretroThumbnails: Sendable {
         return LibretroNames(boxart: find("Named_Boxarts"), snap: find("Named_Snaps"), title: find("Named_Titles"))
     }
 
-    /// An image by its path, from the cache or downloaded the first time.
+    /// An image by its path, from the cache or downloaded the first time. The CDN can lag behind the
+    /// repos, so an image it hasn't got comes from GitHub, as long as it's a PNG and not a per-disc symlink.
     public func image(_ path: String) async throws -> URL {
         try await cache.image(at: "libretro/\(path)") {
             let url = URL(string: "https://thumbnails.libretro.com")!.appending(path: path)
             let (data, response) = try await api.send(URLRequest(url: url))
-            guard response.statusCode == 200 else { throw HTTPStatusError(status: response.statusCode, url: url) }
-            return data
+            if response.statusCode == 200 { return data }
+            guard response.statusCode == 404, let fromGitHub = try await fromGitHub(path) else {
+                throw HTTPStatusError(status: response.statusCode, url: url)
+            }
+            return fromGitHub
         }
+    }
+
+    /// The image from the repo itself, or nil when it isn't there or isn't a PNG.
+    private func fromGitHub(_ path: String) async throws -> Data? {
+        let parts = path.split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return nil }
+        let repo = parts[0].replacingOccurrences(of: " ", with: "_")
+        let url = URL(string: "https://raw.githubusercontent.com/libretro-thumbnails")!.appending(path: "\(repo)/master/\(parts[1])")
+        let (data, response) = try await api.send(URLRequest(url: url))
+        let png = Data([0x89, 0x50, 0x4E, 0x47])
+        return response.statusCode == 200 && data.starts(with: png) ? data : nil
     }
 
     static func listingKey(_ repo: String) -> String { "libretro:listing:\(repo)" }

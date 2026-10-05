@@ -30,6 +30,10 @@ final class FakeInternet: HTTPTransport, Sendable {
         var hashes: [String: (game: Int, platform: Int)] = [:]
         // libretro-thumbnails: repo → file paths ("Named_Boxarts/X (USA).png")
         var libretro: [String: [String]] = [:]
+        // Paths ("Sony - PlayStation/Named_Boxarts/X.png") thumbnails.libretro.com hasn't caught up with
+        var libretroCDNMissing: Set<String> = []
+        // Paths that are per-disc symlinks in the repo: raw GitHub serves the link's target as text
+        var libretroSymlinks: Set<String> = []
         // Failure injection, keyed by host
         var down: Set<String> = []
         var rateLimitOnce: [String: Int] = [:]  // host → Retry-After seconds
@@ -123,6 +127,7 @@ final class FakeInternet: HTTPTransport, Sendable {
             case Hosts.hasheous: return Self.hasheous(request, s)
             case Hosts.github: return Self.githubTree(request, s)
             case Hosts.libretro: return Self.libretroImage(request, s)
+            case Hosts.githubRaw: return Self.githubRaw(request, s)
             default: return (404, [:], Data())
             }
         }
@@ -143,6 +148,7 @@ final class FakeInternet: HTTPTransport, Sendable {
         static let hasheous = "hasheous.org"
         static let github = "api.github.com"
         static let libretro = "thumbnails.libretro.com"
+        static let githubRaw = "raw.githubusercontent.com"
     }
 
     // MARK: - Fake services
@@ -226,9 +232,21 @@ final class FakeInternet: HTTPTransport, Sendable {
     private static func libretroImage(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
         let path = request.url!.path(percentEncoded: false).dropFirst()
         let parts = path.split(separator: "/", maxSplits: 1).map(String.init)
-        guard parts.count == 2, s.libretro[parts[0].replacingOccurrences(of: " ", with: "_")]?.contains(parts[1]) == true else {
+        guard parts.count == 2, s.libretro[parts[0].replacingOccurrences(of: " ", with: "_")]?.contains(parts[1]) == true,
+            !s.libretroCDNMissing.contains(String(path))
+        else {
             return (404, [:], Data())
         }
+        return (200, [:], boxartPNG)
+    }
+
+    /// GitHub's raw files: `/libretro-thumbnails/<repo>/master/<folder>/<name>.png`.
+    private static func githubRaw(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
+        let parts = request.url!.path(percentEncoded: false).split(separator: "/", maxSplits: 3).map(String.init)
+        guard parts.count == 4, parts[0] == "libretro-thumbnails", parts[2] == "master", s.libretro[parts[1]]?.contains(parts[3]) == true
+        else { return (404, [:], Data()) }
+        let path = "\(parts[1].replacingOccurrences(of: "_", with: " "))/\(parts[3])"
+        if s.libretroSymlinks.contains(path) { return (200, [:], Data("X (USA) (Disc 1).png".utf8)) }
         return (200, [:], boxartPNG)
     }
 
