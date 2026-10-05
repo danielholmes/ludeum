@@ -135,9 +135,9 @@ public final class IGDBClient: Sendable {
                 s.name.isEmpty
                 ? "fields id; where \(s.conditions); sort total_rating_count desc; limit 100;"
                 : """
-                    search "\(s.name.replacingOccurrences(of: "\"", with: "\\\""))"; \
-                    fields id; where \(s.conditions); limit 20;
-                    """
+                search "\(s.name.replacingOccurrences(of: "\"", with: "\\\""))"; \
+                fields id; where \(s.conditions); limit 20;
+                """
             let ids = (try JSONValue.decode(try await post("games", body)).array ?? []).compactMap { $0["id"]?.int }
             return [s: try JSONEncoder().encode(ids)]
         }
@@ -199,7 +199,7 @@ public final class IGDBClient: Sendable {
 
     func named(_ endpoint: String, servesStale: Bool) async throws -> [IGDBNamed] {
         let payloads = try await cache.resolve(
-            [endpoint], key: { "igdb:\($0):all" }, maxAge: maxAge, batchSize: 1, servesStale: servesStale
+            [endpoint], key: Self.namedKey, maxAge: maxAge, batchSize: 1, servesStale: servesStale
         ) { _ in
             let body = "fields id, name; sort name asc; limit 500;"
             return [endpoint: try JSONEncoder().encode(Self.named(try await post(endpoint, body)))]
@@ -218,7 +218,7 @@ public final class IGDBClient: Sendable {
             .joined(separator: " ")
         guard !text.isEmpty else { return [] }
         let payloads = try await cache.resolve(
-            [text], key: { "igdb:companies:\($0)" }, maxAge: maxAge, batchSize: 1, servesStale: servesStale
+            [text], key: Self.companiesKey, maxAge: maxAge, batchSize: 1, servesStale: servesStale
         ) { _ in
             let body = """
                 fields id, name; where name ~ *"\(text)"* & (developed != null | published != null); sort name asc; limit 50;
@@ -252,6 +252,8 @@ public final class IGDBClient: Sendable {
 
     static func gameKey(_ id: Int) -> String { "igdb:game:\(id)" }
     static func platformsKey(_: String) -> String { "igdb:platforms:all" }
+    static func namedKey(_ endpoint: String) -> String { "igdb:\(endpoint):all" }
+    static func companiesKey(_ text: String) -> String { "igdb:companies:\(text)" }
     /// Fully expanded records are large: IGDB answers 413 for ~250 at once but is fine with 100.
     static let maxBatch = 100
 
