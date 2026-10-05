@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// The Library, or a scoped view of it (a Platform, a List, a Pinned item, Finished, Childhood): every
@@ -253,7 +253,7 @@ struct LibraryScreen: View {
 }
 
 /// The Platforms and Lists the filter menu offers.
-func filterChoices(_ journal: JournalStore) throws -> ([IGDBPlatform], [GameList]) {
+func filterChoices(_ journal: LudeumStore) throws -> ([IGDBPlatform], [GameList]) {
     (try journal.shownPlatforms(), try journal.lists())
 }
 

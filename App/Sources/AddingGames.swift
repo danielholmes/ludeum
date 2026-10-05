@@ -1,8 +1,8 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// Counts changes to the journal. Views reload with `.task(id: changes.revision)`.
-@Observable @MainActor final class JournalChanges {
+@Observable @MainActor final class LudeumChanges {
     private(set) var revision = 0
     /// Bumped only when a Cover changes, so the covers view doesn't refetch on every edit.
     private(set) var coverRevision = 0
@@ -16,9 +16,9 @@ import SwiftUI
 /// What the app's screens work with: the journal, and IGDB when credentials are set.
 @MainActor struct Services {
     let settings: AppSettings
-    let journal: JournalStore?
+    let journal: LudeumStore?
     /// Bumped after every change to the journal, so the screens showing it reload.
-    let changes = JournalChanges()
+    let changes = LudeumChanges()
     /// Decoded Covers and genres, shared by every screen.
     let memory = MemoryCache()
     /// The launch refresh, Import and Sync exclusivity, and the journal's edit lock.
@@ -26,7 +26,7 @@ import SwiftUI
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
 
-    init(settings: AppSettings, journal: JournalStore?) {
+    init(settings: AppSettings, journal: LudeumStore?) {
         self.settings = settings
         self.journal = journal
         cache = try? CacheStore(directory: CacheStore.defaultDirectory)
@@ -452,7 +452,7 @@ struct PlatformPickerSheet: View {
 /// A Game with no IGDB link: name and Platform required, with a warning (never a block) when
 /// a Game on that Platform has a name that agrees.
 struct AddByHandSheet: View {
-    let journal: JournalStore
+    let journal: LudeumStore
     let platforms: [IGDBPlatform]
     let used: Set<Int64>
     @State var name: String
@@ -461,7 +461,7 @@ struct AddByHandSheet: View {
     @State private var similar: [Game] = []
     @State private var error: String?
 
-    init(journal: JournalStore, platforms: [IGDBPlatform], used: Set<Int64>, name: String, done: @escaping (GameID?) -> Void) {
+    init(journal: LudeumStore, platforms: [IGDBPlatform], used: Set<Int64>, name: String, done: @escaping (GameID?) -> Void) {
         self.journal = journal
         self.platforms = platforms
         self.used = used
@@ -558,7 +558,7 @@ struct LinkGameSheet: View {
                         platform: canChangePlatform && chosen.id != platform.id ? chosen : nil)
                     linked()
                     dismiss()
-                } catch JournalError.igdbLinkTaken {
+                } catch LudeumError.igdbLinkTaken {
                     let holder = (try? search.journalGame(igdbGameId: result.igdbGameId, platformId: platform.id))?.name ?? "another Game"
                     error = "Already linked to \(holder)."
                 } catch {

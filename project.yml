@@ -1,11 +1,11 @@
-name: GamesJournal
+name: Ludeum
 options:
   bundleIdPrefix: org.danielholmes
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
 packages:
-  GamesJournal:
+  Ludeum:
     path: .
 settings:
   base:
@@ -13,7 +13,7 @@ settings:
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
 targets:
-  GamesJournal:
+  Ludeum:
     type: application
     platform: macOS
     sources:
@@ -26,12 +26,12 @@ targets:
       Debug: App/Config/Signing.xcconfig
       Release: App/Config/Signing.xcconfig
     dependencies:
-      - package: GamesJournal
-        product: JournalCore
+      - package: Ludeum
+        product: LudeumCore
     settings:
       base:
-        PRODUCT_NAME: Games Journal
-        PRODUCT_BUNDLE_IDENTIFIER: org.danielholmes.GamesJournal
+        PRODUCT_NAME: Ludeum
+        PRODUCT_BUNDLE_IDENTIFIER: org.danielholmes.Ludeum
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES

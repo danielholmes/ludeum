@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// The main window: sidebar, the selected screen, and the Game detail pane.
@@ -209,12 +209,12 @@ struct Sidebar: View {
         .badge(badge).tag(screen)
     }
 
-    private func save(_ change: (JournalStore) throws -> Void) {
+    private func save(_ change: (LudeumStore) throws -> Void) {
         error = apply(change)
     }
 
     /// Runs a journal change and reloads the screens, or returns what went wrong.
-    private func apply(_ change: (JournalStore) throws -> Void) -> String? {
+    private func apply(_ change: (LudeumStore) throws -> Void) -> String? {
         guard let journal = services.journal else { return nil }
         do {
             try change(journal)

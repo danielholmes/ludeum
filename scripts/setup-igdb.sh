@@ -209,7 +209,7 @@ pause "Press Enter once 2FA is on."
 # ── Stage 2 ────────────────────────────────────────────────────────────────
 stage "Register the application → Client ID"
 open_url "https://dev.twitch.tv/console/apps/create"
-step "Name: anything unique across Twitch, e.g. 'games-journal-<yourname>'."
+step "Name: anything unique across Twitch, e.g. 'ludeum-<yourname>'."
 step "OAuth Redirect URLs: http://localhost  (unused, but required)."
 step "Category: 'Application Integration'."
 step "Client Type: Confidential  (a Public client cannot have a secret)."

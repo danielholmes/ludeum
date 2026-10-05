@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// What to play next: Playing, Up next and Backlog, each Game once. A plain view, no suggestions.

@@ -1,5 +1,5 @@
 import AppKit
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// Game detail: the editable right-hand pane. Every change is saved straight away.
@@ -15,7 +15,7 @@ struct GameDetailView: View {
     @State private var platform: IGDBPlatform?
     @State private var history: [RatingEntry] = []
     @State private var playthroughs: [Playthrough] = []
-    @State private var roms: [JournalROM] = []
+    @State private var roms: [LudeumROM] = []
     @State private var emulatorSettings = EmulatorSettings()
     @State private var showingHistory = false
     /// Each present ROM file's created and modified dates, by ROM id, read from disk.
@@ -214,7 +214,7 @@ struct GameDetailView: View {
             playthroughs = try journal.playthroughs(id)
             roms = try journal.roms(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
-        } catch JournalError.gameNotFound {
+        } catch LudeumError.gameNotFound {
             self.game = nil
         } catch {
             self.error = error.localizedDescription
@@ -222,7 +222,7 @@ struct GameDetailView: View {
     }
 
     /// Runs a journal change, then reloads every screen showing the journal.
-    private func save(_ change: (JournalStore) throws -> Void) {
+    private func save(_ change: (LudeumStore) throws -> Void) {
         guard let journal = services.journal else { return }
         do {
             try change(journal)
@@ -341,7 +341,7 @@ struct GameDetailView: View {
     }
 
     /// Reveals the ROM's file in OpenEmu's library folder.
-    private func showInFinder(_ rom: JournalROM) {
+    private func showInFinder(_ rom: LudeumROM) {
         do {
             guard let file = try OpenEmuLibrary.romFile(library: services.settings.openEmuLibrary, openEmuPk: rom.openEmuPk) else {
                 error = "Couldn't find \(rom.fileName) in OpenEmu's library. Run an Import, then try again."
@@ -393,7 +393,7 @@ private func playthroughDetails(_ d: PlaythroughDraft) -> String? {
 
 /// Messages for the journal's rules, as the UI says them.
 func journalErrorText(_ error: Error) -> String {
-    switch error as? JournalError {
+    switch error as? LudeumError {
     case .inProgressNeedsStart: "A Playthrough in progress needs a start date: add one, or choose an Outcome."
     case .endBeforeStart: "The end date can't come before the start date."
     case .listNameTaken: "There's already a List with that name."

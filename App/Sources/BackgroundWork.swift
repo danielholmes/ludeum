@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 import os
 
@@ -14,7 +14,7 @@ import os
     /// Mirrors `gate.current`, for views.
     private(set) var exclusive: ExclusiveWork?
 
-    private static let log = Logger(subsystem: "org.danielholmes.GamesJournal", category: "refresh")
+    private static let log = Logger(subsystem: "org.danielholmes.Ludeum", category: "refresh")
 
     /// Starts Import or Sync, or returns false while the other (or another of the same) runs.
     func begin(_ work: ExclusiveWork) -> Bool {

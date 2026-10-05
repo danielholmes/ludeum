@@ -52,7 +52,7 @@ jobs:
 
       # No Local.xcconfig in CI, so the app is ad-hoc signed.
       - name: Build app (warnings are errors)
-        run: xcodebuild -project GamesJournal.xcodeproj -scheme GamesJournal -configuration Debug -derivedDataPath .build/xcode build
+        run: xcodebuild -project Ludeum.xcodeproj -scheme Ludeum -configuration Debug -derivedDataPath .build/xcode build
 
       - name: Check signature
-        run: codesign --verify --verbose ".build/xcode/Build/Products/Debug/Games Journal.app"
+        run: codesign --verify --verbose ".build/xcode/Build/Products/Debug/Ludeum.app"

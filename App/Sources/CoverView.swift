@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 import UniformTypeIdentifiers
 

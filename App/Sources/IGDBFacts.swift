@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// What IGDB says about a game, as rows of pills: community scores, genres, themes, franchises,

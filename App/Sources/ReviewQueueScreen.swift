@@ -1,5 +1,5 @@
 import AppKit
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// The Review queue, Mail-style: item kinds with counts, that kind's items, and the selected item.

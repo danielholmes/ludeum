@@ -1,11 +1,11 @@
 import AppKit
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// Settings' backup controls: where backups go (with a warning when it's the local fallback),
 /// "Back up now" and "Restore from backup…".
 struct BackupsSection: View {
-    let journal: JournalStore?
+    let journal: LudeumStore?
     let backups: Backups
     let chooseFolder: () -> Void
 
@@ -59,7 +59,7 @@ struct BackupsSection: View {
 
 /// Lists the backups. Restoring one backs up the current journal first, replaces it, and relaunches.
 struct RestoreSheet: View {
-    let journal: JournalStore
+    let journal: LudeumStore
     let backups: Backups
     @Environment(\.dismiss) private var dismiss
     @State private var list: [Backup] = []
@@ -69,7 +69,7 @@ struct RestoreSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Restore from backup").font(.headline)
-            Text("The journal is backed up first, then replaced, and Games Journal relaunches. Nothing is written to OpenEmu.")
+            Text("The journal is backed up first, then replaced, and Ludeum relaunches. Nothing is written to OpenEmu.")
                 .font(.callout).foregroundStyle(.secondary)
             List(list, id: \.url, selection: $selection) { backup in
                 HStack {
@@ -107,7 +107,7 @@ struct RestoreSheet: View {
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
             DispatchQueue.main.async {
                 if let error {
-                    self.error = "Restored, but couldn't relaunch (\(error.localizedDescription)). Quit and reopen Games Journal."
+                    self.error = "Restored, but couldn't relaunch (\(error.localizedDescription)). Quit and reopen Ludeum."
                 } else {
                     NSApp.terminate(nil)
                 }

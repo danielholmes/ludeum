@@ -1,5 +1,5 @@
 import AppKit
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// A Platform's icon: 16 px colour pixel art from App/Resources/PlatformIcons. Most are gamicons
@@ -27,10 +27,10 @@ struct PlatformIcon: View {
         4: "gamicons-n64", 21: "gamicons-gcn", 5: "gamicons-wii", 29: "gamicons-gen", 32: "gamicons-sat", 7: "gamicons-psx",
         38: "gamicons-psp",
         9: "gamicons-ps3",
-        130: "journal-switch", 86: "journal-pce", 150: "journal-pce", 64: "journal-sms", 35: "journal-gg", 78: "journal-scd",
-        48: "journal-ps4", 49: "journal-xone",
-        6: "journal-pc",
-        13: "journal-pc",
+        130: "ludeum-switch", 86: "ludeum-pce", 150: "ludeum-pce", 64: "ludeum-sms", 35: "ludeum-gg", 78: "ludeum-scd",
+        48: "ludeum-ps4", 49: "ludeum-xone",
+        6: "ludeum-pc",
+        13: "ludeum-pc",
     ]
 
     @MainActor private static var loaded: [Int64: NSImage?] = [:]

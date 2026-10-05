@@ -1,5 +1,5 @@
 import AppKit
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// After an Import that changed something: what was added, matched, sent to review and gone

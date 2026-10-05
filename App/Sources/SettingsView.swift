@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// The ⌘, Settings window: IGDB credentials with "Test connection", the optional Hasheous key,
@@ -6,7 +6,7 @@ import SwiftUI
 struct SettingsView: View {
     let settings: AppSettings
     /// Nil if the journal couldn't be opened, so there's nothing to back up or restore into.
-    let journal: JournalStore?
+    let journal: LudeumStore?
 
     @State private var clientID = ""
     @State private var clientSecret = ""
@@ -36,7 +36,7 @@ struct SettingsView: View {
             Section {
                 if needsCredentials {
                     Text(
-                        "Games Journal needs IGDB credentials: register an app in the [Twitch developer console](https://dev.twitch.tv/console/apps) and paste its client ID and secret here."
+                        "Ludeum needs IGDB credentials: register an app in the [Twitch developer console](https://dev.twitch.tv/console/apps) and paste its client ID and secret here."
                     )
                     .font(.callout)
                 }

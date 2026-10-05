@@ -1,5 +1,5 @@
 import AppKit
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// The Sync's state: the preview, my Delete ticks, and the result.

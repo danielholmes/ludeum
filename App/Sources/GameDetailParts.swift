@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// A Rating's colour: red at 0, through yellow at 5, to green at 10.

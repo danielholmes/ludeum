@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 
 /// A screen the main window's sidebar can select, shown in the middle column.
 enum Screen: Hashable {

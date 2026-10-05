@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// One Emulator setting a Game can change: what it's called, what it does, its choices and how it

@@ -1,5 +1,5 @@
 import AppKit
-import JournalCore
+import LudeumCore
 
 /// Decoded Covers and the Library's genres and themes, kept in memory so screens open without re-reading
 /// the cache. Covers are dropped when any Cover changes; genres when the journal does.

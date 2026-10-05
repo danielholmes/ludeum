@@ -1,5 +1,5 @@
 import AppKit
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// Searching IGDB to add Games: results in the middle column, the selected one in full beside it.

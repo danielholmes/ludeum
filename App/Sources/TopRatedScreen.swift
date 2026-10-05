@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// Top-rated: every rated Game by current Rating, highest first. Ties share a rank.

@@ -1,4 +1,4 @@
-# Games Journal
+# Ludeum
 
 A personal record of the games I play across every platform (retro via OpenEmu, PC, Xbox, and others): what I thought of them, when I played them, and what I want to play next. The journal, not any emulator library, is the source of truth for this data.
 

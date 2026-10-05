@@ -1,4 +1,4 @@
-import JournalCore
+import LudeumCore
 import SwiftUI
 
 /// The kinds of filter the Add filter menu offers. A screen offers the ones it applies, less the
