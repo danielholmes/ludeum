@@ -60,7 +60,7 @@ struct WhatToPlayNextScreen: View {
         .toolbar {
             ToolbarItemGroup {
                 LibraryFilterMenu(filter: $filter, platforms: platforms, lists: lists)
-                LibrarySortMenu(sort: $sort, ascending: $ascending, offersDefault: true)
+                LibrarySortMenu(sort: $sort, ascending: $ascending, sorts: LibrarySort.allCases.filter { $0 != .year }, offersDefault: true)
                 Picker("View", selection: $showCovers) {
                     Label("List", systemImage: "list.bullet").tag(false)
                     Label("Covers", systemImage: "square.grid.2x2").tag(true)

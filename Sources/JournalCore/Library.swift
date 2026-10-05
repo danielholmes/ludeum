@@ -64,12 +64,15 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     case name, platform, rating
     /// When the Intent was set.
     case intentSet
+    /// IGDB's first release year. It lives in the cache, so only `library(_:sort:ascending:facts:)`
+    /// applies it; without facts the order is by name.
+    case year
 
     /// The order choosing this sort starts in: A–Z for names and Platforms, best and newest first otherwise.
     public var defaultAscending: Bool {
         switch self {
         case .name, .platform: true
-        case .rating, .intentSet: false
+        case .rating, .intentSet, .year: false
         }
     }
 }
@@ -157,6 +160,7 @@ extension JournalStore {
             case .platform: "platformName COLLATE NOCASE \(direction), \(name)"
             case .rating: "r.rating IS NULL, r.rating \(direction), \(name)"
             case .intentSet: "g.intentSetAt IS NULL, g.intentSetAt \(direction), \(name)"
+            case .year: name
             }
         let sql = """
             SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood,

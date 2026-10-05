@@ -165,4 +165,27 @@ import Testing
         #expect(try search("metroidvania") == ["Taz-Mania"])
         #expect(try search("").count == 3)
     }
+
+    @Test func yearSortUsesIGDBsReleaseYearNewestFirstUndatedLast() async throws {
+        let h = try Harness()
+        let j = try JournalHarness()
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        h.internet.addGame(1, "Super Metroid", fields: ["first_release_date": 765_158_400])  // 1994
+        h.internet.addGame(2, "Super Mario World", fields: ["first_release_date": 658_800_000])  // 1990
+        h.internet.addGame(3, "Unreleased")
+        h.internet.addGame(4, "Donkey Kong Country", fields: ["first_release_date": 785_000_000])  // 1994
+        for (id, name) in [(1, "Super Metroid"), (2, "Super Mario World"), (3, "Unreleased"), (4, "Donkey Kong Country")] {
+            try j.journal.addGame(platformId: 19, name: name, igdbGameId: Int64(id), igdbName: name)
+        }
+        try j.journal.addGameByHand(name: "Hand-made", platformId: 19)
+        let facts = try await LibraryFacts(igdb: h.igdb).byGame([1, 2, 3, 4])
+
+        func sorted(ascending: Bool) throws -> [String] {
+            try j.journal.library(LibraryFilter(), sort: .year, ascending: ascending, facts: facts).map(\.name)
+        }
+
+        #expect(try sorted(ascending: false) == ["Donkey Kong Country", "Super Metroid", "Super Mario World", "Hand-made", "Unreleased"])
+        #expect(try sorted(ascending: true) == ["Super Mario World", "Donkey Kong Country", "Super Metroid", "Hand-made", "Unreleased"])
+        #expect(!LibrarySort.year.defaultAscending)
+    }
 }

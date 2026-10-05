@@ -120,6 +120,7 @@ struct LibraryScreen: View {
             get: {
                 let order: SortOrder = ascending ? .forward : .reverse
                 return switch sort {
+                case .year: []
                 case .name: [KeyPathComparator(\LibraryRow.name, order: order)]
                 case .platform: [KeyPathComparator(\LibraryRow.platformName, order: order)]
                 case .rating: [KeyPathComparator(\LibraryRow.ratingSortKey, order: order)]
@@ -194,7 +195,7 @@ struct LibraryScreen: View {
         if let list { effective.listId = list.id }
         do {
             let (effective, sort, ascending) = (effective, sort, ascending)
-            if !filter.usesIGDBFacts, filter.name.trimmed.isEmpty {
+            if !filter.usesIGDBFacts, filter.name.trimmed.isEmpty, sort != .year {
                 let found = try await offMain {
                     try journal.library(effective, sort: sort, ascending: ascending)
                 }
@@ -205,7 +206,8 @@ struct LibraryScreen: View {
                 // The Add filter menu's genres and themes can follow.
                 if bar == .filters { facts = await services.memory.facts(services) }
             } else {
-                // A search also matches companies, franchises and series, which live in the cache.
+                // A search also matches companies, franchises and series, and Year sorts by IGDB's release
+                // year: both live in the cache.
                 facts = await services.memory.facts(services)
                 let facts = facts
                 // Off the main thread, so typing stays smooth while it filters.
@@ -312,6 +314,8 @@ struct LibraryFilterMenu: View {
 struct LibrarySortMenu: View {
     @Binding var sort: LibrarySort?
     @Binding var ascending: Bool
+    /// What it offers: Year only where the screen has IGDB's facts to sort by.
+    var sorts = LibrarySort.allCases
     var offersDefault = false
 
     var body: some View {
@@ -327,7 +331,7 @@ struct LibrarySortMenu: View {
                     })
             ) {
                 if offersDefault { Text("Default").tag(LibrarySort?.none) }
-                ForEach(LibrarySort.allCases, id: \.self) { Text(sortText($0)).tag(LibrarySort?.some($0)) }
+                ForEach(sorts, id: \.self) { Text(sortText($0)).tag(LibrarySort?.some($0)) }
             }
             Picker("Order", selection: $ascending) {
                 Text("Ascending").tag(true)
@@ -344,6 +348,7 @@ func sortText(_ sort: LibrarySort) -> String {
     case .platform: "Platform"
     case .rating: "Rating"
     case .intentSet: "Intent set"
+    case .year: "Year"
     }
 }
 

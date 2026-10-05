@@ -50,6 +50,29 @@ extension JournalStore {
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts]) throws
         -> [LibraryRow]
     {
+        let rows = try matching(filter, sort: sort, ascending: ascending, facts: facts)
+        guard sort == .year else { return rows }
+        // Newest (or oldest) first; Games IGDB has no year for go last, by name as they came.
+        func year(_ row: LibraryRow) -> Int? { row.igdbGameId.flatMap { facts[$0]?.releaseYear } }
+        struct Dated {
+            let index: Int
+            let year: Int
+            let row: LibraryRow
+        }
+        var dated: [Dated] = []
+        for (index, row) in rows.enumerated() {
+            if let y = year(row) { dated.append(Dated(index: index, year: y, row: row)) }
+        }
+        dated.sort { a, b in
+            if a.year == b.year { return a.index < b.index }
+            return ascending ? a.year < b.year : a.year > b.year
+        }
+        return dated.map(\.row) + rows.filter { year($0) == nil }
+    }
+
+    private func matching(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts]) throws
+        -> [LibraryRow]
+    {
         let text = filter.name.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return try library(filter, sort: sort, ascending: ascending).having(filter, in: facts) }
         var withoutSearch = filter
