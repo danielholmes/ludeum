@@ -5,8 +5,8 @@ import Testing
 
 @Suite struct EmulatorTests {
     @Test func nesAndSNESGamesArePlayedInMesenCE() {
-        for platform: Int64 in [18, 99, 19, 58] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
-        #expect(Emulator.of(platformId: 33) == nil)  // Game Boy
+        for platform: Int64 in [18, 99, 19, 58, 33, 22] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
+        #expect(Emulator.of(platformId: 24) == nil)  // Game Boy Advance
     }
 
     @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() {
