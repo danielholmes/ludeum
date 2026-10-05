@@ -23,19 +23,20 @@ struct IGDBFactsRows: View {
             if !facts.credits.isEmpty { companies }
             if let t = facts.timeToBeat, let text = timeToBeatText(t) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("Time to beat").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
-                    Text(text).font(.subheadline)
+                    Text("Time to beat").font(FactStyle.label).foregroundStyle(.secondary).frame(
+                        width: FactStyle.labelWidth, alignment: .leading)
+                    Text(text).font(FactStyle.value)
                 }
             }
             if !facts.links.isEmpty || facts.trailer != nil {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("Links").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
+                    Text("Links").font(FactStyle.label).foregroundStyle(.secondary).frame(width: FactStyle.labelWidth, alignment: .leading)
                     FlowLayout(spacing: 8) {
                         if let trailer = facts.trailer {
-                            Link("▶ Trailer", destination: trailer).font(.subheadline).help(trailer.absoluteString)
+                            Link("▶ Trailer", destination: trailer).font(FactStyle.value).help(trailer.absoluteString)
                         }
                         ForEach(facts.links, id: \.title) { link in
-                            Link(link.title, destination: link.url).font(.subheadline).help(link.url.absoluteString)
+                            Link(link.title, destination: link.url).font(FactStyle.value).help(link.url.absoluteString)
                         }
                     }
                 }
@@ -169,11 +170,11 @@ struct KeywordsSection: View {
                 let limit = 10
                 let collapsed = !showingAll && keywords.count > limit
                 ForEach(collapsed ? Array(keywords.prefix(limit)) : keywords, id: \.self) { k in
-                    Text(k).font(.subheadline).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
+                    Text(k).font(FactStyle.value).padding(.horizontal, 10).padding(.vertical, 3).background(.quaternary, in: .capsule)
                 }
                 if collapsed {
                     Button("+\(keywords.count - limit) more") { showingAll = true }
-                        .buttonStyle(.plain).font(.subheadline).foregroundStyle(.secondary)
+                        .buttonStyle(.plain).font(FactStyle.value).foregroundStyle(.secondary)
                         .padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
                 }
             }

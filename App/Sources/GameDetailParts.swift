@@ -40,7 +40,7 @@ struct PillRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
+            Text(title).font(FactStyle.label).foregroundStyle(.secondary).frame(width: FactStyle.labelWidth, alignment: .leading)
             FlowLayout(spacing: 4) {
                 ForEach(items, id: \.self) { item in
                     if let open {
@@ -89,7 +89,7 @@ private func pill(_ text: String, systemImage: String?) -> some View {
         Text(text)
         if let systemImage { Image(systemName: systemImage).imageScale(.small).foregroundStyle(.secondary) }
     }
-    .font(.subheadline).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
+    .font(FactStyle.value).padding(.horizontal, 10).padding(.vertical, 3).background(.quaternary, in: .capsule)
 }
 
 struct Screenshot: Identifiable {
@@ -302,10 +302,19 @@ struct CommunityScores: View {
 
     private func score(_ title: String, _ s: CommunityScore, noun: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(ratingText(s.rating)).font(.callout.bold()).monospacedDigit().foregroundStyle(ratingColor(s.rating))
-            Text("(\(s.count) \(noun)\(s.count == 1 ? "" : "s"))").font(.caption).foregroundStyle(.secondary)
+            Text(title).font(FactStyle.label).foregroundStyle(.secondary)
+            Text(ratingText(s.rating)).font(FactStyle.value.bold()).monospacedDigit().foregroundStyle(ratingColor(s.rating))
+            Text("(\(s.count) \(noun)\(s.count == 1 ? "" : "s"))").font(FactStyle.label).foregroundStyle(.secondary)
         }
         .help("IGDB \(title.lowercased()): \(String(format: "%.1f", s.score / 10)) from \(s.count) \(noun)\(s.count == 1 ? "" : "s")")
     }
+}
+
+/// Text sizes for the IGDB facts on Game detail (Genre, Theme, Companies, Links…): 1.5× the
+/// caption labels and subheadline values they started as.
+enum FactStyle {
+    static let label = Font.system(size: 15)
+    static let value = Font.system(size: 16.5)
+    /// The label column's width, so the values line up.
+    static let labelWidth: CGFloat = 100
 }
