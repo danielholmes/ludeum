@@ -12,6 +12,7 @@ struct LibraryScreen: View {
     @State private var filter: LibraryFilter
     /// What's typed in the search field; it reaches `filter.name` after a pause in typing.
     @State private var searchText: String
+    @FocusState private var searchFocused: Bool
     // Remembered across screens and launches, shared by the Library and every List.
     @AppStorage("librarySort") private var sort = LibrarySort.name
     @AppStorage("librarySortAscending") private var ascending = true
@@ -55,9 +56,15 @@ struct LibraryScreen: View {
             } else if rows.isEmpty {
                 // At the top, where the Games would be, not centred.
                 VStack {
-                    ContentUnavailableView(
-                        filter == LibraryFilter() ? "No Games yet" : "No Games match", systemImage: "books.vertical",
-                        description: Text(filter == LibraryFilter() ? "Add one with +." : "Try fewer filters or another search.")
+                    EmptyResults(
+                        title: filter == LibraryFilter() ? "No Games yet" : "No Games match", systemImage: "books.vertical",
+                        description: filter == LibraryFilter() ? "Add one with +." : "Try fewer filters or another search.",
+                        clearFilters: filter == LibraryFilter()
+                            ? nil
+                            : {
+                                filter = LibraryFilter()
+                                searchText = ""
+                            }
                     )
                     .fixedSize(horizontal: false, vertical: true)
                     Spacer()
@@ -95,8 +102,9 @@ struct LibraryScreen: View {
                     TableColumn("Intent", sortUsing: KeyPathComparator(\LibraryRow.intentSetSortKey)) {
                         Text($0.intent.map(intentText) ?? "")
                     }.width(70)
-                    TableColumn("Played") { Text(playedText($0)) }.width(110)
-                    TableColumn("Childhood") { Text($0.childhood ? "Yes" : "") }.width(70)
+                    TableColumn("Played", sortUsing: KeyPathComparator(\LibraryRow.playedSortKey)) { Text(playedText($0)) }.width(110)
+                    TableColumn("Childhood", sortUsing: KeyPathComparator(\LibraryRow.childhoodSortKey)) { Text($0.childhood ? "Yes" : "") }
+                        .width(70)
                 }
             }
         }
@@ -110,6 +118,7 @@ struct LibraryScreen: View {
             }
         }
         .navigationTitle(title ?? "Library")
+        .viewShortcuts(showCovers: $showCovers, search: $searchFocused)
         .toolbar { toolbar }
         .task(id: searchText) {
             // Debounced: the Library reloads 300 ms after the last keystroke, not on every one.
@@ -131,6 +140,8 @@ struct LibraryScreen: View {
                 return switch sort {
                 case .year: [KeyPathComparator(\LibraryRow.yearSortKey, order: order)]
                 case .players: [KeyPathComparator(\LibraryRow.playersSortKey, order: order)]
+                case .played: [KeyPathComparator(\LibraryRow.playedSortKey, order: order)]
+                case .childhood: [KeyPathComparator(\LibraryRow.childhoodSortKey, order: order)]
                 case .name: [KeyPathComparator(\LibraryRow.name, order: order)]
                 case .platform: [KeyPathComparator(\LibraryRow.platformName, order: order)]
                 case .rating: [KeyPathComparator(\LibraryRow.ratingSortKey, order: order)]
@@ -147,6 +158,8 @@ struct LibraryScreen: View {
                     case \LibraryRow.intentSetSortKey: .intentSet
                     case \LibraryRow.yearSortKey: .year
                     case \LibraryRow.playersSortKey: .players
+                    case \LibraryRow.playedSortKey: .played
+                    case \LibraryRow.childhoodSortKey: .childhood
                     default: nil
                     }
                 guard let chosen else { return }
@@ -172,7 +185,8 @@ struct LibraryScreen: View {
         if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
         ToolbarItem {
             TextField("Search", text: $searchText)
-                .help("Names, companies, franchises and series")
+                .focused($searchFocused)
+                .help("Names, companies, franchises, series and keywords (⌘F)")
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 180)
                 .overlay(alignment: .trailing) {
@@ -251,6 +265,8 @@ func sortText(_ sort: LibrarySort) -> String {
     case .intentSet: "Intent set"
     case .year: "Year"
     case .players: "Players' rating"
+    case .played: "Played"
+    case .childhood: "Childhood"
     }
 }
 
@@ -280,7 +296,7 @@ private struct CoversGrid: View {
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: 16, alignment: .top)], spacing: 16) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: 24, alignment: .top)], spacing: 24) {
                 ForEach(rows) { row in CoverCell(services: services, row: row, width: width, selection: $selection) }
             }
             .padding()
@@ -417,6 +433,9 @@ extension LibraryRow {
     var yearSortKey: Int { releaseYear ?? 0 }
     /// For the table's Players column (the Library sorts it, ranking only scores with 10 or more ratings).
     var playersSortKey: Double { playerScore.map(\.score) ?? 0 }
+    /// For the table's Played and Childhood columns (the Library sorts them).
+    var playedSortKey: Int { isPlaying ? 3 : outcomes.contains(.finished) ? 2 : outcomes.contains(.dropped) ? 1 : 0 }
+    var childhoodSortKey: Int { childhood ? 1 : 0 }
 }
 
 /// Runs `work` on a background thread. Cancelling the caller cancels it, so work that checks

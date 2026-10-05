@@ -91,12 +91,15 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     case year
     /// IGDB players' average rating, counting only scores with 10 or more ratings. From the cache, like `year`.
     case players
+    /// Playing, then Finished, Dropped and never played.
+    case played
+    case childhood
 
     /// The order choosing this sort starts in: A–Z for names and Platforms, oldest first for years, best and newest first otherwise.
     public var defaultAscending: Bool {
         switch self {
         case .name, .platform, .year: true
-        case .rating, .intentSet, .players: false
+        case .rating, .intentSet, .players, .played, .childhood: false
         }
     }
 }
@@ -189,6 +192,9 @@ extension JournalStore {
             case .rating: "r.rating IS NULL, r.rating \(direction), \(name)"
             case .intentSet: "g.intentSetAt IS NULL, g.intentSetAt \(direction), \(name)"
             case .year, .players: name
+            case .played:
+                "CASE WHEN playing THEN 3 WHEN outcomes LIKE '%finished%' THEN 2 WHEN outcomes LIKE '%dropped%' THEN 1 ELSE 0 END \(direction), \(name)"
+            case .childhood: "g.childhood \(direction), \(name)"
             }
         let sql = """
             SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood,

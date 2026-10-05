@@ -27,7 +27,8 @@ struct PlatformIcon: View {
         4: "gamicons-n64", 21: "gamicons-gcn", 5: "gamicons-wii", 29: "gamicons-gen", 32: "gamicons-sat", 7: "gamicons-psx",
         38: "gamicons-psp",
         9: "gamicons-ps3",
-        130: "journal-switch", 64: "journal-sms", 35: "journal-gg", 78: "journal-scd", 48: "journal-ps4", 49: "journal-xone",
+        130: "journal-switch", 86: "journal-pce", 150: "journal-pce", 64: "journal-sms", 35: "journal-gg", 78: "journal-scd",
+        48: "journal-ps4", 49: "journal-xone",
         6: "journal-pc",
         13: "journal-pc",
     ]

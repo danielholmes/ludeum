@@ -87,7 +87,8 @@ struct IGDBSearchView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                TextField("Search IGDB", text: $query).textFieldStyle(.roundedBorder).onSubmit(run)
+                TextField("Search IGDB", text: $query, prompt: Text("Search IGDB, then press Return")).textFieldStyle(.roundedBorder)
+                    .onSubmit(run)
                 if linking {
                     Text(platformFilter?.name ?? "").foregroundStyle(.secondary)
                 } else {

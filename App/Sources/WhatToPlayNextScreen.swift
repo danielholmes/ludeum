@@ -23,9 +23,10 @@ struct WhatToPlayNextScreen: View {
             if let error {
                 ContentUnavailableView("Couldn't read the journal", systemImage: "exclamationmark.triangle", description: Text(error))
             } else if next.playing.isEmpty, next.upNext.isEmpty, next.backlog.isEmpty {
-                ContentUnavailableView(
-                    "Nothing to play next", systemImage: "play.circle",
-                    description: Text(filter == LibraryFilter() ? "Set a Game's Intent to Up next or Backlog." : "Try fewer filters."))
+                EmptyResults(
+                    title: "Nothing to play next", systemImage: "play.circle",
+                    description: filter == LibraryFilter() ? "Set a Game's Intent to Up next or Backlog." : "Try fewer filters.",
+                    clearFilters: filter == LibraryFilter() ? nil : { filter = LibraryFilter() })
             } else if showCovers {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
@@ -35,7 +36,7 @@ struct WhatToPlayNextScreen: View {
                         ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
                             if index > 0 { Divider() }
                             Text("\(section.0) (\(section.1.count))").font(.headline)
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 16, alignment: .top)], spacing: 16) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 24, alignment: .top)], spacing: 24) {
                                 ForEach(section.1) { row in
                                     CoverCell(services: services, row: row, width: coverWidth, selection: $selection)
                                         .contextMenu { if section.2 { Button("Start playing") { startPlaying(row.id) } } }
@@ -63,10 +64,11 @@ struct WhatToPlayNextScreen: View {
             }
         }
         .navigationTitle("What to play next")
+        .viewShortcuts(showCovers: $showCovers)
         .toolbar {
             ToolbarItemGroup {
                 Picker("View", selection: $showCovers) {
-                    Label("List", systemImage: "list.bullet").tag(false)
+                    Label("Table", systemImage: "list.bullet").tag(false)
                     Label("Covers", systemImage: "square.grid.2x2").tag(true)
                 }
                 .pickerStyle(.segmented)

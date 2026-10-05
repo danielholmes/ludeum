@@ -20,12 +20,13 @@ struct TopRatedScreen: View {
             if let error {
                 ContentUnavailableView("Couldn't read the journal", systemImage: "exclamationmark.triangle", description: Text(error))
             } else if rows.isEmpty {
-                ContentUnavailableView(
-                    "No rated Games", systemImage: "star",
-                    description: Text(filter == LibraryFilter() ? "Rate a Game in its detail." : "Try fewer filters."))
+                EmptyResults(
+                    title: "No rated Games", systemImage: "star",
+                    description: filter == LibraryFilter() ? "Rate a Game in its detail." : "Try fewer filters.",
+                    clearFilters: filter == LibraryFilter() ? nil : { filter = LibraryFilter() })
             } else if showCovers {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 16, alignment: .top)], spacing: 16) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 24, alignment: .top)], spacing: 24) {
                         ForEach(rows, id: \.game.id) { row in
                             CoverCell(services: services, row: row.game, width: coverWidth, selection: $selection, rank: row.rank)
                         }
@@ -55,6 +56,7 @@ struct TopRatedScreen: View {
                 count: rows.count, filter: $filter, kinds: [.platform, .list, .childhood], platforms: platforms, lists: lists)
         }
         .navigationTitle("Top-rated")
+        .viewShortcuts(showCovers: $showCovers)
         .toolbar {
             ToolbarItemGroup {
                 Picker("View", selection: $showCovers) {

@@ -25,11 +25,10 @@ struct YearInReviewScreen: View {
             } else if let review {
                 ScrollView { content(review).padding() }
             } else {
-                ContentUnavailableView(
-                    "Nothing to review", systemImage: "calendar",
-                    description: Text(
-                        filter == LibraryFilter()
-                            ? "Playthroughs with dates show up here." : "Try fewer filters."))
+                EmptyResults(
+                    title: "Nothing to review", systemImage: "calendar",
+                    description: filter == LibraryFilter() ? "Playthroughs with dates show up here." : "Try fewer filters.",
+                    clearFilters: filter == LibraryFilter() ? nil : { filter = LibraryFilter() })
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -129,7 +128,7 @@ struct YearInReviewScreen: View {
         if !entries.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title).font(.title2)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .top)], alignment: .leading, spacing: 16) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 24, alignment: .top)], alignment: .leading, spacing: 24) {
                     ForEach(entries) { entry in
                         Button {
                             selection = entry.game.id

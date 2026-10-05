@@ -232,3 +232,36 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
     if let company = filter.company { c.append(Chip(text: "Company: \(company)") { $0.company = nil }) }
     return c
 }
+
+/// An empty screen: what's missing and why, with Clear filters when filters are why.
+struct EmptyResults: View {
+    let title: String
+    let systemImage: String
+    let description: String
+    /// Set when filters are hiding Games.
+    var clearFilters: (() -> Void)? = nil
+
+    var body: some View {
+        ContentUnavailableView {
+            Label(title, systemImage: systemImage)
+        } description: {
+            Text(description)
+        } actions: {
+            if let clearFilters { Button("Clear filters", action: clearFilters) }
+        }
+    }
+}
+
+extension View {
+    /// ⌘1 for Table and ⌘2 for Covers, and with `search`, ⌘F to focus the search field.
+    func viewShortcuts(showCovers: Binding<Bool>, search: FocusState<Bool>.Binding? = nil) -> some View {
+        background {
+            ZStack {
+                Button("Show as Table") { showCovers.wrappedValue = false }.keyboardShortcut("1")
+                Button("Show as Covers") { showCovers.wrappedValue = true }.keyboardShortcut("2")
+                if let search { Button("Search") { search.wrappedValue = true }.keyboardShortcut("f") }
+            }
+            .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+        }
+    }
+}

@@ -44,6 +44,15 @@ import Testing
         #expect(rows.allSatisfy { !$0.noROMInOpenEmu })
     }
 
+    @Test func sortsByPlayedAndChildhood() throws {
+        // Played: Playing, then Finished, then Dropped, then never played.
+        #expect(try names(sort: .played, ascending: false) == ["Doom", "Super Metroid", "A Link to the Past"])
+        #expect(try names(sort: .played, ascending: true) == ["A Link to the Past", "Super Metroid", "Doom"])
+        #expect(try names(sort: .childhood, ascending: false) == ["A Link to the Past", "Doom", "Super Metroid"])
+        #expect(!LibrarySort.played.defaultAscending)
+        #expect(!LibrarySort.childhood.defaultAscending)
+    }
+
     @Test func filtersCombine() throws {
         #expect(try names(LibraryFilter(platformId: 19)) == ["A Link to the Past", "Super Metroid"])
         #expect(try names(LibraryFilter(rating: .unrated)) == ["Doom"])
