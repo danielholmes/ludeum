@@ -18,6 +18,7 @@ struct GameDetailView: View {
     @State private var allLists: [GameList] = []
     @State private var memberOf: Set<Int64> = []
     @State private var roms: [JournalROM] = []
+    @State private var emulatorSettings = EmulatorSettings()
     @State private var showingHistory = false
     @State private var pins: Set<Pin> = []
     @State private var allScreenshots = false
@@ -57,7 +58,14 @@ struct GameDetailView: View {
                             Text(game.name).font(.title).bold()
                             Spacer()
                             if !roms.isEmpty, !roms.allSatisfy(\.missing) {
-                                Button("Play in OpenEmu", systemImage: "play.fill", action: playInOpenEmu)
+                                if let emulator = Emulator.of(platformId: game.platformId) {
+                                    Button("Play in \(emulator.name)", systemImage: "play.fill") { play(in: emulator) }
+                                        .labelStyle(.iconOnly).buttonStyle(.hover).help("Play in \(emulator.name)")
+                                }
+                                Button(
+                                    "Play in OpenEmu",
+                                    systemImage: Emulator.of(platformId: game.platformId) == nil ? "play.fill" : "play.rectangle",
+                                    action: playInOpenEmu)
                                     .labelStyle(.iconOnly).buttonStyle(.hover).help("Play in OpenEmu")
                             }
                             Button("Edit Game", systemImage: "pencil") { editingGame = true }
@@ -209,6 +217,18 @@ struct GameDetailView: View {
                 }
             }
 
+            if let emulator = Emulator.of(platformId: game.platformId) {
+                Section(emulator.name) {
+                    Picker("Run-ahead", selection: runAheadFrames) {
+                        Text("Default (0 frames)").tag(Int?.none)
+                        ForEach(EmulatorSettings.runAheadRange, id: \.self) { frames in
+                            Text("\(frames) frame\(frames == 1 ? "" : "s")").tag(Int?.some(frames))
+                        }
+                    }
+                    .help("Frames MesenCE runs ahead to hide input lag. Set on every Play.")
+                }
+            }
+
             if let error { Text(error).foregroundStyle(.red) }
         }
         .formStyle(.grouped)
@@ -306,6 +326,7 @@ struct GameDetailView: View {
             allLists = try journal.lists()
             memberOf = Set(try journal.lists(containing: id).map(\.id))
             roms = try journal.roms(of: id)
+            emulatorSettings = try journal.emulatorSettings(id)
             pins = Set(try journal.pins())
         } catch JournalError.gameNotFound {
             self.game = nil
@@ -357,26 +378,58 @@ struct GameDetailView: View {
         }
     }
 
-    /// Opens the Game's ROM in OpenEmu, which plays it: the playlist of a multi-disc Version, else
-    /// the first present ROM.
-    private func playInOpenEmu() {
+    private var runAheadFrames: Binding<Int?> {
+        Binding(
+            get: { emulatorSettings.runAheadFrames },
+            set: { frames in
+                var settings = emulatorSettings
+                settings.runAheadFrames = frames
+                save { try $0.setEmulatorSettings(id, settings) }
+            })
+    }
+
+    /// The file a Play opens: the playlist of a multi-disc Version, else the first present ROM. Nil
+    /// (with the error shown) when it can't be found.
+    private func playFile() -> URL? {
         let present = roms.filter { !$0.missing }
-        guard let rom = present.first(where: { $0.fileName.lowercased().hasSuffix(".m3u") }) ?? present.first else { return }
+        guard let rom = present.first(where: { $0.fileName.lowercased().hasSuffix(".m3u") }) ?? present.first else { return nil }
+        do {
+            guard let file = try OpenEmuLibrary.romFile(library: services.settings.openEmuLibrary, openEmuPk: rom.openEmuPk) else {
+                error = "Couldn't find \(rom.fileName) in OpenEmu's library. Run an Import, then try again."
+                return nil
+            }
+            return file
+        } catch {
+            self.error = "Couldn't read OpenEmu's library: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    /// Plays the Game in its Emulator, with every Emulator setting on the command line. A running
+    /// Emulator gets the ROM in its open window.
+    private func play(in emulator: Emulator) {
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: emulator.bundleIdentifier) else {
+            error = "\(emulator.name) isn't installed."
+            return
+        }
+        guard let file = playFile() else { return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.arguments = emulator.arguments(rom: file, settings: emulatorSettings)
+        // A second copy hands its arguments to the running one and quits.
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
+            if let error { Task { @MainActor in self.error = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
+        }
+    }
+
+    private func playInOpenEmu() {
         guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.openemu.OpenEmu") else {
             error = "OpenEmu isn't installed."
             return
         }
-        do {
-            guard let file = try OpenEmuLibrary.romFile(library: services.settings.openEmuLibrary, openEmuPk: rom.openEmuPk) else {
-                error = "Couldn't find \(rom.fileName) in OpenEmu's library. Run an Import, then try again."
-                return
-            }
-            NSWorkspace.shared.open([file], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
-        } catch {
-            self.error = "Couldn't read OpenEmu's library: \(error.localizedDescription)"
-        }
+        guard let file = playFile() else { return }
+        NSWorkspace.shared.open([file], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
     }
-
 
     /// Reveals the ROM's file in OpenEmu's library folder.
     private func showInFinder(_ rom: JournalROM) {
@@ -441,6 +494,7 @@ func journalErrorText(_ error: Error) -> String {
     case .gameHasROMs: "This Game has ROMs, so its Platform can't change."
     case .nameRequired: "A name is required."
     case .gameNotFound: "That Game no longer exists."
+    case .runAheadOutOfRange: "Run-ahead is 0 to 10 frames."
     case nil: error.localizedDescription
     }
 }

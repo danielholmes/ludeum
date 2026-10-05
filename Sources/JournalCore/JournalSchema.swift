@@ -189,6 +189,9 @@ enum JournalSchema {
         migrator.registerMigration("v7 no activity") { db in
             try db.drop(table: "activitySnapshot")
         }
+        migrator.registerMigration("v8 emulator settings") { db in
+            try db.alter(table: "game") { t in t.add(column: "runAheadFrames", .integer) }
+        }
         return migrator
     }
 }

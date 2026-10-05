@@ -15,6 +15,8 @@ public enum JournalError: Error, Equatable {
     case alreadyLinked
     /// A Game's Platform changes only while it has no ROMs: they say what it's played on.
     case gameHasROMs
+    /// MesenCE takes 0–10 frames of run-ahead.
+    case runAheadOutOfRange
 }
 
 /// A Game as the journal shows it.
