@@ -464,6 +464,7 @@ struct PlaythroughSheet: View {
     @State private var versions: [String] = []
     @State private var vias: [String] = []
     @State private var error: String?
+    @State private var confirmingDelete = false
 
     var body: some View {
         Form {
@@ -479,6 +480,7 @@ struct PlaythroughSheet: View {
             TextField("Notes", text: $notes, axis: .vertical).lineLimit(3...8)
             if let error { Text(error).foregroundStyle(.red) }
             HStack {
+                if edit.id != nil { Button("Delete…", role: .destructive) { confirmingDelete = true } }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
                 Button("Save", action: save).keyboardShortcut(.defaultAction)
@@ -486,6 +488,11 @@ struct PlaythroughSheet: View {
         }
         .formStyle(.grouped)
         .frame(width: 440)
+        .confirmationDialog("Delete this Playthrough?", isPresented: $confirmingDelete) {
+            Button("Delete Playthrough", role: .destructive, action: delete)
+        } message: {
+            Text("Its dates, Outcome and notes go with it. There's no undo; a backup is taken first.")
+        }
         .onAppear {
             if let d = edit.draft {
                 start = d.start.text
@@ -529,6 +536,16 @@ struct PlaythroughSheet: View {
             done()
         } catch let e as DateError {
             error = "The \(e.label) date should look like 1996, 1996-03 or 1996-03-17."
+        } catch {
+            self.error = journalErrorText(error)
+        }
+    }
+
+    private func delete() {
+        guard let journal = services.journal, let id = edit.id else { return }
+        do {
+            try journal.deletePlaythrough(id)
+            done()
         } catch {
             self.error = journalErrorText(error)
         }
