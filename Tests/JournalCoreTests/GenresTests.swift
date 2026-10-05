@@ -166,6 +166,29 @@ import Testing
         #expect(try search("").count == 3)
     }
 
+    @Test func playersSortCountsOnlyScoresWithTenRatingsBestFirst() async throws {
+        let h = try Harness()
+        let j = try JournalHarness()
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        h.internet.addGame(1, "Super Metroid", fields: ["rating": 91.0, "rating_count": 40])
+        h.internet.addGame(2, "Obscure Gem", fields: ["rating": 98.0, "rating_count": 3])
+        h.internet.addGame(3, "Super Mario World", fields: ["rating": 88.0, "rating_count": 10])
+        h.internet.addGame(4, "Unrated")
+        for (id, name) in [(1, "Super Metroid"), (2, "Obscure Gem"), (3, "Super Mario World"), (4, "Unrated")] {
+            try j.journal.addGame(platformId: 19, name: name, igdbGameId: Int64(id), igdbName: name)
+        }
+        let facts = try await LibraryFacts(igdb: h.igdb).byGame([1, 2, 3, 4])
+
+        let best = try j.journal.library(LibraryFilter(), sort: .players, ascending: false, facts: facts)
+        let worst = try j.journal.library(LibraryFilter(), sort: .players, ascending: true, facts: facts)
+
+        #expect(best.map(\.name) == ["Super Metroid", "Super Mario World", "Obscure Gem", "Unrated"])
+        #expect(worst.map(\.name) == ["Super Mario World", "Super Metroid", "Obscure Gem", "Unrated"])
+        #expect(best[2].playerScore == CommunityScore(score: 98, count: 3))  // shown, but not ranked
+        #expect(!LibrarySort.players.defaultAscending)
+        #expect(CommunityScore(score: 98, count: 3).isReliable == false)
+    }
+
     @Test func yearSortUsesIGDBsReleaseYearNewestFirstUndatedLast() async throws {
         let h = try Harness()
         let j = try JournalHarness()
@@ -190,6 +213,6 @@ import Testing
         let rows = try j.journal.library(LibraryFilter(), sort: .name, ascending: true, facts: facts)
         #expect(rows.map(\.releaseYear) == [1994, nil, 1990, 1994, nil])  // every sort carries the year
         let plain = try j.journal.library(LibraryFilter(), sort: .name, ascending: true)
-        #expect(plain.withReleaseYears(facts) == rows)
+        #expect(plain.withIGDBFacts(facts) == rows)
     }
 }

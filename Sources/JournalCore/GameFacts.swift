@@ -81,6 +81,9 @@ public struct CommunityScore: Sendable, Equatable {
         self.init(score: score, count: count)
     }
 
+    /// Enough ratings to rank by: fewer than 10 is shown, but sorts with the unrated.
+    public var isReliable: Bool { count >= 10 }
+
     /// On the journal's 0–10 scale, to one decimal place.
     public var rating: Rating { Rating(tenths: Int(score.rounded()))! }
 }

@@ -89,12 +89,14 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     /// IGDB's first release year. It lives in the cache, so only `library(_:sort:ascending:facts:)`
     /// applies it; without facts the order is by name.
     case year
+    /// IGDB players' average rating, counting only scores with 10 or more ratings. From the cache, like `year`.
+    case players
 
     /// The order choosing this sort starts in: A–Z for names and Platforms, oldest first for years, best and newest first otherwise.
     public var defaultAscending: Bool {
         switch self {
         case .name, .platform, .year: true
-        case .rating, .intentSet: false
+        case .rating, .intentSet, .players: false
         }
     }
 }
@@ -120,8 +122,10 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let outcomes: Set<Outcome>
     /// It has ROMs, and every one is missing.
     public let noROMInOpenEmu: Bool
-    /// IGDB's first release year, when the rows came with IGDB's facts (`withReleaseYears(_:)`).
+    /// IGDB's first release year, when the rows came with IGDB's facts (`withIGDBFacts(_:)`).
     public var releaseYear: Int? = nil
+    /// IGDB players' average rating, with the same proviso.
+    public var playerScore: CommunityScore? = nil
 }
 
 extension JournalStore {
@@ -184,7 +188,7 @@ extension JournalStore {
             case .platform: "platformName COLLATE NOCASE \(direction), \(name)"
             case .rating: "r.rating IS NULL, r.rating \(direction), \(name)"
             case .intentSet: "g.intentSetAt IS NULL, g.intentSetAt \(direction), \(name)"
-            case .year: name
+            case .year, .players: name
             }
         let sql = """
             SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood,

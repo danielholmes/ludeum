@@ -83,6 +83,15 @@ struct LibraryScreen: View {
                     TableColumn("Rating", sortUsing: KeyPathComparator(\LibraryRow.ratingSortKey)) {
                         Text($0.rating.map(ratingText) ?? "–")
                     }.width(60)
+                    TableColumn("Players", sortUsing: KeyPathComparator(\LibraryRow.playersSortKey)) { row in
+                        if let p = row.playerScore {
+                            Text(ratingText(p.rating)).foregroundStyle(p.isReliable ? .primary : .tertiary)
+                                .help(
+                                    "\(p.count) player rating\(p.count == 1 ? "" : "s") on IGDB\(p.isReliable ? "" : ": too few to rank by")"
+                                )
+                        }
+                    }
+                    .width(60)
                     TableColumn("Intent", sortUsing: KeyPathComparator(\LibraryRow.intentSetSortKey)) {
                         Text($0.intent.map(intentText) ?? "")
                     }.width(70)
@@ -121,6 +130,7 @@ struct LibraryScreen: View {
                 let order: SortOrder = ascending ? .forward : .reverse
                 return switch sort {
                 case .year: [KeyPathComparator(\LibraryRow.yearSortKey, order: order)]
+                case .players: [KeyPathComparator(\LibraryRow.playersSortKey, order: order)]
                 case .name: [KeyPathComparator(\LibraryRow.name, order: order)]
                 case .platform: [KeyPathComparator(\LibraryRow.platformName, order: order)]
                 case .rating: [KeyPathComparator(\LibraryRow.ratingSortKey, order: order)]
@@ -136,6 +146,7 @@ struct LibraryScreen: View {
                     case \LibraryRow.ratingSortKey: .rating
                     case \LibraryRow.intentSetSortKey: .intentSet
                     case \LibraryRow.yearSortKey: .year
+                    case \LibraryRow.playersSortKey: .players
                     default: nil
                     }
                 guard let chosen else { return }
@@ -194,7 +205,7 @@ struct LibraryScreen: View {
         let effective = filter.scoped(by: scope)
         do {
             let (effective, sort, ascending) = (effective, sort, ascending)
-            if !effective.usesIGDBFacts, effective.name.trimmed.isEmpty, sort != .year {
+            if !effective.usesIGDBFacts, effective.name.trimmed.isEmpty, sort != .year, sort != .players {
                 let found = try await offMain {
                     try journal.library(effective, sort: sort, ascending: ascending)
                 }
@@ -205,10 +216,10 @@ struct LibraryScreen: View {
                 // The Year column and the Add filter menu's genres and themes can follow.
                 facts = await services.memory.facts(services)
                 guard !Task.isCancelled else { return }
-                rows = found.withReleaseYears(facts)
+                rows = found.withIGDBFacts(facts)
             } else {
-                // A search also matches companies, franchises and series, and Year sorts by IGDB's release
-                // year: both live in the cache.
+                // A search also matches companies, franchises and series, and Year and Players sort by IGDB's
+                // release year and rating: all live in the cache.
                 facts = await services.memory.facts(services)
                 let facts = facts
                 // Off the main thread, so typing stays smooth while it filters.
@@ -239,6 +250,7 @@ func sortText(_ sort: LibrarySort) -> String {
     case .rating: "Rating"
     case .intentSet: "Intent set"
     case .year: "Year"
+    case .players: "Players' rating"
     }
 }
 
@@ -403,6 +415,8 @@ extension LibraryRow {
     var intentSetSortKey: Date { intentSetAt ?? .distantPast }
     /// For the table's Year column (the Library sorts it, with no year last).
     var yearSortKey: Int { releaseYear ?? 0 }
+    /// For the table's Players column (the Library sorts it, ranking only scores with 10 or more ratings).
+    var playersSortKey: Double { playerScore.map(\.score) ?? 0 }
 }
 
 /// Runs `work` on a background thread. Cancelling the caller cancels it, so work that checks

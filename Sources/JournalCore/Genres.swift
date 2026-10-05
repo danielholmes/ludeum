@@ -29,11 +29,13 @@ extension Array where Element == LibraryRow {
 }
 
 extension [LibraryRow] {
-    /// The rows with IGDB's release year filled in from the facts.
-    public func withReleaseYears(_ facts: [Int64: GameFacts]) -> [LibraryRow] {
+    /// The rows with IGDB's release year and players' rating filled in from the facts.
+    public func withIGDBFacts(_ facts: [Int64: GameFacts]) -> [LibraryRow] {
         map { row in
             var row = row
-            row.releaseYear = row.igdbGameId.flatMap { facts[$0]?.releaseYear }
+            let f = row.igdbGameId.flatMap { facts[$0] }
+            row.releaseYear = f?.releaseYear
+            row.playerScore = f?.playerScore
             return row
         }
     }
@@ -61,24 +63,12 @@ extension JournalStore {
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts]) throws
         -> [LibraryRow]
     {
-        let rows = try matching(filter, sort: sort, ascending: ascending, facts: facts).withReleaseYears(facts)
-        guard sort == .year else { return rows }
-        // Newest (or oldest) first; Games IGDB has no year for go last, by name as they came.
-        func year(_ row: LibraryRow) -> Int? { row.releaseYear }
-        struct Dated {
-            let index: Int
-            let year: Int
-            let row: LibraryRow
+        let rows = try matching(filter, sort: sort, ascending: ascending, facts: facts).withIGDBFacts(facts)
+        switch sort {
+        case .year: return rows.sorted(by: { $0.releaseYear.map(Double.init) }, ascending: ascending)
+        case .players: return rows.sorted(by: { $0.playerScore.flatMap { $0.isReliable ? $0.score : nil } }, ascending: ascending)
+        default: return rows
         }
-        var dated: [Dated] = []
-        for (index, row) in rows.enumerated() {
-            if let y = year(row) { dated.append(Dated(index: index, year: y, row: row)) }
-        }
-        dated.sort { a, b in
-            if a.year == b.year { return a.index < b.index }
-            return ascending ? a.year < b.year : a.year > b.year
-        }
-        return dated.map(\.row) + rows.filter { year($0) == nil }
     }
 
     private func matching(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts]) throws
@@ -97,4 +87,27 @@ extension JournalStore {
             }
             .having(filter, in: facts)
     }
+}
+
+extension [LibraryRow] {
+    /// Sorted by a value from the cache. Rows without one go last, by name as they came, and equal
+    /// values keep their order.
+    func sorted(by key: (LibraryRow) -> Double?, ascending: Bool) -> [LibraryRow] {
+        var keyed: [KeyedRow] = []
+        for (index, row) in enumerated() {
+            if let k = key(row) { keyed.append(KeyedRow(index: index, key: k, row: row)) }
+        }
+        keyed.sort { a, b in
+            if a.key == b.key { return a.index < b.index }
+            return ascending ? a.key < b.key : a.key > b.key
+        }
+        let unkeyed: [LibraryRow] = filter { key($0) == nil }
+        return keyed.map { $0.row } + unkeyed
+    }
+}
+
+private struct KeyedRow {
+    let index: Int
+    let key: Double
+    let row: LibraryRow
 }

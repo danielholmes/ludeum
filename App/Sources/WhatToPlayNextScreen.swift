@@ -58,7 +58,8 @@ struct WhatToPlayNextScreen: View {
                 filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms, lists: lists
             ) {
                 LibrarySortMenu(
-                    sort: $sort, ascending: $ascending, sorts: LibrarySort.allCases.filter { $0 != .year }, offersDefault: true)
+                    sort: $sort, ascending: $ascending, sorts: LibrarySort.allCases.filter { $0 != .year && $0 != .players },
+                    offersDefault: true)
             }
         }
         .navigationTitle("What to play next")
