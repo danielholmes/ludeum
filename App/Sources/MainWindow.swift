@@ -163,24 +163,6 @@ struct Sidebar: View {
                     }
                 }
             }
-            Section {
-                ForEach(lists, id: \.id) { list in
-                    row(.list(id: list.id, name: list.name))
-                        .contextMenu {
-                            Button("Rename…") { naming = ListNaming(list: list, name: list.name) }
-                            Button("Delete…", role: .destructive) { deleting = list }
-                        }
-                        .disabled(services.work.journalLocked)
-                }
-            } header: {
-                HStack {
-                    Text("Lists")
-                    Spacer()
-                    Button("New List", systemImage: "plus") { naming = ListNaming(list: nil, name: "") }
-                        .labelStyle(.iconOnly).buttonStyle(.hover)
-                        .disabled(services.journal == nil || services.work.journalLocked)
-                }
-            }
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .sheet(item: $naming) { naming in
