@@ -3,10 +3,9 @@ import JournalCore
 /// A screen the main window's sidebar can select, shown in the middle column.
 enum Screen: Hashable {
     case library
-    /// Library shortcuts: the Library filtered to Finished, Childhood, or Playthroughs with no dates.
+    /// Library shortcuts: the Library filtered to Finished or Childhood.
     case finished
     case childhood
-    case undatedPlaythroughs
     case whatToPlayNext
     case topRated
     case yearInReview
@@ -25,7 +24,6 @@ enum Screen: Hashable {
         case .library: "Library"
         case .finished: "Finished"
         case .childhood: "Childhood"
-        case .undatedPlaythroughs: "No dates"
         case .whatToPlayNext: "What to play next"
         case .topRated: "Top-rated"
         case .yearInReview: "Year in review"
@@ -44,7 +42,6 @@ enum Screen: Hashable {
         case .library: "books.vertical"
         case .finished: "flag.checkered"
         case .childhood: "teddybear"
-        case .undatedPlaythroughs: "calendar.badge.exclamationmark"
         case .whatToPlayNext: "play.circle"
         case .topRated: "star"
         case .yearInReview: "calendar"
@@ -69,12 +66,11 @@ enum Screen: Hashable {
         switch self {
         case .finished: LibraryFilter(outcome: .finished)
         case .childhood: LibraryFilter(childhood: true)
-        case .undatedPlaythroughs: LibraryFilter(undatedPlaythroughs: true)
         default: nil
         }
     }
 
     static let journal: [Screen] = [
-        .library, .finished, .childhood, .undatedPlaythroughs, .whatToPlayNext, .topRated, .yearInReview, .igdb,
+        .library, .finished, .childhood, .whatToPlayNext, .topRated, .yearInReview, .igdb,
     ]
 }
