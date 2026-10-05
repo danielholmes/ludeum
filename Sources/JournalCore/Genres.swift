@@ -36,13 +36,16 @@ extension LibraryFilter {
 extension GameFacts {
     /// Whether a company, franchise or series contains `text`, ignoring case.
     func mentions(_ text: String) -> Bool {
-        (companies.map { $0 } + franchises + series).contains { $0.localizedCaseInsensitiveContains(text) }
+        credits.contains { $0.name.localizedCaseInsensitiveContains(text) }
+            || franchises.contains { $0.localizedCaseInsensitiveContains(text) }
+            || series.contains { $0.localizedCaseInsensitiveContains(text) }
     }
 }
 
 extension JournalStore {
     /// The Library with the IGDB facts applied: the filter's genre, theme, franchise, series and
-    /// company, and a search that also matches the Game's companies, franchises and series.
+    /// company, and a search that also matches the Game's companies, franchises and series. It stops
+    /// early with `CancellationError` when its task is cancelled (a newer search replaced it).
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts]) throws
         -> [LibraryRow]
     {
@@ -51,8 +54,12 @@ extension JournalStore {
         var withoutSearch = filter
         withoutSearch.name = ""
         let byName = Set(try library(filter, sort: sort, ascending: ascending).map(\.id))
+        try Task.checkCancellation()
         return try library(withoutSearch, sort: sort, ascending: ascending)
-            .filter { row in byName.contains(row.id) || (row.igdbGameId.flatMap { facts[$0] }?.mentions(text) ?? false) }
+            .filter { row in
+                try Task.checkCancellation()
+                return byName.contains(row.id) || (row.igdbGameId.flatMap { facts[$0] }?.mentions(text) ?? false)
+            }
             .having(filter, in: facts)
     }
 }

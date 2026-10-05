@@ -27,6 +27,11 @@ struct LibraryScreen: View {
     @State private var facts: [Int64: GameFacts] = [:]
     /// False until the first load, so an empty screen isn't mistaken for "No Games match".
     @State private var loaded = false
+    /// A reload is running.
+    @State private var loading = false
+
+    /// Typing hasn't reached the filter yet, or the Games are being found: shown as spinners.
+    private var busy: Bool { loading || searchText != filter.name }
 
     /// `initialFilter` is where to start, e.g. Year in review's "no dates" link.
     /// `title` replaces "Library", e.g. for a Platform opened from the sidebar.
@@ -86,10 +91,10 @@ struct LibraryScreen: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             switch bar {
-            case .summary: FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count)
+            case .summary: FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count, busy: busy)
             case .filters:
                 LibraryBar(
-                    count: rows.count, filter: $filter, platforms: platforms, lists: lists,
+                    count: rows.count, busy: busy, filter: $filter, platforms: platforms, lists: lists,
                     genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted())
             }
         }
@@ -156,6 +161,9 @@ struct LibraryScreen: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 180)
                 .overlay(alignment: .trailing) {
+                    if busy {
+                        ProgressView().controlSize(.mini).padding(.trailing, searchText.isEmpty ? 5 : 22)
+                    }
                     if !searchText.isEmpty {
                         Button("Clear search", systemImage: "xmark.circle.fill") {
                             searchText = ""
@@ -178,14 +186,16 @@ struct LibraryScreen: View {
 
     private func load() async {
         guard let journal = services.journal else { return }
+        loading = true
+        defer { if !Task.isCancelled { loading = false } }
         var effective = filter
         if let list { effective.listId = list.id }
         do {
-            let (sort, ascending) = (sort, ascending)
+            let (effective, sort, ascending) = (effective, sort, ascending)
             if !filter.usesIGDBFacts, filter.name.trimmed.isEmpty {
-                let found = try await Task.detached(priority: .userInitiated) {
+                let found = try await offMain {
                     try journal.library(effective, sort: sort, ascending: ascending)
-                }.value
+                }
                 // A newer reload has started: its rows win.
                 guard !Task.isCancelled else { return }
                 rows = found
@@ -197,9 +207,9 @@ struct LibraryScreen: View {
                 facts = await services.memory.facts(services)
                 let facts = facts
                 // Off the main thread, so typing stays smooth while it filters.
-                let found = try await Task.detached(priority: .userInitiated) {
+                let found = try await offMain {
                     try journal.library(effective, sort: sort, ascending: ascending, facts: facts)
-                }.value
+                }
                 guard !Task.isCancelled else { return }
                 rows = found
                 loaded = true
@@ -497,12 +507,14 @@ struct FilterSummary: View {
     let lists: [GameList]
     /// How many Games are shown, when the screen has a simple count.
     var count: Int?
+    var busy = false
 
     var body: some View {
         let chips = self.chips
         if !chips.isEmpty {
             HStack(spacing: 6) {
                 Text(count.map { "Showing \($0) Game\($0 == 1 ? "" : "s"):" } ?? "Showing:").foregroundStyle(.secondary)
+                if busy { ProgressView().controlSize(.small) }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(chips, id: \.text) { chip in
@@ -580,6 +592,7 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
 /// removable pill and an Add filter menu on the right. Filters combine.
 struct LibraryBar: View {
     let count: Int
+    var busy = false
     let filter: Binding<LibraryFilter>?
     let platforms: [IGDBPlatform]
     let lists: [GameList]
@@ -589,6 +602,7 @@ struct LibraryBar: View {
     var body: some View {
         HStack(spacing: 6) {
             Text("\(count) Game\(count == 1 ? "" : "s")").foregroundStyle(.secondary)
+            if busy { ProgressView().controlSize(.small) }
             if let filter {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -660,4 +674,15 @@ extension LibraryRow {
     var ratingSortKey: Int { rating?.tenths ?? -1 }
     /// For the table's Intent column: when the Intent was set, undated or none first.
     var intentSetSortKey: Date { intentSetAt ?? .distantPast }
+}
+
+/// Runs `work` on a background thread. Cancelling the caller cancels it, so work that checks
+/// for cancellation (a search) stops when a newer one replaces it.
+func offMain<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+    let task = Task.detached(priority: .userInitiated) { try work() }
+    return try await withTaskCancellationHandler {
+        try await task.value
+    } onCancel: {
+        task.cancel()
+    }
 }
