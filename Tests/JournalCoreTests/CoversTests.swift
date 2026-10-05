@@ -70,114 +70,157 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     }
 }
 
-@Suite struct IGDBAlwaysWinsTests {
+/// The Cover order: upload, libretro Box art, OpenEmu Box art, IGDB Cover art, placeholder.
+@Suite struct CoverOrderTests {
     let h: Harness
     let j: JournalHarness
+    let oe: FakeOpenEmu
+    static let snes = "Nintendo_-_Super_Nintendo_Entertainment_System"
 
     init() throws {
         h = try Harness()
         j = try JournalHarness()
+        oe = try FakeOpenEmu(in: h.directory)
+        let snes: [String: Any] = ["id": 19, "name": "SNES"]
+        h.internet.addPlatform(19, "SNES")
+        h.internet.addGame(1103, "Super Metroid", fields: ["platforms": [snes], "cover": ["image_id": "co1"]])
+        for md5 in ["aa", "a2", "a3"] { h.internet.addHash(md5: md5, game: 1103, platform: 19) }
         try j.journal.addPlatform(id: 19, name: "SNES")
     }
 
-    var covers: Covers { Covers(journal: j.journal, igdb: h.igdb) }
-    var upload: Data { testImage(width: 600, height: 800) }
+    var covers: Covers { h.covers(j.journal) }
 
-    @Test func aHandMadeGameCanUploadReplaceAndRemoveACover() async throws {
-        let game = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
-
-        try await covers.upload(upload, for: game)
-        #expect(try j.journal.journalCover(game)?.origin == .uploaded)
-        try await covers.upload(testImage(width: 100, height: 100), for: game)
-        #expect(try j.journal.journalCover(game)?.width == 100)
-        guard case .journal = try await covers.cover(for: game) else {
-            Issue.record("expected the uploaded cover")
-            return
-        }
-
-        try await covers.remove(for: game)
-        #expect(try await covers.cover(for: game) == .placeholder)
+    func firstImport() async throws -> GameID {
+        let run = FirstImport(
+            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, draftFolder: h.directory.appending(path: "draft"),
+            libretro: h.libretro)
+        try await run.commit(try await run.start(library: oe.folder) { _, _ in })
+        return try #require(try j.journal.library(LibraryFilter(), sort: .name, ascending: true).first?.id)
     }
 
-    @Test func aLinkedGameWithAnIGDBCoverShowsItAndRefusesUploads() async throws {
-        h.internet.addGame(1103, "Super Metroid", fields: ["cover": ["image_id": "co1"]])
-        let game = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
+    @Test func libretroBoxArtComesFirst() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan, USA) (En)"])
+        try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: testImage(width: 20, height: 28))
+        let game = try await firstImport()
 
-        guard case .igdb(let file) = try await covers.cover(for: game) else {
-            Issue.record("expected IGDB's cover")
+        let cover = try await covers.cover(for: game)
+
+        let path = "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (Japan, USA) (En).png"
+        guard case .libretro(let file, path) = cover else {
+            Issue.record("expected libretro's Box art, got \(cover)")
+            return
+        }
+        #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
+    }
+
+    @Test func withoutLibretroOpenEmusBoxArtComesFromTheCache() async throws {
+        let art = testImage(width: 20, height: 28)
+        let pk = try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: art)
+        let game = try await firstImport()
+        try FileManager.default.removeItem(at: oe.folder.appending(path: "Artwork/ART-\(pk)"))  // the cache has its own copy
+
+        guard case .openEmu(let file, "ART-\(pk)") = try await covers.cover(for: game) else {
+            Issue.record("expected OpenEmu's Box art")
+            return
+        }
+        #expect(try Data(contentsOf: file) == art)
+    }
+
+    @Test func withNoBoxArtIGDBsCoverArtShows() async throws {
+        try oe.addROM("Super Metroid (USA)", md5: "aa")
+        let game = try await firstImport()
+
+        guard case .igdb(let file, "co1") = try await covers.cover(for: game) else {
+            Issue.record("expected IGDB's Cover art")
             return
         }
         #expect(file.lastPathComponent == "co1.jpg")
-        #expect(try await !covers.canUpload(for: game))
-        await #expect(throws: CoverError.igdbHasACover) { try await covers.upload(upload, for: game) }
     }
 
-    @Test func aLinkedGameWithoutAnIGDBCoverCanUpload() async throws {
-        h.internet.addGame(5, "Obscure Homebrew")
-        let game = try j.journal.addGame(platformId: 19, name: "Obscure Homebrew", igdbGameId: 5, igdbName: "Obscure Homebrew")
-
-        #expect(try await covers.canUpload(for: game))
-        try await covers.upload(upload, for: game)
-        guard case .journal = try await covers.cover(for: game) else {
-            Issue.record("expected the uploaded cover")
-            return
-        }
-    }
-
-    @Test func gainingALinkWithACoverDeletesTheJournalCover() async throws {
-        h.internet.addGame(1103, "Super Metroid", fields: ["cover": ["image_id": "co1"]])
-        let game = try j.journal.addGameByHand(name: "Metroid 3", platformId: 19)
-        try await covers.upload(upload, for: game)
-        try j.journal.link(game, igdbGameId: 1103, igdbName: "Super Metroid")
-
-        try await covers.reconcile(game)
-
-        #expect(try j.journal.journalCover(game) == nil)
-        guard case .igdb = try await covers.cover(for: game) else {
-            Issue.record("expected IGDB's cover")
-            return
-        }
-    }
-
-    @Test func showingACoverAlsoReconciles() async throws {
-        h.internet.addGame(1103, "Super Metroid", fields: ["cover": ["image_id": "co1"]])
-        let game = try j.journal.addGameByHand(name: "Metroid 3", platformId: 19)
-        try await covers.upload(upload, for: game)
-        try j.journal.link(game, igdbGameId: 1103, igdbName: "Super Metroid")
-
-        _ = try await covers.cover(for: game)
-
-        #expect(try j.journal.journalCover(game) == nil)
-    }
-
-    @Test func withoutIGDBALinkedGameCantUpload() async throws {
-        let game = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
+    @Test func aGameWithNoROMShowsIGDBsCoverArtAndAHandMadeOneAPlaceholder() async throws {
+        let pc = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
         let hand = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
-        let offline = Covers(journal: j.journal, igdb: nil)
 
-        #expect(try await !offline.canUpload(for: game))
-        #expect(try await offline.canUpload(for: hand))
+        guard case .igdb = try await covers.cover(for: pc) else {
+            Issue.record("expected IGDB's Cover art")
+            return
+        }
+        #expect(try await covers.cover(for: hand) == .placeholder)
     }
 
-    @Test func aFailedDownloadKeepsTheJournalCover() async throws {
-        h.internet.addGame(5, "Obscure Homebrew")
-        let game = try j.journal.addGame(platformId: 19, name: "Obscure Homebrew", igdbGameId: 5, igdbName: "Obscure Homebrew")
-        try await covers.upload(upload, for: game)
-        h.internet.addGame(5, "Obscure Homebrew", fields: ["cover": ["image_id": "co5"]])
-        try h.cache.store(["igdb:game:5": Data(#"{"id":5,"name":"Obscure Homebrew","cover":{"image_id":"co5"}}"#.utf8)])
-        h.internet.setDown(FakeInternet.Hosts.igdbImages, true)
+    @Test func anUploadWinsOnAnyGameAndRemovingItFallsBack() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        try oe.addROM("Super Metroid (USA)", md5: "aa")
+        let game = try await firstImport()
+
+        try covers.upload(testImage(width: 600, height: 800), for: game)
+        guard case .upload(let upload) = try await covers.cover(for: game) else {
+            Issue.record("expected the upload")
+            return
+        }
+        #expect(upload.width == 600)
+
+        try covers.remove(for: game)
+        guard case .libretro = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+    }
+
+    @Test func thePresentVersionsBoxArtWinsOverAMissingOnes() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan)", "Super Metroid (Europe)"])
+        try oe.addROM("Super Metroid (Japan)", md5: "aa", fileName: nil)
+        try oe.addROM("Super Metroid (Europe)", md5: "a2")
+        let game = try await firstImport()
+
+        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        #expect(path.hasSuffix("Super Metroid (Europe).png"))
+    }
+
+    @Test func withNothingPresentTheMostRecentlyAddedMissingROMsBoxArtShows() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan)", "Super Metroid (Europe)"])
+        try oe.addROM("Super Metroid (Japan)", md5: "aa", fileName: nil)
+        try oe.addROM("Super Metroid (Europe)", md5: "a2", fileName: nil)
+        let game = try await firstImport()
+
+        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        #expect(path.hasSuffix("Super Metroid (Europe).png"))
+    }
+
+    @Test func aMultiDiscGameShowsItsDisclessBoxArt() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)", "Super Metroid (USA) (Disc 2)"])
+        try oe.addROM("Super Metroid (USA) (Disc 2)", md5: "a2", fileName: "Super Metroid (USA) (Disc 2).cue")
+        try oe.addROM("Super Metroid (USA) (Disc 1)", md5: "aa", fileName: "Super Metroid (USA) (Disc 1).cue")
+        let game = try await firstImport()
+
+        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        #expect(path.hasSuffix("/Super Metroid (USA).png"))
+    }
+
+    @Test func aFailedDownloadThrowsRatherThanFallingBack() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        try oe.addROM("Super Metroid (USA)", md5: "aa")
+        let game = try await firstImport()
+        h.internet.setDown(FakeInternet.Hosts.libretro, true)
 
         await #expect(throws: (any Error).self) { try await covers.cover(for: game) }
-
-        #expect(try j.journal.journalCover(game) != nil)
     }
 
     @Test func aCoverGoesWithItsGame() async throws {
         let game = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
-        try await covers.upload(upload, for: game)
+        try covers.upload(testImage(width: 60, height: 80), for: game)
 
         try j.journal.deleteGame(game)
 
-        #expect(try j.journal.journalCover(game) == nil)
+        #expect(try j.journal.uploadedCover(game) == nil)
     }
 }

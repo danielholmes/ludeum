@@ -14,15 +14,12 @@ public struct CacheRefresh: Sendable {
     let igdb: IGDBClient?
     let hasheous: HasheousClient
     let gate: WorkGate
-    /// When given, Games whose refreshed record now has an IGDB cover lose their journal-owned Cover.
-    let covers: Covers?
 
-    public init(cache: CacheStore, igdb: IGDBClient?, hasheous: HasheousClient, gate: WorkGate, covers: Covers?) {
+    public init(cache: CacheStore, igdb: IGDBClient?, hasheous: HasheousClient, gate: WorkGate) {
         self.cache = cache
         self.igdb = igdb
         self.hasheous = hasheous
         self.gate = gate
-        self.covers = covers
     }
 
     /// `progress` gets (done, total) after each step. Stops early, without error, when cancelled.
@@ -57,15 +54,11 @@ public struct CacheRefresh: Sendable {
             }
         }
         if let igdb {
-            let covers = covers
             for batch in gameIDs.chunked(IGDBClient.maxBatch) {
                 steps.append(
                     (
                         batch.count, "IGDB games \(batch.first!)…",
-                        {
-                            _ = try await igdb.games(ids: batch, servesStale: false)
-                            try await covers?.reconcile(igdbGameIDs: batch)
-                        }
+                        { _ = try await igdb.games(ids: batch, servesStale: false) }
                     ))
             }
         }

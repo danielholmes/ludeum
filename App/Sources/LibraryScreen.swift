@@ -206,7 +206,7 @@ private func playedText(_ row: LibraryRow) -> String {
     return parts.joined(separator: ", ")
 }
 
-/// Games as covers. Linked Games show IGDB's cover from the cache; the rest a named tile.
+/// Games as covers: each Game's Cover (see `Covers`), else a named tile.
 private struct CoversGrid: View {
     let services: Services
     let rows: [LibraryRow]

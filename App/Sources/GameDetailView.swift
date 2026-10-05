@@ -163,11 +163,8 @@ struct GameDetailView: View {
         .sheet(isPresented: $linking) {
             if let search = services.gameSearch, let platform {
                 LinkGameSheet(search: search, game: game, platform: platform) {
-                    // IGDB always wins: a journal-owned Cover goes once the new link brings a cover.
-                    Task {
-                        try? await services.covers?.reconcile(id)
-                        services.changes.coverChanged()
-                    }
+                    // The new link can bring IGDB's Cover art.
+                    services.changes.coverChanged()
                 }
             }
         }

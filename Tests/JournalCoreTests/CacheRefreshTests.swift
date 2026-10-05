@@ -6,8 +6,8 @@ import Testing
 @Suite struct CacheRefreshTests {
     let h = try! Harness()
 
-    private func refresh(gate: WorkGate = WorkGate(), covers: Covers? = nil) -> CacheRefresh {
-        CacheRefresh(cache: h.cache, igdb: h.igdb, hasheous: h.hasheous, gate: gate, covers: covers)
+    private func refresh(gate: WorkGate = WorkGate()) -> CacheRefresh {
+        CacheRefresh(cache: h.cache, igdb: h.igdb, hasheous: h.hasheous, gate: gate)
     }
 
     @Test func refetchesOnlyExpiredEntries() async throws {
@@ -99,22 +99,6 @@ import Testing
 
         gate.end(.importing)
         #expect(await running.value.refreshed == 1)
-    }
-
-    @Test func aRefreshThatBringsACoverRemovesTheJournalsOwn() async throws {
-        let j = try JournalHarness()
-        let covers = Covers(journal: j.journal, igdb: h.igdb)
-        h.internet.addGame(1103, "Super Metroid")
-        try j.journal.addPlatform(id: 19, name: "SNES")
-        let game = try j.journal.addGameByHand(name: "Super Metroid", platformId: 19)
-        try j.journal.link(game, igdbGameId: 1103, igdbName: "Super Metroid")
-        try await covers.upload(testImage(width: 10, height: 10), for: game)
-        h.clock.advance(days: 61)
-        h.internet.addGame(1103, "Super Metroid", fields: ["cover": ["image_id": "co1"]])
-
-        _ = await refresh(covers: covers).run()
-
-        #expect(try j.journal.journalCover(game) == nil)
     }
 }
 

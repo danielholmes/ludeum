@@ -36,7 +36,7 @@ import SwiftUI
         guard let igdb = services.igdb, let hasheous = services.hasheous, let journal = services.journal else { return nil }
         return FirstImport(
             igdb: igdb, hasheous: hasheous, journal: journal, backups: services.settings.backups(),
-            draftFolder: AppSettings.appFolder.appending(path: "Import draft", directoryHint: .isDirectory))
+            draftFolder: AppSettings.appFolder.appending(path: "Import draft", directoryHint: .isDirectory), libretro: services.libretro)
     }
 
     var draft: ImportDraft? { if case .draft(let d) = state { d } else { nil } }
@@ -143,7 +143,7 @@ import SwiftUI
         Self.isRunning = true
         let run = OngoingImport(
             igdb: igdb, hasheous: hasheous, journal: journal, backups: services.settings.backups(),
-            snapshotFile: AppSettings.appFolder.appending(path: "OpenEmu snapshot.sqlite"))
+            snapshotFile: AppSettings.appFolder.appending(path: "OpenEmu snapshot.sqlite"), libretro: services.libretro)
         let library = services.settings.openEmuLibrary
         ongoingProgress = (.snapshot, 0)
         ongoingTask = Task {

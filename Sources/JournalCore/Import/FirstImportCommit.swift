@@ -12,8 +12,6 @@ struct FirstImportPlan {
         let name: String
         /// By `Z_PK`; the lowest wins where only one can.
         let roms: [OpenEmuROMRecord]
-        /// OpenEmu's box art, when IGDB has no cover.
-        let carriedCover: NormalisedCover?
     }
 
     let storeUUID: String
@@ -31,7 +29,7 @@ extension JournalStore {
     }
 
     /// Writes the first Import in one transaction: Games and their ROMs, OpenEmu's collections as
-    /// Intent, Playthroughs, Childhood and Lists, stars ×2 as imported Ratings, carried-over Covers,
+    /// Intent, Playthroughs, Childhood and Lists, stars ×2 as imported Ratings,
     /// unmatched ROMs with their suggestions and held data, and the first Activity snapshot.
     func commitFirstImport(_ plan: FirstImportPlan) throws {
         let now = clock.now()
@@ -96,11 +94,6 @@ extension JournalStore {
                 try Self.applyOpenEmuData(
                     db, game: game, stars: planned.roms.map(\.stars).max() ?? 0, collections: Set(planned.roms.flatMap(\.collections)),
                     start: start, day: day)
-                if let cover = planned.carriedCover {
-                    try db.execute(
-                        sql: "INSERT OR IGNORE INTO cover (gameId, jpeg, width, height, origin, sha256) VALUES (?, ?, ?, ?, 'carried', ?)",
-                        arguments: [game, cover.jpeg, cover.width, cover.height, cover.sha256])
-                }
             }
 
             for (rom, match) in plan.unmatched {

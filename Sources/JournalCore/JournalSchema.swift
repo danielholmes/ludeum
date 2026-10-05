@@ -1,7 +1,6 @@
 import GRDB
 
-/// The journal's one `v1` migration. Edited freely until the first real Import into
-/// the production database, then append-only.
+/// The journal's migrations. Append-only since the first real Import into the production database.
 enum JournalSchema {
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
@@ -126,6 +125,30 @@ enum JournalSchema {
                 t.column("collections", .text).notNull()
                 t.column("currentStart", .text)
             }
+        }
+        // Box-art Covers: libretro-thumbnails names and the cached OpenEmu Box art on each ROM;
+        // the `cover` table holds uploads only, so carried-over Covers go (the cache copy replaces them).
+        migrator.registerMigration("v2 box art") { db in
+            try db.alter(table: "rom") { t in
+                t.add(column: "libretroLookedUp", .boolean).notNull().defaults(to: false)
+                t.add(column: "libretroBoxart", .text)
+                t.add(column: "libretroSnap", .text)
+                t.add(column: "libretroTitle", .text)
+                t.add(column: "openEmuBoxArt", .text)  // ZIMAGE.ZRELATIVEPATH, copied into the cache
+            }
+            try db.create(table: "newCover") { t in
+                t.primaryKey("gameId", .integer).references("game", onDelete: .cascade)
+                t.column("jpeg", .blob).notNull()
+                t.column("width", .integer).notNull()
+                t.column("height", .integer).notNull()
+                t.column("sha256", .text).notNull()
+            }
+            try db.execute(
+                sql: """
+                    INSERT INTO newCover SELECT gameId, jpeg, width, height, sha256 FROM cover WHERE origin = 'uploaded';
+                    DROP TABLE cover;
+                    ALTER TABLE newCover RENAME TO cover;
+                    """)
         }
         return migrator
     }

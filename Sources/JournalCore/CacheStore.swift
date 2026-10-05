@@ -113,9 +113,22 @@ extension CacheStore {
     func image(at path: String, download: () async throws -> Data) async throws -> URL {
         let file = directory.appending(path: "images").appending(path: path)
         if FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) { return file }
-        let data = try await download()
+        return try store(image: try await download(), at: path)
+    }
+
+    @discardableResult
+    func store(image data: Data, at path: String) throws -> URL {
+        let file = directory.appending(path: "images").appending(path: path)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: file, options: .atomic)
         return file
+    }
+}
+
+extension CacheStore {
+    /// A cached image file, if it's there.
+    func cachedImage(at path: String) -> URL? {
+        let file = directory.appending(path: "images").appending(path: path)
+        return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
     }
 }

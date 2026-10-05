@@ -24,6 +24,8 @@ public struct OpenEmuROMRecord: Codable, Sendable, Hashable {
     public let playTimeSeconds: Double
     /// OpenEmu's box art, under the library's `Artwork/`.
     public let boxArt: URL?
+    /// Its `ZIMAGE.Z_PK`, to tell OpenEmu's own box art from a Cover Sync wrote.
+    public var boxArtImagePk: Int64? = nil
 
     var isPlaylist: Bool { file?.pathExtension.lowercased() == "m3u" }
 
@@ -107,7 +109,7 @@ public enum OpenEmuLibrary {
                     SELECT r.Z_PK AS pk, r.ZMD5 AS md5, r.ZLOCATION AS location, r.ZPLAYCOUNT AS playCount,
                         r.ZLASTPLAYED AS lastPlayed, r.ZPLAYTIME AS playTime,
                         g.Z_PK AS game, g.ZNAME AS name, g.ZGAMETITLE AS title, g.ZRATING AS rating,
-                        s.ZSYSTEMIDENTIFIER AS system, i.ZRELATIVEPATH AS art
+                        s.ZSYSTEMIDENTIFIER AS system, i.ZRELATIVEPATH AS art, i.Z_PK AS artPk
                     FROM ZROM r JOIN ZGAME g ON r.ZGAME = g.Z_PK JOIN ZSYSTEM s ON g.ZSYSTEM = s.Z_PK
                     LEFT JOIN ZIMAGE i ON i.Z_PK = g.ZBOXIMAGE
                     ORDER BY r.Z_PK
@@ -125,7 +127,7 @@ public enum OpenEmuLibrary {
                     stars: row["rating"] ?? 0, collections: (collections[row["game"]] ?? []).sorted(),
                     playCount: row["playCount"] ?? 0,
                     lastPlayedAt: (row["lastPlayed"] as Double?).map(Date.init(timeIntervalSinceReferenceDate:)),
-                    playTimeSeconds: row["playTime"] ?? 0, boxArt: art.map { artwork.appending(path: $0) })
+                    playTimeSeconds: row["playTime"] ?? 0, boxArt: art.map { artwork.appending(path: $0) }, boxArtImagePk: row["artPk"])
             }
             return OpenEmuLibrarySnapshot(storeUUID: uuid, roms: roms)
         }
