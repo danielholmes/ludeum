@@ -259,31 +259,37 @@ struct GameDetailView: View {
         }
     }
 
-    /// One line per ROM: its name, then Version, Disc, missing and file dates in grey, and Show in Finder.
     @ViewBuilder private var romRows: some View {
         if roms.isEmpty {
             Text("No ROMs").foregroundStyle(.secondary)
         } else {
             if roms.allSatisfy(\.missing) { Text("No ROM in OpenEmu").foregroundStyle(.orange) }
             ForEach(roms) { rom in
-                let dates = fileDates[rom.id]
-                let details = [
-                    readableVersion(rom.version), rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil,
-                    dates?.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
-                    dates?.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
-                ].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-                HStack(alignment: .firstTextBaseline) {
-                    // Without its extension; GoodTools region codes spelled out.
-                    Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing).lineLimit(1)
-                        .layoutPriority(1)
-                    Text(details).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                    Spacer(minLength: 4)
+                HStack {
+                    VStack(alignment: .leading) {
+                        // Without its extension; GoodTools region codes spelled out.
+                        Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
+                        Text(
+                            [readableVersion(rom.version), rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil]
+                                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        if let dates = fileDates[rom.id] {
+                            Text(
+                                [
+                                    dates.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                    dates.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                ].compactMap { $0 }.joined(separator: " · ")
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
                     if !rom.missing {
                         Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
                             .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
                     }
                 }
-                .help(details)
             }
         }
     }
