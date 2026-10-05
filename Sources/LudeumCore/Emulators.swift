@@ -21,6 +21,7 @@ public struct Emulator: Sendable, Equatable {
         case 21: .dolphin  // GameCube
         case 4: .ares  // Nintendo 64
         case 29: .ares  // Mega Drive/Genesis
+        case 78: .ares  // Sega CD
         case 20: .melonDS  // Nintendo DS
         default: nil
         }
@@ -46,7 +47,7 @@ public struct Emulator: Sendable, Equatable {
             // ares's run-ahead is on or off (one frame); any run-ahead frames turn it on. `--setting`
             // overrides are for this launch only: ares puts the saved values back.
             [
-                "--system", platformId == 4 ? "Nintendo 64" : "Mega Drive",
+                "--system", platformId == 4 ? "Nintendo 64" : platformId == 78 ? "Mega CD" : "Mega Drive",
                 "--setting", "General/RunAhead=\((settings.runAheadFrames ?? 0) > 0)", rom.path(percentEncoded: false),
             ]
         case .melonDS:

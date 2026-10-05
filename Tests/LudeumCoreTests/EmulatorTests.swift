@@ -11,7 +11,8 @@ import Testing
         #expect(Emulator.of(platformId: 29) == .ares)  // Mega Drive/Genesis
         #expect(Emulator.of(platformId: 4) == .ares)  // Nintendo 64
         #expect(Emulator.of(platformId: 20) == .melonDS)  // Nintendo DS
-        #expect(Emulator.of(platformId: 78) == nil)  // Sega CD
+        #expect(Emulator.of(platformId: 78) == .ares)  // Sega CD
+        #expect(Emulator.of(platformId: 32) == nil)  // Saturn
     }
 
     @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() throws {
@@ -77,6 +78,11 @@ import Testing
         try Emulator.ares.arguments(
             rom: URL(filePath: "/Games/N64/Super Mario 64 (USA).z64"), platformId: 4, settings: EmulatorSettings(runAheadFrames: 1))
             == ["--system", "Nintendo 64", "--setting", "General/RunAhead=true", "/Games/N64/Super Mario 64 (USA).z64"])
+}
+
+@Test func aresPlaysSegaCDGamesAsMegaCD() throws {
+    let rom = URL(filePath: "/Games/SegaCD/Sonic CD (USA).cue")
+    #expect(try Emulator.ares.arguments(rom: rom, platformId: 78, settings: EmulatorSettings()).prefix(2) == ["--system", "Mega CD"])
 }
 
 @Test func melonDSJustOpensTheGame() throws {
