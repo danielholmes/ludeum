@@ -61,8 +61,8 @@ struct LibraryScreen: View {
             } else if showCovers {
                 CoversGrid(services: services, rows: rows, width: coverWidth, selection: $selection)
             } else {
-                Table(rows, selection: $selection) {
-                    TableColumn("Name") { row in
+                Table(rows, selection: $selection, sortOrder: columnSort) {
+                    TableColumn("Name", sortUsing: KeyPathComparator(\LibraryRow.name)) { row in
                         HStack(spacing: 4) {
                             Text(row.name)
                             if row.noROMInOpenEmu {
@@ -71,8 +71,12 @@ struct LibraryScreen: View {
                         }
                     }
                     TableColumn("Platform", value: \.platformName)
-                    TableColumn("Rating") { Text($0.rating.map(ratingText) ?? "–") }.width(60)
-                    TableColumn("Intent") { Text($0.intent.map(intentText) ?? "") }.width(70)
+                    TableColumn("Rating", sortUsing: KeyPathComparator(\LibraryRow.ratingSortKey)) {
+                        Text($0.rating.map(ratingText) ?? "–")
+                    }.width(60)
+                    TableColumn("Intent", sortUsing: KeyPathComparator(\LibraryRow.intentSetSortKey)) {
+                        Text($0.intent.map(intentText) ?? "")
+                    }.width(70)
                     TableColumn("Played") { Text(playedText($0)) }.width(110)
                     TableColumn("Childhood") { Text($0.childhood ? "Yes" : "") }.width(70)
                 }
@@ -93,6 +97,39 @@ struct LibraryScreen: View {
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, list: list?.id)) {
             await load()
         }
+    }
+
+    /// The table's header clicks, as the Library's sort: Name, Platform, Rating and Intent (when it was set)
+    /// sort; a newly clicked column starts in its usual order, and clicking it again flips it.
+    private var columnSort: Binding<[KeyPathComparator<LibraryRow>]> {
+        Binding(
+            get: {
+                let order: SortOrder = ascending ? .forward : .reverse
+                return switch sort {
+                case .name: [KeyPathComparator(\LibraryRow.name, order: order)]
+                case .platform: [KeyPathComparator(\LibraryRow.platformName, order: order)]
+                case .rating: [KeyPathComparator(\LibraryRow.ratingSortKey, order: order)]
+                case .intentSet: [KeyPathComparator(\LibraryRow.intentSetSortKey, order: order)]
+                }
+            },
+            set: { new in
+                guard let first = new.first else { return }
+                let chosen: LibrarySort? =
+                    switch first.keyPath {
+                    case \LibraryRow.name: .name
+                    case \LibraryRow.platformName: .platform
+                    case \LibraryRow.ratingSortKey: .rating
+                    case \LibraryRow.intentSetSortKey: .intentSet
+                    default: nil
+                    }
+                guard let chosen else { return }
+                if chosen == sort {
+                    ascending = first.order == .forward
+                } else {
+                    sort = chosen
+                    ascending = chosen.defaultAscending
+                }
+            })
     }
 
     private struct Reload: Equatable {
@@ -594,4 +631,11 @@ private struct AddFilterMenu: View {
         }
         .menuStyle(.borderlessButton).fixedSize()
     }
+}
+
+extension LibraryRow {
+    /// For the table's Rating column: unrated below 0.0.
+    var ratingSortKey: Int { rating?.tenths ?? -1 }
+    /// For the table's Intent column: when the Intent was set, undated or none first.
+    var intentSetSortKey: Date { intentSetAt ?? .distantPast }
 }
