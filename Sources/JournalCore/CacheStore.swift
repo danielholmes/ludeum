@@ -111,24 +111,24 @@ extension CacheStore {
     /// A cached image file at `path` (relative to the cache's images folder),
     /// downloaded with `download` the first time. Images never expire.
     func image(at path: String, download: () async throws -> Data) async throws -> URL {
-        let file = directory.appending(path: "images").appending(path: path)
+        let file = imageFile(path)
         if FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) { return file }
         return try store(image: try await download(), at: path)
     }
 
     @discardableResult
     func store(image data: Data, at path: String) throws -> URL {
-        let file = directory.appending(path: "images").appending(path: path)
+        let file = imageFile(path)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: file, options: .atomic)
         return file
     }
-}
 
-extension CacheStore {
     /// A cached image file, if it's there.
     func cachedImage(at path: String) -> URL? {
-        let file = directory.appending(path: "images").appending(path: path)
+        let file = imageFile(path)
         return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
     }
+
+    private func imageFile(_ path: String) -> URL { directory.appending(path: "images").appending(path: path) }
 }
