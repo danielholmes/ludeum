@@ -23,7 +23,7 @@ struct PlatformIcon: View {
     /// IGDB platform id → icon file in PlatformIcons.
     private static let files: [Int64: String] = [
         33: "gamicons-gb", 22: "gamicons-gbc", 24: "gamicons-gba", 20: "gamicons-ds", 18: "gamicons-nes", 99: "gamicons-nes", 19: "gamicons-snes", 58: "gamicons-snes",
-        4: "gamicons-n64", 21: "gamicons-gcn", 29: "gamicons-gen", 32: "gamicons-sat", 7: "gamicons-psx", 38: "gamicons-psp",
+        4: "gamicons-n64", 21: "gamicons-gcn", 5: "gamicons-wii", 29: "gamicons-gen", 32: "gamicons-sat", 7: "gamicons-psx", 38: "gamicons-psp",
         9: "gamicons-ps3",
         64: "journal-sms", 35: "journal-gg", 78: "journal-scd", 48: "journal-ps4", 49: "journal-xone", 6: "journal-pc",
         13: "journal-pc",
