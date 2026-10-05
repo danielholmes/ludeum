@@ -170,3 +170,21 @@ import Testing
         #expect(try search("  ").count == 3)
     }
 }
+
+@Suite struct ScopedFilterTests {
+    @Test func aScreensScopeWinsAndAddedFiltersCombineWithIt() {
+        let scope = LibraryFilter(platformId: 19, outcome: .finished)
+        let added = LibraryFilter(platformId: 4, rating: .unrated, childhood: true, genre: "Platform", name: "mario")
+
+        let combined = added.scoped(by: scope)
+
+        #expect(combined.platformId == 19)
+        #expect(combined.outcome == .finished)
+        #expect(combined.rating == .unrated)
+        #expect(combined.childhood == true)
+        #expect(combined.genre == "Platform")
+        #expect(combined.name == "mario")
+        #expect(LibraryFilter(undatedPlaythroughs: true).scoped(by: LibraryFilter()).undatedPlaythroughs)
+        #expect(LibraryFilter().scoped(by: LibraryFilter(series: "Metroid", company: "Nintendo")).series == "Metroid")
+    }
+}

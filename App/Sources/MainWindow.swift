@@ -40,19 +40,21 @@ struct MainWindow: View {
         } content: {
             switch selection {
             case .library:
-                LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter, bar: .filters)
+                LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter)
                     .id(libraryRequest)
+            case .finished, .childhood:
+                if let screen = selection, let scope = screen.shortcutFilter {
+                    LibraryScreen(services: services, selection: $selectedGame, scope: scope, title: screen.title).id(selection)
+                }
             case .platform(let id, let name):
-                LibraryScreen(
-                    services: services, selection: $selectedGame, initialFilter: LibraryFilter(platformId: id), title: name
-                )
-                .id(selection)
+                LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(platformId: id), title: name)
+                    .id(selection)
             case .pinned(let pin):
-                LibraryScreen(services: services, selection: $selectedGame, initialFilter: pin.filter, title: pin.name)
+                LibraryScreen(services: services, selection: $selectedGame, scope: pin.filter, title: pin.name)
                     .id(selection)
             case .list(let id, _):
                 if let list = lists.first(where: { $0.id == id }) {
-                    LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
+                    LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(listId: id), title: list.name).id(id)
                 }
             case .whatToPlayNext:
                 WhatToPlayNextScreen(services: services, selection: $selectedGame)
@@ -92,14 +94,7 @@ struct MainWindow: View {
                     .frame(maxWidth: 520)
             }
         }
-        .onChange(of: selection) {
-            // A shortcut is the Library with its filter as the only pill.
-            if let filter = selection?.shortcutFilter {
-                showInLibrary(filter)
-            } else if selection != .library {
-                libraryFilter = LibraryFilter()
-            }
-        }
+        .onChange(of: selection) { if selection != .library { libraryFilter = LibraryFilter() } }
         .modifier(OngoingImportTriggers(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
         .toolbar {

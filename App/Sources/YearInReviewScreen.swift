@@ -33,12 +33,9 @@ struct YearInReviewScreen: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            FilterSummary(filter: $filter, platforms: platforms, lists: lists)
+            FilterBar(filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms, lists: lists)
         }
         .navigationTitle("Year in review")
-        .toolbar {
-            LibraryFilterMenu(filter: $filter, platforms: platforms, lists: lists)
-        }
         .task(id: Reload(revision: services.changes.revision, filter: filter, year: year)) { load() }
     }
 

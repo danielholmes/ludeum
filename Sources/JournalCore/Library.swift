@@ -46,6 +46,28 @@ public struct LibraryFilter: Sendable, Equatable {
     }
 }
 
+extension LibraryFilter {
+    /// These filters within a screen's fixed scope (a Platform, a List, Finished…): whatever the scope
+    /// sets wins, and the rest combine with it.
+    public func scoped(by scope: LibraryFilter) -> LibraryFilter {
+        var f = self
+        if let v = scope.platformId { f.platformId = v }
+        if let v = scope.rating { f.rating = v }
+        if let v = scope.intent { f.intent = v }
+        if let v = scope.listId { f.listId = v }
+        if let v = scope.outcome { f.outcome = v }
+        if let v = scope.childhood { f.childhood = v }
+        if scope.undatedPlaythroughs { f.undatedPlaythroughs = true }
+        if let v = scope.genre { f.genre = v }
+        if let v = scope.theme { f.theme = v }
+        if let v = scope.franchise { f.franchise = v }
+        if let v = scope.series { f.series = v }
+        if let v = scope.company { f.company = v }
+        if !scope.name.isEmpty { f.name = scope.name }
+        return f
+    }
+}
+
 public enum RatingFilter: Sendable, Hashable {
     case unrated
     case atLeast(Rating)

@@ -1,14 +1,13 @@
 import JournalCore
 import SwiftUI
 
-/// The Library (or one List): every Game, as a table or as covers, filtered and sorted.
+/// The Library, or a scoped view of it (a Platform, a List, a Pinned item, Finished, Childhood): every
+/// Game, as a table or as covers, filtered and sorted.
 struct LibraryScreen: View {
     let services: Services
-    /// Set when showing one List: its Games, with the List filter fixed.
-    var list: GameList?
+    /// What this screen always shows, e.g. one Platform. Shown as a fixed chip, never removed.
+    var scope = LibraryFilter()
     var title: String?
-    /// How the bar above the Games works: the Library adds and removes filters as pills; the rest (Platforms, Lists, Pinned) say what they're showing.
-    var bar = Bar.summary
     @Binding var selection: GameID?
     @State private var filter: LibraryFilter
     /// What's typed in the search field; it reaches `filter.name` after a pause in typing.
@@ -33,15 +32,14 @@ struct LibraryScreen: View {
     /// Typing hasn't reached the filter yet, or the Games are being found: shown as spinners.
     private var busy: Bool { loading || searchText != filter.name }
 
-    /// `initialFilter` is where to start, e.g. Year in review's "no dates" link.
-    /// `title` replaces "Library", e.g. for a Platform opened from the sidebar.
+    /// `initialFilter` is where to start, e.g. Year in review's "no dates" link: removable pills.
+    /// `title` replaces "Library", and names the `scope` chip.
     init(
-        services: Services, list: GameList? = nil, selection: Binding<GameID?>, initialFilter: LibraryFilter = LibraryFilter(),
-        title: String? = nil, bar: Bar = .summary
+        services: Services, selection: Binding<GameID?>, initialFilter: LibraryFilter = LibraryFilter(),
+        scope: LibraryFilter = LibraryFilter(), title: String? = nil
     ) {
         self.services = services
-        self.bar = bar
-        self.list = list
+        self.scope = scope
         self.title = title
         _selection = selection
         _filter = State(initialValue: initialFilter)
@@ -94,26 +92,23 @@ struct LibraryScreen: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            switch bar {
-            case .summary: FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count, busy: busy)
-            case .filters:
-                LibraryBar(
-                    count: rows.count, busy: busy, sortStatus: "Sorted by \(sortText(sort)) \(ascending ? "↑" : "↓")", filter: $filter,
-                    platforms: platforms, lists: lists,
-                    genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted())
+            FilterBar(
+                count: rows.count, busy: busy, scope: scope == LibraryFilter() ? nil : title, filter: $filter,
+                kinds: FilterKind.library.subtracting(FilterKind.fixed(by: scope)), platforms: platforms, lists: lists,
+                genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted()
+            ) {
+                LibrarySortMenu(sort: Binding($sort), ascending: $ascending)
             }
         }
-        .navigationTitle(list?.name ?? title ?? "Library")
+        .navigationTitle(title ?? "Library")
         .toolbar { toolbar }
-        // The search pill cleared (or any other change to the filter's search) shows in the field.
-        .onChange(of: filter.name) { searchText = filter.name }
         .task(id: searchText) {
             // Debounced: the Library reloads 300 ms after the last keystroke, not on every one.
             guard searchText != filter.name else { return }
             try? await Task.sleep(for: .milliseconds(300))
             if !Task.isCancelled { filter.name = searchText }
         }
-        .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, list: list?.id)) {
+        .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, scope: scope)) {
             await load()
         }
     }
@@ -158,7 +153,7 @@ struct LibraryScreen: View {
         let filter: LibraryFilter
         let sort: LibrarySort
         let ascending: Bool
-        let list: Int64?
+        let scope: LibraryFilter
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -183,7 +178,6 @@ struct LibraryScreen: View {
                 }
         }
         ToolbarItemGroup {
-            LibrarySortMenu(sort: Binding($sort), ascending: $ascending)
             Picker("View", selection: $showCovers) {
                 Label("Table", systemImage: "list.bullet").tag(false)
                 Label("Covers", systemImage: "square.grid.2x2").tag(true)
@@ -197,11 +191,10 @@ struct LibraryScreen: View {
         guard let journal = services.journal else { return }
         loading = true
         defer { if !Task.isCancelled { loading = false } }
-        var effective = filter
-        if let list { effective.listId = list.id }
+        let effective = filter.scoped(by: scope)
         do {
             let (effective, sort, ascending) = (effective, sort, ascending)
-            if !filter.usesIGDBFacts, filter.name.trimmed.isEmpty, sort != .year {
+            if !effective.usesIGDBFacts, effective.name.trimmed.isEmpty, sort != .year {
                 let found = try await offMain {
                     try journal.library(effective, sort: sort, ascending: ascending)
                 }
@@ -234,120 +227,9 @@ struct LibraryScreen: View {
     }
 }
 
-extension LibraryScreen {
-    enum Bar { case filters, summary }
-}
-
 /// The Platforms and Lists the filter menu offers.
 func filterChoices(_ journal: JournalStore) throws -> ([IGDBPlatform], [GameList]) {
     (try journal.shownPlatforms(), try journal.lists())
-}
-
-/// The Library's filter menu, shared by the screens that filter like it.
-struct LibraryFilterMenu: View {
-    @Binding var filter: LibraryFilter
-    let platforms: [IGDBPlatform]
-    /// Nil hides the List filter (when showing one List).
-    let lists: [GameList]?
-    /// Top-rated offers only Platform, List and Childhood.
-    var ratedOnly = false
-    /// Nil hides the Genre and Theme filters (screens that don't apply them).
-    var genres: [String]? = nil
-    var themes: [String]? = nil
-
-    var body: some View {
-        Menu(
-            "Filter",
-            systemImage: filter == LibraryFilter() ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill"
-        ) {
-            Picker("Platform", selection: $filter.platformId) {
-                Text("Any").tag(Int64?.none)
-                ForEach(platforms) { Text($0.name).tag(Int64?.some($0.id)) }
-            }
-            if !ratedOnly {
-                Picker("Rating", selection: $filter.rating) {
-                    Text("Any").tag(RatingFilter?.none)
-                    Text("Unrated").tag(RatingFilter?.some(.unrated))
-                    ForEach([9, 8, 7, 6, 5], id: \.self) {
-                        Text("\($0).0 or more").tag(RatingFilter?.some(.atLeast(Rating(tenths: $0 * 10)!)))
-                    }
-                }
-                Picker("Intent", selection: $filter.intent) {
-                    Text("Any").tag(Intent??.none)
-                    Text("None").tag(Intent??.some(nil))
-                    Text("Backlog").tag(Intent??.some(.backlog))
-                    Text("Up next").tag(Intent??.some(.upNext))
-                }
-            }
-            if let lists {
-                Picker("List", selection: $filter.listId) {
-                    Text("Any").tag(Int64?.none)
-                    ForEach(lists, id: \.id) { Text($0.name).tag(Int64?.some($0.id)) }
-                }
-            }
-            if let genres, !genres.isEmpty {
-                Picker("Genre", selection: $filter.genre) {
-                    Text("Any").tag(String?.none)
-                    ForEach(genres, id: \.self) { Text($0).tag(String?.some($0)) }
-                }
-            }
-            if let themes, !themes.isEmpty {
-                Picker("Theme", selection: $filter.theme) {
-                    Text("Any").tag(String?.none)
-                    ForEach(themes, id: \.self) { Text($0).tag(String?.some($0)) }
-                }
-            }
-            if !ratedOnly {
-                Picker("Played", selection: $filter.outcome) {
-                    Text("Any").tag(OutcomeFilter?.none)
-                    Text("Playing").tag(OutcomeFilter?.some(.playing))
-                    Text("Finished").tag(OutcomeFilter?.some(.finished))
-                    Text("Dropped").tag(OutcomeFilter?.some(.dropped))
-                    Text("Not played").tag(OutcomeFilter?.some(.notPlayed))
-                }
-            }
-            Picker("Childhood", selection: $filter.childhood) {
-                Text("Any").tag(Bool?.none)
-                Text("Childhood").tag(Bool?.some(true))
-                Text("Not childhood").tag(Bool?.some(false))
-            }
-            Toggle("Playthroughs with no dates", isOn: $filter.undatedPlaythroughs)
-            Divider()
-            Button("Clear filters") { filter = LibraryFilter() }
-        }
-    }
-}
-
-/// The Library's sort menu. Nil is What to play next's "Default", offered only with `offersDefault`.
-struct LibrarySortMenu: View {
-    @Binding var sort: LibrarySort?
-    @Binding var ascending: Bool
-    /// What it offers: Year only where the screen has IGDB's facts to sort by.
-    var sorts = LibrarySort.allCases
-    var offersDefault = false
-
-    var body: some View {
-        Menu("Sort", systemImage: "arrow.up.arrow.down") {
-            // Choosing a sort also sets its usual order; Order can still flip it.
-            Picker(
-                "Sort by",
-                selection: Binding(
-                    get: { sort },
-                    set: { new in
-                        sort = new
-                        if let new { ascending = new.defaultAscending }
-                    })
-            ) {
-                if offersDefault { Text("Default").tag(LibrarySort?.none) }
-                ForEach(sorts, id: \.self) { Text(sortText($0)).tag(LibrarySort?.some($0)) }
-            }
-            Picker("Order", selection: $ascending) {
-                Text("Ascending").tag(true)
-                Text("Descending").tag(false)
-            }
-            .disabled(sort == nil)
-        }
-    }
 }
 
 func sortText(_ sort: LibrarySort) -> String {
@@ -511,182 +393,6 @@ private enum CoverStatus {
         case .upNext: "Up next"
         case .backlog: "Backlog"
         }
-    }
-}
-
-/// What the filters are showing, in words, above a filtered screen: one chip per active filter,
-/// each clearable, plus Clear all. Nothing when no filter is set.
-struct FilterSummary: View {
-    @Binding var filter: LibraryFilter
-    let platforms: [IGDBPlatform]
-    let lists: [GameList]
-    /// How many Games are shown, when the screen has a simple count.
-    var count: Int?
-    var busy = false
-
-    var body: some View {
-        let chips = self.chips
-        if !chips.isEmpty {
-            HStack(spacing: 6) {
-                Text(count.map { "Showing \($0) Game\($0 == 1 ? "" : "s"):" } ?? "Showing:").foregroundStyle(.secondary)
-                if busy { ProgressView().controlSize(.small) }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(chips, id: \.text) { chip in
-                            HStack(spacing: 4) {
-                                Text(chip.text)
-                                Button("Remove filter", systemImage: "xmark") { chip.clear(&filter) }
-                                    .labelStyle(.iconOnly).buttonStyle(.hover).imageScale(.small)
-                            }
-                            .padding(.leading, 8).padding(.vertical, 2)
-                            .background(.quaternary, in: .capsule)
-                        }
-                    }
-                }
-                Button("Clear all") { filter = LibraryFilter() }.buttonStyle(.hover)
-            }
-            .font(.callout)
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(.bar)
-        }
-    }
-
-    private var chips: [FilterChip] { filterChips(filter, platforms: platforms, lists: lists) }
-}
-
-/// One filter as a pill: what it says, and how to remove it.
-struct FilterChip {
-    let text: String
-    let clear: (inout LibraryFilter) -> Void
-}
-
-func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [GameList]) -> [FilterChip] {
-    typealias Chip = FilterChip
-    var c: [Chip] = []
-    let search = filter.name.trimmingCharacters(in: .whitespaces)
-    if !search.isEmpty { c.append(Chip(text: "“\(search)”") { $0.name = "" }) }
-    if let id = filter.platformId {
-        c.append(Chip(text: platforms.first { $0.id == id }?.name ?? "One Platform") { $0.platformId = nil })
-    }
-    switch filter.rating {
-    case .unrated: c.append(Chip(text: "Unrated") { $0.rating = nil })
-    case .atLeast(let r): c.append(Chip(text: "Rated \(ratingText(r)) or more") { $0.rating = nil })
-    case nil: break
-    }
-    switch filter.intent {
-    case .some(nil): c.append(Chip(text: "No Intent") { $0.intent = nil })
-    case .some(.some(let i)): c.append(Chip(text: intentText(i)) { $0.intent = nil })
-    case nil: break
-    }
-    if let id = filter.listId {
-        c.append(Chip(text: "In \(lists.first { $0.id == id }?.name ?? "a List")") { $0.listId = nil })
-    }
-    if let o = filter.outcome {
-        let text =
-            switch o {
-            case .playing: "Playing"
-            case .finished: "Finished"
-            case .dropped: "Dropped"
-            case .notPlayed: "Not played"
-            }
-        c.append(Chip(text: text) { $0.outcome = nil })
-    }
-    if let ch = filter.childhood {
-        c.append(Chip(text: ch ? "Childhood" : "Not childhood") { $0.childhood = nil })
-    }
-    if filter.undatedPlaythroughs {
-        c.append(Chip(text: "Playthroughs with no dates") { $0.undatedPlaythroughs = false })
-    }
-    if let genre = filter.genre { c.append(Chip(text: genre) { $0.genre = nil }) }
-    if let theme = filter.theme { c.append(Chip(text: theme) { $0.theme = nil }) }
-    if let franchise = filter.franchise { c.append(Chip(text: "Franchise: \(franchise)") { $0.franchise = nil }) }
-    if let series = filter.series { c.append(Chip(text: "Series: \(series)") { $0.series = nil }) }
-    if let company = filter.company { c.append(Chip(text: "Company: \(company)") { $0.company = nil }) }
-    return c
-}
-
-/// The bar above the Library's Games: how many there are, then (with a `filter`) each filter as a
-/// removable pill and an Add filter menu on the right. Filters combine.
-struct LibraryBar: View {
-    let count: Int
-    var busy = false
-    /// The current sort, on the right.
-    var sortStatus: String? = nil
-    let filter: Binding<LibraryFilter>?
-    let platforms: [IGDBPlatform]
-    let lists: [GameList]
-    let genres: [String]
-    let themes: [String]
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text("\(count) Game\(count == 1 ? "" : "s")").foregroundStyle(.secondary)
-            if busy { ProgressView().controlSize(.small) }
-            if let filter {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(filterChips(filter.wrappedValue, platforms: platforms, lists: lists), id: \.text) { chip in
-                            HStack(spacing: 4) {
-                                Text(chip.text)
-                                Button("Remove filter", systemImage: "xmark") { chip.clear(&filter.wrappedValue) }
-                                    .labelStyle(.iconOnly).buttonStyle(.hover).imageScale(.small)
-                            }
-                            .padding(.leading, 8).padding(.vertical, 2)
-                            .background(.quaternary, in: .capsule)
-                        }
-                        // Snug after the pills.
-                        AddFilterMenu(filter: filter, platforms: platforms, lists: lists, genres: genres, themes: themes)
-                    }
-                }
-            } else {
-                Spacer()
-            }
-            if let sortStatus { Text(sortStatus).foregroundStyle(.secondary).fixedSize() }
-        }
-        .font(.callout)
-        .padding(.horizontal, 12).padding(.vertical, 6)
-        .background(.bar)
-    }
-}
-
-/// Adds one filter (replacing any of the same kind), as a pill in the Library bar.
-private struct AddFilterMenu: View {
-    @Binding var filter: LibraryFilter
-    let platforms: [IGDBPlatform]
-    let lists: [GameList]
-    let genres: [String]
-    let themes: [String]
-
-    var body: some View {
-        Menu("Add filter", systemImage: "line.3.horizontal.decrease.circle") {
-            Menu("Platform") { ForEach(platforms) { p in Button(p.name) { filter.platformId = p.id } } }
-            Menu("Rating") {
-                Button("Unrated") { filter.rating = .unrated }
-                ForEach([9, 8, 7, 6, 5], id: \.self) { n in
-                    Button("\(n).0 or more") { filter.rating = .atLeast(Rating(tenths: n * 10)!) }
-                }
-            }
-            Menu("Intent") {
-                Button("None") { filter.intent = .some(nil) }
-                Button("Backlog") { filter.intent = .backlog }
-                Button("Up next") { filter.intent = .upNext }
-            }
-            if !lists.isEmpty { Menu("List") { ForEach(lists, id: \.id) { l in Button(l.name) { filter.listId = l.id } } } }
-            if !genres.isEmpty { Menu("Genre") { ForEach(genres, id: \.self) { g in Button(g) { filter.genre = g } } } }
-            if !themes.isEmpty { Menu("Theme") { ForEach(themes, id: \.self) { t in Button(t) { filter.theme = t } } } }
-            Menu("Played") {
-                Button("Playing") { filter.outcome = .playing }
-                Button("Finished") { filter.outcome = .finished }
-                Button("Dropped") { filter.outcome = .dropped }
-                Button("Not played") { filter.outcome = .notPlayed }
-            }
-            Menu("Childhood") {
-                Button("Childhood") { filter.childhood = true }
-                Button("Not childhood") { filter.childhood = false }
-            }
-            Button("Playthroughs with no dates") { filter.undatedPlaythroughs = true }
-        }
-        .menuStyle(.borderlessButton).fixedSize()
     }
 }
 

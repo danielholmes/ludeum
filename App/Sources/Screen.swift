@@ -3,7 +3,7 @@ import JournalCore
 /// A screen the main window's sidebar can select, shown in the middle column.
 enum Screen: Hashable {
     case library
-    /// Library shortcuts: selecting one opens the Library with just its filter (Finished or Childhood).
+    /// Library shortcuts: the Library scoped to Finished or Childhood, like a Platform.
     case finished
     case childhood
     case whatToPlayNext

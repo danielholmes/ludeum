@@ -51,12 +51,12 @@ struct TopRatedScreen: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count)
+            FilterBar(
+                count: rows.count, filter: $filter, kinds: [.platform, .list, .childhood], platforms: platforms, lists: lists)
         }
         .navigationTitle("Top-rated")
         .toolbar {
             ToolbarItemGroup {
-                LibraryFilterMenu(filter: $filter, platforms: platforms, lists: lists, ratedOnly: true)
                 Picker("View", selection: $showCovers) {
                     Label("Table", systemImage: "list.bullet").tag(false)
                     Label("Covers", systemImage: "square.grid.2x2").tag(true)
