@@ -21,6 +21,9 @@ final class FakeInternet: HTTPTransport, Sendable {
         var timeToBeat: [Int: Int] = [:]
         var searches: [String: [Int]] = [:]  // "<platform or any>:<name>" → ids
         var platforms: [[String: Any]] = []
+        var genres: [[String: Any]] = []
+        var themes: [[String: Any]] = []
+        var companies: [[String: Any]] = []  // each with "developed": Bool
         var maxGamesPerResponse = Int.max  // larger game batches get "413 Payload Too Large"
         // Twitch
         var tokenLifetime: Int = 5_000_000
@@ -70,6 +73,13 @@ final class FakeInternet: HTTPTransport, Sendable {
 
     func addPlatform(_ id: Int, _ name: String, abbreviation: String? = nil) {
         state.withLock { $0.platforms.append(["id": id, "name": name, "abbreviation": abbreviation as Any? ?? NSNull()]) }
+    }
+
+    func addGenre(_ id: Int, _ name: String) { state.withLock { $0.genres.append(["id": id, "name": name]) } }
+    func addTheme(_ id: Int, _ name: String) { state.withLock { $0.themes.append(["id": id, "name": name]) } }
+    /// A company; one that never developed or published anything isn't offered as a filter.
+    func addCompany(_ id: Int, _ name: String, developed: Bool = true) {
+        state.withLock { $0.companies.append(["id": id, "name": name, "developed": developed]) }
     }
 
     func addHash(md5: String, game: Int, platform: Int) {
@@ -179,6 +189,29 @@ final class FakeInternet: HTTPTransport, Sendable {
                 return platformOK && ([s.games[id]!] + alternatives).contains { $0.lowercased().contains(text) }
             }
             return (200, [:], try! JSONSerialization.data(withJSONObject: found.map { ["id": $0] }))
+        case "/v4/games" where body.contains("sort total_rating_count"):
+            // A filter-only search: games with any of the genres, any of the themes, and the company.
+            let found = s.games.keys.sorted().filter { id in
+                let extra = s.gameFields[id].flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                func has(_ field: String, _ marker: String, id path: ([String: Any]) -> Int?) -> Bool {
+                    let wanted = Self.ids(after: marker, in: body)
+                    let actual = (extra[field] as? [[String: Any]] ?? []).compactMap(path)
+                    return wanted.isEmpty || actual.contains(where: wanted.contains)
+                }
+                return has("platforms", "platforms = (") { $0["id"] as? Int }
+                    && has("genres", "genres = (") { $0["id"] as? Int }
+                    && has("themes", "themes = (") { $0["id"] as? Int }
+                    && has("involved_companies", "involved_companies.company = (") { ($0["company"] as? [String: Any])?["id"] as? Int }
+            }
+            return (200, [:], try! JSONSerialization.data(withJSONObject: found.map { ["id": $0] }))
+        case "/v4/genres":
+            return (200, [:], try! JSONSerialization.data(withJSONObject: s.genres))
+        case "/v4/themes":
+            return (200, [:], try! JSONSerialization.data(withJSONObject: s.themes))
+        case "/v4/companies":
+            let text = body.components(separatedBy: "name ~ *\"")[1].components(separatedBy: "\"")[0].lowercased()
+            let found = s.companies.filter { ($0["developed"] as! Bool) && ($0["name"] as! String).lowercased().contains(text) }
+            return (200, [:], try! JSONSerialization.data(withJSONObject: found.map { ["id": $0["id"]!, "name": $0["name"]!] }))
         case "/v4/platforms":
             let offset = Int(body.components(separatedBy: "offset ").dropFirst().first?.prefix { $0.isNumber } ?? "0") ?? 0
             return (200, [:], try! JSONSerialization.data(withJSONObject: Array(s.platforms.dropFirst(offset).prefix(500))))

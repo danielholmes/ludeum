@@ -10,19 +10,66 @@ public struct IGDBCredentials: Sendable {
     }
 }
 
-/// A name search for games on one IGDB platform, or on every platform.
+/// A search for games: by name, filters, or both, on one IGDB platform or on every platform.
+/// Several genres or themes match a game with any of them; a company matches any involvement
+/// (developer, publisher, porting or supporting).
 public struct IGDBSearch: Sendable, Hashable {
     public let name: String
     public let platformID: Int?
+    public let genreIDs: [Int]
+    public let themeIDs: [Int]
+    public let companyID: Int?
 
-    public init(name: String, platformID: Int? = nil) {
+    public init(name: String, platformID: Int? = nil, genreIDs: [Int] = [], themeIDs: [Int] = [], companyID: Int? = nil) {
         self.name = name
         self.platformID = platformID
+        self.genreIDs = Array(Set(genreIDs)).sorted()
+        self.themeIDs = Array(Set(themeIDs)).sorted()
+        self.companyID = companyID
     }
 
+    /// `igdb:search:<platform>:<name>`, with any filters after the platform: `any|g12,31|t19|c70`.
     var cacheKey: String {
         let normalised = name.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return "igdb:search:\(platformID.map(String.init) ?? "any"):\(normalised)"
+        var scope = platformID.map(String.init) ?? "any"
+        if !genreIDs.isEmpty { scope += "|g" + genreIDs.map(String.init).joined(separator: ",") }
+        if !themeIDs.isEmpty { scope += "|t" + themeIDs.map(String.init).joined(separator: ",") }
+        if let companyID { scope += "|c\(companyID)" }
+        return "igdb:search:\(scope):\(normalised)"
+    }
+
+    /// The search a `cacheKey` was made from.
+    init?(cacheKey: String) {
+        let parts = cacheKey.split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false)
+        guard parts.count == 4, parts[0] == "igdb", parts[1] == "search" else { return nil }
+        let scope = parts[2].split(separator: "|")
+        guard let platform = scope.first else { return nil }
+        func ids(_ tag: Character) -> [Int] {
+            scope.dropFirst().first { $0.first == tag }.map { $0.dropFirst().split(separator: ",").compactMap { Int($0) } } ?? []
+        }
+        self.init(
+            name: String(parts[3]), platformID: Int(platform), genreIDs: ids("g"), themeIDs: ids("t"), companyID: ids("c").first)
+    }
+
+    /// The `where` conditions besides the name: add-ons left out, then the platform and filters.
+    var conditions: String {
+        var c = ["game_type != (1,2,7,13,14)"]
+        if let platformID { c.append("platforms = (\(platformID))") }
+        if !genreIDs.isEmpty { c.append("genres = (\(genreIDs.map(String.init).joined(separator: ",")))") }
+        if !themeIDs.isEmpty { c.append("themes = (\(themeIDs.map(String.init).joined(separator: ",")))") }
+        if let companyID { c.append("involved_companies.company = (\(companyID))") }
+        return c.joined(separator: " & ")
+    }
+}
+
+/// An IGDB genre, theme or company: just what's needed to choose one as a search filter.
+public struct IGDBNamed: Sendable, Hashable, Codable, Identifiable {
+    public let id: Int
+    public let name: String
+
+    public init(id: Int, name: String) {
+        self.id = id
+        self.name = name
     }
 }
 
@@ -83,17 +130,21 @@ public final class IGDBClient: Sendable {
             searches, key: \.cacheKey, maxAge: maxAge, batchSize: 1, servesStale: servesStale
         ) { batch in
             let s = batch[0]
-            let body = """
-                search "\(s.name.replacingOccurrences(of: "\"", with: "\\\""))"; \
-                fields id; where game_type != (1,2,7,13,14)\(s.platformID.map { " & platforms = (\($0))" } ?? ""); limit 20;
-                """
+            // With no name there's no relevance order, so the most-rated games come first.
+            let body =
+                s.name.isEmpty
+                ? "fields id; where \(s.conditions); sort total_rating_count desc; limit 100;"
+                : """
+                    search "\(s.name.replacingOccurrences(of: "\"", with: "\\\""))"; \
+                    fields id; where \(s.conditions); limit 20;
+                    """
             let ids = (try JSONValue.decode(try await post("games", body)).array ?? []).compactMap { $0["id"]?.int }
             return [s: try JSONEncoder().encode(ids)]
         }
         var results = try payloads.mapValues { try JSONDecoder().decode([Int].self, from: $0) }
         // IGDB's search index misses some games entirely (Einhänder isn't found even as "Einh"), so a
         // search with no results falls back to matching the name, an alternative name or the slug.
-        let empty = searches.filter { results[$0]?.isEmpty ?? false }
+        let empty = searches.filter { !$0.name.isEmpty && results[$0]?.isEmpty ?? false }
         if !empty.isEmpty {
             let fallbackKey: (IGDBSearch) -> String = { "igdb:search-fallback:" + $0.cacheKey.dropFirst("igdb:search:".count) }
             let fallback = try await cache.resolve(
@@ -106,7 +157,7 @@ public final class IGDBClient: Sendable {
                     .split { !($0.isLetter || $0.isNumber) }.joined(separator: "-")
                 let body = """
                     fields id; where (name ~ *"\(text)"* | alternative_names.name ~ *"\(text)"* | slug = "\(slug)") \
-                    & game_type != (1,2,7,13,14)\(s.platformID.map { " & platforms = (\($0))" } ?? ""); limit 20;
+                    & \(s.conditions); limit 20;
                     """
                 let ids = (try JSONValue.decode(try await post("games", body)).array ?? []).compactMap { $0["id"]?.int }
                 return [s: try JSONEncoder().encode(ids)]
@@ -138,6 +189,50 @@ public final class IGDBClient: Sendable {
             return ["all": try JSONEncoder().encode(all)]
         }
         return try JSONDecoder().decode([IGDBPlatform].self, from: payloads["all"] ?? Data("[]".utf8))
+    }
+
+    /// Every IGDB genre, by name. Cached as one entry.
+    public func genres() async throws -> [IGDBNamed] { try await named("genres", servesStale: true) }
+
+    /// Every IGDB theme, by name. Cached as one entry.
+    public func themes() async throws -> [IGDBNamed] { try await named("themes", servesStale: true) }
+
+    func named(_ endpoint: String, servesStale: Bool) async throws -> [IGDBNamed] {
+        let payloads = try await cache.resolve(
+            [endpoint], key: { "igdb:\($0):all" }, maxAge: maxAge, batchSize: 1, servesStale: servesStale
+        ) { _ in
+            let body = "fields id, name; sort name asc; limit 500;"
+            return [endpoint: try JSONEncoder().encode(Self.named(try await post(endpoint, body)))]
+        }
+        return try JSONDecoder().decode([IGDBNamed].self, from: payloads[endpoint] ?? Data("[]".utf8))
+    }
+
+    /// Companies whose name contains `text`, that developed or published something, by name.
+    /// IGDB's `search` doesn't work on companies, so this matches the name instead.
+    public func companies(matching text: String) async throws -> [IGDBNamed] {
+        try await companies(matching: text, servesStale: true)
+    }
+
+    func companies(matching text: String, servesStale: Bool) async throws -> [IGDBNamed] {
+        let text = text.lowercased().replacingOccurrences(of: "\"", with: "").split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        guard !text.isEmpty else { return [] }
+        let payloads = try await cache.resolve(
+            [text], key: { "igdb:companies:\($0)" }, maxAge: maxAge, batchSize: 1, servesStale: servesStale
+        ) { _ in
+            let body = """
+                fields id, name; where name ~ *"\(text)"* & (developed != null | published != null); sort name asc; limit 50;
+                """
+            return [text: try JSONEncoder().encode(Self.named(try await post("companies", body)))]
+        }
+        return try JSONDecoder().decode([IGDBNamed].self, from: payloads[text] ?? Data("[]".utf8))
+    }
+
+    private static func named(_ data: Data) throws -> [IGDBNamed] {
+        (try JSONValue.decode(data).array ?? []).compactMap { r in
+            guard let id = r["id"]?.int, let name = r["name"]?.string else { return nil }
+            return IGDBNamed(id: id, name: name)
+        }
     }
 
     /// A local file holding the cover image, downloaded once.

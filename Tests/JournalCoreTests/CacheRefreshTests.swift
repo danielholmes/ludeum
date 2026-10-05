@@ -53,6 +53,28 @@ import Testing
         #expect(h.internet.sent.isEmpty)
     }
 
+    @Test func refreshesFilteredSearchesGenresThemesAndCompanies() async throws {
+        h.internet.addGame(1, "Rise of the Triad", fields: ["involved_companies": [["company": ["id": 70]]], "themes": [["id": 19]]])
+        h.internet.addGenre(8, "Platform")
+        h.internet.addTheme(19, "Horror")
+        h.internet.addCompany(70, "Apogee")
+        let filtered = IGDBSearch(name: "", genreIDs: [], themeIDs: [19], companyID: 70)
+        _ = try await h.igdb.search([filtered])
+        _ = try await h.igdb.genres()
+        _ = try await h.igdb.themes()
+        _ = try await h.igdb.companies(matching: "apogee")
+        h.clock.advance(days: 61)
+        h.internet.resetSent()
+
+        let result = await refresh().run()
+
+        #expect(result.errors.isEmpty)
+        #expect(result.refreshed == 4)
+        h.internet.resetSent()
+        #expect(try await h.igdb.search([filtered])[filtered] == [1])
+        #expect(h.internet.sent.isEmpty)
+    }
+
     @Test func aFailedRefreshKeepsTheOldEntryAndCarriesOn() async throws {
         h.internet.addGame(1, "Super Metroid")
         h.internet.addHash(md5: "aa", game: 1, platform: 19)

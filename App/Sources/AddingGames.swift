@@ -55,8 +55,8 @@ import SwiftUI
     var covers: Covers? { journal.map { Covers(journal: $0, cache: cache, igdb: igdb, libretro: libretro) } }
 }
 
-/// The one IGDB search component: a search box, an optional Platform filter, and results with
-/// their platforms as chips. What a chip does is up to the caller (add a Game, or link one).
+/// The one IGDB search component: a search box, an optional Platform filter, genre, theme and company
+/// filters (shown as removable pills), and results with their platforms as chips. What a chip does is up to the caller (add a Game, or link one).
 struct IGDBSearchView: View {
     let search: GameSearch
     let platforms: [IGDBPlatform]
@@ -83,6 +83,10 @@ struct IGDBSearchView: View {
     @State private var current: [Int64: [PlatformChip]] = [:]
     @State private var sort = GameSearchSort.name
     @State private var ascending = true
+    @State private var filters = GameSearchFilters()
+    @State private var genres: [IGDBNamed] = []
+    @State private var themes: [IGDBNamed] = []
+    @State private var choosingCompany = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -99,6 +103,7 @@ struct IGDBSearchView: View {
                     }
                     .frame(maxWidth: 200)
                 }
+                SearchFilterMenu(filters: $filters, genres: genres, themes: themes, chooseCompany: { choosingCompany = true })
                 if browse != nil {
                     Menu("Sort", systemImage: "arrow.up.arrow.down") {
                         // Choosing a sort also sets its usual order; Order can still flip it.
@@ -123,6 +128,7 @@ struct IGDBSearchView: View {
                 }
                 if searching { ProgressView().controlSize(.small) }
             }
+            if !filters.isEmpty { SearchFilterPills(filters: $filters) }
             if let error { Text(error).foregroundStyle(.red) }
             List(
                 browse == nil ? results : sort.sorted(results, ascending: ascending), selection: browse == nil ? .constant(nil) : $selected
@@ -162,7 +168,19 @@ struct IGDBSearchView: View {
                 if case .platform(let platform) = choice { choose(result, platform) }
             }
         }
-        .onAppear { if !query.isEmpty { run() } }
+        .sheet(isPresented: $choosingCompany) {
+            CompanyPickerSheet(search: search) { company in
+                choosingCompany = false
+                if let company { filters.company = company }
+            }
+        }
+        .onAppear { if !query.isEmpty || !filters.isEmpty { run() } }
+        // Each filter added or removed searches again; with no text and no filters, the results clear.
+        .onChange(of: filters) { run() }
+        .task {
+            genres = (try? await search.genres()) ?? []
+            themes = (try? await search.themes()) ?? []
+        }
         .onChange(of: selected) { browse?(results.first { $0.id == selected }) }
         .task(id: CurrentChipsKey(results: results.map(\.id), revision: revision)) {
             guard browse != nil else { return }
@@ -173,12 +191,13 @@ struct IGDBSearchView: View {
     private func run() {
         let query = query
         let platform = platformFilter?.id
+        let filters = filters
         generation += 1
         let mine = generation
         searching = true
         Task {
             do {
-                let found = try await search.search(query, platform: platform)
+                let found = try await search.search(query, platform: platform, filters: filters)
                 guard mine == generation else { return }
                 results = found
                 error = nil
@@ -186,6 +205,121 @@ struct IGDBSearchView: View {
                 guard mine == generation else { return }
                 self.error = "Search failed: \(error.localizedDescription)"
             }
+            searching = false
+        }
+    }
+}
+
+/// Adds a genre or theme (several of each match a game with any of them), or chooses the company.
+private struct SearchFilterMenu: View {
+    @Binding var filters: GameSearchFilters
+    let genres: [IGDBNamed]
+    let themes: [IGDBNamed]
+    let chooseCompany: () -> Void
+
+    var body: some View {
+        Menu("Filter", systemImage: "line.3.horizontal.decrease") {
+            Menu("Genre") { toggles(genres, \.genres) }.disabled(genres.isEmpty)
+            Menu("Theme") { toggles(themes, \.themes) }.disabled(themes.isEmpty)
+            Button(filters.company == nil ? "Company…" : "Change company…", action: chooseCompany)
+        }
+        .fixedSize()
+    }
+
+    private func toggles(_ all: [IGDBNamed], _ chosen: WritableKeyPath<GameSearchFilters, [IGDBNamed]>) -> some View {
+        ForEach(all) { item in
+            Toggle(
+                item.name,
+                isOn: Binding(
+                    get: { filters[keyPath: chosen].contains(item) },
+                    set: { on in
+                        filters[keyPath: chosen].removeAll { $0 == item }
+                        if on { filters[keyPath: chosen].append(item) }
+                    }))
+        }
+    }
+}
+
+/// The search's filters as pills, each with its own remove button.
+private struct SearchFilterPills: View {
+    @Binding var filters: GameSearchFilters
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                if let company = filters.company { pill("By \(company.name)") { filters.company = nil } }
+                ForEach(filters.genres) { g in pill(g.name) { filters.genres.removeAll { $0 == g } } }
+                ForEach(filters.themes) { t in pill(t.name) { filters.themes.removeAll { $0 == t } } }
+                if [filters.company != nil, !filters.genres.isEmpty, !filters.themes.isEmpty].filter({ $0 }).count > 1 {
+                    Button("Clear all") { filters = GameSearchFilters() }.buttonStyle(.hover).controlSize(.small)
+                }
+            }
+        }
+    }
+
+    private func pill(_ text: String, remove: @escaping () -> Void) -> some View {
+        Button(action: remove) {
+            Label(text, systemImage: "xmark").labelStyle(TrailingIconLabelStyle())
+        }
+        .buttonStyle(.bordered).controlSize(.small)
+        .help("Remove filter")
+    }
+}
+
+private struct TrailingIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.title
+            configuration.icon.imageScale(.small).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Finds a company by name to filter the search by; nil when cancelled.
+private struct CompanyPickerSheet: View {
+    let search: GameSearch
+    let done: (IGDBNamed?) -> Void
+    @State private var text = ""
+    @State private var companies: [IGDBNamed] = []
+    @State private var searching = false
+    @State private var error: String?
+    @State private var searched = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Filter by company").font(.headline)
+            HStack {
+                TextField("Company", text: $text, prompt: Text("e.g. Apogee, then press Return")).textFieldStyle(.roundedBorder)
+                    .onSubmit(run)
+                if searching { ProgressView().controlSize(.small) }
+            }
+            if let error { Text(error).foregroundStyle(.red) }
+            List(companies) { company in
+                Button(company.name) { done(company) }.buttonStyle(.hover)
+            }
+            .overlay {
+                if searched && companies.isEmpty && !searching { Text("No companies found").foregroundStyle(.secondary) }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { done(nil) }.keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding()
+        .frame(width: 380, height: 420)
+    }
+
+    private func run() {
+        let text = text
+        searching = true
+        Task {
+            do {
+                companies = try await search.companies(matching: text)
+                error = nil
+            } catch {
+                self.error = "Search failed: \(error.localizedDescription)"
+            }
+            searched = true
             searching = false
         }
     }

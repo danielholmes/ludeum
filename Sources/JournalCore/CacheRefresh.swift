@@ -40,9 +40,15 @@ public struct CacheRefresh: Sendable {
             case ("igdb", "game") where parts.count == 3:
                 if let id = Int(parts[2]) { gameIDs.append(id) }
             case ("igdb", "search") where parts.count == 4:
-                guard let igdb else { continue }
-                let search = IGDBSearch(name: parts[3], platformID: Int(parts[2]))
+                guard let igdb, let search = IGDBSearch(cacheKey: key) else { continue }
                 steps.append((1, key, { _ = try await igdb.search([search], servesStale: false) }))
+            case ("igdb", "genres"), ("igdb", "themes"):
+                guard let igdb else { continue }
+                let endpoint = parts[1]
+                steps.append((1, key, { _ = try await igdb.named(endpoint, servesStale: false) }))
+            case ("igdb", "companies") where parts.count == 3:
+                guard let igdb else { continue }
+                steps.append((1, key, { _ = try await igdb.companies(matching: parts[2], servesStale: false) }))
             case ("igdb", "platforms"):
                 guard let igdb else { continue }
                 steps.append((1, key, { _ = try await igdb.platforms(servesStale: false) }))

@@ -41,6 +41,22 @@ public struct GameSearchResult: Sendable, Hashable, Identifiable {
     public var id: Int64 { igdbGameId }
 }
 
+/// What the IGDB search is narrowed to besides its text: any of the genres, any of the themes,
+/// and a company involved in any way. Each can be cleared on its own.
+public struct GameSearchFilters: Sendable, Hashable {
+    public var genres: [IGDBNamed] = []
+    public var themes: [IGDBNamed] = []
+    public var company: IGDBNamed? = nil
+
+    public init(genres: [IGDBNamed] = [], themes: [IGDBNamed] = [], company: IGDBNamed? = nil) {
+        self.genres = genres
+        self.themes = themes
+        self.company = company
+    }
+
+    public var isEmpty: Bool { genres.isEmpty && themes.isEmpty && company == nil }
+}
+
 /// How IGDB search results are ordered. Undated results go last either way.
 public enum GameSearchSort: String, CaseIterable, Sendable {
     case name
@@ -81,16 +97,28 @@ public struct GameSearch: Sendable {
         self.journal = journal
     }
 
-    /// IGDB games matching `query`, optionally on one platform, best match first. DLC, Expansions,
-    /// Seasons, Packs and Updates are left out; Mods are shown and labelled.
-    public func search(_ query: String, platform: Int64? = nil) async throws -> [GameSearchResult] {
+    /// IGDB games matching `query` and `filters`, optionally on one platform, best match first (most
+    /// rated first with no query). DLC, Expansions, Seasons, Packs and Updates are left out; Mods are
+    /// shown and labelled.
+    public func search(_ query: String, platform: Int64? = nil, filters: GameSearchFilters = .init()) async throws
+        -> [GameSearchResult]
+    {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return [] }
-        let search = IGDBSearch(name: query, platformID: platform.map(Int.init))
+        guard !query.isEmpty || !filters.isEmpty else { return [] }
+        let search = IGDBSearch(
+            name: query, platformID: platform.map(Int.init), genreIDs: filters.genres.map(\.id),
+            themeIDs: filters.themes.map(\.id), companyID: filters.company?.id)
         let ids = try await igdb.search([search])[search] ?? []
         let games = try await igdb.games(ids: ids)
         return try ids.compactMap { games[$0] }.filter { !isAddOn($0) }.map(result)
     }
+
+    /// Every IGDB genre and theme, for filtering the search.
+    public func genres() async throws -> [IGDBNamed] { try await igdb.genres() }
+    public func themes() async throws -> [IGDBNamed] { try await igdb.themes() }
+
+    /// Companies to filter the search by, whose name contains `text`.
+    public func companies(matching text: String) async throws -> [IGDBNamed] { try await igdb.companies(matching: text) }
 
     /// Adds the IGDB game as a Game on `platform`, taking IGDB's name and link. If that IGDB game
     /// and platform is already a Game, that Game is returned instead.

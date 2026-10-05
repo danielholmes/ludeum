@@ -60,6 +60,55 @@ import Testing
         #expect(results[1].gameType == "Mod")
     }
 
+    @Test func searchesByCompanyGenreAndThemeWithNoName() async throws {
+        let apogee = ["company": ["id": 70]]
+        h.internet.addGame(1, "Rise of the Triad", fields: ["involved_companies": [apogee], "themes": [["id": 19]]])
+        h.internet.addGame(2, "Duke Nukem", fields: ["involved_companies": [apogee], "themes": [["id": 1]]])
+        h.internet.addGame(3, "Doom", fields: ["themes": [["id": 19]]])
+        let horror = IGDBNamed(id: 19, name: "Horror")
+
+        let byApogee = try await search.search("", filters: GameSearchFilters(company: IGDBNamed(id: 70, name: "Apogee")))
+        let horrorByApogee = try await search.search(
+            "", filters: GameSearchFilters(themes: [horror], company: IGDBNamed(id: 70, name: "Apogee")))
+
+        #expect(byApogee.map(\.igdbGameId) == [1, 2])
+        #expect(horrorByApogee.map(\.igdbGameId) == [1])
+    }
+
+    @Test func severalGenresMatchAGameWithAnyOfThem() async throws {
+        h.internet.addGame(1, "Super Metroid", fields: ["genres": [["id": 8]]])
+        h.internet.addGame(2, "Final Fantasy", fields: ["genres": [["id": 12]]])
+        h.internet.addGame(3, "Tetris", fields: ["genres": [["id": 9]]])
+
+        let results = try await search.search(
+            "", filters: GameSearchFilters(genres: [IGDBNamed(id: 8, name: "Platform"), IGDBNamed(id: 12, name: "RPG")]))
+
+        #expect(results.map(\.igdbGameId) == [1, 2])
+    }
+
+    @Test func aSearchWithNoNameAndNoFiltersFindsNothing() async throws {
+        h.internet.addGame(1, "Super Metroid")
+
+        #expect(try await search.search("  ").isEmpty)
+        #expect(h.internet.sent.isEmpty)
+    }
+
+    @Test func offersCompaniesThatMadeSomethingByName() async throws {
+        h.internet.addCompany(70, "Apogee Software")
+        h.internet.addCompany(71, "Apogee Entertainment")
+        h.internet.addCompany(72, "Apogee Holdings", developed: false)
+
+        #expect(try await search.companies(matching: "  APOGEE ").map(\.name) == ["Apogee Software", "Apogee Entertainment"])
+    }
+
+    @Test func listsGenresAndThemes() async throws {
+        h.internet.addGenre(8, "Platform")
+        h.internet.addTheme(19, "Horror")
+
+        #expect(try await search.genres() == [IGDBNamed(id: 8, name: "Platform")])
+        #expect(try await search.themes() == [IGDBNamed(id: 19, name: "Horror")])
+    }
+
     @Test func thePlatformFilterNarrowsTheSearch() async throws {
         h.internet.addGame(1103, "Super Metroid", fields: ["platforms": [snes]])
         h.internet.addSearch("super metroid", platform: 19, results: [1103])
