@@ -7,19 +7,74 @@ public struct Emulator: Sendable, Equatable {
     public let bundleIdentifier: String
 
     public static let mesenCE = Emulator(name: "MesenCE", bundleIdentifier: "ca.mesen")
+    public static let duckStation = Emulator(name: "DuckStation", bundleIdentifier: "com.github.stenzek.duckstation")
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
         switch platformId {
         case 18, 99, 19, 58, 33, 22, 24: .mesenCE  // NES, Family Computer, SNES, Super Famicom, Game Boy, Game Boy Color, GBA
+        case 7: .duckStation  // PlayStation
         default: nil
         }
     }
 
     /// The command line for a Play. It sets every Emulator setting, with the default where the Game
-    /// has none, because a running MesenCE keeps the last Play's settings (ADR 0008).
-    public func arguments(rom: URL, settings: EmulatorSettings) -> [String] {
-        ["--doNotSaveSettings", "--emulation.runAheadFrames=\(settings.runAheadFrames ?? 0)", rom.path(percentEncoded: false)]
+    /// has none, because a running MesenCE keeps the last Play's settings (ADR 0008). DuckStation
+    /// takes settings only as a whole file, so its Play writes one first (`DuckStationSettings`).
+    public func arguments(rom: URL, settings: EmulatorSettings, duckStation: DuckStationSettings = .init()) throws -> [String] {
+        switch self {
+        case .duckStation:
+            ["-settings", try duckStation.write(settings).path(percentEncoded: false), rom.path(percentEncoded: false)]
+        default:
+            ["--doNotSaveSettings", "--emulation.runAheadFrames=\(settings.runAheadFrames ?? 0)", rom.path(percentEncoded: false)]
+        }
+    }
+}
+
+/// The settings file a DuckStation Play starts with: a copy of DuckStation's own `settings.ini`
+/// with the Game's settings written over it, so its controllers, BIOS and video settings carry over.
+/// Changes made in DuckStation during that Play go to the copy and are lost.
+public struct DuckStationSettings: Sendable {
+    let base: URL
+    let copy: URL
+
+    public init(
+        base: URL = URL.applicationSupportDirectory.appending(path: "DuckStation/settings.ini"),
+        copy: URL = AppSettings.appFolder.appending(path: "DuckStation settings.ini")
+    ) {
+        self.base = base
+        self.copy = copy
+    }
+
+    /// Writes the copy and returns where it is.
+    func write(_ settings: EmulatorSettings) throws -> URL {
+        let original = (try? String(contentsOf: base, encoding: .utf8)) ?? ""
+        try FileManager.default.createDirectory(at: copy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Self.applying(settings, to: original).write(to: copy, atomically: true, encoding: .utf8)
+        return copy
+    }
+
+    /// `ini` with `[Main] RunaheadFrameCount` set to the Game's run-ahead (0 by default).
+    static func applying(_ settings: EmulatorSettings, to ini: String) -> String {
+        let setting = "RunaheadFrameCount = \(settings.runAheadFrames ?? 0)"
+        var lines = ini.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var section = ""
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") {
+                section = trimmed
+            } else if section == "[Main]", trimmed.split(separator: "=").first?.trimmingCharacters(in: .whitespaces) == "RunaheadFrameCount"
+            {
+                lines[i] = setting
+                return lines.joined(separator: "\n")
+            }
+        }
+        if let main = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "[Main]" }) {
+            lines.insert(setting, at: main + 1)
+        } else {
+            lines.insert(contentsOf: ["[Main]", setting, ""], at: 0)
+        }
+        return lines.joined(separator: "\n")
     }
 }
 

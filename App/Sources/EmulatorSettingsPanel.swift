@@ -17,7 +17,7 @@ struct EmulatorSettingRow: Identifiable {
 
     static func rows(for emulator: Emulator) -> [EmulatorSettingRow] {
         switch emulator {
-        case .mesenCE:
+        case .mesenCE, .duckStation:
             [
                 EmulatorSettingRow(
                     title: "Run-ahead",

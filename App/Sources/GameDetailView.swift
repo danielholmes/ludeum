@@ -316,8 +316,13 @@ struct GameDetailView: View {
         }
         guard let file = playFile() else { return }
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.arguments = emulator.arguments(rom: file, settings: emulatorSettings)
-        // A second copy hands its arguments to the running one and quits.
+        do {
+            configuration.arguments = try emulator.arguments(rom: file, settings: emulatorSettings)
+        } catch {
+            self.error = "Couldn't write \(emulator.name)'s settings: \(error.localizedDescription)"
+            return
+        }
+        // A second MesenCE hands its arguments to the running one and quits; DuckStation opens another window.
         configuration.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
             if let error { Task { @MainActor in self.error = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
