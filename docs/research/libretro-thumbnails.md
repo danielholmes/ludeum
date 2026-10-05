@@ -14,7 +14,7 @@ Research for #42 (map: #40). Measured 2026-10-05 against the `master` tree of ea
 
 Per Game (a Game counts as hit if any of its ROMs hits): **444/781 (56.9%) exact, 758/781 (97.1%) with all fallbacks.**
 
-The first two rows assume Game Boy ROMs are also looked up in the Game Boy Color repo (see "Surprises"). If you only check `Nintendo_-_Game_Boy`, exact drops to 461 (43.8%) and the all-fallbacks rate drops to 85%.
+The first two rows assume Game Boy ROMs are also looked up in the Game Boy Color repo — OpenEmu files GB and GBC games together under `openemu.system.gb`, and 92 of 119 "GB" misses were GBC titles. If you only check `Nintendo_-_Game_Boy`, exact drops to 461 (43.8%) and the all-fallbacks rate drops to 85%.
 
 **Checksum route (best option for cartridge systems):** looking up the OpenEmu ROM MD5 in libretro-database's No-Intro DATs gives the canonical name, and that name has a box art in **629 of 832** cartridge ROMs tested (SNES 143/146, GB+GBC 234/254, GBA 101/107, N64 23/32, DS 41/59, MD 86/105). The big exception is NES (1/129), because OpenEmu hashes the file with its iNES header and No-Intro hashes it without.
 
