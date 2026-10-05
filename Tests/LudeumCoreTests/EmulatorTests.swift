@@ -5,21 +5,36 @@ import Testing
 
 @Suite struct EmulatorTests {
     @Test func nesAndSNESGamesArePlayedInMesenCE() {
-        for platform: Int64 in [18, 99, 19, 58, 33, 22, 24] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
+        for platform: Int64 in [18, 99, 19, 58, 33, 22, 24, 64] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
         #expect(Emulator.of(platformId: 7) == .duckStation)  // PlayStation
         #expect(Emulator.of(platformId: 21) == .dolphin)  // GameCube
-        #expect(Emulator.of(platformId: 4) == nil)  // Nintendo 64
+        #expect(Emulator.of(platformId: 29) == .ares)  // Mega Drive/Genesis
+        #expect(Emulator.of(platformId: 4) == .ares)  // Nintendo 64
+        #expect(Emulator.of(platformId: 20) == nil)  // Nintendo DS
     }
 
     @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() throws {
         let rom = URL(filePath: "/Games/roms/NES/Super Mario Bros. 3 (USA).nes")
 
         #expect(
-            try Emulator.mesenCE.arguments(rom: rom, settings: EmulatorSettings())
+            try Emulator.mesenCE.arguments(rom: rom, platformId: 18, settings: EmulatorSettings())
                 == ["--doNotSaveSettings", "--emulation.runAheadFrames=0", "/Games/roms/NES/Super Mario Bros. 3 (USA).nes"])
         #expect(
-            try Emulator.mesenCE.arguments(rom: rom, settings: EmulatorSettings(runAheadFrames: 2))
+            try Emulator.mesenCE.arguments(rom: rom, platformId: 18, settings: EmulatorSettings(runAheadFrames: 2))
                 == ["--doNotSaveSettings", "--emulation.runAheadFrames=2", "/Games/roms/NES/Super Mario Bros. 3 (USA).nes"])
+    }
+
+    @Test func aresRunAheadIsOnOrOff() throws {
+        let rom = URL(filePath: "/Games/Genesis/Sonic the Hedgehog (USA, Europe).md")
+        func runAhead(_ frames: Int?) throws -> [String] {
+            try Emulator.ares.arguments(rom: rom, platformId: 29, settings: EmulatorSettings(runAheadFrames: frames))
+        }
+
+        #expect(
+            try runAhead(nil)
+                == ["--system", "Mega Drive", "--setting", "General/RunAhead=false", "/Games/Genesis/Sonic the Hedgehog (USA, Europe).md"])
+        #expect(try runAhead(0).contains("General/RunAhead=false"))
+        #expect(try runAhead(1).contains("General/RunAhead=true"))
     }
 
     @Test func aGamesSettingsAreKeptAndCanBeClearedBackToTheDefault() throws {
@@ -49,11 +64,18 @@ import Testing
     let rom = URL(filePath: "/Games/GameCube/Pikmin (USA).rvz")
 
     #expect(
-        try Emulator.dolphin.arguments(rom: rom, settings: EmulatorSettings())
+        try Emulator.dolphin.arguments(rom: rom, platformId: 21, settings: EmulatorSettings())
             == [
                 "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-e",
                 "/Games/GameCube/Pikmin (USA).rvz",
             ])
+}
+
+@Test func aresPlaysNintendo64GamesAsNintendo64() throws {
+    #expect(
+        try Emulator.ares.arguments(
+            rom: URL(filePath: "/Games/N64/Super Mario 64 (USA).z64"), platformId: 4, settings: EmulatorSettings(runAheadFrames: 1))
+            == ["--system", "Nintendo 64", "--setting", "General/RunAhead=true", "/Games/N64/Super Mario 64 (USA).z64"])
 }
 
 @Suite struct DuckStationSettingsTests {
@@ -69,7 +91,8 @@ import Testing
         let rom = URL(filePath: "/Games/PSX/Parasite Eve II (USA).m3u")
 
         let arguments = try Emulator.duckStation.arguments(
-            rom: rom, settings: EmulatorSettings(runAheadFrames: 2), duckStation: DuckStationSettings(base: base, copy: copy))
+            rom: rom, platformId: 7, settings: EmulatorSettings(runAheadFrames: 2), duckStation: DuckStationSettings(base: base, copy: copy)
+        )
 
         #expect(arguments == ["-settings", copy.path(percentEncoded: false), "/Games/PSX/Parasite Eve II (USA).m3u"])
         #expect(

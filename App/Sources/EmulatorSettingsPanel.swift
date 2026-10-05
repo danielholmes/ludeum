@@ -27,6 +27,16 @@ struct EmulatorSettingRow: Identifiable {
                     choices: EmulatorSettings.runAheadRange.map { ("\($0) frame\($0 == 1 ? "" : "s")", $0) },
                     defaultLabel: "0 frames", summary: { "Run-ahead \($0)" })
             ]
+        case .ares:
+            [
+                EmulatorSettingRow(
+                    title: "Run-ahead",
+                    explanation: "ares runs one frame ahead to hide the game's own input lag. It can't run further "
+                        + "ahead than one frame.",
+                    value: \.runAheadFrames,
+                    choices: [("Off", 0), ("On (1 frame)", 1)],
+                    defaultLabel: "off", summary: { $0 > 0 ? "Run-ahead on" : "Run-ahead off" })
+            ]
         default: []
         }
     }

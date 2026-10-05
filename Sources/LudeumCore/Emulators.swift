@@ -9,13 +9,17 @@ public struct Emulator: Sendable, Equatable {
     public static let mesenCE = Emulator(name: "MesenCE", bundleIdentifier: "ca.mesen")
     public static let duckStation = Emulator(name: "DuckStation", bundleIdentifier: "com.github.stenzek.duckstation")
     public static let dolphin = Emulator(name: "Dolphin", bundleIdentifier: "org.dolphin-emu.dolphin")
+    public static let ares = Emulator(name: "ares", bundleIdentifier: "dev.ares.ares")
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
         switch platformId {
-        case 18, 99, 19, 58, 33, 22, 24: .mesenCE  // NES, Family Computer, SNES, Super Famicom, Game Boy, Game Boy Color, GBA
+        // NES, Family Computer, SNES, Super Famicom, Game Boy, Game Boy Color, GBA, Master System
+        case 18, 99, 19, 58, 33, 22, 24, 64: .mesenCE
         case 7: .duckStation  // PlayStation
         case 21: .dolphin  // GameCube
+        case 4: .ares  // Nintendo 64
+        case 29: .ares  // Mega Drive/Genesis
         default: nil
         }
     }
@@ -23,7 +27,9 @@ public struct Emulator: Sendable, Equatable {
     /// The command line for a Play. It sets every Emulator setting, with the default where the Game
     /// has none, because a running MesenCE keeps the last Play's settings (ADR 0008). DuckStation
     /// takes settings only as a whole file, so its Play writes one first (`DuckStationSettings`).
-    public func arguments(rom: URL, settings: EmulatorSettings, duckStation: DuckStationSettings = .init()) throws -> [String] {
+    public func arguments(
+        rom: URL, platformId: Int64, settings: EmulatorSettings, duckStation: DuckStationSettings = .init()
+    ) throws -> [String] {
         switch self {
         case .duckStation:
             ["-settings", try duckStation.write(settings).path(percentEncoded: false), rom.path(percentEncoded: false)]
@@ -33,6 +39,13 @@ public struct Emulator: Sendable, Equatable {
             [
                 "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-e",
                 rom.path(percentEncoded: false),
+            ]
+        case .ares:
+            // ares's run-ahead is on or off (one frame); any run-ahead frames turn it on. `--setting`
+            // overrides are for this launch only: ares puts the saved values back.
+            [
+                "--system", platformId == 4 ? "Nintendo 64" : "Mega Drive",
+                "--setting", "General/RunAhead=\((settings.runAheadFrames ?? 0) > 0)", rom.path(percentEncoded: false),
             ]
         default:
             ["--doNotSaveSettings", "--emulation.runAheadFrames=\(settings.runAheadFrames ?? 0)", rom.path(percentEncoded: false)]

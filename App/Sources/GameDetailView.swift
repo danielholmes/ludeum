@@ -320,7 +320,7 @@ struct GameDetailView: View {
         guard let file = playFile() else { return }
         let configuration = NSWorkspace.OpenConfiguration()
         do {
-            configuration.arguments = try emulator.arguments(rom: file, settings: emulatorSettings)
+            configuration.arguments = try emulator.arguments(rom: file, platformId: game?.platformId ?? 0, settings: emulatorSettings)
         } catch {
             self.error = "Couldn't write \(emulator.name)'s settings: \(error.localizedDescription)"
             return
