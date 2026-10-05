@@ -25,7 +25,7 @@ struct TopRatedScreen: View {
                     description: Text(filter == LibraryFilter() ? "Rate a Game in its detail." : "Try fewer filters."))
             } else if showCovers {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 16)], spacing: 16) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 16, alignment: .top)], spacing: 16) {
                         ForEach(rows, id: \.game.id) { row in
                             CoverCell(services: services, row: row.game, width: coverWidth, selection: $selection, rank: row.rank)
                         }

@@ -35,7 +35,7 @@ struct WhatToPlayNextScreen: View {
                         ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
                             if index > 0 { Divider() }
                             Text("\(section.0) (\(section.1.count))").font(.headline)
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 16)], spacing: 16) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 16, alignment: .top)], spacing: 16) {
                                 ForEach(section.1) { row in
                                     CoverCell(services: services, row: row, width: coverWidth, selection: $selection)
                                         .contextMenu { if section.2 { Button("Start playing") { startPlaying(row.id) } } }

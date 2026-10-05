@@ -289,7 +289,7 @@ private struct CoversGrid: View {
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: 16)], spacing: 16) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: 16, alignment: .top)], spacing: 16) {
                 ForEach(rows) { row in CoverCell(services: services, row: row, width: width, selection: $selection) }
             }
             .padding()
