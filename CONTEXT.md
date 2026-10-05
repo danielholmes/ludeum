@@ -77,8 +77,19 @@ Play statistics recorded automatically by an emulator (play count, last played, 
 _Avoid_: Stats, history
 
 **Cover**:
-The box art shown for a Game. It comes from the Game's IGDB link whenever IGDB has one. Otherwise it's the box art OpenEmu had when the Game came in at the first Import, or an image I supplied myself. Either of those is discarded once IGDB has a cover, and a Game can have no Cover at all.
+The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else its OpenEmu Box art, else IGDB's Cover art. A Game can have no Cover at all.
 _Avoid_: Artwork, box image, thumbnail
+
+**Box art**:
+A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe). It comes from libretro-thumbnails or from OpenEmu, and only exists for emulated platforms.
+_Avoid_: Cover (that's what's shown, whatever its source)
+
+**Cover art**:
+IGDB's clean artwork for a game, without the box's branding. Kept for every linked Game; shown as the Cover only when there's no upload and no Box art.
+_Avoid_: Box art
+
+**Screenshot**:
+An image of a game being played, or its title screen. From IGDB (several per game) and libretro-thumbnails (one gameplay shot and one title screen).
 
 ### Working with OpenEmu
 
