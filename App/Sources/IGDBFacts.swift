@@ -14,6 +14,7 @@ struct IGDBFactsRows: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let summary = facts.summary { SummaryText(text: summary) }
             CommunityScores(players: facts.playerScore, critics: facts.criticScore)
             if !facts.genres.isEmpty { PillRow(title: "Genre", items: facts.genres, open: { browse(LibraryFilter(genre: $0)) }) }
             if !facts.themes.isEmpty { pinnable("Theme", .theme, facts.themes) }
@@ -30,6 +31,9 @@ struct IGDBFactsRows: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Links").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
                     FlowLayout(spacing: 8) {
+                        if let trailer = facts.trailer {
+                            Link("▶ Trailer", destination: trailer).font(.subheadline).help(trailer.absoluteString)
+                        }
                         ForEach(facts.links, id: \.title) { link in
                             Link(link.title, destination: link.url).font(.subheadline).help(link.url.absoluteString)
                         }
