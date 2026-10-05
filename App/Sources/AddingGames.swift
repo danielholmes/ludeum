@@ -101,7 +101,15 @@ struct IGDBSearchView: View {
                 if browse != nil {
                     Menu("Sort", systemImage: "arrow.up.arrow.down") {
                         // Choosing a sort also sets its usual order; Order can still flip it.
-                        Picker("Sort by", selection: Binding(get: { sort }, set: { sort = $0; ascending = $0.defaultAscending })) {
+                        Picker(
+                            "Sort by",
+                            selection: Binding(
+                                get: { sort },
+                                set: {
+                                    sort = $0
+                                    ascending = $0.defaultAscending
+                                })
+                        ) {
                             Text("Name").tag(GameSearchSort.name)
                             Text("Release date").tag(GameSearchSort.releaseDate)
                         }
@@ -115,7 +123,9 @@ struct IGDBSearchView: View {
                 if searching { ProgressView().controlSize(.small) }
             }
             if let error { Text(error).foregroundStyle(.red) }
-            List(browse == nil ? results : sort.sorted(results, ascending: ascending), selection: browse == nil ? .constant(nil) : $selected) { result in
+            List(
+                browse == nil ? results : sort.sorted(results, ascending: ascending), selection: browse == nil ? .constant(nil) : $selected
+            ) { result in
                 HStack(alignment: .top, spacing: 8) {
                     ResultCover(search: search, result: result)
                     VStack(alignment: .leading, spacing: 4) {

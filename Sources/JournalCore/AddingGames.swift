@@ -71,7 +71,8 @@ extension JournalStore {
                     throw JournalError.gameHasROMs
                 }
                 try db.execute(
-                    sql: "INSERT INTO platform (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING", arguments: [platform.id, platform.name])
+                    sql: "INSERT INTO platform (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
+                    arguments: [platform.id, platform.name])
                 try db.execute(sql: "UPDATE game SET platformId = ? WHERE id = ?", arguments: [platform.id, id])
             }
             try db.execute(sql: "UPDATE game SET igdbGameId = ?, igdbName = ? WHERE id = ?", arguments: [igdbGameId, igdbName, id])

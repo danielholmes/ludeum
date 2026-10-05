@@ -55,8 +55,12 @@ struct GameDetailView: View {
                             Spacer()
                             if !roms.isEmpty, !roms.allSatisfy(\.missing) {
                                 if let emulator {
-                                    Button { play(in: emulator) } label: { Label(emulator.name, systemImage: "play.fill") }
-                                        .labelStyle(.titleAndIcon).buttonStyle(.hover).help("Play in \(emulator.name)")
+                                    Button {
+                                        play(in: emulator)
+                                    } label: {
+                                        Label(emulator.name, systemImage: "play.fill")
+                                    }
+                                    .labelStyle(.titleAndIcon).buttonStyle(.hover).help("Play in \(emulator.name)")
                                 }
                                 Button(action: playInOpenEmu) { Label("OpenEmu", systemImage: "play.fill") }
                                     .labelStyle(.titleAndIcon).buttonStyle(.hover).help("Play in OpenEmu")
@@ -143,29 +147,29 @@ struct GameDetailView: View {
                     if roms.allSatisfy(\.missing) { Text("No ROM in OpenEmu").foregroundStyle(.orange) }
                     ForEach(roms) { rom in
                         HStack {
-                        VStack(alignment: .leading) {
-                            // Without its extension; GoodTools region codes spelled out.
-                            Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
-                            Text(
-                                [readableVersion(rom.version), rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil]
-                                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-                            )
-                            .font(.caption).foregroundStyle(.secondary)
-                            if let dates = fileDates[rom.id] {
+                            VStack(alignment: .leading) {
+                                // Without its extension; GoodTools region codes spelled out.
+                                Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
                                 Text(
-                                    [
-                                        dates.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
-                                        dates.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
-                                    ].compactMap { $0 }.joined(separator: " · ")
+                                    [readableVersion(rom.version), rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil]
+                                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                                 )
                                 .font(.caption).foregroundStyle(.secondary)
+                                if let dates = fileDates[rom.id] {
+                                    Text(
+                                        [
+                                            dates.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                            dates.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                        ].compactMap { $0 }.joined(separator: " · ")
+                                    )
+                                    .font(.caption).foregroundStyle(.secondary)
+                                }
                             }
-                        }
-                        Spacer()
-                        if !rom.missing {
-                            Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
-                                .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
-                        }
+                            Spacer()
+                            if !rom.missing {
+                                Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
+                                    .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
+                            }
                         }
                     }
                 }

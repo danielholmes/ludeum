@@ -1,8 +1,8 @@
 import Foundation
 import GRDB
+import ImageIO
 import Synchronization
 import Testing
-import ImageIO
 import UniformTypeIdentifiers
 
 @testable import JournalCore

@@ -48,8 +48,9 @@ struct LibraryScreen: View {
                 VStack {
                     ContentUnavailableView(
                         filter == LibraryFilter() ? "No Games yet" : "No Games match", systemImage: "books.vertical",
-                        description: Text(filter == LibraryFilter() ? "Add one with +." : "Try fewer filters."))
-                        .fixedSize(horizontal: false, vertical: true)
+                        description: Text(filter == LibraryFilter() ? "Add one with +." : "Try fewer filters.")
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                 }
                 .padding(.top, 24)

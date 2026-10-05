@@ -95,8 +95,9 @@ public final class IGDBClient: Sendable {
         // search with no results falls back to matching the name, an alternative name or the slug.
         let empty = searches.filter { results[$0]?.isEmpty ?? false }
         if !empty.isEmpty {
+            let fallbackKey: (IGDBSearch) -> String = { "igdb:search-fallback:" + $0.cacheKey.dropFirst("igdb:search:".count) }
             let fallback = try await cache.resolve(
-                empty, key: { "igdb:search-fallback:" + $0.cacheKey.dropFirst("igdb:search:".count) }, maxAge: maxAge, batchSize: 1,
+                empty, key: fallbackKey, maxAge: maxAge, batchSize: 1,
                 servesStale: servesStale
             ) { batch in
                 let s = batch[0]

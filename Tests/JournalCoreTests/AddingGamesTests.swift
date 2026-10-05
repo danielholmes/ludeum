@@ -89,7 +89,10 @@ import Testing
         h.internet.addSearch("metroid", platform: nil, results: [1, 2, 3, 4])
         let results = try await search.search("metroid")
 
-        #expect(GameSearchSort.name.sorted(results, ascending: true).map(\.name) == ["Metroid", "metroid fan game", "Metroid Fusion", "Metroid II"])
+        #expect(
+            GameSearchSort.name.sorted(results, ascending: true).map(\.name) == [
+                "Metroid", "metroid fan game", "Metroid Fusion", "Metroid II",
+            ])
         #expect(GameSearchSort.releaseDate.sorted(results, ascending: false).map(\.igdbGameId) == [4, 1, 2, 3])
         #expect(GameSearchSort.releaseDate.sorted(results, ascending: true).map(\.igdbGameId) == [2, 1, 4, 3])
         #expect(GameSearchSort.name.defaultAscending)
@@ -234,7 +237,10 @@ import Testing
 
         #expect(try j.journal.game(pc).platformId == 13)
         try j.journal.db.write { db in
-            try db.execute(sql: "INSERT INTO rom (openEmuPk, md5, fileName, systemId, gameId, matchKind, matchedAt) VALUES (1, 'a', 'doom.zip', 'x', ?, 'manual', 0)", arguments: [pc])
+            try db.execute(
+                sql:
+                    "INSERT INTO rom (openEmuPk, md5, fileName, systemId, gameId, matchKind, matchedAt) VALUES (1, 'a', 'doom.zip', 'x', ?, 'manual', 0)",
+                arguments: [pc])
         }
         #expect(throws: JournalError.gameHasROMs) {
             try j.journal.link(pc, igdbGameId: 3, igdbName: "Doom", replacing: true, platform: IGDBPlatform(id: 6, name: "PC"))

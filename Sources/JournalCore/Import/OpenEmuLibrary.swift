@@ -152,7 +152,8 @@ extension OpenEmuLibrary {
             })
         else { return nil }
         let romsFolder = library.appending(path: "roms", directoryHint: .isDirectory)
-        let file = location.hasPrefix("file://") ? URL(string: location) : location.removingPercentEncoding.map { romsFolder.appending(path: $0) }
+        let file =
+            location.hasPrefix("file://") ? URL(string: location) : location.removingPercentEncoding.map { romsFolder.appending(path: $0) }
         guard let file, FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) else { return nil }
         return file
     }

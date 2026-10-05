@@ -46,9 +46,10 @@ import Testing
 
         let rows = try roms()
         let folder = "Nintendo - Super Nintendo Entertainment System"
-        #expect(rows.map { $0["libretroBoxart"] as String? } == [
-            "\(folder)/Named_Boxarts/Super Metroid (USA).png", "\(folder)/Named_Boxarts/Super Mario World (USA).png",
-        ])
+        #expect(
+            rows.map { $0["libretroBoxart"] as String? } == [
+                "\(folder)/Named_Boxarts/Super Metroid (USA).png", "\(folder)/Named_Boxarts/Super Mario World (USA).png",
+            ])
         #expect(rows[0]["libretroSnap"] as String? == "\(folder)/Named_Snaps/Super Metroid (USA).png")
         #expect(rows[0]["libretroTitle"] as String? == "\(folder)/Named_Titles/Super Metroid (USA).png")
     }
@@ -97,7 +98,8 @@ import Testing
 /// The migration that ships box-art Covers, on a journal written by the first spec.
 @Suite struct BoxArtMigrationTests {
     @Test func carriedOverCoversAreDeletedAndUploadsKept() throws {
-        let directory = FileManager.default.temporaryDirectory.appending(path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))

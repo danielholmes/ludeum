@@ -82,7 +82,9 @@ public final class LibretroThumbnails: Sendable {
             ]
             for step in steps {
                 for (repo, folders) in listings {
-                    if let name = step(folders[folder] ?? []) { return "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png" }
+                    if let name = step(folders[folder] ?? []) {
+                        return "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png"
+                    }
                 }
             }
             return nil

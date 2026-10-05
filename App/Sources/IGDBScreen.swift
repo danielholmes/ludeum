@@ -20,7 +20,8 @@ struct IGDBScreen: View {
         VStack(alignment: .leading, spacing: 8) {
             if let search = services.gameSearch {
                 IGDBSearchView(
-                    search: search, platforms: platforms, usedPlatforms: used, query: $query, browse: { shown = $0 }, revision: services.changes.revision, choose: { _, _ in })
+                    search: search, platforms: platforms, usedPlatforms: used, query: $query, browse: { shown = $0 },
+                    revision: services.changes.revision, choose: { _, _ in })
             } else {
                 ContentUnavailableView(
                     "IGDB isn't set up", systemImage: "key", description: Text("Add IGDB credentials in Settings to search."))
@@ -90,12 +91,20 @@ struct IGDBGameDetailView: View {
                         FlowLayout(spacing: 6) {
                             ForEach(chips, id: \.platform.id) { chip in
                                 if let game = chip.game {
-                                    Button { open(game) } label: { Label("\(chip.platform.name) · In Library", systemImage: "checkmark") }
-                                        .buttonStyle(.bordered).tint(.green).help("Open this Game")
+                                    Button {
+                                        open(game)
+                                    } label: {
+                                        Label("\(chip.platform.name) · In Library", systemImage: "checkmark")
+                                    }
+                                    .buttonStyle(.bordered).tint(.green).help("Open this Game")
                                 } else {
-                                    Button { add(on: chip.platform) } label: { Label(chip.platform.name, systemImage: "plus") }
-                                        .buttonStyle(.bordered).help("Add to Library on \(chip.platform.name)")
-                                        .disabled(services.work.journalLocked)
+                                    Button {
+                                        add(on: chip.platform)
+                                    } label: {
+                                        Label(chip.platform.name, systemImage: "plus")
+                                    }
+                                    .buttonStyle(.bordered).help("Add to Library on \(chip.platform.name)")
+                                    .disabled(services.work.journalLocked)
                                 }
                             }
                             Button("Different platform…") { choosingPlatform = true }.buttonStyle(.hover)

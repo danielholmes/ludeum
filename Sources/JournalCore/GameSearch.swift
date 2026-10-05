@@ -127,11 +127,14 @@ public struct GameSearch: Sendable {
         let listed = try result.chips.map { chip in
             PlatformChip(platform: chip.platform, game: try journal.gameID(igdbGameId: result.igdbGameId, platformId: chip.platform.id))
         }
-        let others = try journal.games(igdbGameId: result.igdbGameId).filter { game in !listed.contains { $0.platform.id == game.platformId } }
+        let others = try journal.games(igdbGameId: result.igdbGameId).filter { game in
+            !listed.contains { $0.platform.id == game.platformId }
+        }
         return try listed
             + others.map { game in
                 PlatformChip(
-                    platform: try journal.platform(game.platformId) ?? IGDBPlatform(id: game.platformId, name: "Platform \(game.platformId)", abbreviation: nil),
+                    platform: try journal.platform(game.platformId)
+                        ?? IGDBPlatform(id: game.platformId, name: "Platform \(game.platformId)", abbreviation: nil),
                     game: game.id)
             }
     }

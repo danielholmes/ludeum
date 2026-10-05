@@ -259,7 +259,7 @@ private struct ReviewItemDetail: View {
         }
     }
 
-        private func regionText(_ regions: Set<NameRegion>) -> String {
+    private func regionText(_ regions: Set<NameRegion>) -> String {
         [(NameRegion.usa, "USA"), (.europe, "Europe"), (.japan, "Japan"), (.korea, "Korea")].filter { regions.contains($0.0) }
             .map(\.1).joined(separator: ", ")
     }

@@ -56,8 +56,12 @@ struct PillRow: View {
                     }
                 }
                 if let more {
-                    Button { more.show() } label: { pill("+\(more.count) more", systemImage: nil).foregroundStyle(.secondary) }
-                        .buttonStyle(.plain)
+                    Button {
+                        more.show()
+                    } label: {
+                        pill("+\(more.count) more", systemImage: nil).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -106,9 +110,9 @@ struct ScreenshotImage: View {
                 if let image { Image(nsImage: image).resizable().interpolation(.high).scaledToFill() }
             }
             .clipped()
-        .task(id: imageID) {
-            if let file = try? await igdb.screenshot(imageID: imageID, large: large) { image = NSImage(contentsOf: file) }
-        }
+            .task(id: imageID) {
+                if let file = try? await igdb.screenshot(imageID: imageID, large: large) { image = NSImage(contentsOf: file) }
+            }
     }
 }
 

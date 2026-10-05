@@ -13,7 +13,9 @@ import Testing
         try j.journal.addPlatform(id: 19, name: "SNES")
         h.internet.addGame(
             1103, "Super Metroid",
-            fields: ["genres": [["id": 8, "name": "Platform"], ["id": 31, "name": "Adventure"]], "themes": [["name": "Science fiction"]]])
+            fields: [
+                "genres": [["id": 8, "name": "Platform"], ["id": 31, "name": "Adventure"]], "themes": [["name": "Science fiction"]],
+            ])
         h.internet.addGame(1070, "Super Mario World", fields: ["genres": [["id": 8, "name": "Platform"]]])
         h.internet.addGame(5, "Chrono Trigger", fields: ["genres": [["id": 12, "name": "Role-playing (RPG)"]]])
         h.internet.addGame(6, "Nothing Listed")
@@ -59,7 +61,8 @@ import Testing
                     ["type": 3, "url": "https://en.wikipedia.org/wiki/Super_Metroid"],
                 ],
                 "external_games": [["external_game_source": 3, "url": "https://www.giantbomb.com/games/3030-1/"]],
-                "franchise": ["name": "Metroid"], "franchises": [["name": "Nintendo All-Stars"]], "collections": [["name": "Metroid"]], "first_release_date": 765_158_400,
+                "franchise": ["name": "Metroid"], "franchises": [["name": "Nintendo All-Stars"]], "collections": [["name": "Metroid"]],
+                "first_release_date": 765_158_400,
             ])
 
         let facts = try await h.igdb.facts(igdbGameId: 1103)
@@ -68,7 +71,8 @@ import Testing
             facts
                 == GameFacts(
                     genres: ["Platform"], themes: ["Science fiction", "Action"], franchises: ["Metroid", "Nintendo All-Stars"],
-                    series: ["Metroid"], credits: [
+                    series: ["Metroid"],
+                    credits: [
                         CompanyCredit(name: "Nintendo R&D1", roles: [.developer]),
                         CompanyCredit(name: "Nintendo", roles: [.developer, .publisher]),
                     ], releaseYear: 1994,

@@ -16,9 +16,10 @@ import Testing
     }
 
     @Test func dosAndWindowsShowAsOnePCPlatform() throws {
-        #expect(try j.journal.platformCounts() == [
-            PlatformCount(id: 6, name: "PC", games: 2), PlatformCount(id: 19, name: "Super Nintendo Entertainment System", games: 1),
-        ])
+        #expect(
+            try j.journal.platformCounts() == [
+                PlatformCount(id: 6, name: "PC", games: 2), PlatformCount(id: 19, name: "Super Nintendo Entertainment System", games: 1),
+            ])
         #expect(try j.journal.shownPlatforms().map(\.name) == ["PC", "Super Nintendo Entertainment System"])
     }
 
@@ -27,9 +28,10 @@ import Testing
         try j.journal.addGameByHand(name: "Bahamut Lagoon", platformId: 58)
 
         #expect(try j.journal.platformCounts().first { $0.id == 19 }?.games == 2)
-        #expect(try j.journal.library(LibraryFilter(platformId: 19), sort: .name, ascending: true).map(\.name) == [
-            "Bahamut Lagoon", "Super Metroid",
-        ])
+        #expect(
+            try j.journal.library(LibraryFilter(platformId: 19), sort: .name, ascending: true).map(\.name) == [
+                "Bahamut Lagoon", "Super Metroid",
+            ])
     }
 
     @Test func filteringOnPCFindsBothAndRowsSayPC() throws {

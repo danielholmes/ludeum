@@ -10,7 +10,8 @@ import Testing
 
     @Test func aROMGetsItsBoxartSnapAndTitleNames() async throws {
         h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (Japan, USA) (En)"])
-        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (Europe) (En,Fr,De)"], folders: ["Named_Snaps"])
+        h.internet.addLibretro(
+            "Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (Europe) (En,Fr,De)"], folders: ["Named_Snaps"])
 
         let names = try await h.libretro.names(system: "openemu.system.snes", fileName: "Super Metroid (E).sfc", titles: [])
 

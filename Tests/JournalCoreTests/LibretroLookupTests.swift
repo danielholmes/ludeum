@@ -8,18 +8,21 @@ import Testing
     }
 
     @Test func theFileNameMinusItsExtensionMatchesExactly() {
-        #expect(find("Super Metroid (Japan, USA) (En).sfc", in: ["Super Metroid (Japan, USA) (En)", "Super Metroid (Europe)"])
-            == "Super Metroid (Japan, USA) (En)")
+        #expect(
+            find("Super Metroid (Japan, USA) (En).sfc", in: ["Super Metroid (Japan, USA) (En)", "Super Metroid (Europe)"])
+                == "Super Metroid (Japan, USA) (En)")
         #expect(find("Metroid Prime (USA).nkit.iso", in: ["Metroid Prime (USA)"]) == "Metroid Prime (USA)")
     }
 
     @Test func libretrosSubstitutionsApply() {
-        #expect(find("Ren & Stimpy Show, The - Buckeroo$! (USA).sfc", in: ["Ren _ Stimpy Show, The - Buckeroo$! (USA)"])
-            == "Ren _ Stimpy Show, The - Buckeroo$! (USA)")
+        #expect(
+            find("Ren & Stimpy Show, The - Buckeroo$! (USA).sfc", in: ["Ren _ Stimpy Show, The - Buckeroo$! (USA)"])
+                == "Ren _ Stimpy Show, The - Buckeroo$! (USA)")
     }
 
     @Test func goodToolsTagsAreRewritten() {
-        #expect(find("Super Mario Kart (U) [!].smc", in: ["Super Mario Kart (USA)", "Super Mario Kart (Europe)"]) == "Super Mario Kart (USA)")
+        #expect(
+            find("Super Mario Kart (U) [!].smc", in: ["Super Mario Kart (USA)", "Super Mario Kart (Europe)"]) == "Super Mario Kart (USA)")
         #expect(find("Zelda (UE) (V1.1) [C][!].gb", in: ["Zelda (USA, Europe) (Rev 1)"]) == "Zelda (USA, Europe) (Rev 1)")
     }
 
@@ -34,8 +37,9 @@ import Testing
     }
 
     @Test func withNoRegionOfItsOwnUSAThenEuropeThenJapanWin() {
-        #expect(find("Vagrant Story.cue", in: ["Vagrant Story (Japan)", "Vagrant Story (Europe)", "Vagrant Story (USA)"])
-            == "Vagrant Story (USA)")
+        #expect(
+            find("Vagrant Story.cue", in: ["Vagrant Story (Japan)", "Vagrant Story (Europe)", "Vagrant Story (USA)"])
+                == "Vagrant Story (USA)")
         #expect(find("Vagrant Story.cue", in: ["Vagrant Story (Japan)", "Vagrant Story (Europe)"]) == "Vagrant Story (Europe)")
     }
 

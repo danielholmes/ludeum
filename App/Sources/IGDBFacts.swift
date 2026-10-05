@@ -14,23 +14,23 @@ struct IGDBFactsRows: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-        CommunityScores(players: facts.playerScore, critics: facts.criticScore)
-        if !facts.genres.isEmpty { PillRow(title: "Genre", items: facts.genres, open: { browse(LibraryFilter(genre: $0)) }) }
-        if !facts.themes.isEmpty { pinnable("Theme", .theme, facts.themes) }
-        if !facts.franchises.isEmpty { pinnable("Franchise", .franchise, facts.franchises) }
-        if !facts.series.isEmpty { pinnable("Series", .series, facts.series) }
-        if !facts.credits.isEmpty { companies }
-        if !facts.links.isEmpty {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("Links").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
-                FlowLayout(spacing: 8) {
-                    ForEach(facts.links, id: \.title) { link in
-                        Link(link.title, destination: link.url).font(.caption).help(link.url.absoluteString)
+            CommunityScores(players: facts.playerScore, critics: facts.criticScore)
+            if !facts.genres.isEmpty { PillRow(title: "Genre", items: facts.genres, open: { browse(LibraryFilter(genre: $0)) }) }
+            if !facts.themes.isEmpty { pinnable("Theme", .theme, facts.themes) }
+            if !facts.franchises.isEmpty { pinnable("Franchise", .franchise, facts.franchises) }
+            if !facts.series.isEmpty { pinnable("Series", .series, facts.series) }
+            if !facts.credits.isEmpty { companies }
+            if !facts.links.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Links").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
+                    FlowLayout(spacing: 8) {
+                        ForEach(facts.links, id: \.title) { link in
+                            Link(link.title, destination: link.url).font(.caption).help(link.url.absoluteString)
+                        }
                     }
                 }
             }
-        }
-        if let error { Text(error).foregroundStyle(.red) }
+            if let error { Text(error).foregroundStyle(.red) }
         }
         .task(id: services.changes.revision) { pins = Set((try? services.journal?.pins()) ?? []) }
     }
@@ -39,7 +39,8 @@ struct IGDBFactsRows: View {
     /// first publisher show; the rest (often regional publishers) wait behind "+N more".
     @ViewBuilder private var companies: some View {
         let roles = Dictionary(facts.credits.map { ($0.name, $0.roles) }, uniquingKeysWith: { a, _ in a })
-        let key = facts.credits.filter { $0.roles.contains(.developer) }.map(\.name)
+        let key =
+            facts.credits.filter { $0.roles.contains(.developer) }.map(\.name)
             + facts.credits.filter { !$0.roles.contains(.developer) && $0.roles.contains(.publisher) }.prefix(1).map(\.name)
         let all = facts.credits.map(\.name)
         let shown = allCompanies || key.isEmpty ? all : all.filter(key.contains)
@@ -95,7 +96,9 @@ struct ScreenshotsSection: View {
                         .onTapGesture { viewing = Screenshot(id: imageID) }
                 }
                 if collapsed {
-                    Button { showingAll = true } label: {
+                    Button {
+                        showingAll = true
+                    } label: {
                         Label("\(screenshots.count - shown.count) more", systemImage: "plus")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))

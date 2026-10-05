@@ -55,7 +55,8 @@ extension JournalStore {
                 let fileName: String = row["fileName"]
                 let parsed = ROMName((fileName as NSString).deletingPathExtension)
                 return JournalROM(
-                    id: row["id"], openEmuPk: row["openEmuPk"], fileName: fileName, name: row["displayName"], version: row["version"] ?? parsed.version,
+                    id: row["id"], openEmuPk: row["openEmuPk"], fileName: fileName, name: row["displayName"],
+                    version: row["version"] ?? parsed.version,
                     disc: row["discNumber"] ?? parsed.disc, missing: row["missing"])
             }
         }
