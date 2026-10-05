@@ -19,7 +19,7 @@ struct LibraryScreen: View {
     @State private var platforms: [IGDBPlatform] = []
     @State private var lists: [GameList] = []
     @State private var error: String?
-    /// IGDB genres and themes by IGDB game id, for the Genre and Theme filters.
+    /// IGDB facts by IGDB game id, for genre, theme and company filters and searches.
     @State private var facts: [Int64: GameFacts] = [:]
     /// False until the first load, so an empty screen isn't mistaken for "No Games match".
     @State private var loaded = false
@@ -48,7 +48,7 @@ struct LibraryScreen: View {
                 VStack {
                     ContentUnavailableView(
                         filter == LibraryFilter() ? "No Games yet" : "No Games match", systemImage: "books.vertical",
-                        description: Text(filter == LibraryFilter() ? "Add one with +." : "Try fewer filters.")
+                        description: Text(filter == LibraryFilter() ? "Add one with +." : filter.name.isEmpty ? "" : "Try another search.")
                     )
                     .fixedSize(horizontal: false, vertical: true)
                     Spacer()
@@ -108,9 +108,6 @@ struct LibraryScreen: View {
                 }
         }
         ToolbarItemGroup {
-            LibraryFilterMenu(
-                filter: $filter, platforms: platforms, lists: list == nil ? lists : nil,
-                genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted())
             LibrarySortMenu(sort: Binding($sort), ascending: $ascending)
             Picker("View", selection: $showCovers) {
                 Label("Table", systemImage: "list.bullet").tag(false)
@@ -127,10 +124,8 @@ struct LibraryScreen: View {
         if let list { effective.listId = list.id }
         do {
             if !filter.usesIGDBFacts, filter.name.trimmed.isEmpty {
-                // Show the rows now; the Genre and Theme menus' choices can follow.
                 rows = try journal.library(effective, sort: sort, ascending: ascending)
                 loaded = true
-                facts = await services.memory.facts(services)
             } else {
                 // A search also matches companies, franchises and series, which live in the cache.
                 facts = await services.memory.facts(services)

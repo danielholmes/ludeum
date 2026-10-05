@@ -54,6 +54,10 @@ struct MainWindow: View {
                 if let list = lists.first(where: { $0.id == id }) {
                     LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
                 }
+            case .finished, .childhood, .undatedPlaythroughs:
+                if let screen = selection, let filter = screen.shortcutFilter {
+                    LibraryScreen(services: services, selection: $selectedGame, initialFilter: filter, title: screen.title).id(selection)
+                }
             case .whatToPlayNext:
                 WhatToPlayNextScreen(services: services, selection: $selectedGame)
             case .topRated:
