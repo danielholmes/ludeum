@@ -222,18 +222,16 @@ import Testing
         #expect(snapshots == 0)
     }
 
-    @Test func gamesWithoutAnIGDBCoverCarryOverOpenEmusBoxArt() async throws {
-        try oe.addROM("Super Mario World (USA)", md5: "bb", boxArt: testImage(width: 200, height: 280))
-        try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: testImage(width: 200, height: 280))
+    @Test func nothingIsCarriedIntoTheJournalOpenEmusBoxArtIsCached() async throws {
+        let art = testImage(width: 200, height: 280)
+        let pk = try oe.addROM("Super Mario World (USA)", md5: "bb", boxArt: art)
         let draft = try await start()
 
         try await firstImport.commit(draft)
 
-        let rows = try j.journal.library(LibraryFilter(), sort: .name, ascending: true)
-        let smw = try #require(rows.first { $0.name == "Super Mario World" })
-        let sm = try #require(rows.first { $0.name == "Super Metroid" })
-        #expect(try j.journal.journalCover(smw.id)?.origin == .carried)
-        #expect(try j.journal.journalCover(sm.id) == nil)  // IGDB has a cover
+        let covers = try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM cover")! }
+        #expect(covers == 0)
+        #expect(try Data(contentsOf: h.cache.cachedImage(at: "openemu/ART-\(pk)")!) == art)
     }
 
     @Test func aGameAlreadyInTheJournalGetsTheROM() async throws {

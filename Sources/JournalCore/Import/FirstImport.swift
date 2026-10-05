@@ -138,11 +138,17 @@ public final class FirstImport: Sendable {
     let matcher: Matcher
     let journal: JournalStore
     let backups: Backups?
+    let boxArt: BoxArtImport
     /// Holds `draft.json` and `snapshot.sqlite`.
     let draftFolder: URL
 
-    public init(igdb: IGDBClient, hasheous: HasheousClient, journal: JournalStore, backups: Backups?, draftFolder: URL) {
+    /// Without `libretro`, no ROM is looked up in libretro-thumbnails (OpenEmu's Box art is still cached).
+    public init(
+        igdb: IGDBClient, hasheous: HasheousClient, journal: JournalStore, backups: Backups?, draftFolder: URL,
+        libretro: LibretroThumbnails? = nil
+    ) {
         self.igdb = igdb
+        boxArt = BoxArtImport(journal: journal, cache: igdb.cache, libretro: libretro)
         matcher = Matcher(igdb: igdb, hasheous: hasheous)
         self.journal = journal
         self.backups = backups
@@ -249,16 +255,11 @@ public final class FirstImport: Sendable {
         for (key, roms) in games {
             let record = records[Int(key.igdbGameId)]
             let sorted = roms.sorted { $0.pk < $1.pk }
-            let carried: NormalisedCover? =
-                record?.record["cover"]?["image_id"]?.string != nil
-                ? nil
-                : sorted.lazy.compactMap { $0.boxArt.flatMap { try? CoverImage.normalise(Data(contentsOf: $0)) } }.first
             plan.games.append(
                 .init(
                     igdbGameId: key.igdbGameId, platformId: key.platformId,
                     platformName: platformNames[key.platformId] ?? "Platform \(key.platformId)",
-                    igdbName: record?.name ?? cleanName(sorted[0].name), name: cleanName(sorted[0].name), roms: sorted,
-                    carriedCover: carried))
+                    igdbName: record?.name ?? cleanName(sorted[0].name), name: cleanName(sorted[0].name), roms: sorted))
         }
         plan.games.sort { $0.roms[0].pk < $1.roms[0].pk }
         plan.unmatched = draft.library.roms.filter { draft.gameKey($0) == nil }.map { ($0, draft.matches[$0.pk] ?? .noSuggestion) }
@@ -266,5 +267,6 @@ public final class FirstImport: Sendable {
         try backups?.backUp(journal, operation: .beforeImport)
         try journal.commitFirstImport(plan)
         try discardDraft()
+        await boxArt.run(draft.library)
     }
 }

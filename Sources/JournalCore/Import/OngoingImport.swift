@@ -30,9 +30,15 @@ public final class OngoingImport: Sendable {
     let journal: JournalStore
     let backups: Backups?
     let snapshotFile: URL
+    let boxArt: BoxArtImport
 
-    public init(igdb: IGDBClient, hasheous: HasheousClient, journal: JournalStore, backups: Backups?, snapshotFile: URL) {
+    /// Without `libretro`, no ROM is looked up in libretro-thumbnails (OpenEmu's Box art is still cached).
+    public init(
+        igdb: IGDBClient, hasheous: HasheousClient, journal: JournalStore, backups: Backups?, snapshotFile: URL,
+        libretro: LibretroThumbnails? = nil
+    ) {
         self.igdb = igdb
+        boxArt = BoxArtImport(journal: journal, cache: igdb.cache, libretro: libretro)
         matcher = Matcher(igdb: igdb, hasheous: hasheous)
         self.journal = journal
         self.backups = backups
@@ -100,7 +106,9 @@ public final class OngoingImport: Sendable {
         progress(.review, 1)
         await writing()
         if touchesROMs { try backups?.backUp(journal, operation: .beforeImport) }
-        return try journal.applyOngoingImport(plan)
+        let result = try journal.applyOngoingImport(plan)
+        await boxArt.run(snapshot)
+        return result
     }
 }
 

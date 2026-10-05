@@ -44,7 +44,7 @@ import os
     /// The low-priority refresh of expired cache entries, once per launch. Errors are logged.
     func refreshCache(services: Services) async {
         guard let cache = services.cache, let hasheous = services.hasheous else { return }
-        let refresh = CacheRefresh(cache: cache, igdb: services.igdb, hasheous: hasheous, gate: gate, covers: services.covers)
+        let refresh = CacheRefresh(cache: cache, igdb: services.igdb, hasheous: hasheous, gate: gate)
         let result = await Task.detached(priority: .background) {
             await refresh.run { done, total in
                 Task { @MainActor in self.advance(done, total) }

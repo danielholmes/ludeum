@@ -8,7 +8,8 @@ import JournalCore
 func firstImportRun(library: URL, journalFolder: URL, commit: Bool, igdb: IGDBClient, hasheous: HasheousClient) async throws {
     let journal = try JournalStore(directory: journalFolder)
     let run = FirstImport(
-        igdb: igdb, hasheous: hasheous, journal: journal, backups: nil, draftFolder: journalFolder.appending(path: "draft"))
+        igdb: igdb, hasheous: hasheous, journal: journal, backups: nil, draftFolder: journalFolder.appending(path: "draft"),
+        libretro: LibretroThumbnails(cache: try CacheStore(directory: cacheDirectory)))
     var draft = try await run.start(library: library) { phase, fraction in
         FileHandle.standardError.write(Data("\r\(phase.rawValue) \(Int(fraction * 100))%   ".utf8))
     }

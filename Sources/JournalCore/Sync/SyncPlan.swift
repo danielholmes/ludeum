@@ -66,12 +66,15 @@ struct SyncPlan {
     // MARK: Covers
 
     mutating func planCovers(for game: SyncedGame, source: CoverSource, downloadFailed: Bool) {
-        let image: (key: String, jpeg: Data)?
-        switch source {
-        case .igdb(let file): image = (try? Data(contentsOf: file)).map { (file.deletingPathExtension().lastPathComponent, $0) }
-        case .journal(let cover): image = (cover.image.sha256, cover.image.jpeg)
-        case .placeholder: image = nil
-        }
+        // OpenEmu takes JPEG: IGDB's and OpenEmu's bytes as they are, libretro's PNG re-encoded.
+        let jpeg: Data? =
+            switch source {
+            case .upload(let cover): cover.jpeg
+            case .libretro(let file, _): (try? Data(contentsOf: file)).flatMap { try? CoverImage.normalise($0).jpeg }
+            case .openEmu(let file, _), .igdb(let file, _): try? Data(contentsOf: file)
+            case .placeholder: nil
+            }
+        let image = source.key.flatMap { key in jpeg.map { (key: key, jpeg: $0) } }
         for row in game.rows {
             guard let oe = store.games[row.openEmuGame] else { continue }
             if let synced = syncedCovers[row.romId] {

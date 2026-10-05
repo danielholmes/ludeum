@@ -6,8 +6,10 @@ import JournalCore
 /// library. Never point it at the live library.
 func syncRun(library: URL, journalFolder: URL, write: Bool, igdb: IGDBClient) async throws {
     let journal = try JournalStore(directory: journalFolder)
+    let cache = try CacheStore(directory: cacheDirectory)
+    let covers = Covers(journal: journal, cache: cache, igdb: igdb, libretro: LibretroThumbnails(cache: cache))
     let sync = OpenEmuSync(
-        journal: journal, covers: Covers(journal: journal, igdb: igdb), backupFolder: journalFolder.appending(path: "OpenEmu backups"),
+        journal: journal, covers: covers, backupFolder: journalFolder.appending(path: "OpenEmu backups"),
         isOpenEmuRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: "org.openemu.OpenEmu").isEmpty })
     let preview = try await sync.preview(library: library)
     print("Guards failing: \(preview.failedGuards.map(\.rawValue))")

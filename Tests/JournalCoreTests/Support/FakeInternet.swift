@@ -28,6 +28,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         var firstValidToken = 1  // tokens numbered below this are rejected
         // Hasheous
         var hashes: [String: (game: Int, platform: Int)] = [:]
+        // libretro-thumbnails: repo → file paths ("Named_Boxarts/X (USA).png")
+        var libretro: [String: [String]] = [:]
         // Failure injection, keyed by host
         var down: Set<String> = []
         var rateLimitOnce: [String: Int] = [:]  // host → Retry-After seconds
@@ -68,6 +70,12 @@ final class FakeInternet: HTTPTransport, Sendable {
 
     func addHash(md5: String, game: Int, platform: Int) {
         state.withLock { $0.hashes[md5.lowercased()] = (game, platform) }
+    }
+
+    /// libretro-thumbnails images: `repo` like "Nintendo_-_Game_Boy", each name in every folder
+    /// unless `folders` says otherwise.
+    func addLibretro(_ repo: String, _ names: [String], folders: [String] = ["Named_Boxarts", "Named_Snaps", "Named_Titles"]) {
+        state.withLock { s in s.libretro[repo, default: []] += folders.flatMap { f in names.map { "\(f)/\($0).png" } } }
     }
 
     func setDown(_ host: String, _ isDown: Bool) {
@@ -113,12 +121,17 @@ final class FakeInternet: HTTPTransport, Sendable {
             case Hosts.igdb: return Self.igdb(request, s)
             case Hosts.igdbImages: return (200, [:], Self.coverJPEG)
             case Hosts.hasheous: return Self.hasheous(request, s)
+            case Hosts.github: return Self.githubTree(request, s)
+            case Hosts.libretro: return Self.libretroImage(request, s)
             default: return (404, [:], Data())
             }
         }
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!
         return (body, response)
     }
+
+    /// What libretro's image host serves: a real (tiny) PNG, 12 × 16.
+    static let boxartPNG = testImage(width: 12, height: 16, type: .png)
 
     /// What IGDB's image host serves: a real (tiny) JPEG, 10 × 14.
     static let coverJPEG = testImage(width: 10, height: 14, type: .jpeg)
@@ -128,6 +141,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         static let igdb = "api.igdb.com"
         static let igdbImages = "images.igdb.com"
         static let hasheous = "hasheous.org"
+        static let github = "api.github.com"
+        static let libretro = "thumbnails.libretro.com"
     }
 
     // MARK: - Fake services
@@ -188,6 +203,22 @@ final class FakeInternet: HTTPTransport, Sendable {
         let name = body.components(separatedBy: "search \"")[1].components(separatedBy: "\"")[0]
         let platform = ids(after: "platforms = (", in: body).first.map(String.init) ?? "any"
         return (s.searches["\(platform):\(name)"] ?? []).map { ["id": $0] }
+    }
+
+    private static func githubTree(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
+        let parts = request.url!.path().split(separator: "/")
+        guard parts.count >= 3, let paths = s.libretro[String(parts[2])] else { return (404, [:], Data()) }
+        let tree = paths.map { ["path": $0, "type": "blob"] } + [["path": "README.md", "type": "blob"]]
+        return (200, [:], try! JSONSerialization.data(withJSONObject: ["tree": tree, "truncated": false]))
+    }
+
+    private static func libretroImage(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
+        let path = request.url!.path(percentEncoded: false).dropFirst()
+        let parts = path.split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2, s.libretro[parts[0].replacingOccurrences(of: " ", with: "_")]?.contains(parts[1]) == true else {
+            return (404, [:], Data())
+        }
+        return (200, [:], boxartPNG)
     }
 
     private static func hasheous(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {

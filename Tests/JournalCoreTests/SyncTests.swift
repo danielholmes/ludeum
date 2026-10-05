@@ -2,6 +2,8 @@ import Foundation
 import GRDB
 import Synchronization
 import Testing
+import ImageIO
+import UniformTypeIdentifiers
 
 @testable import JournalCore
 
@@ -37,13 +39,14 @@ final class RunningFlag: @unchecked Sendable {
     var sync: OpenEmuSync {
         let running = openEmuRunning
         return OpenEmuSync(
-            journal: j.journal, covers: Covers(journal: j.journal, igdb: h.igdb), backupFolder: backups,
+            journal: j.journal, covers: h.covers(j.journal), backupFolder: backups,
             isOpenEmuRunning: { running.isOn })
     }
 
     func firstImport() async throws {
         let run = FirstImport(
-            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, draftFolder: h.directory.appending(path: "draft"))
+            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, draftFolder: h.directory.appending(path: "draft"),
+            libretro: h.libretro)
         let draft = try await run.start(library: oe.folder) { _, _ in }
         try await run.commit(draft)
     }
@@ -208,15 +211,15 @@ final class RunningFlag: @unchecked Sendable {
         h.internet.addHash(md5: "hh", game: 5, platform: 19)
         let hermano = try oe.addROM("Hermano", md5: "hh")
         try await firstImport()
-        let covers = Covers(journal: j.journal, igdb: h.igdb)
-        try await covers.upload(testImage(width: 100, height: 140), for: try game("Hermano"))
+        let covers = h.covers(j.journal)
+        try covers.upload(testImage(width: 100, height: 140), for: try game("Hermano"))
         _ = try await sync.sync(library: oe.folder, deleting: [])
         let first = try oe.db.read {
             try Row.fetchOne(
                 $0, sql: "SELECT i.Z_PK, i.ZRELATIVEPATH FROM ZGAME g JOIN ZIMAGE i ON i.Z_PK = g.ZBOXIMAGE WHERE g.Z_PK = ?",
                 arguments: [hermano])!
         }
-        try await covers.upload(testImage(width: 200, height: 280), for: try game("Hermano"))
+        try covers.upload(testImage(width: 200, height: 280), for: try game("Hermano"))
 
         let preview = try await sync.preview(library: oe.folder)
         #expect(preview.coversReplaced.count == 1)
@@ -240,8 +243,8 @@ final class RunningFlag: @unchecked Sendable {
         h.internet.addHash(md5: "hh", game: 5, platform: 19)
         let hermano = try oe.addROM("Hermano", md5: "hh")
         try await firstImport()
-        let covers = Covers(journal: j.journal, igdb: h.igdb)
-        try await covers.upload(testImage(width: 100, height: 140), for: try game("Hermano"))
+        let covers = h.covers(j.journal)
+        try covers.upload(testImage(width: 100, height: 140), for: try game("Hermano"))
         _ = try await sync.sync(library: oe.folder, deleting: [])
         // I pick different box art in OpenEmu.
         try await oe.db.write { db in
@@ -249,7 +252,7 @@ final class RunningFlag: @unchecked Sendable {
             try db.execute(sql: "INSERT INTO ZIMAGE VALUES (?, 10, 1, 3, ?, 1, 1, 'MINE', NULL)", arguments: [image, hermano])
             try db.execute(sql: "UPDATE ZGAME SET ZBOXIMAGE = ? WHERE Z_PK = ?", arguments: [image, hermano])
         }
-        try await covers.upload(testImage(width: 200, height: 280), for: try game("Hermano"))
+        try covers.upload(testImage(width: 200, height: 280), for: try game("Hermano"))
 
         _ = try await sync.sync(library: oe.folder, deleting: [])
 
@@ -260,6 +263,67 @@ final class RunningFlag: @unchecked Sendable {
         #expect(path == "MINE")
         let synced = try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM syncedCover")! }
         #expect(synced == 0)
+    }
+
+    func ongoingImport() async throws {
+        _ = try await OngoingImport(
+            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, snapshotFile: h.directory.appending(path: "s.sqlite"),
+            libretro: h.libretro
+        ).run(library: oe.folder)
+    }
+
+    func boxArt(_ game: Int64) throws -> Row? {
+        try oe.db.read {
+            try Row.fetchOne(
+                $0, sql: "SELECT i.Z_PK, i.ZRELATIVEPATH, i.ZWIDTH FROM ZGAME g JOIN ZIMAGE i ON i.Z_PK = g.ZBOXIMAGE WHERE g.Z_PK = ?",
+                arguments: [game])
+        }
+    }
+
+    @Test func libretrosPNGIsWrittenAsJPEG() async throws {
+        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (USA)"])
+        let metroid = try oe.addROM("Super Metroid (USA)", md5: "aa")
+        try await firstImport()
+
+        _ = try await sync.sync(library: oe.folder, deleting: [])
+
+        let row = try #require(try boxArt(metroid))
+        let file = oe.folder.appending(path: "Artwork").appending(path: row["ZRELATIVEPATH"] as String)
+        let source = try #require(CGImageSourceCreateWithData(try Data(contentsOf: file) as CFData, nil))
+        #expect(CGImageSourceGetType(source) as String? == UTType.jpeg.identifier)
+        #expect(row["ZWIDTH"] as Double == 12)
+    }
+
+    @Test func anIGDBCoverSyncWroteIsReplacedOnceLibretroHasBoxArt() async throws {
+        let metroid = try oe.addROM("Super Metroid (USA)", md5: "aa")
+        try await firstImport()
+        _ = try await sync.sync(library: oe.folder, deleting: [])
+        let igdb = try #require(try boxArt(metroid))
+        // libretro gains the box scan; the ROM is looked up again at a later Import.
+        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (USA)"])
+        try await j.journal.db.write { try $0.execute(sql: "UPDATE rom SET libretroLookedUp = 0") }
+        try await ongoingImport()
+
+        #expect(try await sync.preview(library: oe.folder).coversReplaced.count == 1)
+        _ = try await sync.sync(library: oe.folder, deleting: [])
+
+        let replaced = try #require(try boxArt(metroid))
+        #expect(replaced["Z_PK"] as Int64 == igdb["Z_PK"] as Int64)
+        #expect(replaced["ZWIDTH"] as Double == 12)
+    }
+
+    @Test func aCoverSyncWroteIsntTakenForOpenEmusOwnBoxArt() async throws {
+        let metroid = try oe.addROM("Super Metroid (USA)", md5: "aa")
+        try await firstImport()
+        _ = try await sync.sync(library: oe.folder, deleting: [])
+
+        try await ongoingImport()
+
+        let path = try await j.journal.db.read { try String.fetchOne($0, sql: "SELECT openEmuBoxArt FROM rom") }
+        #expect(path == nil)
+        let preview = try await sync.preview(library: oe.folder)
+        #expect(preview.coversReplaced.isEmpty && preview.coversAdded.isEmpty)
+        #expect(try boxArt(metroid) != nil)
     }
 
     // MARK: Guards, backup and Duplicate Versions

@@ -1,0 +1,79 @@
+import Foundation
+
+/// Finds a ROM's name in a libretro-thumbnails folder listing, in order: the file name minus its
+/// extension (with libretro's substitutions), then with GoodTools tags rewritten to No-Intro ones,
+/// then a fuzzy title match on the file name, then on each of `titles` (OpenEmu's or IGDB's).
+/// A multi-disc ROM looks for its disc-less name first.
+enum LibretroLookup {
+    static func find(fileName: String, titles: [String], in names: Set<String>) -> String? {
+        let stem = substituted(Self.stem(fileName))
+        let discless = withoutDisc(stem)
+        for exact in [discless, stem, withoutDisc(goodToolsRewritten(stem))] where names.contains(exact) { return exact }
+
+        let byTitle = Dictionary(grouping: names.filter { !isPrerelease($0) }, by: { titleKey($0) })
+        let regions = ROMName(stem).regions.map { preferredOrder.filter($0.contains) } ?? []
+        for title in [stem] + titles {
+            let key = titleKey(title)
+            guard !key.isEmpty, let candidates = byTitle[key] else { continue }
+            return candidates.min { rank($0, regions) < rank($1, regions) }
+        }
+        return nil
+    }
+
+    /// The file name minus its extension (`.nkit.iso` counts as one).
+    static func stem(_ fileName: String) -> String {
+        var s = fileName
+        if s.lowercased().hasSuffix(".nkit.iso") || s.lowercased().hasSuffix(".nkit.gcz") { s = String(s.dropLast(9)) }
+        let ext = (s as NSString).pathExtension
+        if !ext.isEmpty, ext.count <= 4, !ext.contains(" ") { s = (s as NSString).deletingPathExtension }
+        return s
+    }
+
+    /// libretro-thumbnails replaces ``&*/:`<>?\|"`` with `_` in its file names.
+    static func substituted(_ name: String) -> String {
+        String(name.map { #"&*/:`<>?\|""#.contains($0) ? "_" : $0 })
+    }
+
+    static func withoutDisc(_ name: String) -> String {
+        name.replacingOccurrences(of: #" \(Disc \d+\)"#, with: "", options: .regularExpression)
+    }
+
+    private static let goodToolsRegions: [String: String] = [
+        "U": "USA", "E": "Europe", "J": "Japan", "UE": "USA, Europe", "JU": "Japan, USA", "JUE": "Japan, USA, Europe",
+        "JE": "Japan, Europe", "W": "World", "B": "Brazil", "F": "France", "G": "Germany", "K": "Korea",
+    ]
+
+    /// `(U)` → `(USA)`, `(V1.1)` → `(Rev 1)`; square-bracket flags and `(M5)`-style language counts dropped.
+    static func goodToolsRewritten(_ name: String) -> String {
+        var s = name.replacingOccurrences(of: #"\s*\[[^\]]*\]"#, with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"\s*\(M\d+\)"#, with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"\([Vv]1\.(\d+)\)"#, with: "(Rev $1)", options: .regularExpression)
+        for (code, region) in goodToolsRegions { s = s.replacingOccurrences(of: "(\(code))", with: "(\(region))") }
+        return s.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The text before the first tag, normalised: articles moved to the front, `&` and `_` read as "and",
+    /// only letters and digits kept.
+    static func titleKey(_ name: String) -> String {
+        var title = String(name.prefix { $0 != "(" && $0 != "[" }).trimmingCharacters(in: .whitespaces)
+        if let r = title.range(of: #", (The|A|An)$"#, options: .regularExpression) {
+            title = "\(title[r].dropFirst(2)) " + title[..<r.lowerBound]
+        }
+        title = title.replacingOccurrences(of: "&", with: " and ").replacingOccurrences(of: "_", with: " and ")
+        return String(title.lowercased().folding(options: .diacriticInsensitive, locale: nil).filter { $0.isLetter || $0.isNumber })
+    }
+
+    private static func isPrerelease(_ name: String) -> Bool {
+        name.range(of: #"\((Beta|Proto|Prototype|Demo|Sample|Kiosk)( \d+)?\)"#, options: .regularExpression) != nil
+    }
+
+    private static let preferredOrder: [NameRegion] = [.usa, .europe, .japan]
+
+    /// Lower is better: the ROM's own region, else USA, Europe, Japan; then a disc-less name, then the shortest.
+    private static func rank(_ name: String, _ own: [NameRegion]) -> (Int, Int, Int, String) {
+        let regions = ROMName(name).regions ?? []
+        let order = own + preferredOrder.filter { !own.contains($0) }
+        let region = order.firstIndex(where: regions.contains) ?? order.count
+        return (region, withoutDisc(name) == name ? 0 : 1, name.count, name)
+    }
+}
