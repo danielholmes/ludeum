@@ -375,6 +375,16 @@ private struct CoverTile: View {
                         .help(status.help)
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                // The table's Name column shows the same symbol.
+                if row.noROMInOpenEmu {
+                    Image(systemName: "externaldrive.badge.xmark").font(.system(size: max(12, width / 10))).foregroundStyle(.secondary)
+                        .padding(6)
+                        .background(.regularMaterial, in: .circle)
+                        .padding(5)
+                        .help("No ROM in OpenEmu")
+                }
+            }
     }
 }
 
