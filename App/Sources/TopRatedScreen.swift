@@ -38,6 +38,9 @@ struct TopRatedScreen: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count)
+        }
         .navigationTitle("Top-rated")
         .toolbar {
             LibraryFilterMenu(filter: $filter, platforms: platforms, lists: lists, ratedOnly: true)

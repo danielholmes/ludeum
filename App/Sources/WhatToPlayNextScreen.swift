@@ -31,6 +31,9 @@ struct WhatToPlayNextScreen: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            FilterSummary(filter: $filter, platforms: platforms, lists: lists)
+        }
         .navigationTitle("What to play next")
         .toolbar {
             ToolbarItemGroup {

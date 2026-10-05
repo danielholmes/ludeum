@@ -53,6 +53,9 @@ struct LibraryScreen: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count)
+        }
         .navigationTitle(list?.name ?? "Library")
         .toolbar { toolbar }
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, list: list?.id)) {
@@ -237,5 +240,83 @@ private struct CoverTile: View {
     var body: some View {
         CoverView(services: services, game: row.id, name: row.name)
             .frame(width: 120, height: 160)
+    }
+}
+
+/// What the filters are showing, in words, above a filtered screen: one chip per active filter,
+/// each clearable, plus Clear all. Nothing when no filter is set.
+struct FilterSummary: View {
+    @Binding var filter: LibraryFilter
+    let platforms: [IGDBPlatform]
+    let lists: [GameList]
+    /// How many Games are shown, when the screen has a simple count.
+    var count: Int?
+
+    var body: some View {
+        let chips = self.chips
+        if !chips.isEmpty {
+            HStack(spacing: 6) {
+                Text(count.map { "Showing \($0) Game\($0 == 1 ? "" : "s"):" } ?? "Showing:").foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(chips, id: \.text) { chip in
+                            HStack(spacing: 4) {
+                                Text(chip.text)
+                                Button("Remove filter", systemImage: "xmark") { chip.clear(&filter) }
+                                    .labelStyle(.iconOnly).buttonStyle(.hover).imageScale(.small)
+                            }
+                            .padding(.leading, 8).padding(.vertical, 2)
+                            .background(.quaternary, in: .capsule)
+                        }
+                    }
+                }
+                Button("Clear all") { filter = LibraryFilter() }.buttonStyle(.hover)
+            }
+            .font(.callout)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(.bar)
+        }
+    }
+
+    private struct Chip {
+        let text: String
+        let clear: (inout LibraryFilter) -> Void
+    }
+
+    private var chips: [Chip] {
+        var c: [Chip] = []
+        if let id = filter.platformId {
+            c.append(Chip(text: platforms.first { $0.id == id }?.name ?? "One Platform") { $0.platformId = nil })
+        }
+        switch filter.rating {
+        case .unrated: c.append(Chip(text: "Unrated") { $0.rating = nil })
+        case .atLeast(let r): c.append(Chip(text: "Rated \(ratingText(r)) or more") { $0.rating = nil })
+        case nil: break
+        }
+        switch filter.intent {
+        case .some(nil): c.append(Chip(text: "No Intent") { $0.intent = nil })
+        case .some(.some(let i)): c.append(Chip(text: intentText(i)) { $0.intent = nil })
+        case nil: break
+        }
+        if let id = filter.listId {
+            c.append(Chip(text: "In \(lists.first { $0.id == id }?.name ?? "a List")") { $0.listId = nil })
+        }
+        if let o = filter.outcome {
+            let text =
+                switch o {
+                case .playing: "Playing"
+                case .finished: "Finished"
+                case .dropped: "Dropped"
+                case .notPlayed: "Not played"
+                }
+            c.append(Chip(text: text) { $0.outcome = nil })
+        }
+        if let ch = filter.childhood {
+            c.append(Chip(text: ch ? "Childhood" : "Not childhood") { $0.childhood = nil })
+        }
+        if filter.undatedPlaythroughs {
+            c.append(Chip(text: "Playthroughs with no dates") { $0.undatedPlaythroughs = false })
+        }
+        return c
     }
 }

@@ -30,6 +30,9 @@ struct YearInReviewScreen: View {
                             ? "Playthroughs with dates and tracked OpenEmu play time show up here." : "Try fewer filters."))
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            FilterSummary(filter: $filter, platforms: platforms, lists: lists)
+        }
         .navigationTitle("Year in review")
         .toolbar {
             if !years.isEmpty {
