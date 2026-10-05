@@ -11,7 +11,7 @@ public struct Emulator: Sendable, Equatable {
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
         switch platformId {
-        case 18, 99: .mesenCE  // NES, Family Computer
+        case 18, 99, 19, 58: .mesenCE  // NES, Family Computer, SNES, Super Famicom
         default: nil
         }
     }

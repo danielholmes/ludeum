@@ -90,7 +90,7 @@ An image of a game being played, or its title screen. From IGDB (several per gam
 ### Playing
 
 **Emulator**:
-The app a Platform's Games are played in, e.g. MesenCE for NES. Each Platform has at most one.
+The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one.
 _Avoid_: Core, player
 
 **Emulator settings**:

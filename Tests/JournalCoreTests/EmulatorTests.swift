@@ -4,10 +4,9 @@ import Testing
 @testable import JournalCore
 
 @Suite struct EmulatorTests {
-    @Test func nesAndFamicomGamesArePlayedInMesenCE() {
-        #expect(Emulator.of(platformId: 18) == .mesenCE)
-        #expect(Emulator.of(platformId: 99) == .mesenCE)
-        #expect(Emulator.of(platformId: 19) == nil)
+    @Test func nesAndSNESGamesArePlayedInMesenCE() {
+        for platform: Int64 in [18, 99, 19, 58] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
+        #expect(Emulator.of(platformId: 33) == nil)  // Game Boy
     }
 
     @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() {
