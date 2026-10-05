@@ -8,6 +8,8 @@ struct IGDBFactsRows: View {
     let facts: GameFacts
     /// Opens the Library with a filter (a genre, a franchise…).
     let browse: (LibraryFilter) -> Void
+    /// Game detail shows the scores beside my Rating instead.
+    var showsScores = true
     @State private var pins: Set<Pin> = []
     @State private var allCompanies = false
     @State private var error: String?
@@ -15,10 +17,12 @@ struct IGDBFactsRows: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let summary = facts.summary { SummaryText(text: summary) }
-            CommunityScores(players: facts.playerScore, critics: facts.criticScore)
+            if showsScores { CommunityScores(players: facts.playerScore, critics: facts.criticScore) }
             if !facts.genres.isEmpty { PillRow(title: "Genre", items: facts.genres, open: { browse(LibraryFilter(genre: $0)) }) }
             if !facts.themes.isEmpty { pinnable("Theme", .theme, facts.themes) }
-            if !facts.franchises.isEmpty { pinnable("Franchise", .franchise, facts.franchises) }
+            // A franchise that only repeats the series (Metroid and Metroid) says nothing new.
+            let franchises = facts.franchises.filter { !facts.series.contains($0) }
+            if !franchises.isEmpty { pinnable("Franchise", .franchise, franchises) }
             if !facts.series.isEmpty { pinnable("Series", .series, facts.series) }
             if !facts.credits.isEmpty { companies }
             if let t = facts.timeToBeat, let text = timeToBeatText(t) {

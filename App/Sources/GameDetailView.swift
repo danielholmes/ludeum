@@ -42,6 +42,7 @@ struct GameDetailView: View {
 
     private func form(_ game: Game) -> some View {
         Form {
+            // Identity and actions: what the Game is, and playing it.
             Section {
                 HStack(alignment: .top, spacing: 16) {
                     // The Cover in its own shape (SNES boxes are wide), at the top of its column.
@@ -51,18 +52,6 @@ struct GameDetailView: View {
                         HStack(alignment: .firstTextBaseline) {
                             Text(game.name).font(.title).bold()
                             Spacer()
-                            if !roms.isEmpty, !roms.allSatisfy(\.missing) {
-                                if let emulator {
-                                    Button {
-                                        play(in: emulator)
-                                    } label: {
-                                        Label(emulator.name, systemImage: "play.fill")
-                                    }
-                                    .labelStyle(.titleAndIcon).buttonStyle(.hover).help("Play in \(emulator.name)")
-                                }
-                                Button(action: playInOpenEmu) { Label("OpenEmu", systemImage: "play.fill") }
-                                    .labelStyle(.titleAndIcon).buttonStyle(.hover).help("Play in OpenEmu")
-                            }
                             Button("Edit Game", systemImage: "pencil") { editingGame = true }
                                 .labelStyle(.iconOnly).buttonStyle(.hover).help("Name, Cover, IGDB link and deleting")
                         }
@@ -70,15 +59,19 @@ struct GameDetailView: View {
                             Text([platform.name, facts.releaseYear.map(String.init)].compactMap { $0 }.joined(separator: " · "))
                                 .foregroundStyle(.secondary)
                         }
-                        RatingEditor(
-                            rating: game.rating, imported: game.ratingImported, hasHistory: !history.isEmpty,
-                            set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
-                        IGDBFactsRows(services: services, facts: facts, browse: browse)
+                        if !roms.isEmpty, !roms.allSatisfy(\.missing) { playControls }
                     }
                 }
             }
 
-            Section("Intent") {
+            // My journal: what I think of it and when I played it.
+            Section("My journal") {
+                HStack(alignment: .firstTextBaseline, spacing: 24) {
+                    RatingEditor(
+                        rating: game.rating, imported: game.ratingImported, hasHistory: !history.isEmpty,
+                        set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
+                    CommunityScores(players: facts.playerScore, critics: facts.criticScore)
+                }
                 HStack {
                     Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
                         Text("None").tag(Intent?.none)
@@ -90,77 +83,53 @@ struct GameDetailView: View {
                     Toggle("Childhood", isOn: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
                         .toggleStyle(.checkbox).fixedSize()
                 }
-            }
-
-            Section {
                 ForEach(playthroughs, id: \.id) { p in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(playthroughTitle(p.draft))
-                            if let details = playthroughDetails(p.draft) { Text(details).font(.caption).foregroundStyle(.secondary) }
-                        }
-                        Spacer()
-                        Button("Edit") { editing = PlaythroughEdit(id: p.id, draft: p.draft) }.buttonStyle(.hover)
-                        Button("Delete", systemImage: "trash") { deletingPlaythrough = p }.labelStyle(.iconOnly).buttonStyle(.hover)
-                    }
-                }
-                Button("Add Playthrough…") { editing = PlaythroughEdit(id: nil, draft: PlaythroughDraft()) }
-            } header: {
-                Text("Playthroughs")
-            }
-
-            if !facts.screenshots.isEmpty, let igdb = services.igdb {
-                ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots)
-            }
-
-            Section("ROMs") {
-                if roms.isEmpty {
-                    Text("No ROMs").foregroundStyle(.secondary)
-                } else {
-                    if roms.allSatisfy(\.missing) { Text("No ROM in OpenEmu").foregroundStyle(.orange) }
-                    ForEach(roms) { rom in
+                    // Click to edit; delete from the right-click menu or the edit sheet.
+                    Button {
+                        editing = PlaythroughEdit(id: p.id, draft: p.draft)
+                    } label: {
                         HStack {
                             VStack(alignment: .leading) {
-                                // Without its extension; GoodTools region codes spelled out.
-                                Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
-                                Text(
-                                    [readableVersion(rom.version), rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil]
-                                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-                                )
-                                .font(.caption).foregroundStyle(.secondary)
-                                if let dates = fileDates[rom.id] {
-                                    Text(
-                                        [
-                                            dates.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
-                                            dates.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
-                                        ].compactMap { $0 }.joined(separator: " · ")
-                                    )
-                                    .font(.caption).foregroundStyle(.secondary)
+                                Text(playthroughTitle(p.draft))
+                                if let details = playthroughDetails(p.draft) {
+                                    Text(details).font(.caption).foregroundStyle(.secondary)
                                 }
                             }
                             Spacer()
-                            if !rom.missing {
-                                Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
-                                    .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
-                            }
+                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                         }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Edit this Playthrough")
+                    .contextMenu {
+                        Button("Edit…") { editing = PlaythroughEdit(id: p.id, draft: p.draft) }
+                        Button("Delete…", role: .destructive) { deletingPlaythrough = p }
                     }
                 }
+                Button("Add Playthrough…", systemImage: "plus") { editing = PlaythroughEdit(id: nil, draft: PlaythroughDraft()) }
+                    .buttonStyle(.hover)
             }
 
-            if let emulator {
-                Section(emulator.name) {
-                    Picker("Run-ahead", selection: runAheadFrames) {
-                        Text("Default (0 frames)").tag(Int?.none)
-                        ForEach(EmulatorSettings.runAheadRange, id: \.self) { frames in
-                            Text("\(frames) frame\(frames == 1 ? "" : "s")").tag(Int?.some(frames))
-                        }
-                    }
-                    .help("Frames \(emulator.name) runs ahead to hide input lag. Set on every Play.")
+            // About: what IGDB says about it.
+            if facts != .none {
+                Section("About") {
+                    IGDBFactsRows(services: services, facts: facts, browse: browse, showsScores: false)
                 }
             }
-
+            if !facts.screenshots.isEmpty, let igdb = services.igdb {
+                ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots)
+            }
             if !facts.keywords.isEmpty { KeywordsSection(keywords: facts.keywords) }
+
+            // Files: the ROMs, checked now and then.
+            Section {
+                DisclosureGroup {
+                    romRows
+                } label: {
+                    Text(filesSummary).foregroundStyle(.secondary)
+                }
+            }
 
             if let error { Text(error).foregroundStyle(.red) }
         }
@@ -267,6 +236,82 @@ struct GameDetailView: View {
     }
 
     /// The Emulator this Game's Platform is played in, if any.
+    /// ▶ Play in the Platform's Emulator (else OpenEmu), and beside it the Emulator's settings and
+    /// OpenEmu as the other way to play.
+    @ViewBuilder private var playControls: some View {
+        HStack(spacing: 8) {
+            if let emulator {
+                Button {
+                    play(in: emulator)
+                } label: {
+                    Label("Play", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent).help("Play in \(emulator.name)")
+                Menu {
+                    Picker("Run-ahead", selection: runAheadFrames) {
+                        Text("Default (0 frames)").tag(Int?.none)
+                        ForEach(EmulatorSettings.runAheadRange, id: \.self) { frames in
+                            Text("\(frames) frame\(frames == 1 ? "" : "s")").tag(Int?.some(frames))
+                        }
+                    }
+                    Divider()
+                    Button("Play in OpenEmu", action: playInOpenEmu)
+                } label: {
+                    Text("\(emulator.name) · Run-ahead \(emulatorSettings.runAheadFrames ?? 0)")
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .help("Frames \(emulator.name) runs ahead to hide input lag, set on every Play; or play in OpenEmu")
+            } else {
+                Button(action: playInOpenEmu) { Label("Play", systemImage: "play.fill") }
+                    .buttonStyle(.borderedProminent).help("Play in OpenEmu")
+            }
+        }
+    }
+
+    /// "Files · 1 ROM", or what's missing.
+    private var filesSummary: String {
+        if roms.isEmpty { return "Files · No ROMs" }
+        let missing = roms.filter(\.missing).count
+        let count = "\(roms.count) ROM\(roms.count == 1 ? "" : "s")"
+        if missing == roms.count { return "Files · \(count), none in OpenEmu" }
+        return missing > 0 ? "Files · \(count), \(missing) missing" : "Files · \(count)"
+    }
+
+    @ViewBuilder private var romRows: some View {
+        if roms.isEmpty {
+            Text("No ROMs").foregroundStyle(.secondary)
+        } else {
+            if roms.allSatisfy(\.missing) { Text("No ROM in OpenEmu").foregroundStyle(.orange) }
+            ForEach(roms) { rom in
+                HStack {
+                    VStack(alignment: .leading) {
+                        // Without its extension; GoodTools region codes spelled out.
+                        Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
+                        Text(
+                            [readableVersion(rom.version), rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil]
+                                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        if let dates = fileDates[rom.id] {
+                            Text(
+                                [
+                                    dates.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                    dates.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                ].compactMap { $0 }.joined(separator: " · ")
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    if !rom.missing {
+                        Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
+                            .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
+                    }
+                }
+            }
+        }
+    }
+
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
 
     private var runAheadFrames: Binding<Int?> {
