@@ -11,6 +11,8 @@ struct LibraryScreen: View {
     var bar = Bar.summary
     @Binding var selection: GameID?
     @State private var filter: LibraryFilter
+    /// What's typed in the search field; it reaches `filter.name` after a pause in typing.
+    @State private var searchText: String
     @State private var sort = LibrarySort.name
     @State private var ascending = true
     // Remembered across screens and launches, shared by the Library and every List.
@@ -38,6 +40,7 @@ struct LibraryScreen: View {
         self.title = title
         _selection = selection
         _filter = State(initialValue: initialFilter)
+        _searchText = State(initialValue: initialFilter.name)
     }
 
     var body: some View {
@@ -92,6 +95,12 @@ struct LibraryScreen: View {
         }
         .navigationTitle(list?.name ?? title ?? "Library")
         .toolbar { toolbar }
+        .task(id: searchText) {
+            // Debounced: the Library reloads 300 ms after the last keystroke, not on every one.
+            guard searchText != filter.name else { return }
+            try? await Task.sleep(for: .milliseconds(300))
+            if !Task.isCancelled { filter.name = searchText }
+        }
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, list: list?.id)) {
             await load()
         }
@@ -142,14 +151,17 @@ struct LibraryScreen: View {
         // The search field in a group of its own, so the window's Add button doesn't join it.
         if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
         ToolbarItem {
-            TextField("Search", text: $filter.name)
+            TextField("Search", text: $searchText)
                 .help("Names, companies, franchises and series")
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 180)
                 .overlay(alignment: .trailing) {
-                    if !filter.name.isEmpty {
-                        Button("Clear search", systemImage: "xmark.circle.fill") { filter.name = "" }
-                            .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary).padding(.trailing, 5)
+                    if !searchText.isEmpty {
+                        Button("Clear search", systemImage: "xmark.circle.fill") {
+                            searchText = ""
+                            filter.name = ""
+                        }
+                        .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary).padding(.trailing, 5)
                     }
                 }
         }
@@ -169,15 +181,27 @@ struct LibraryScreen: View {
         var effective = filter
         if let list { effective.listId = list.id }
         do {
+            let (sort, ascending) = (sort, ascending)
             if !filter.usesIGDBFacts, filter.name.trimmed.isEmpty {
-                rows = try journal.library(effective, sort: sort, ascending: ascending)
+                let found = try await Task.detached(priority: .userInitiated) {
+                    try journal.library(effective, sort: sort, ascending: ascending)
+                }.value
+                // A newer reload has started: its rows win.
+                guard !Task.isCancelled else { return }
+                rows = found
                 loaded = true
                 // The Add filter menu's genres and themes can follow.
                 if bar == .filters { facts = await services.memory.facts(services) }
             } else {
                 // A search also matches companies, franchises and series, which live in the cache.
                 facts = await services.memory.facts(services)
-                rows = try journal.library(effective, sort: sort, ascending: ascending, facts: facts)
+                let facts = facts
+                // Off the main thread, so typing stays smooth while it filters.
+                let found = try await Task.detached(priority: .userInitiated) {
+                    try journal.library(effective, sort: sort, ascending: ascending, facts: facts)
+                }.value
+                guard !Task.isCancelled else { return }
+                rows = found
                 loaded = true
             }
             (platforms, lists) = try filterChoices(journal)
