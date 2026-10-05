@@ -10,6 +10,12 @@ extension JournalStore {
         }
     }
 
+    /// Every Game holding this IGDB game, on any Platform, by id.
+    public func games(igdbGameId: Int64) throws -> [Game] {
+        try db.read { db in try GameID.fetchAll(db, sql: "SELECT id FROM game WHERE igdbGameId = ? ORDER BY id", arguments: [igdbGameId]) }
+            .map(game)
+    }
+
     /// A Platform the journal has recorded.
     public func platform(_ id: Int64) throws -> IGDBPlatform? {
         try db.read { db in

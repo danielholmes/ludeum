@@ -81,6 +81,20 @@ import Testing
         #expect(game.platformId == 19)
     }
 
+    @Test func chipsAreReadAgainFromTheLibraryIncludingADifferentPlatform() async throws {
+        h.internet.addGame(1103, "Super Metroid", fields: ["platforms": [snes, wii]])
+        h.internet.addSearch("metroid", platform: nil, results: [1103])
+        let result = try #require(try await search.search("metroid").first)
+        let snesGame = try search.add(result, on: result.chips[0].platform)
+        let pc = IGDBPlatform(id: 6, name: "PC (Microsoft Windows)", abbreviation: "PC")
+        let pcGame = try search.add(result, on: pc)
+
+        let chips = try search.currentChips(for: result)
+
+        #expect(chips.map(\.platform.id) == [19, 5, 6])
+        #expect(chips.map(\.game) == [snesGame, nil, pcGame])
+    }
+
     @Test func aChipAlreadyInTheJournalSaysSoAndAddingOpensThatGame() async throws {
         h.internet.addGame(1103, "Super Metroid", fields: ["platforms": [snes, wii]])
         h.internet.addSearch("metroid", platform: nil, results: [1103])

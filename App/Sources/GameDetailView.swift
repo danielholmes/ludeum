@@ -20,16 +20,12 @@ struct GameDetailView: View {
     @State private var roms: [JournalROM] = []
     @State private var emulatorSettings = EmulatorSettings()
     @State private var showingHistory = false
-    @State private var pins: Set<Pin> = []
-    @State private var allScreenshots = false
-    @State private var allCompanies = false
     /// Each present ROM file's created and modified dates, by ROM id, read from disk.
     @State private var fileDates: [Int64: (created: Date?, modified: Date?)] = [:]
     @State private var facts = GameFacts.none
     @State private var editing: PlaythroughEdit?
     @State private var linking = false
     @State private var editingGame = false
-    @State private var viewing: Screenshot?
     @State private var deletion: DeletionSummary?
     @State private var deletingPlaythrough: Playthrough?
     @State private var error: String?
@@ -75,22 +71,7 @@ struct GameDetailView: View {
                         RatingEditor(
                             rating: game.rating, imported: game.ratingImported, hasHistory: !history.isEmpty,
                             set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
-                        CommunityScores(players: facts.playerScore, critics: facts.criticScore)
-                        if !facts.genres.isEmpty { PillRow(title: "Genre", items: facts.genres, open: { browse(LibraryFilter(genre: $0)) }) }
-                        if !facts.themes.isEmpty { pinnable("Theme", .theme, facts.themes) }
-                        if !facts.franchises.isEmpty { pinnable("Franchise", .franchise, facts.franchises) }
-                        if !facts.series.isEmpty { pinnable("Series", .series, facts.series) }
-                        if !facts.credits.isEmpty { companies }
-                        if !facts.links.isEmpty {
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text("Links").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
-                                FlowLayout(spacing: 8) {
-                                    ForEach(facts.links, id: \.title) { link in
-                                        Link(link.title, destination: link.url).font(.caption).help(link.url.absoluteString)
-                                    }
-                                }
-                            }
-                        }
+                        IGDBFactsRows(services: services, facts: facts, browse: browse)
                     }
                 }
             }
@@ -152,31 +133,7 @@ struct GameDetailView: View {
             }
 
             if !facts.screenshots.isEmpty, let igdb = services.igdb {
-                Section("Screenshots") {
-                    // Two rows of three, then a tile to show the rest.
-                    let limit = 6
-                    let all = facts.screenshots
-                    let collapsed = !allScreenshots && all.count > limit
-                    let shown = collapsed ? Array(all.prefix(limit - 1)) : all
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                        ForEach(shown, id: \.self) { imageID in
-                            ScreenshotImage(igdb: igdb, imageID: imageID, large: false)
-                                .aspectRatio(16 / 9, contentMode: .fit)
-                                .frame(minWidth: 0)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                .onTapGesture { viewing = Screenshot(id: imageID) }
-                        }
-                        if collapsed {
-                            Button { allScreenshots = true } label: {
-                                Label("\(all.count - shown.count) more", systemImage: "plus")
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-                            }
-                            .buttonStyle(.plain)
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                        }
-                    }
-                }
+                ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots)
             }
 
             Section("ROMs") {
@@ -247,8 +204,6 @@ struct GameDetailView: View {
         }
         .task(id: game.igdbGameId) {
             facts = .none
-            allScreenshots = false
-            allCompanies = false
             if let link = game.igdbGameId, let igdb = services.igdb { facts = (try? await igdb.facts(igdbGameId: link)) ?? .none }
         }
         .sheet(isPresented: $editingGame) {
@@ -262,15 +217,6 @@ struct GameDetailView: View {
         }
         .sheet(isPresented: $showingHistory) {
             RatingHistorySheet(history: history) { entry in save { try $0.deleteRatingEntry(entry.id) } }
-        }
-        .sheet(item: $viewing) { shot in
-            if let igdb = services.igdb {
-                // IGDB's full size (1280 × 720), shrinking to fit a smaller screen. Click to close.
-                ScreenshotImage(igdb: igdb, imageID: shot.id, large: true)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .frame(minWidth: 640, idealWidth: 1280, maxWidth: 1280)
-                    .onTapGesture { viewing = nil }
-            }
         }
         .sheet(item: $editing) { edit in
             PlaythroughSheet(services: services, game: id, edit: edit) {
@@ -324,43 +270,11 @@ struct GameDetailView: View {
             memberOf = Set(try journal.lists(containing: id).map(\.id))
             roms = try journal.roms(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
-            pins = Set(try journal.pins())
         } catch JournalError.gameNotFound {
             self.game = nil
         } catch {
             self.error = error.localizedDescription
         }
-    }
-
-    /// Each company once, its roles in brackets: "Capcom (Developer, Publisher)". Developers and the
-    /// first publisher show; the rest (often regional publishers) wait behind "+N more".
-    @ViewBuilder private var companies: some View {
-        let roles = Dictionary(facts.credits.map { ($0.name, $0.roles) }, uniquingKeysWith: { a, _ in a })
-        let key = facts.credits.filter { $0.roles.contains(.developer) }.map(\.name)
-            + facts.credits.filter { !$0.roles.contains(.developer) && $0.roles.contains(.publisher) }.prefix(1).map(\.name)
-        let all = facts.credits.map(\.name)
-        let shown = allCompanies || key.isEmpty ? all : all.filter(key.contains)
-        pinnable(
-            "Companies", .company, shown,
-            more: shown.count < all.count ? (all.count - shown.count, { allCompanies = true }) : nil
-        ) { name in
-            let r = roles[name] ?? []
-            return r.isEmpty ? name : "\(name) (\(r.map(\.rawValue.capitalized).joined(separator: ", ")))"
-        }
-    }
-
-    /// Franchise, Series or Theme pills: each opens the Library filtered to it, and can be pinned to the sidebar.
-    private func pinnable(
-        _ title: String, _ kind: Pin.Kind, _ names: [String], more: (count: Int, show: () -> Void)? = nil,
-        label: @escaping (String) -> String = { $0 }
-    ) -> some View {
-        PillRow(
-            title: title, items: names, label: label, more: more, open: { browse(Pin(kind: kind, name: $0).filter) },
-            pinned: Set(pins.filter { $0.kind == kind }.map(\.name)),
-            togglePin: { name in
-                let pin = Pin(kind: kind, name: name)
-                save { pins.contains(pin) ? try $0.unpin(pin) : try $0.pin(pin) }
-            })
     }
 
     /// Runs a journal change, then reloads every screen showing the journal.

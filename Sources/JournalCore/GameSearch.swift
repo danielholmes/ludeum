@@ -97,6 +97,21 @@ public struct GameSearch: Sendable {
         try journal.gameID(igdbGameId: igdbGameId, platformId: platformId).map(journal.game)
     }
 
+    /// The result's chips as the Library is now: IGDB's platforms, then Platforms a Game holds this
+    /// IGDB link on that IGDB doesn't list (added with "Different platform…").
+    public func currentChips(for result: GameSearchResult) throws -> [PlatformChip] {
+        let listed = try result.chips.map { chip in
+            PlatformChip(platform: chip.platform, game: try journal.gameID(igdbGameId: result.igdbGameId, platformId: chip.platform.id))
+        }
+        let others = try journal.games(igdbGameId: result.igdbGameId).filter { game in !listed.contains { $0.platform.id == game.platformId } }
+        return try listed
+            + others.map { game in
+                PlatformChip(
+                    platform: try journal.platform(game.platformId) ?? IGDBPlatform(id: game.platformId, name: "Platform \(game.platformId)", abbreviation: nil),
+                    game: game.id)
+            }
+    }
+
     private func result(_ game: IGDBGame) throws -> GameSearchResult {
         let platforms = (game.record["platforms"]?.array ?? []).compactMap { p -> IGDBPlatform? in
             guard let id = p["id"]?.int, let name = p["name"]?.string else { return nil }

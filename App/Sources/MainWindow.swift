@@ -7,7 +7,9 @@ struct MainWindow: View {
     let importModel: ImportModel
     let syncModel: SyncModel
     @State private var selectedGame: GameID?
-    @State private var adding = false
+    @State private var igdbQuery = ""
+    /// The IGDB screen's selected result, shown in the detail column instead of a Game.
+    @State private var igdbResult: GameSearchResult?
     @State private var selection: Screen? = .library
     /// A filter another screen asked the Library to open with, bumping `libraryRequest` to apply it.
     @State private var libraryFilter = LibraryFilter()
@@ -16,6 +18,12 @@ struct MainWindow: View {
     @State private var reviewQueueCount = 0
     @State private var platformCounts: [PlatformCount] = []
     @State private var pins: [Pin] = []
+
+    /// Opens a Game in the detail column, leaving any IGDB result.
+    private func openGame(_ id: GameID) {
+        igdbResult = nil
+        selectedGame = id
+    }
 
     /// Opens the Library with `filter`, keeping the selected Game.
     private func showInLibrary(_ filter: LibraryFilter) {
@@ -52,6 +60,8 @@ struct MainWindow: View {
                 TopRatedScreen(services: services, selection: $selectedGame)
             case .yearInReview:
                 YearInReviewScreen(services: services, selection: $selectedGame, openLibrary: showInLibrary)
+            case .igdb:
+                IGDBScreen(services: services, query: $igdbQuery, shown: $igdbResult, open: openGame)
             case .reviewQueue:
                 ReviewQueueScreen(services: services, checkAgain: importModel.importNow, shownGame: $selectedGame)
                     .disabled(services.work.journalLocked)
@@ -65,7 +75,10 @@ struct MainWindow: View {
                 ContentUnavailableView("Nothing selected", systemImage: "sidebar.left")
             }
         } detail: {
-            if let selectedGame {
+            if selection == .igdb, let igdbResult {
+                IGDBGameDetailView(services: services, result: igdbResult, browse: showInLibrary, open: openGame)
+                    .id(igdbResult.id)
+            } else if let selectedGame {
                 GameDetailView(services: services, id: selectedGame, browse: showInLibrary) { self.selectedGame = nil }
                     .id(selectedGame)
                     .disabled(services.work.journalLocked)
@@ -89,18 +102,12 @@ struct MainWindow: View {
                     if services.work.journalLocked {
                         Text("Can't edit while the Import writes").font(.caption).foregroundStyle(.secondary)
                     }
-                    Button("Add Game", systemImage: "plus") { adding = true }
-                        .disabled(services.journal == nil || services.work.journalLocked)
+                    Button("Add Game", systemImage: "plus") { selection = .igdb }
+                        .help("Search IGDB to add a Game")
                 }
             }
             // Its own group, apart from the screen's search and filters that follow it.
             if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
-        }
-        .sheet(isPresented: $adding) {
-            AddGameSheet(services: services) {
-                selectedGame = $0
-                services.changes.changed()
-            }
         }
         .task(id: services.changes.revision) {
             lists = (try? services.journal?.lists()) ?? []

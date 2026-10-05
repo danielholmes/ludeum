@@ -65,6 +65,8 @@ struct IGDBSearchView: View {
     @State var platformFilter: IGDBPlatform?
     /// Linking a Game: the Platform filter is fixed and each result has one Link button instead of chips.
     var linking = false
+    /// Browsing (the IGDB screen): results are selectable and list their platforms; a selected one is shown in full.
+    var browse: ((GameSearchResult?) -> Void)? = nil
     /// A chip was chosen: the result and the platform (a listed one, or one from "Different platform…").
     let choose: (GameSearchResult, IGDBPlatform) -> Void
 
@@ -74,6 +76,7 @@ struct IGDBSearchView: View {
     @State private var choosingPlatformFor: GameSearchResult?
     /// Bumped by each search, so only the latest one's answer is shown.
     @State private var generation = 0
+    @State private var selected: Int64?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -92,7 +95,7 @@ struct IGDBSearchView: View {
                 if searching { ProgressView().controlSize(.small) }
             }
             if let error { Text(error).foregroundStyle(.red) }
-            List(results) { result in
+            List(results, selection: browse == nil ? .constant(nil) : $selected) { result in
                 HStack(alignment: .top, spacing: 8) {
                     ResultCover(search: search, result: result)
                     VStack(alignment: .leading, spacing: 4) {
@@ -105,6 +108,9 @@ struct IGDBSearchView: View {
                         }
                         if linking, let platform = platformFilter {
                             Button("Link") { choose(result, platform) }.controlSize(.small)
+                        } else if browse != nil {
+                            Text(result.chips.map { $0.platform.abbreviation ?? $0.platform.name }.joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.secondary)
                         } else {
                             PlatformChips(
                                 result: result, choose: { choose(result, $0) }, differentPlatform: { choosingPlatformFor = result })
@@ -121,6 +127,7 @@ struct IGDBSearchView: View {
             }
         }
         .onAppear { if !query.isEmpty { run() } }
+        .onChange(of: selected) { browse?(results.first { $0.id == selected }) }
     }
 
     private func run() {
@@ -180,7 +187,7 @@ private struct PlatformChips: View {
                     Text(
                         chip.game == nil
                             ? chip.platform.abbreviation ?? chip.platform.name
-                            : "\(chip.platform.abbreviation ?? chip.platform.name) · In journal")
+                            : "\(chip.platform.abbreviation ?? chip.platform.name) · In Library")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -254,67 +261,6 @@ struct PlatformPickerSheet: View {
         }
         .padding()
         .frame(width: 360, height: 420)
-    }
-}
-
-/// Adding a Game: the IGDB search, then a chip adds it; or "Add by hand" with a name and Platform.
-struct AddGameSheet: View {
-    let services: Services
-    /// The added (or already-present) Game, to open in Game detail.
-    let added: (GameID) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var query = ""
-    @State private var platforms: [IGDBPlatform] = []
-    @State private var used: Set<Int64> = []
-    @State private var byHand = false
-    @State private var error: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add a Game").font(.title2)
-            if let search = services.gameSearch {
-                IGDBSearchView(search: search, platforms: platforms, usedPlatforms: used, query: $query) { result, platform in
-                    do {
-                        added(try search.add(result, on: platform))
-                        dismiss()
-                    } catch {
-                        self.error = "Couldn't add it: \(error.localizedDescription)"
-                    }
-                }
-            } else {
-                ContentUnavailableView(
-                    "IGDB isn't set up", systemImage: "key", description: Text("Add IGDB credentials in Settings to search."))
-            }
-            if let error { Text(error).foregroundStyle(.red) }
-            HStack {
-                Button("Add by hand…") { byHand = true }.disabled(services.journal == nil)
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-            }
-        }
-        .padding()
-        .frame(width: 640, height: 560)
-        .task { await loadPlatforms() }
-        .sheet(isPresented: $byHand) {
-            if let journal = services.journal {
-                AddByHandSheet(journal: journal, platforms: platforms, used: used, name: query) { id in
-                    byHand = false
-                    if let id {
-                        added(id)
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-
-    private func loadPlatforms() async {
-        used = (try? services.journal?.usedPlatformIDs()) ?? []
-        do {
-            platforms = try await services.igdb?.platforms() ?? []
-        } catch {
-            self.error = "Couldn't load IGDB's platforms: \(error.localizedDescription)"
-        }
     }
 }
 

@@ -6,6 +6,8 @@ enum Screen: Hashable {
     case whatToPlayNext
     case topRated
     case yearInReview
+    /// Searching IGDB to add Games.
+    case igdb
     case list(id: Int64, name: String)
     case platform(id: Int64, name: String)
     /// A pinned franchise or series: the Library filtered to it.
@@ -20,6 +22,7 @@ enum Screen: Hashable {
         case .whatToPlayNext: "What to play next"
         case .topRated: "Top-rated"
         case .yearInReview: "Year in review"
+        case .igdb: "IGDB"
         case .list(_, let name): name
         case .platform(_, let name): name
         case .pinned(let pin): pin.name
@@ -35,6 +38,7 @@ enum Screen: Hashable {
         case .whatToPlayNext: "play.circle"
         case .topRated: "star"
         case .yearInReview: "calendar"
+        case .igdb: "magnifyingglass"
         case .list: "list.bullet"
         case .platform: "gamecontroller"
         case .pinned(let pin):
@@ -50,5 +54,5 @@ enum Screen: Hashable {
         }
     }
 
-    static let journal: [Screen] = [.library, .whatToPlayNext, .topRated, .yearInReview]
+    static let journal: [Screen] = [.library, .whatToPlayNext, .topRated, .yearInReview, .igdb]
 }
