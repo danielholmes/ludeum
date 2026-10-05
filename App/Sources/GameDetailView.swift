@@ -244,8 +244,11 @@ struct GameDetailView: View {
                     Label("Play", systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent).help("Play in \(emulator.name)")
-                EmulatorSettingsButton(emulator: emulator, settings: emulatorSettings) { settings in
-                    save { try $0.setEmulatorSettings(id, settings) }
+                // Dolphin has no per-Game settings: every Game gets the same ones.
+                if !EmulatorSettingRow.rows(for: emulator).isEmpty {
+                    EmulatorSettingsButton(emulator: emulator, settings: emulatorSettings) { settings in
+                        save { try $0.setEmulatorSettings(id, settings) }
+                    }
                 }
             }
         } else {

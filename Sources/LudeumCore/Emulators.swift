@@ -8,12 +8,14 @@ public struct Emulator: Sendable, Equatable {
 
     public static let mesenCE = Emulator(name: "MesenCE", bundleIdentifier: "ca.mesen")
     public static let duckStation = Emulator(name: "DuckStation", bundleIdentifier: "com.github.stenzek.duckstation")
+    public static let dolphin = Emulator(name: "Dolphin", bundleIdentifier: "org.dolphin-emu.dolphin")
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
         switch platformId {
         case 18, 99, 19, 58, 33, 22, 24: .mesenCE  // NES, Family Computer, SNES, Super Famicom, Game Boy, Game Boy Color, GBA
         case 7: .duckStation  // PlayStation
+        case 21: .dolphin  // GameCube
         default: nil
         }
     }
@@ -25,6 +27,13 @@ public struct Emulator: Sendable, Equatable {
         switch self {
         case .duckStation:
             ["-settings", try duckStation.write(settings).path(percentEncoded: false), rom.path(percentEncoded: false)]
+        case .dolphin:
+            // Lower input latency for every Game, for this launch only: frames shown as soon as
+            // they're ready, with their timing smoothed. Immediately Present XFB stays off: it breaks some Games.
+            [
+                "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-e",
+                rom.path(percentEncoded: false),
+            ]
         default:
             ["--doNotSaveSettings", "--emulation.runAheadFrames=\(settings.runAheadFrames ?? 0)", rom.path(percentEncoded: false)]
         }

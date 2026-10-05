@@ -7,7 +7,8 @@ import Testing
     @Test func nesAndSNESGamesArePlayedInMesenCE() {
         for platform: Int64 in [18, 99, 19, 58, 33, 22, 24] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
         #expect(Emulator.of(platformId: 7) == .duckStation)  // PlayStation
-        #expect(Emulator.of(platformId: 21) == nil)  // GameCube
+        #expect(Emulator.of(platformId: 21) == .dolphin)  // GameCube
+        #expect(Emulator.of(platformId: 4) == nil)  // Nintendo 64
     }
 
     @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() throws {
@@ -42,6 +43,17 @@ import Testing
         #expect(throws: LudeumError.runAheadOutOfRange) { try h.journal.setEmulatorSettings(game, EmulatorSettings(runAheadFrames: -1)) }
         try h.journal.setEmulatorSettings(game, EmulatorSettings(runAheadFrames: 10))
     }
+}
+
+@Test func everyDolphinPlayLowersInputLatencyForThatLaunchOnly() throws {
+    let rom = URL(filePath: "/Games/GameCube/Pikmin (USA).rvz")
+
+    #expect(
+        try Emulator.dolphin.arguments(rom: rom, settings: EmulatorSettings())
+            == [
+                "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-e",
+                "/Games/GameCube/Pikmin (USA).rvz",
+            ])
 }
 
 @Suite struct DuckStationSettingsTests {
