@@ -1,0 +1,21 @@
+#!/bin/sh
+# Formats staged Swift files with swift-format, then runs CI's strict lint on them.
+# A file that also has unstaged changes is only linted, so the commit never picks up work you didn't stage.
+# Skip with `git commit --no-verify`.
+set -e
+
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.swift')
+[ -z "$files" ] && exit 0
+
+unstaged=$(git diff --name-only -- $files)
+for f in $files; do
+    if ! printf '%s\n' "$unstaged" | grep -qxF "$f"; then
+        swift format -i "$f"
+        git add "$f"
+    fi
+done
+
+if ! swift format lint --strict $files; then
+    echo "pre-commit: swift-format found issues it can't fix itself (above). Fix them, or commit with --no-verify." >&2
+    exit 1
+fi
