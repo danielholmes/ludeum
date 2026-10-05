@@ -184,7 +184,7 @@ Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The
 A phased trial of replacing OpenEmu as the player (ADR 0008). OpenEmu stays the library and Import source.
 
 - **Emulators** are hard-coded per Platform in `Emulator.of(platformId:)`, not settings: MesenCE for NES, Family Computer, SNES and Super Famicom.
-- **Play** (Game detail only) opens the Game's present ROM where it is in OpenEmu's library: the multi-disc playlist, else the first present ROM. It never changes journal data. A running MesenCE gets the ROM in its open window.
+- **Play** (Game detail only) opens the Game's present ROM where it is in OpenEmu's library: the multi-disc playlist, else the first present ROM. It never changes journal data. A running MesenCE gets the ROM in its open window. There's no Play in OpenEmu: a Game whose Platform has no Emulator shows "No ‹Platform› emulator yet" instead.
 - **Emulator settings:** run-ahead frames, 0–10, stored as `game.runAheadFrames` (null is the default, 0). Every Play passes the full set plus `--doNotSaveSettings`, so MesenCE's own preferences are never changed and one Game's settings never carry into the next.
 
 ### What to play next and Top-rated

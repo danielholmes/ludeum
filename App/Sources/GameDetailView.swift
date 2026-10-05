@@ -233,29 +233,23 @@ struct GameDetailView: View {
         }
     }
 
-    /// The Emulator this Game's Platform is played in, if any.
-    /// ▶ Play in the Platform's Emulator (else OpenEmu), and beside it the Emulator's settings and
-    /// OpenEmu as the other way to play.
+    /// ▶ Play in the Platform's Emulator, and beside it the Emulator's settings. A Platform with no
+    /// Emulator says so instead.
     @ViewBuilder private var playControls: some View {
-        HStack(spacing: 12) {
-            if let emulator {
-                // ▶ Play in the Emulator; its menu also plays in OpenEmu.
-                Menu {
-                    Button("Play in OpenEmu", action: playInOpenEmu)
+        if let emulator {
+            HStack(spacing: 12) {
+                Button {
+                    play(in: emulator)
                 } label: {
                     Label("Play", systemImage: "play.fill")
-                } primaryAction: {
-                    play(in: emulator)
                 }
-                .menuStyle(.button).buttonStyle(.borderedProminent).fixedSize()
-                .help("Play in \(emulator.name)")
+                .buttonStyle(.borderedProminent).help("Play in \(emulator.name)")
                 EmulatorSettingsButton(emulator: emulator, settings: emulatorSettings) { settings in
                     save { try $0.setEmulatorSettings(id, settings) }
                 }
-            } else {
-                Button(action: playInOpenEmu) { Label("Play", systemImage: "play.fill") }
-                    .buttonStyle(.borderedProminent).help("Play in OpenEmu")
             }
+        } else {
+            Text("No \(platform?.name ?? "") emulator yet").foregroundStyle(.secondary)
         }
     }
 
@@ -328,16 +322,6 @@ struct GameDetailView: View {
         NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
             if let error { Task { @MainActor in self.error = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
         }
-    }
-
-    /// Opens the Game's ROM in OpenEmu, which plays it.
-    private func playInOpenEmu() {
-        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.openemu.OpenEmu") else {
-            error = "OpenEmu isn't installed."
-            return
-        }
-        guard let file = playFile() else { return }
-        NSWorkspace.shared.open([file], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
     }
 
     /// Reveals the ROM's file in OpenEmu's library folder.
