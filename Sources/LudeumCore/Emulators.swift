@@ -10,6 +10,7 @@ public struct Emulator: Sendable, Equatable {
     public static let duckStation = Emulator(name: "DuckStation", bundleIdentifier: "com.github.stenzek.duckstation")
     public static let dolphin = Emulator(name: "Dolphin", bundleIdentifier: "org.dolphin-emu.dolphin")
     public static let ares = Emulator(name: "ares", bundleIdentifier: "dev.ares.ares")
+    public static let melonDS = Emulator(name: "melonDS", bundleIdentifier: "net.kuribo64.melonDS")
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
@@ -20,6 +21,7 @@ public struct Emulator: Sendable, Equatable {
         case 21: .dolphin  // GameCube
         case 4: .ares  // Nintendo 64
         case 29: .ares  // Mega Drive/Genesis
+        case 20: .melonDS  // Nintendo DS
         default: nil
         }
     }
@@ -47,6 +49,9 @@ public struct Emulator: Sendable, Equatable {
                 "--system", platformId == 4 ? "Nintendo 64" : "Mega Drive",
                 "--setting", "General/RunAhead=\((settings.runAheadFrames ?? 0) > 0)", rom.path(percentEncoded: false),
             ]
+        case .melonDS:
+            // No settings: it just opens the Game.
+            [rom.path(percentEncoded: false)]
         default:
             ["--doNotSaveSettings", "--emulation.runAheadFrames=\(settings.runAheadFrames ?? 0)", rom.path(percentEncoded: false)]
         }

@@ -183,13 +183,14 @@ Writes straight into OpenEmu's Core Data SQLite store (`Library.storedata`). The
 ### Playing in an Emulator (trial)
 A phased trial of replacing OpenEmu as the player (ADR 0008). OpenEmu stays the library and Import source.
 
-- **Emulators** are hard-coded per Platform in `Emulator.of(platformId:)`, not settings: MesenCE for NES, Family Computer, SNES, Super Famicom, Game Boy, Game Boy Color, Game Boy Advance and Master System; DuckStation for PlayStation; Dolphin for GameCube; ares for Nintendo 64 and Mega Drive/Genesis (with `--system` naming which).
-- **Play** (Game detail only) opens the Game's present ROM where it is in OpenEmu's library: the multi-disc playlist, else the first present ROM. It never changes journal data. A running MesenCE gets the ROM in its open window; DuckStation, Dolphin and ares open another window. There's no Play in OpenEmu: a Game whose Platform has no Emulator shows "No ‹Platform› emulator yet" instead.
+- **Emulators** are hard-coded per Platform in `Emulator.of(platformId:)`, not settings: MesenCE for NES, Family Computer, SNES, Super Famicom, Game Boy, Game Boy Color, Game Boy Advance and Master System; DuckStation for PlayStation; Dolphin for GameCube; ares for Nintendo 64 and Mega Drive/Genesis (with `--system` naming which); melonDS for Nintendo DS.
+- **Play** (Game detail only) opens the Game's present ROM where it is in OpenEmu's library: the multi-disc playlist, else the first present ROM. It never changes journal data. A running MesenCE gets the ROM in its open window; DuckStation, Dolphin, ares and melonDS open another window. There's no Play in OpenEmu: a Game whose Platform has no Emulator shows "No ‹Platform› emulator yet" instead.
 - **Emulator settings:** run-ahead frames, 0–10, stored as `game.runAheadFrames` (null is the default, 0). Every Play passes the full set, and never changes the Emulator's own saved preferences, so one Game's settings never carry into the next:
   - MesenCE: `--doNotSaveSettings --emulation.runAheadFrames=N`.
   - DuckStation takes settings only as a whole file, so its Play writes a copy of DuckStation's own `settings.ini` with the Game's `RunaheadFrameCount` and passes it with `-settings`.
   - ares's run-ahead is only on or off (one frame): its Games choose Off or On, stored as 0 or 1, and passed as `--setting General/RunAhead=true|false`, which ares doesn't save.
   - Dolphin has no per-Game settings: every Play turns on Rush Frame Presentation and Smooth Early Presentation for that launch (`-C`) to lower input latency, leaving Immediately Present XFB off since it breaks some Games.
+  - melonDS has no per-Game settings and no run-ahead: Play just opens the Game.
 
 ### What to play next and Top-rated
 - **What to play next** is a plain view, with no ranking or suggestions. It has three sections: **Playing**, **Up next** and **Backlog**. Each Game appears once, in the first section that fits (a Game that's Playing and Up next shows under Playing).

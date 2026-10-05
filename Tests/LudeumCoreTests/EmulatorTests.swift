@@ -10,7 +10,8 @@ import Testing
         #expect(Emulator.of(platformId: 21) == .dolphin)  // GameCube
         #expect(Emulator.of(platformId: 29) == .ares)  // Mega Drive/Genesis
         #expect(Emulator.of(platformId: 4) == .ares)  // Nintendo 64
-        #expect(Emulator.of(platformId: 20) == nil)  // Nintendo DS
+        #expect(Emulator.of(platformId: 20) == .melonDS)  // Nintendo DS
+        #expect(Emulator.of(platformId: 78) == nil)  // Sega CD
     }
 
     @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() throws {
@@ -76,6 +77,14 @@ import Testing
         try Emulator.ares.arguments(
             rom: URL(filePath: "/Games/N64/Super Mario 64 (USA).z64"), platformId: 4, settings: EmulatorSettings(runAheadFrames: 1))
             == ["--system", "Nintendo 64", "--setting", "General/RunAhead=true", "/Games/N64/Super Mario 64 (USA).z64"])
+}
+
+@Test func melonDSJustOpensTheGame() throws {
+    let rom = URL(filePath: "/Games/DS/Advance Wars - Dual Strike (USA).nds")
+    #expect(
+        try Emulator.melonDS.arguments(rom: rom, platformId: 20, settings: EmulatorSettings()) == [
+            "/Games/DS/Advance Wars - Dual Strike (USA).nds"
+        ])
 }
 
 @Suite struct DuckStationSettingsTests {
