@@ -150,6 +150,41 @@ enum JournalSchema {
                     ALTER TABLE newCover RENAME TO cover;
                     """)
         }
+        // Franchises and series pinned to the sidebar, by IGDB name.
+        migrator.registerMigration("v3 pins") { db in
+            try db.create(table: "pin") { t in
+                t.column("kind", .text).notNull().check { ["franchise", "series"].contains($0) }
+                t.column("name", .text).notNull()
+                t.primaryKey(["kind", "name"])
+            }
+        }
+        // Themes can be pinned too: the kind's CHECK widened, which SQLite does by rebuilding the table.
+        migrator.registerMigration("v4 theme pins") { db in
+            try db.create(table: "newPin") { t in
+                t.column("kind", .text).notNull().check { ["franchise", "series", "theme"].contains($0) }
+                t.column("name", .text).notNull()
+                t.primaryKey(["kind", "name"])
+            }
+            try db.execute(sql: "INSERT INTO newPin SELECT kind, name FROM pin; DROP TABLE pin; ALTER TABLE newPin RENAME TO pin")
+        }
+        // Companies can be pinned too.
+        migrator.registerMigration("v5 company pins") { db in
+            try db.create(table: "newPin") { t in
+                t.column("kind", .text).notNull().check { ["franchise", "series", "theme", "company"].contains($0) }
+                t.column("name", .text).notNull()
+                t.primaryKey(["kind", "name"])
+            }
+            try db.execute(sql: "INSERT INTO newPin SELECT kind, name FROM pin; DROP TABLE pin; ALTER TABLE newPin RENAME TO pin")
+        }
+        // Game Boy Color ROMs filed under Game Boy were looked up in Game Boy first, and some took a
+        // Game Boy game's box: look them up again at the next Import.
+        migrator.registerMigration("v6 relook up colour ROMs") { db in
+            try db.execute(
+                sql: """
+                    UPDATE rom SET libretroLookedUp = 0
+                    WHERE systemId = 'openemu.system.gb' AND (fileName LIKE '%.gbc' OR fileName LIKE '%[C]%')
+                    """)
+        }
         return migrator
     }
 }

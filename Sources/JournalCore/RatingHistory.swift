@@ -21,9 +21,10 @@ extension JournalStore {
         let day = today()
         try db.write { db in
             let current = try Row.fetchOne(
-                db, sql: "SELECT rating FROM ratingEntry WHERE gameId = ? \(Self.ratingOrder) LIMIT 1", arguments: [game])
+                db, sql: "SELECT rating, imported FROM ratingEntry WHERE gameId = ? \(Self.ratingOrder) LIMIT 1", arguments: [game])
             let currentTenths: Int? = current?["rating"]  // nil when unrated or no history yet
-            if currentTenths == rating?.tenths { return }
+            // The same value again is no change, unless it confirms an imported Rating as mine.
+            if currentTenths == rating?.tenths, !(current?["imported"] ?? false) { return }
             try db.execute(
                 sql: """
                     INSERT INTO ratingEntry (gameId, day, rating, imported) VALUES (?, ?, ?, 0)

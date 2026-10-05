@@ -31,6 +31,17 @@ import Testing
         #expect(tetris?.boxart == "Nintendo - Game Boy/Named_Boxarts/Tetris (World) (Rev 1).png")
     }
 
+    @Test func aColourROMPrefersGameBoyColourOverAGameBoyGameOfTheSameName() async throws {
+        h.internet.addLibretro("Nintendo_-_Game_Boy", ["Looney Tunes (USA, Europe)"])
+        h.internet.addLibretro("Nintendo_-_Game_Boy_Color", ["Looney Tunes (USA) (GB Compatible)"])
+
+        let colour = try await h.libretro.names(system: "openemu.system.gb", fileName: "Looney Tunes (U) [C][!].7z", titles: [])
+        let mono = try await h.libretro.names(system: "openemu.system.gb", fileName: "Looney Tunes (U) [!].7z", titles: [])
+
+        #expect(colour?.boxart == "Nintendo - Game Boy Color/Named_Boxarts/Looney Tunes (USA) (GB Compatible).png")
+        #expect(mono?.boxart == "Nintendo - Game Boy/Named_Boxarts/Looney Tunes (USA, Europe).png")
+    }
+
     @Test func eachSystemsListingIsFetchedOnceNotPerROM() async throws {
         h.internet.addLibretro("Nintendo_-_Nintendo_Entertainment_System", ["Metroid (USA)", "Kid Icarus (USA, Europe)"])
 

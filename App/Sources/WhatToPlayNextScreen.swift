@@ -14,6 +14,9 @@ struct WhatToPlayNextScreen: View {
     @State private var platforms: [IGDBPlatform] = []
     @State private var lists: [GameList] = []
     @State private var error: String?
+    // Shared with the Library: one choice of view and Cover size everywhere.
+    @AppStorage("libraryShowsCovers") private var showCovers = false
+    @AppStorage("libraryCoverWidth") private var coverWidth = 120.0
 
     var body: some View {
         Group {
@@ -23,6 +26,25 @@ struct WhatToPlayNextScreen: View {
                 ContentUnavailableView(
                     "Nothing to play next", systemImage: "play.circle",
                     description: Text(filter == LibraryFilter() ? "Set a Game's Intent to Up next or Backlog." : "Try fewer filters."))
+            } else if showCovers {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Each section's covers, a rule between sections.
+                        let sections = [("Playing", next.playing, false), ("Up next", next.upNext, true), ("Backlog", next.backlog, true)]
+                            .filter { !$0.1.isEmpty }
+                        ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
+                            if index > 0 { Divider() }
+                            Text("\(section.0) (\(section.1.count))").font(.headline)
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 16)], spacing: 16) {
+                                ForEach(section.1) { row in
+                                    CoverCell(services: services, row: row, width: coverWidth, selection: $selection)
+                                        .contextMenu { if section.2 { Button("Start playing") { startPlaying(row.id) } } }
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                }
             } else {
                 List(selection: $selection) {
                     section("Playing", next.playing, canStart: false)
@@ -39,6 +61,12 @@ struct WhatToPlayNextScreen: View {
             ToolbarItemGroup {
                 LibraryFilterMenu(filter: $filter, platforms: platforms, lists: lists)
                 LibrarySortMenu(sort: $sort, ascending: $ascending, offersDefault: true)
+                Picker("View", selection: $showCovers) {
+                    Label("List", systemImage: "list.bullet").tag(false)
+                    Label("Covers", systemImage: "square.grid.2x2").tag(true)
+                }
+                .pickerStyle(.segmented)
+                if showCovers { CoverSizeSlider(width: $coverWidth) }
             }
         }
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending)) { load() }

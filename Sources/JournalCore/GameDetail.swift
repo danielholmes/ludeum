@@ -4,6 +4,8 @@ import GRDB
 /// A ROM as Game detail shows it, with its latest Activity.
 public struct JournalROM: Sendable, Equatable, Identifiable {
     public let id: Int64
+    /// The ROM's `Z_PK` in OpenEmu's library.
+    public let openEmuPk: Int64
     public let fileName: String
     /// OpenEmu's name for it, or the file name when unknown.
     public let name: String
@@ -54,7 +56,7 @@ extension JournalStore {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.id, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
+                    SELECT r.id, r.openEmuPk, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
                         a.playCount, a.lastPlayedAt, a.playTimeSeconds
                     FROM rom r
                     LEFT JOIN activitySnapshot a ON a.romId = r.id
@@ -66,7 +68,7 @@ extension JournalStore {
                 let fileName: String = row["fileName"]
                 let parsed = ROMName((fileName as NSString).deletingPathExtension)
                 return JournalROM(
-                    id: row["id"], fileName: fileName, name: row["displayName"], version: row["version"] ?? parsed.version,
+                    id: row["id"], openEmuPk: row["openEmuPk"], fileName: fileName, name: row["displayName"], version: row["version"] ?? parsed.version,
                     disc: row["discNumber"] ?? parsed.disc, missing: row["missing"], playCount: row["playCount"] ?? 0,
                     lastPlayedAt: row["lastPlayedAt"], playTimeSeconds: row["playTimeSeconds"] ?? 0)
             }

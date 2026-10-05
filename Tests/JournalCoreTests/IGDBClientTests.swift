@@ -154,3 +154,26 @@ import Testing
         #expect(games[1070]?.name == "Super Mario World")
     }
 }
+
+@Suite struct SearchFallbackTests {
+    @Test func aGameIGDBsSearchMissesIsFoundByNameOrAlternativeName() async throws {
+        let h = try Harness()
+        h.internet.addGame(1360, "Einhänder", fields: ["alternative_names": [["name": "Einhander"]]])
+        let searches = [IGDBSearch(name: "Einhänder"), IGDBSearch(name: "einhander")]
+
+        let results = try await h.igdb.search(searches)
+
+        #expect(results[searches[0]] == [1360])
+        #expect(results[searches[1]] == [1360])
+    }
+
+    @Test func theFallbackRunsOnlyWhenTheSearchFindsNothing() async throws {
+        let h = try Harness()
+        h.internet.addGame(1103, "Super Metroid")
+        h.internet.addSearch("Super Metroid", platform: nil, results: [1103])
+
+        _ = try await h.igdb.search([IGDBSearch(name: "Super Metroid")])
+
+        #expect(h.internet.sent(to: FakeInternet.Hosts.igdb).filter { $0.body.contains("alternative_names") }.isEmpty)
+    }
+}

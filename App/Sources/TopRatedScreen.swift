@@ -11,6 +11,9 @@ struct TopRatedScreen: View {
     @State private var platforms: [IGDBPlatform] = []
     @State private var lists: [GameList] = []
     @State private var error: String?
+    // Shared with the Library: one choice of view and Cover size everywhere.
+    @AppStorage("libraryShowsCovers") private var showCovers = false
+    @AppStorage("libraryCoverWidth") private var coverWidth = 120.0
 
     var body: some View {
         Group {
@@ -20,6 +23,15 @@ struct TopRatedScreen: View {
                 ContentUnavailableView(
                     "No rated Games", systemImage: "star",
                     description: Text(filter == LibraryFilter() ? "Rate a Game in its detail." : "Try fewer filters."))
+            } else if showCovers {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 16)], spacing: 16) {
+                        ForEach(rows, id: \.game.id) { row in
+                            CoverCell(services: services, row: row.game, width: coverWidth, selection: $selection, rank: row.rank)
+                        }
+                    }
+                    .padding()
+                }
             } else {
                 Table(rows, selection: $selection) {
                     TableColumn("#") { Text("\($0.rank)").monospacedDigit() }.width(40)
@@ -43,7 +55,15 @@ struct TopRatedScreen: View {
         }
         .navigationTitle("Top-rated")
         .toolbar {
-            LibraryFilterMenu(filter: $filter, platforms: platforms, lists: lists, ratedOnly: true)
+            ToolbarItemGroup {
+                LibraryFilterMenu(filter: $filter, platforms: platforms, lists: lists, ratedOnly: true)
+                Picker("View", selection: $showCovers) {
+                    Label("Table", systemImage: "list.bullet").tag(false)
+                    Label("Covers", systemImage: "square.grid.2x2").tag(true)
+                }
+                .pickerStyle(.segmented)
+                if showCovers { CoverSizeSlider(width: $coverWidth) }
+            }
         }
         .task(id: Reload(revision: services.changes.revision, filter: filter)) { load() }
     }

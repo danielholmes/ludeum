@@ -1,3 +1,4 @@
+import AppKit
 import JournalCore
 import SwiftUI
 
@@ -5,6 +6,8 @@ import SwiftUI
 struct GameDetailView: View {
     let services: Services
     let id: GameID
+    /// Opens the Library with a filter, e.g. every Game in this one's series.
+    let browse: (LibraryFilter) -> Void
     /// Called after the Game is deleted.
     let deleted: () -> Void
 
@@ -15,19 +18,20 @@ struct GameDetailView: View {
     @State private var allLists: [GameList] = []
     @State private var memberOf: Set<Int64> = []
     @State private var roms: [JournalROM] = []
-    @State private var activity: Activity?
-    /// Play time in the first Import's snapshot, which has no year.
-    @State private var beforeTracking: Double = 0
-    @State private var nameOverride = ""
-    @State private var ratingInput = ""
+    @State private var showingHistory = false
+    @State private var pins: Set<Pin> = []
+    @State private var allScreenshots = false
+    @State private var allCompanies = false
+    /// Each present ROM file's created and modified dates, by ROM id, read from disk.
+    @State private var fileDates: [Int64: (created: Date?, modified: Date?)] = [:]
+    @State private var facts = GameFacts.none
     @State private var editing: PlaythroughEdit?
     @State private var linking = false
+    @State private var editingGame = false
+    @State private var viewing: Screenshot?
     @State private var deletion: DeletionSummary?
     @State private var deletingPlaythrough: Playthrough?
     @State private var error: String?
-    @FocusState private var focus: Field?
-
-    private enum Field { case nameOverride, rating }
 
     var body: some View {
         if let game {
@@ -44,51 +48,84 @@ struct GameDetailView: View {
     private func form(_ game: Game) -> some View {
         Form {
             Section {
-                CoverEditor(services: services, game: id, name: game.name)
-                Text(game.name).font(.title).bold()
-                if let platform { Text(platform.name).foregroundStyle(.secondary) }
-                if game.igdbGameId == nil, services.gameSearch != nil, platform != nil {
-                    Button("Link to IGDB…") { linking = true }
-                }
-                TextField("Name override", text: $nameOverride, prompt: Text("Use IGDB's name"))
-                    .focused($focus, equals: .nameOverride)
-                    .onSubmit(saveNameOverride)
-            }
-
-            Section("Rating") {
-                HStack {
-                    TextField("Rating", text: $ratingInput, prompt: Text("0.0–10.0")).frame(width: 90)
-                        .focused($focus, equals: .rating).onSubmit(setRating)
-                    Button("Set", action: setRating)
-                    Button("Clear") { save { try $0.setRating(id, nil) } }.disabled(game.rating == nil)
-                    if game.ratingImported { Text("Imported from OpenEmu, approximate").font(.caption).foregroundStyle(.secondary) }
-                }
-                ForEach(history, id: \.id) { entry in
-                    HStack {
-                        Text(entry.day).monospacedDigit()
-                        Text(entry.rating.map(ratingText) ?? "Unrated")
-                        if entry.imported { Text("imported").font(.caption).foregroundStyle(.secondary) }
-                        Spacer()
-                        Button("Delete", systemImage: "trash") { save { try $0.deleteRatingEntry(entry.id) } }
-                            .labelStyle(.iconOnly).buttonStyle(.hover)
+                HStack(alignment: .top, spacing: 16) {
+                    // The Cover in its own shape (SNES boxes are wide), at the top of its column.
+                    CoverView(services: services, game: id, name: game.name, fitsImage: true)
+                        .frame(width: 150).frame(maxHeight: 200, alignment: .top)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(game.name).font(.title).bold()
+                            Spacer()
+                            if !roms.isEmpty, !roms.allSatisfy(\.missing) {
+                                Button("Play in OpenEmu", systemImage: "play.fill", action: playInOpenEmu)
+                                    .labelStyle(.iconOnly).buttonStyle(.hover).help("Play in OpenEmu")
+                            }
+                            Button("Edit Game", systemImage: "pencil") { editingGame = true }
+                                .labelStyle(.iconOnly).buttonStyle(.hover).help("Name, Cover, IGDB link and deleting")
+                        }
+                        if let platform {
+                            Text([platform.name, facts.releaseYear.map(String.init)].compactMap { $0 }.joined(separator: " · "))
+                                .foregroundStyle(.secondary)
+                        }
+                        RatingEditor(
+                            rating: game.rating, imported: game.ratingImported, hasHistory: !history.isEmpty,
+                            set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
+                        CommunityScores(players: facts.playerScore, critics: facts.criticScore)
+                        if !facts.genres.isEmpty { PillRow(title: "Genre", items: facts.genres, open: { browse(LibraryFilter(genre: $0)) }) }
+                        if !facts.themes.isEmpty { pinnable("Theme", .theme, facts.themes) }
+                        if !facts.franchises.isEmpty { pinnable("Franchise", .franchise, facts.franchises) }
+                        if !facts.series.isEmpty { pinnable("Series", .series, facts.series) }
+                        if !facts.credits.isEmpty { companies }
+                        if !facts.links.isEmpty {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text("Links").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
+                                FlowLayout(spacing: 8) {
+                                    ForEach(facts.links, id: \.title) { link in
+                                        Link(link.title, destination: link.url).font(.caption).help(link.url.absoluteString)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             Section("Intent and Lists") {
-                Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
-                    Text("None").tag(Intent?.none)
-                    Text("Backlog").tag(Intent?.some(.backlog))
-                    Text("Up next").tag(Intent?.some(.upNext))
+                HStack {
+                    Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
+                        Text("None").tag(Intent?.none)
+                        Text("Backlog").tag(Intent?.some(.backlog))
+                        Text("Up next").tag(Intent?.some(.upNext))
+                    }
+                    .pickerStyle(.segmented)
+                    .help(game.intentSetAt.map { "Set \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
+                    Toggle("Childhood", isOn: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
+                        .toggleStyle(.checkbox).fixedSize()
                 }
-                if let setAt = game.intentSetAt { LabeledContent("Set", value: setAt.formatted(date: .abbreviated, time: .shortened)) }
-                Toggle("Childhood", isOn: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
-                ForEach(allLists, id: \.id) { list in
-                    Toggle(
-                        list.name,
-                        isOn: Binding(
-                            get: { memberOf.contains(list.id) },
-                            set: { on in save { on ? try $0.addToList(list.id, id) : try $0.removeFromList(list.id, id) } }))
+                LabeledContent("Lists") {
+                    // Current Lists as removable pills, then a menu of the rest.
+                    FlowLayout(spacing: 6) {
+                        ForEach(allLists.filter { memberOf.contains($0.id) }, id: \.id) { list in
+                            HStack(spacing: 4) {
+                                Text(list.name)
+                                Button("Remove from \(list.name)", systemImage: "xmark") {
+                                    save { try $0.removeFromList(list.id, id) }
+                                }
+                                .labelStyle(.iconOnly).buttonStyle(.hover).imageScale(.small)
+                            }
+                            .padding(.leading, 8).padding(.vertical, 2)
+                            .background(.quaternary, in: .capsule)
+                        }
+                        let others = allLists.filter { !memberOf.contains($0.id) }
+                        if !others.isEmpty {
+                            Menu("Add to List") {
+                                ForEach(others, id: \.id) { list in
+                                    Button(list.name) { save { try $0.addToList(list.id, id) } }
+                                }
+                            }
+                            .menuStyle(.borderlessButton).fixedSize().controlSize(.small)
+                        }
+                    }
                 }
             }
 
@@ -109,39 +146,66 @@ struct GameDetailView: View {
                 Text("Playthroughs")
             }
 
-            Section("ROMs and Activity") {
-                if roms.isEmpty {
-                    Text("No ROMs").foregroundStyle(.secondary)
-                } else {
-                    if roms.allSatisfy(\.missing) { Text("No ROM in OpenEmu").foregroundStyle(.orange) }
-                    if let activity {
-                        LabeledContent("Played", value: "\(activity.playCount) times")
-                        LabeledContent(
-                            "Play time",
-                            value: playTime(activity.playTimeSeconds)
-                                + (beforeTracking > 0
-                                    ? " (\(playTime(min(beforeTracking, activity.playTimeSeconds))) before tracking)" : ""))
-                        if let last = activity.lastPlayedAt {
-                            LabeledContent("Last played", value: last.formatted(date: .abbreviated, time: .omitted))
+            if !facts.screenshots.isEmpty, let igdb = services.igdb {
+                Section("Screenshots") {
+                    // Two rows of three, then a tile to show the rest.
+                    let limit = 6
+                    let all = facts.screenshots
+                    let collapsed = !allScreenshots && all.count > limit
+                    let shown = collapsed ? Array(all.prefix(limit - 1)) : all
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ForEach(shown, id: \.self) { imageID in
+                            ScreenshotImage(igdb: igdb, imageID: imageID, large: false)
+                                .aspectRatio(16 / 9, contentMode: .fit)
+                                .frame(minWidth: 0)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .onTapGesture { viewing = Screenshot(id: imageID) }
                         }
-                    }
-                    ForEach(roms) { rom in
-                        VStack(alignment: .leading) {
-                            Text(rom.fileName).strikethrough(rom.missing)
-                            Text(
-                                [rom.version, rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil].compactMap { $0 }.filter {
-                                    !$0.isEmpty
-                                }.joined(separator: " · ")
-                            )
-                            .font(.caption).foregroundStyle(.secondary)
+                        if collapsed {
+                            Button { allScreenshots = true } label: {
+                                Label("\(all.count - shown.count) more", systemImage: "plus")
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                            }
+                            .buttonStyle(.plain)
+                            .aspectRatio(16 / 9, contentMode: .fit)
                         }
                     }
                 }
             }
 
-            Section {
-                Button("Delete Game…", role: .destructive) {
-                    do { deletion = try services.journal?.deletionSummary(id) } catch { self.error = journalErrorText(error) }
+            Section("ROMs") {
+                if roms.isEmpty {
+                    Text("No ROMs").foregroundStyle(.secondary)
+                } else {
+                    if roms.allSatisfy(\.missing) { Text("No ROM in OpenEmu").foregroundStyle(.orange) }
+                    ForEach(roms) { rom in
+                        HStack {
+                        VStack(alignment: .leading) {
+                            // Without its extension; GoodTools region codes spelled out.
+                            Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
+                            Text(
+                                [readableVersion(rom.version), rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil]
+                                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
+                            if let dates = fileDates[rom.id] {
+                                Text(
+                                    [
+                                        dates.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                        dates.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                    ].compactMap { $0 }.joined(separator: " · ")
+                                )
+                                .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        if !rom.missing {
+                            Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
+                                .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
+                        }
+                        }
+                    }
                 }
             }
 
@@ -149,10 +213,47 @@ struct GameDetailView: View {
         }
         .formStyle(.grouped)
         .task(id: services.changes.revision) { load() }
-        .onChange(of: focus) { old, _ in
-            // Leaving a field saves it, like pressing Return.
-            if old == .nameOverride { saveNameOverride() }
-            if old == .rating, ratingInput.trimmed != (game.rating.map(ratingText) ?? "") { setRating() }
+        .task(id: roms.map(\.id)) {
+            // Off the main thread: it reads OpenEmu's library and the files' attributes.
+            let library = services.settings.openEmuLibrary
+            let present = roms.filter { !$0.missing }.map { ($0.id, $0.openEmuPk) }
+            fileDates = await Task.detached(priority: .utility) {
+                var out: [Int64: (created: Date?, modified: Date?)] = [:]
+                for (id, pk) in present {
+                    guard let file = try? OpenEmuLibrary.romFile(library: library, openEmuPk: pk),
+                        let values = try? file.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
+                    else { continue }
+                    out[id] = (values.creationDate, values.contentModificationDate)
+                }
+                return out
+            }.value
+        }
+        .task(id: game.igdbGameId) {
+            facts = .none
+            allScreenshots = false
+            allCompanies = false
+            if let link = game.igdbGameId, let igdb = services.igdb { facts = (try? await igdb.facts(igdbGameId: link)) ?? .none }
+        }
+        .sheet(isPresented: $editingGame) {
+            EditGameSheet(
+                services: services, game: game,
+                canLink: services.gameSearch != nil && platform != nil,
+                link: { linking = true },
+                delete: {
+                    do { deletion = try services.journal?.deletionSummary(id) } catch { self.error = journalErrorText(error) }
+                })
+        }
+        .sheet(isPresented: $showingHistory) {
+            RatingHistorySheet(history: history) { entry in save { try $0.deleteRatingEntry(entry.id) } }
+        }
+        .sheet(item: $viewing) { shot in
+            if let igdb = services.igdb {
+                // IGDB's full size (1280 × 720), shrinking to fit a smaller screen. Click to close.
+                ScreenshotImage(igdb: igdb, imageID: shot.id, large: true)
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .frame(minWidth: 640, idealWidth: 1280, maxWidth: 1280)
+                    .onTapGesture { viewing = nil }
+            }
         }
         .sheet(item: $editing) { edit in
             PlaythroughSheet(services: services, game: id, edit: edit) {
@@ -162,7 +263,7 @@ struct GameDetailView: View {
         }
         .sheet(isPresented: $linking) {
             if let search = services.gameSearch, let platform {
-                LinkGameSheet(search: search, game: game, platform: platform) {
+                LinkGameSheet(search: search, game: game, platform: platform, canChangePlatform: roms.isEmpty) {
                     // The new link can bring IGDB's Cover art.
                     services.changes.coverChanged()
                 }
@@ -205,16 +306,43 @@ struct GameDetailView: View {
             allLists = try journal.lists()
             memberOf = Set(try journal.lists(containing: id).map(\.id))
             roms = try journal.roms(of: id)
-            activity = try journal.activity(of: id)
-            beforeTracking = try journal.playTimeBeforeTracking(id)
-            // Never overwrite what I'm typing.
-            if focus != .nameOverride { nameOverride = try journal.nameOverride(id) ?? "" }
-            if focus != .rating { ratingInput = game.rating.map(ratingText) ?? "" }
+            pins = Set(try journal.pins())
         } catch JournalError.gameNotFound {
             self.game = nil
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Each company once, its roles in brackets: "Capcom (Developer, Publisher)". Developers and the
+    /// first publisher show; the rest (often regional publishers) wait behind "+N more".
+    @ViewBuilder private var companies: some View {
+        let roles = Dictionary(facts.credits.map { ($0.name, $0.roles) }, uniquingKeysWith: { a, _ in a })
+        let key = facts.credits.filter { $0.roles.contains(.developer) }.map(\.name)
+            + facts.credits.filter { !$0.roles.contains(.developer) && $0.roles.contains(.publisher) }.prefix(1).map(\.name)
+        let all = facts.credits.map(\.name)
+        let shown = allCompanies || key.isEmpty ? all : all.filter(key.contains)
+        pinnable(
+            "Companies", .company, shown,
+            more: shown.count < all.count ? (all.count - shown.count, { allCompanies = true }) : nil
+        ) { name in
+            let r = roles[name] ?? []
+            return r.isEmpty ? name : "\(name) (\(r.map(\.rawValue.capitalized).joined(separator: ", ")))"
+        }
+    }
+
+    /// Franchise, Series or Theme pills: each opens the Library filtered to it, and can be pinned to the sidebar.
+    private func pinnable(
+        _ title: String, _ kind: Pin.Kind, _ names: [String], more: (count: Int, show: () -> Void)? = nil,
+        label: @escaping (String) -> String = { $0 }
+    ) -> some View {
+        PillRow(
+            title: title, items: names, label: label, more: more, open: { browse(Pin(kind: kind, name: $0).filter) },
+            pinned: Set(pins.filter { $0.kind == kind }.map(\.name)),
+            togglePin: { name in
+                let pin = Pin(kind: kind, name: name)
+                save { pins.contains(pin) ? try $0.unpin(pin) : try $0.pin(pin) }
+            })
     }
 
     /// Runs a journal change, then reloads every screen showing the journal.
@@ -229,18 +357,38 @@ struct GameDetailView: View {
         }
     }
 
-    private func saveNameOverride() {
-        let name = nameOverride.trimmed
-        guard name != ((try? services.journal?.nameOverride(id)) ?? nil ?? "") else { return }
-        save { try $0.setNameOverride(id, name.isEmpty ? nil : name) }
-    }
-
-    private func setRating() {
-        guard let rating = parseRating(ratingInput) else {
-            error = "A Rating is 0.0 to 10.0, in steps of 0.1."
+    /// Opens the Game's ROM in OpenEmu, which plays it: the playlist of a multi-disc Version, else
+    /// the first present ROM.
+    private func playInOpenEmu() {
+        let present = roms.filter { !$0.missing }
+        guard let rom = present.first(where: { $0.fileName.lowercased().hasSuffix(".m3u") }) ?? present.first else { return }
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.openemu.OpenEmu") else {
+            error = "OpenEmu isn't installed."
             return
         }
-        save { try $0.setRating(id, rating) }
+        do {
+            guard let file = try OpenEmuLibrary.romFile(library: services.settings.openEmuLibrary, openEmuPk: rom.openEmuPk) else {
+                error = "Couldn't find \(rom.fileName) in OpenEmu's library. Run an Import, then try again."
+                return
+            }
+            NSWorkspace.shared.open([file], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+        } catch {
+            self.error = "Couldn't read OpenEmu's library: \(error.localizedDescription)"
+        }
+    }
+
+
+    /// Reveals the ROM's file in OpenEmu's library folder.
+    private func showInFinder(_ rom: JournalROM) {
+        do {
+            guard let file = try OpenEmuLibrary.romFile(library: services.settings.openEmuLibrary, openEmuPk: rom.openEmuPk) else {
+                error = "Couldn't find \(rom.fileName) in OpenEmu's library. Run an Import, then try again."
+                return
+            }
+            NSWorkspace.shared.activateFileViewerSelecting([file])
+        } catch {
+            self.error = "Couldn't read OpenEmu's library: \(error.localizedDescription)"
+        }
     }
 
     private func deleteGame() {
@@ -271,19 +419,14 @@ private func deletionMessage(_ s: DeletionSummary) -> String {
 
 private func playthroughTitle(_ d: PlaythroughDraft) -> String {
     let outcome = d.outcome.map { $0 == .finished ? "Finished" : "Dropped" } ?? "In progress"
-    let dates = [d.start?.text, d.end?.text].compactMap { $0 }.joined(separator: " – ")
+    // The same start and end shows once: "Finished, 2021", not "2021 – 2021".
+    let dates = (d.start == d.end ? [d.start?.text] : [d.start?.text, d.end?.text]).compactMap { $0 }.joined(separator: " – ")
     return dates.isEmpty ? outcome : "\(outcome), \(dates)"
 }
 
 private func playthroughDetails(_ d: PlaythroughDraft) -> String? {
     let parts = [d.version, d.playedVia.map { "via \($0)" }, d.notes].compactMap { $0 }.filter { !$0.isEmpty }
     return parts.isEmpty ? nil : parts.joined(separator: " · ")
-}
-
-private func playTime(_ seconds: Double) -> String {
-    let hours = Int(seconds) / 3600
-    let minutes = (Int(seconds) % 3600) / 60
-    return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
 }
 
 /// Messages for the journal's rules, as the UI says them.
@@ -294,7 +437,8 @@ func journalErrorText(_ error: Error) -> String {
     case .listNameTaken: "There's already a List with that name."
     case .gameHasPresentROMs: "This Game has ROMs in OpenEmu. Remove them in OpenEmu first."
     case .igdbLinkTaken: "Another Game already has that IGDB link."
-    case .alreadyLinked: "This Game already has an IGDB link, which can't be changed."
+    case .alreadyLinked: "This Game already has an IGDB link. Use Change IGDB link… to replace it."
+    case .gameHasROMs: "This Game has ROMs, so its Platform can't change."
     case .nameRequired: "A name is required."
     case .gameNotFound: "That Game no longer exists."
     case nil: error.localizedDescription

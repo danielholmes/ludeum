@@ -163,3 +163,24 @@ import Testing
         #expect(try !h.journal.deletionSummary(game).canDelete)
     }
 }
+
+@Suite struct LibraryNameSearchTests {
+    @Test func matchesAnyNameAGoesByIgnoringCaseAndTakingWildcardsLiterally() throws {
+        let j = try JournalHarness()
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        try j.journal.addGame(platformId: 19, name: "Super Metroid (USA)", igdbGameId: 1, igdbName: "Super Metroid")
+        let renamed = try j.journal.addGame(platformId: 19, name: "Zelda", igdbGameId: 2, igdbName: "The Legend of Zelda")
+        try j.journal.setNameOverride(renamed, "Zelda 3")
+        try j.journal.addGameByHand(name: "100% Orange Juice", platformId: 19)
+
+        func search(_ text: String) throws -> [String] {
+            try j.journal.library(LibraryFilter(name: text), sort: .name, ascending: true).map(\.name)
+        }
+
+        #expect(try search("metroid") == ["Super Metroid"])
+        #expect(try search("legend") == ["Zelda 3"])
+        #expect(try search("0%") == ["100% Orange Juice"])
+        #expect(try search("_") == [])
+        #expect(try search("  ").count == 3)
+    }
+}

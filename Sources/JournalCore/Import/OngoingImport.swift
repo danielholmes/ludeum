@@ -47,10 +47,11 @@ public final class OngoingImport: Sendable {
 
     /// Reads OpenEmu and brings the journal up to date. Refused before the first Import, and when
     /// the library was rebuilt or replaced (a new store UUID). `writing` is awaited just before the
-    /// write step (the backup and the one transaction), so the app can stop journal edits first.
+    /// write step (the backup and the one transaction), so the app can stop journal edits first;
+    /// `wrote` just after it, before the Box art step, which never touches what I edit.
     public func run(
         library: URL, progress: @escaping @Sendable (ImportPhase, Double) -> Void = { _, _ in },
-        writing: @Sendable () async -> Void = {}
+        writing: @Sendable () async -> Void = {}, wrote: @Sendable () async -> Void = {}
     ) async throws
         -> OngoingImportResult
     {
@@ -107,6 +108,7 @@ public final class OngoingImport: Sendable {
         await writing()
         if touchesROMs { try backups?.backUp(journal, operation: .beforeImport) }
         let result = try journal.applyOngoingImport(plan)
+        await wrote()
         await boxArt.run(snapshot)
         return result
     }

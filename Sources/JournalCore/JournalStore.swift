@@ -11,8 +11,10 @@ public enum JournalError: Error, Equatable {
     case gameHasPresentROMs
     case gameNotFound
     case nameRequired
-    /// A Game's IGDB link is never changed or removed.
+    /// A Game's IGDB link is changed only on purpose (`replacing`), and never removed.
     case alreadyLinked
+    /// A Game's Platform changes only while it has no ROMs: they say what it's played on.
+    case gameHasROMs
 }
 
 /// A Game as the journal shows it.

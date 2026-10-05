@@ -14,15 +14,34 @@ struct MainWindow: View {
     @State private var libraryRequest = 0
     @State private var lists: [GameList] = []
     @State private var reviewQueueCount = 0
+    @State private var platformCounts: [PlatformCount] = []
+    @State private var pins: [Pin] = []
+
+    /// Opens the Library with `filter`, keeping the selected Game.
+    private func showInLibrary(_ filter: LibraryFilter) {
+        libraryFilter = filter
+        libraryRequest += 1
+        selection = .library
+    }
 
     var body: some View {
         NavigationSplitView {
-            Sidebar(services: services, selection: $selection, lists: lists, reviewQueueCount: reviewQueueCount)
+            Sidebar(
+                services: services, selection: $selection, lists: lists, platforms: platformCounts, pins: pins,
+                reviewQueueCount: reviewQueueCount)
         } content: {
             switch selection {
             case .library:
                 LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter)
                     .id(libraryRequest)
+            case .platform(let id, let name):
+                LibraryScreen(
+                    services: services, selection: $selectedGame, initialFilter: LibraryFilter(platformId: id), title: name
+                )
+                .id(selection)
+            case .pinned(let pin):
+                LibraryScreen(services: services, selection: $selectedGame, initialFilter: pin.filter, title: pin.name)
+                    .id(selection)
             case .list(let id, _):
                 if let list = lists.first(where: { $0.id == id }) {
                     LibraryScreen(services: services, list: list, selection: $selectedGame).id(id)
@@ -32,13 +51,9 @@ struct MainWindow: View {
             case .topRated:
                 TopRatedScreen(services: services, selection: $selectedGame)
             case .yearInReview:
-                YearInReviewScreen(services: services, selection: $selectedGame) { filter in
-                    libraryFilter = filter
-                    libraryRequest += 1
-                    selection = .library
-                }
+                YearInReviewScreen(services: services, selection: $selectedGame, openLibrary: showInLibrary)
             case .reviewQueue:
-                ReviewQueueScreen(services: services, checkAgain: importModel.importNow)
+                ReviewQueueScreen(services: services, checkAgain: importModel.importNow, shownGame: $selectedGame)
                     .disabled(services.work.journalLocked)
             case .syncPage:
                 SyncPage(model: syncModel)
@@ -51,7 +66,8 @@ struct MainWindow: View {
             }
         } detail: {
             if let selectedGame {
-                GameDetailView(services: services, id: selectedGame) { self.selectedGame = nil }.id(selectedGame)
+                GameDetailView(services: services, id: selectedGame, browse: showInLibrary) { self.selectedGame = nil }
+                    .id(selectedGame)
                     .disabled(services.work.journalLocked)
             } else {
                 GameDetailPlaceholder()
@@ -69,9 +85,16 @@ struct MainWindow: View {
         .toolbar {
             ToolbarItem(placement: .status) { RefreshStatus(work: services.work) }
             ToolbarItem {
-                Button("Add Game", systemImage: "plus") { adding = true }
-                    .disabled(services.journal == nil || services.work.journalLocked)
+                HStack(spacing: 6) {
+                    if services.work.journalLocked {
+                        Text("Can't edit while the Import writes").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Button("Add Game", systemImage: "plus") { adding = true }
+                        .disabled(services.journal == nil || services.work.journalLocked)
+                }
             }
+            // Its own group, apart from the screen's search and filters that follow it.
+            if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
         }
         .sheet(isPresented: $adding) {
             AddGameSheet(services: services) {
@@ -82,6 +105,9 @@ struct MainWindow: View {
         .task(id: services.changes.revision) {
             lists = (try? services.journal?.lists()) ?? []
             reviewQueueCount = (try? services.journal?.reviewQueue().count) ?? 0
+            platformCounts = (try? services.journal?.platformCounts()) ?? []
+            pins = (try? services.journal?.pins()) ?? []
+            if case .pinned(let pin) = selection, !pins.contains(pin) { selection = .library }
             if case .list(let id, _) = selection, !lists.contains(where: { $0.id == id }) { selection = .library }
         }
     }
@@ -91,6 +117,8 @@ struct Sidebar: View {
     let services: Services
     @Binding var selection: Screen?
     let lists: [GameList]
+    let platforms: [PlatformCount]
+    let pins: [Pin]
     let reviewQueueCount: Int
 
     @State private var naming: ListNaming?
@@ -104,8 +132,24 @@ struct Sidebar: View {
             }
             Section("OpenEmu") {
                 row(.reviewQueue, badge: reviewQueueCount)
-                row(.importPage)
-                row(.syncPage)
+                row(.importPage, running: services.work.exclusive == .importing)
+                row(.syncPage, running: services.work.exclusive == .syncing)
+            }
+            if !platforms.isEmpty {
+                Section("Platforms") {
+                    ForEach(platforms, id: \.id) { p in
+                        row(.platform(id: p.id, name: p.name), badge: p.games)
+                    }
+                }
+            }
+            if !pins.isEmpty {
+                Section("Pinned") {
+                    ForEach(pins, id: \.self) { pin in
+                        row(.pinned(pin))
+                            .help(pin.kind.rawValue.capitalized)
+                            .contextMenu { Button("Unpin") { save { try $0.unpin(pin) } } }
+                    }
+                }
             }
             Section {
                 ForEach(lists, id: \.id) { list in
@@ -154,9 +198,21 @@ struct Sidebar: View {
         }
     }
 
-    private func row(_ screen: Screen, badge: Int = 0) -> some View {
+    /// `running` animates the icon while that screen's work (Import, Sync) runs.
+    private func row(_ screen: Screen, badge: Int = 0, running: Bool = false) -> some View {
         // The badge goes inside the tag: a badge outside it hides the tag, and the row can't be selected.
-        Label(screen.title, systemImage: screen.systemImage).badge(badge).tag(screen)
+        Label {
+            Text(screen.title)
+        } icon: {
+            if case .platform(let id, _) = screen {
+                PlatformIcon(platformId: id)
+            } else {
+                Image(systemName: running ? "arrow.triangle.2.circlepath" : screen.systemImage)
+                    .symbolEffect(.rotate, isActive: running)
+            }
+        }
+        .help(running ? "\(screen.title) running" : "")
+        .badge(badge).tag(screen)
     }
 
     private func save(_ change: (JournalStore) throws -> Void) {

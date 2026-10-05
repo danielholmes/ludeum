@@ -51,12 +51,23 @@ extension JournalStore {
     }
 
     /// Gives a hand-made Game its IGDB link. Its name then follows IGDB unless overridden.
-    public func link(_ id: GameID, igdbGameId: Int64, igdbName: String) throws {
+    /// Links a Game to IGDB. `replacing` changes an existing link, to fix a mistaken one; otherwise a
+    /// linked Game is refused. `platform` moves the Game to another Platform too, only while it has no
+    /// ROMs. Either way, no two Games share a link.
+    public func link(_ id: GameID, igdbGameId: Int64, igdbName: String, replacing: Bool = false, platform: IGDBPlatform? = nil) throws {
         try write(uniqueViolation: .igdbLinkTaken) { db in
             guard let current = try Row.fetchOne(db, sql: "SELECT igdbGameId FROM game WHERE id = ?", arguments: [id]) else {
                 throw JournalError.gameNotFound
             }
-            if (current["igdbGameId"] as Int64?) != nil { throw JournalError.alreadyLinked }
+            if (current["igdbGameId"] as Int64?) != nil, !replacing { throw JournalError.alreadyLinked }
+            if let platform {
+                if try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ?)", arguments: [id])! {
+                    throw JournalError.gameHasROMs
+                }
+                try db.execute(
+                    sql: "INSERT INTO platform (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING", arguments: [platform.id, platform.name])
+                try db.execute(sql: "UPDATE game SET platformId = ? WHERE id = ?", arguments: [platform.id, id])
+            }
             try db.execute(sql: "UPDATE game SET igdbGameId = ?, igdbName = ? WHERE id = ?", arguments: [igdbGameId, igdbName, id])
         }
     }

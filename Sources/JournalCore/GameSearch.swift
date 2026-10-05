@@ -79,9 +79,12 @@ public struct GameSearch: Sendable {
 
     /// Links a hand-made Game to the IGDB game. Refused if another Game holds that link
     /// (`igdbLinkTaken`) or the Game already has one (`alreadyLinked`).
-    public func link(_ game: GameID, to result: GameSearchResult) throws {
-        try journal.link(game, igdbGameId: result.igdbGameId, igdbName: result.name)
+    public func link(_ game: GameID, to result: GameSearchResult, replacing: Bool = false, platform: IGDBPlatform? = nil) throws {
+        try journal.link(game, igdbGameId: result.igdbGameId, igdbName: result.name, replacing: replacing, platform: platform)
     }
+
+    /// Every IGDB platform, for choosing where a Game goes.
+    public func platforms() async throws -> [IGDBPlatform] { try await igdb.platforms() }
 
     /// The local file of a result's IGDB cover, downloaded once; nil if it has none.
     public func cover(for result: GameSearchResult) async throws -> URL? {

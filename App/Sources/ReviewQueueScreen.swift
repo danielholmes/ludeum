@@ -7,6 +7,8 @@ struct ReviewQueueScreen: View {
     let services: Services
     /// Re-reads OpenEmu (an ongoing Import).
     let checkAgain: () -> Void
+    /// The Game shown in the detail column: set to the Game an answer gave the ROM.
+    @Binding var shownGame: GameID?
 
     enum Kind: String, CaseIterable, Identifiable {
         case namesAgree = "Names agree"
@@ -63,12 +65,12 @@ struct ReviewQueueScreen: View {
                 if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
                     DuplicateVersionsDetail(item: d, checkAgain: checkAgain)
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
-                    ReviewItemDetail(services: services, item: item) { error = $0 }
+                    ReviewItemDetail(services: services, item: item, failed: { error = $0 }, answered: { shownGame = $0 })
                 } else {
                     ContentUnavailableView(items.count == 0 ? "Nothing to review" : "Choose an item", systemImage: "tray")
                 }
             }
-            .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 646, idealWidth: 823, maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("Review queue")
         .overlay(alignment: .bottom) {
@@ -106,9 +108,18 @@ struct ReviewQueueScreen: View {
         }
     }
 
+    /// The ids listed in the middle column, in order.
+    private var listedIDs: [Int64] { kind == .duplicateVersions ? items.duplicateVersions.map(\.id) : romItems.map(\.romId) }
+
     private func reload() {
         do {
+            let before = listedIDs
             items = try services.journal?.reviewQueue() ?? ReviewQueueItems()
+            // The selected item was answered: move to the next one (else the one before), for quick review.
+            let after = Set(listedIDs)
+            if let selected = selection, !after.contains(selected), let index = before.firstIndex(of: selected) {
+                selection = before[(index + 1)...].first(where: after.contains) ?? before[..<index].last(where: after.contains)
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -139,8 +150,12 @@ private struct ReviewItemDetail: View {
     let services: Services
     let item: ReviewItem
     let failed: (String?) -> Void
+    /// The Game the ROM now belongs to, to show in the detail column.
+    let answered: (GameID) -> Void
 
     @State private var suggestion: IGDBGame?
+    /// A Search IGDB result I picked: shown as the suggestion until I Confirm it.
+    @State private var picked: (igdbGameId: Int64, name: String, platform: IGDBPlatform)?
     @State private var checksumGame: IGDBGame?
     @State private var platforms: [IGDBPlatform] = []
     /// Every IGDB platform, for Make by hand's "any other Platform".
@@ -150,6 +165,105 @@ private struct ReviewItemDetail: View {
     @State private var makingByHand = false
     @State private var duplicateWarning: (() -> Void)?
 
+    /// This ROM beside the suggestion, row by row: name, platform (shared ones highlighted), region and year.
+    @ViewBuilder private var comparison: some View {
+        let rom = ROMName(item.romName)
+        let romPlatforms = Set(platforms.map(\.id))
+        let suggested = (suggestion?.record["platforms"]?.array ?? []).compactMap { p -> (id: Int64, name: String)? in
+            guard let id = p["id"]?.int, let name = p["name"]?.string else { return nil }
+            return (Int64(id), name)
+        }
+        let releases = suggestion?.releases(onSystem: item.systemId) ?? []
+        Grid(alignment: .topLeading, horizontalSpacing: 12, verticalSpacing: 8) {
+            GridRow {
+                Text("")
+                Text("This ROM").font(.caption.bold()).foregroundStyle(.secondary)
+                Text("Suggestion").font(.caption.bold()).foregroundStyle(.secondary)
+            }
+            Divider().gridCellUnsizedAxes(.horizontal)
+            GridRow {
+                label("Name")
+                Text(cleanName(item.romName)).fontWeight(.semibold).fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(suggestion?.name ?? picked?.name ?? "IGDB #\(item.suggestedIgdbGameId ?? 0)").fontWeight(.semibold)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if picked == nil {
+                        Image(systemName: item.namesAgree ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(item.namesAgree ? .green : .orange)
+                            .help(item.namesAgree ? "Names agree" : "Names don't agree")
+                    }
+                }
+            }
+            GridRow {
+                label("Platform")
+                Text(platforms.map(\.name).joined(separator: " or ")).fixedSize(horizontal: false, vertical: true)
+                FlowLayout(spacing: 4) {
+                    // The ROM's own platforms first, highlighted.
+                    ForEach(suggested.sorted { romPlatforms.contains($0.id) && !romPlatforms.contains($1.id) }, id: \.id) { p in
+                        let match = romPlatforms.contains(p.id)
+                        Text(p.name).font(.caption).padding(.horizontal, 6).padding(.vertical, 1)
+                            .foregroundStyle(match ? Color.white : Color.secondary)
+                            .background(match ? AnyShapeStyle(Color.green) : AnyShapeStyle(.quaternary), in: .capsule)
+                    }
+                    if !suggested.isEmpty, !suggested.contains(where: { romPlatforms.contains($0.id) }) {
+                        Label("Not on this platform", systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                    }
+                }
+            }
+            GridRow {
+                label("Region")
+                Text(rom.regions.map(regionText) ?? "Not in the name").foregroundStyle(rom.regions == nil ? .secondary : .primary)
+                if releases.isEmpty {
+                    Text("No releases listed").foregroundStyle(.secondary)
+                } else {
+                    // Green where a release matches the ROM's region; red when the ROM names a region none match.
+                    let matching = Set(releases.map(\.region).filter { region in rom.regions.map { regionMatches(region, $0) } ?? false })
+                    FlowLayout(spacing: 4) {
+                        ForEach(releases, id: \.region) { r in
+                            let match = matching.contains(r.region)
+                            Text(r.year.map { "\(r.region) \($0)" } ?? r.region).font(.caption)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .foregroundStyle(match ? Color.white : Color.secondary)
+                                .background(match ? AnyShapeStyle(Color.green) : AnyShapeStyle(.quaternary), in: .capsule)
+                        }
+                        if rom.regions != nil, matching.isEmpty {
+                            Label("No release in this ROM's region", systemImage: "xmark.octagon.fill").font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .help("Releases on this ROM's platform")
+                }
+            }
+            GridRow {
+                label("Year")
+                Text("–").foregroundStyle(.secondary)
+                Text(suggestion?.facts.releaseYear.map(String.init) ?? "–")
+            }
+        }
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text).font(.caption).foregroundStyle(.secondary).gridColumnAlignment(.leading)
+    }
+
+    /// Whether an IGDB release region covers any of the ROM's regions. Australia and New Zealand count as
+    /// Europe (PAL releases).
+    private func regionMatches(_ release: String, _ regions: Set<NameRegion>) -> Bool {
+        switch release {
+        case "Worldwide": true
+        case "North America": regions.contains(.usa)
+        case "Europe", "Australia", "New Zealand": regions.contains(.europe)
+        case "Japan": regions.contains(.japan)
+        case "Korea": regions.contains(.korea)
+        default: false
+        }
+    }
+
+        private func regionText(_ regions: Set<NameRegion>) -> String {
+        [(NameRegion.usa, "USA"), (.europe, "Europe"), (.japan, "Japan"), (.korea, "Korea")].filter { regions.contains($0.0) }
+            .map(\.1).joined(separator: ", ")
+    }
+
     var body: some View {
         Form {
             Section {
@@ -158,21 +272,28 @@ private struct ReviewItemDetail: View {
                 Text(reason).foregroundStyle(.secondary)
                 if item.missing { Text("Its file is missing from OpenEmu.").foregroundStyle(.orange) }
             }
-            if item.suggestedIgdbGameId != nil {
-                Section("Suggestion") {
-                    if let checksumGame { Text(checksumGame.name ?? "").strikethrough().foregroundStyle(.secondary) }
-                    HStack(alignment: .top) {
-                        SuggestionCover(services: services, game: suggestion).frame(width: 60, height: 80)
-                        VStack(alignment: .leading) {
-                            Text(suggestion?.name ?? "IGDB #\(item.suggestedIgdbGameId!)").font(.headline)
+            if item.suggestedIgdbGameId != nil || picked != nil {
+                Section(picked == nil ? "Suggestion" : "Picked from search") {
+                    if picked == nil, let checksumGame { Text(checksumGame.name ?? "").strikethrough().foregroundStyle(.secondary) }
+                    HStack(alignment: .top, spacing: 16) {
+                        SuggestionCover(services: services, game: suggestion).frame(width: 180, height: 240)
+                        VStack(alignment: .leading, spacing: 10) {
+                            comparison
+                            let developers = suggestion?.facts.credits.filter { $0.roles.contains(.developer) }.map(\.name) ?? []
+                            if !developers.isEmpty {
+                                Text("Developer: " + developers.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+                            }
                             if let type = suggestion?.record["game_type"]?.int, type != 0 { Text("game_type \(type)").font(.caption) }
-                            Label(
-                                item.namesAgree ? "Names agree" : "Names don't agree", systemImage: item.namesAgree ? "checkmark" : "xmark"
-                            )
-                            .font(.caption).foregroundStyle(item.namesAgree ? .green : .orange)
                         }
                     }
-                    Button("Confirm", action: confirm).buttonStyle(.borderedProminent)
+                    HStack {
+                        Button("Confirm", action: confirm).buttonStyle(.borderedProminent)
+                        if picked != nil {
+                            Button(item.suggestedIgdbGameId == nil ? "Clear" : "Back to the suggestion") {
+                                Task { await load() }
+                            }
+                        }
+                    }
                 }
             }
             Section {
@@ -186,15 +307,20 @@ private struct ReviewItemDetail: View {
         .sheet(isPresented: $searching) {
             if let search = services.gameSearch {
                 ReviewSearchSheet(search: search, item: item, platforms: platforms) { result, platform in
-                    act {
-                        try await services.reviewQueue?.choose(item, igdbGameId: result.igdbGameId, name: result.name, platform: platform)
-                    }
+                    // Show it for comparison first; Confirm matches it.
+                    picked = (result.igdbGameId, result.name, platform)
+                    Task { await showPicked() }
                 }
             }
         }
         .sheet(isPresented: $assigning) {
             AssignToGameSheet(services: services) { game in
-                let assign = { act { try services.journal?.assign(item, to: game) } }
+                let assign = {
+                    act {
+                        try services.journal?.assign(item, to: game)
+                        return game
+                    }
+                }
                 if (try? services.journal?.wouldHaveDuplicateVersions(game, adding: item.romId)) == true {
                     warnAfterSheetCloses(assign)
                 } else {
@@ -204,7 +330,7 @@ private struct ReviewItemDetail: View {
         }
         .sheet(isPresented: $makingByHand) {
             MakeByHandSheet(name: cleanName(item.romName), platforms: platforms, allPlatforms: allPlatforms) { name, platform in
-                act { _ = try services.journal?.makeByHand(item, name: name, platform: platform) }
+                act { try services.journal?.makeByHand(item, name: name, platform: platform) }
             }
         }
         .confirmationDialog(
@@ -228,7 +354,14 @@ private struct ReviewItemDetail: View {
         }
     }
 
+    /// Loads the picked search result's record into the suggestion.
+    private func showPicked() async {
+        guard let picked, let igdb = services.igdb else { return }
+        suggestion = (try? await igdb.games(ids: [Int(picked.igdbGameId)]))?[Int(picked.igdbGameId)]
+    }
+
     private func load() async {
+        picked = nil
         suggestion = nil
         checksumGame = nil
         let ids = openEmuSystemPlatforms[item.systemId] ?? []
@@ -252,6 +385,10 @@ private struct ReviewItemDetail: View {
 
     private func confirm() {
         guard let queue = services.reviewQueue else { return }
+        if let picked {
+            act { try await queue.choose(item, igdbGameId: picked.igdbGameId, name: picked.name, platform: picked.platform) }
+            return
+        }
         Task {
             if (try? await queue.confirmWouldGiveDuplicateVersions(item)) == true {
                 duplicateWarning = { act { try await queue.confirm(item) } }
@@ -261,11 +398,13 @@ private struct ReviewItemDetail: View {
         }
     }
 
-    private func act(_ answer: @escaping () async throws -> Void) {
+    /// Runs an answer, then shows the Game the ROM went to.
+    private func act(_ answer: @escaping () async throws -> GameID?) {
         Task {
             do {
-                try await answer()
+                let game = try await answer()
                 failed(nil)
+                if let game { answered(game) }
             } catch {
                 failed(journalErrorText(error))
             }

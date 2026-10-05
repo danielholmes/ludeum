@@ -143,3 +143,23 @@ enum SpecialCollection {
     static let childhood = "_Childhood Played"
     static let all: Set<String> = [backlog, upNext, current, completed, childhood]
 }
+
+extension OpenEmuLibrary {
+    /// The file of one ROM, read fresh from OpenEmu's library (read-only; safe while OpenEmu runs).
+    /// Nil when the ROM is gone or its file isn't there.
+    public static func romFile(library: URL, openEmuPk: Int64) throws -> URL? {
+        var config = Configuration()
+        config.readonly = true
+        let db = try DatabaseQueue(path: databaseFile(in: library).path(percentEncoded: false), configuration: config)
+        defer { try? db.close() }
+        guard
+            let location = try db.read({ db in
+                try String.fetchOne(db, sql: "SELECT ZLOCATION FROM ZROM WHERE Z_PK = ?", arguments: [openEmuPk])
+            })
+        else { return nil }
+        let romsFolder = library.appending(path: "roms", directoryHint: .isDirectory)
+        let file = location.hasPrefix("file://") ? URL(string: location) : location.removingPercentEncoding.map { romsFolder.appending(path: $0) }
+        guard let file, FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) else { return nil }
+        return file
+    }
+}

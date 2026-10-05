@@ -153,11 +153,13 @@ import SwiftUI
                     Task { @MainActor in self.ongoingProgress = (phase, fraction) }
                 } writing: {
                     await MainActor.run { work.lockJournal(true) }
+                } wrote: {
+                    await MainActor.run { work.lockJournal(false) }
                 }
                 if result.changedSomething { summary = result }
                 lastImported = Date()
                 error = nil
-                services.changes.changed()
+                services.changes.coverChanged()  // the Box art step can change Covers
             } catch ImportError.libraryReplaced {
                 error =
                     "OpenEmu's library was rebuilt or replaced (its store ID changed), so the Import stopped. Re-pointing the journal at a new library isn't supported yet."

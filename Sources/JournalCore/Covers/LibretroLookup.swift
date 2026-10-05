@@ -6,9 +6,18 @@ import Foundation
 /// A multi-disc ROM looks for its disc-less name first.
 enum LibretroLookup {
     static func find(fileName: String, titles: [String], in names: Set<String>) -> String? {
+        exact(fileName: fileName, in: names) ?? fuzzy(fileName: fileName, titles: titles, in: names)
+    }
+
+    /// The name (disc-less first), then the GoodTools rewrite.
+    static func exact(fileName: String, in names: Set<String>) -> String? {
         let stem = substituted(Self.stem(fileName))
-        let discless = withoutDisc(stem)
-        for exact in [discless, stem, withoutDisc(goodToolsRewritten(stem))] where names.contains(exact) { return exact }
+        return [withoutDisc(stem), stem, withoutDisc(goodToolsRewritten(stem))].first(where: names.contains)
+    }
+
+    /// A title match on the file name, then on each of `titles`, by region preference.
+    static func fuzzy(fileName: String, titles: [String], in names: Set<String>) -> String? {
+        let stem = substituted(Self.stem(fileName))
 
         let byTitle = Dictionary(grouping: names.filter { !isPrerelease($0) }, by: { titleKey($0) })
         let regions = ROMName(stem).regions.map { preferredOrder.filter($0.contains) } ?? []

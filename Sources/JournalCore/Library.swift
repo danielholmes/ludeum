@@ -12,11 +12,30 @@ public struct LibraryFilter: Sendable, Equatable {
     public var childhood: Bool?
     /// Only Games with a Playthrough that has no dates (Year in review's footer links here).
     public var undatedPlaythroughs: Bool
+    /// An IGDB genre. Not applied by `library(_:sort:ascending:)`: genres live in the cache, so
+    /// the caller narrows the rows with `having(genre:in:)`.
+    public var genre: String?
+    /// An IGDB theme, franchise or series, applied like `genre`.
+    public var theme: String?
+    public var franchise: String?
+    public var series: String?
+    /// A company involved in any role.
+    public var company: String?
+    /// Games with a name (override, IGDB's or their own) containing this, ignoring ASCII case. Empty is no filter.
+    public var name = ""
 
     public init(
         platformId: Int64? = nil, rating: RatingFilter? = nil, intent: Intent?? = nil, listId: Int64? = nil,
-        outcome: OutcomeFilter? = nil, childhood: Bool? = nil, undatedPlaythroughs: Bool = false
+        outcome: OutcomeFilter? = nil, childhood: Bool? = nil, undatedPlaythroughs: Bool = false, genre: String? = nil,
+        theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
+        name: String = ""
     ) {
+        self.company = company
+        self.name = name
+        self.genre = genre
+        self.theme = theme
+        self.franchise = franchise
+        self.series = series
         self.undatedPlaythroughs = undatedPlaythroughs
         self.platformId = platformId
         self.rating = rating
@@ -45,6 +64,14 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     case name, platform, rating
     /// When the Intent was set.
     case intentSet
+
+    /// The order choosing this sort starts in: A–Z for names and Platforms, best and newest first otherwise.
+    public var defaultAscending: Bool {
+        switch self {
+        case .name, .platform: true
+        case .rating, .intentSet: false
+        }
+    }
 }
 
 /// A Game as the Library lists it.
@@ -77,8 +104,9 @@ extension JournalStore {
         var conditions: [String] = []
         var arguments: [any DatabaseValueConvertible] = []
         if let platformId = filter.platformId {
-            conditions.append("g.platformId = ?")
-            arguments.append(platformId)
+            let ids = PlatformGroups.ids(shownAs: platformId)
+            conditions.append("g.platformId IN (\(ids.map { _ in "?" }.joined(separator: ",")))")
+            arguments += ids
         }
         switch filter.rating {
         case .unrated: conditions.append("r.rating IS NULL")
@@ -110,6 +138,14 @@ extension JournalStore {
             conditions.append("g.childhood = ?")
             arguments.append(childhood)
         }
+        let search = filter.name.trimmingCharacters(in: .whitespaces)
+        if !search.isEmpty {
+            // Every name the Game goes by, so an override doesn't hide IGDB's or the No-Intro one.
+            conditions.append("(g.nameOverride LIKE ? ESCAPE '\\' OR g.igdbName LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\')")
+            let escaped = search.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
+                .replacingOccurrences(of: "_", with: "\\_")
+            arguments += Array(repeating: "%\(escaped)%", count: 3)
+        }
         if filter.undatedPlaythroughs {
             conditions.append("EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.start IS NULL AND p.end IS NULL)")
         }
@@ -124,7 +160,8 @@ extension JournalStore {
             }
         let sql = """
             SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood,
-                COALESCE(g.nameOverride, g.igdbName, g.name) AS displayName, pl.name AS platformName,
+                COALESCE(g.nameOverride, g.igdbName, g.name) AS displayName,
+                \(PlatformGroups.shownNameSQL(platformId: "g.platformId", name: "pl.name")) AS platformName,
                 r.rating AS currentRating, COALESCE(r.imported, 0) AS ratingImported,
                 EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playing,
                 (SELECT MAX(start) FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playingSince,
@@ -149,6 +186,35 @@ extension JournalStore {
                     outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }),
                     noROMInOpenEmu: row["noROM"])
             }
+        }
+    }
+}
+
+/// A Platform I have Games on, for the sidebar.
+public struct PlatformCount: Sendable, Equatable {
+    public let id: Int64
+    public let name: String
+    public let games: Int
+}
+
+extension JournalStore {
+    /// Every Platform with at least one Game, by name, with grouped platforms (DOS and Windows as PC) as one.
+    public func platformCounts() throws -> [PlatformCount] {
+        try db.read { db in
+            let counts = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT p.id, p.name, COUNT(*) AS games FROM game g JOIN platform p ON p.id = g.platformId
+                    GROUP BY p.id ORDER BY p.name COLLATE NOCASE
+                    """
+            ).map { PlatformCount(id: $0["id"], name: $0["name"], games: $0["games"]) }
+            // Grouped platforms show as one.
+            let grouped = Dictionary(grouping: counts) { PlatformGroups.shownID($0.id) }
+            return grouped.map { id, members in
+                PlatformCount(
+                    id: id, name: PlatformGroups.groupName(id) ?? members[0].name, games: members.reduce(0) { $0 + $1.games })
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
     }
 }

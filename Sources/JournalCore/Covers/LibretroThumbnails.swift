@@ -60,18 +60,32 @@ public final class LibretroThumbnails: Sendable {
 
     static let folders = ["Named_Boxarts", "Named_Snaps", "Named_Titles"]
 
+    /// A `.gbc` file, or GoodTools' `[C]` (Color) flag.
+    static func isColor(_ fileName: String) -> Bool {
+        fileName.lowercased().hasSuffix(".gbc") || fileName.contains("[C]")
+    }
+
     /// Looks a ROM up in its system's listings. Nil for a system libretro has no repo for.
     public func names(system: String, fileName: String, titles: [String]) async throws -> LibretroNames? {
-        guard let repos = Self.repos[system] else { return nil }
+        guard var repos = Self.repos[system] else { return nil }
+        // A Game Boy Color ROM filed under Game Boy looks in Game Boy Color first, so a Color game
+        // doesn't take the box of a Game Boy game with the same name.
+        if system == "openemu.system.gb", Self.isColor(fileName) { repos.reverse() }
         var listings: [(repo: String, folders: [String: Set<String>])] = []
         for repo in repos { listings.append((repo, try await listing(repo))) }
+        // An exact name in any repo beats a title match; within each step, the first repo wins (Game Boy
+        // before Game Boy Color, unless the ROM is a Color one).
         func find(_ folder: String) -> String? {
-            // A name in an earlier repo wins over the same name in a later one.
-            var repoOf: [String: String] = [:]
-            for (repo, folders) in listings.reversed() { for name in folders[folder] ?? [] { repoOf[name] = repo } }
-            return LibretroLookup.find(fileName: fileName, titles: titles, in: Set(repoOf.keys)).map {
-                "\(repoOf[$0]!.replacingOccurrences(of: "_", with: " "))/\(folder)/\($0).png"
+            let steps: [(Set<String>) -> String?] = [
+                { LibretroLookup.exact(fileName: fileName, in: $0) },
+                { LibretroLookup.fuzzy(fileName: fileName, titles: titles, in: $0) },
+            ]
+            for step in steps {
+                for (repo, folders) in listings {
+                    if let name = step(folders[folder] ?? []) { return "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png" }
+                }
             }
+            return nil
         }
         return LibretroNames(boxart: find("Named_Boxarts"), snap: find("Named_Snaps"), title: find("Named_Titles"))
     }

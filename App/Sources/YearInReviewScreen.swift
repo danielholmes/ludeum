@@ -10,6 +10,8 @@ struct YearInReviewScreen: View {
 
     @State private var filter = LibraryFilter()
     @State private var years: [Int] = []
+    /// Finished Playthroughs per year (with the filter), for the year menu.
+    @State private var finished: [Int: Int] = [:]
     @State private var year: Int?
     @State private var review: YearInReview?
     @State private var platforms: [IGDBPlatform] = []
@@ -27,7 +29,7 @@ struct YearInReviewScreen: View {
                     "Nothing to review", systemImage: "calendar",
                     description: Text(
                         filter == LibraryFilter()
-                            ? "Playthroughs with dates and tracked OpenEmu play time show up here." : "Try fewer filters."))
+                            ? "Playthroughs with dates show up here." : "Try fewer filters."))
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -35,11 +37,6 @@ struct YearInReviewScreen: View {
         }
         .navigationTitle("Year in review")
         .toolbar {
-            if !years.isEmpty {
-                Picker("Year", selection: $year) {
-                    ForEach(years, id: \.self) { y in Text(yearTitle(y)).tag(Int?.some(y)) }
-                }
-            }
             LibraryFilterMenu(filter: $filter, platforms: platforms, lists: lists)
         }
         .task(id: Reload(revision: services.changes.revision, filter: filter, year: year)) { load() }
@@ -59,6 +56,7 @@ struct YearInReviewScreen: View {
         guard let journal = services.journal else { return }
         do {
             years = try journal.yearsInReview(filter)
+            finished = try Dictionary(uniqueKeysWithValues: years.map { ($0, try journal.yearInReview($0, filter).summary.finished) })
             if year == nil || !years.contains(year!) { year = years.first }
             review = try year.map { try journal.yearInReview($0, filter) }
             (platforms, lists) = try filterChoices(journal)
@@ -70,12 +68,24 @@ struct YearInReviewScreen: View {
 
     @ViewBuilder private func content(_ r: YearInReview) -> some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text(r.isCurrentYear ? "\(String(r.year)) so far" : String(r.year)).font(.largeTitle.bold())
+            // The heading is the year picker: a menu of the years with something in them.
+            Menu {
+                Picker("Year", selection: $year) {
+                    ForEach(years, id: \.self) { y in Text("\(yearTitle(y)) (\(finished[y] ?? 0))").tag(Int?.some(y)) }
+                }
+                .pickerStyle(.inline).labelsHidden()
+            } label: {
+                HStack(spacing: 6) {
+                    Text(yearTitle(r.year)).font(.largeTitle.bold())
+                    Image(systemName: "chevron.down").font(.title3.bold()).foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            .help("Choose a year")
             summary(r.summary)
             playthroughSection("Finished", r.finished)
             playthroughSection("Dropped", r.dropped)
             playthroughSection("Also played", r.alsoPlayed)
-            playTimeSection(r)
             if r.undatedPlaythroughs > 0 {
                 Button(
                     "\(r.undatedPlaythroughs) Playthrough\(r.undatedPlaythroughs == 1 ? " has" : "s have") no dates"
@@ -96,7 +106,6 @@ struct YearInReviewScreen: View {
                 stat("Finished", "\(s.finished)")
                 stat("Dropped", "\(s.dropped)")
                 stat("Started", "\(s.started)")
-                stat("Tracked", hoursText(s.playTimeSeconds))
             }
             if !s.platforms.isEmpty {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 2) {
@@ -104,7 +113,6 @@ struct YearInReviewScreen: View {
                         GridRow {
                             Text(p.name)
                             Text("\(p.playthroughs) Playthrough\(p.playthroughs == 1 ? "" : "s")").foregroundStyle(.secondary)
-                            Text(p.playTimeSeconds > 0 ? hoursText(p.playTimeSeconds) : "").foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -148,33 +156,4 @@ struct YearInReviewScreen: View {
             }
         }
     }
-
-    @ViewBuilder private func playTimeSection(_ r: YearInReview) -> some View {
-        if !r.playTime.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("OpenEmu play time").font(.title2)
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
-                    ForEach(r.playTime) { entry in
-                        GridRow {
-                            Button(entry.game.name) { selection = entry.game.id }.buttonStyle(.hoverLink)
-                            Text(entry.game.platformName).foregroundStyle(.secondary)
-                            Text(hoursText(entry.seconds)).monospacedDigit().gridColumnAlignment(.trailing)
-                        }
-                    }
-                    Divider()
-                    GridRow {
-                        Text("Total").bold()
-                        Text("")
-                        Text(hoursText(r.summary.playTimeSeconds)).bold().monospacedDigit()
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Play time as "12 h 30 m", or "45 m" under an hour.
-func hoursText(_ seconds: Double) -> String {
-    let minutes = Int(seconds.rounded()) / 60
-    return minutes >= 60 ? "\(minutes / 60) h \(minutes % 60) m" : "\(minutes) m"
 }

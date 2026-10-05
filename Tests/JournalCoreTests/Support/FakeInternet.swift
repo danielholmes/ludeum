@@ -162,6 +162,17 @@ final class FakeInternet: HTTPTransport, Sendable {
         switch request.url?.path() {
         case "/v4/games" where body.contains("search \""):
             return (200, [:], try! JSONSerialization.data(withJSONObject: searchResult(body, s)))
+        case "/v4/games" where body.contains("alternative_names.name ~"):
+            // The search fallback: name or alternative name containing the text, ignoring case, or the slug.
+            let text = body.components(separatedBy: "name ~ *\"")[1].components(separatedBy: "\"")[0].lowercased()
+            let found = s.games.keys.sorted().filter { id in
+                let extra = s.gameFields[id].flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                let alternatives = (extra["alternative_names"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }
+                let platforms = (extra["platforms"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? Int }
+                let platformOK = Self.ids(after: "platforms = (", in: body).first.map(platforms.contains) ?? true
+                return platformOK && ([s.games[id]!] + alternatives).contains { $0.lowercased().contains(text) }
+            }
+            return (200, [:], try! JSONSerialization.data(withJSONObject: found.map { ["id": $0] }))
         case "/v4/platforms":
             let offset = Int(body.components(separatedBy: "offset ").dropFirst().first?.prefix { $0.isNumber } ?? "0") ?? 0
             return (200, [:], try! JSONSerialization.data(withJSONObject: Array(s.platforms.dropFirst(offset).prefix(500))))

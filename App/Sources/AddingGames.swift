@@ -19,6 +19,8 @@ import SwiftUI
     let journal: JournalStore?
     /// Bumped after every change to the journal, so the screens showing it reload.
     let changes = JournalChanges()
+    /// Decoded Covers and genres, shared by every screen.
+    let memory = MemoryCache()
     /// The launch refresh, Import and Sync exclusivity, and the journal's edit lock.
     let work = BackgroundWork()
     /// Opened once; nil if it couldn't be.
@@ -390,28 +392,39 @@ struct LinkGameSheet: View {
     let search: GameSearch
     let game: Game
     let platform: IGDBPlatform
+    /// A Game with no ROMs can move to another Platform with its new link: each result offers its platforms.
+    let canChangePlatform: Bool
     let linked: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query: String
     @State private var error: String?
+    @State private var allPlatforms: [IGDBPlatform] = []
 
-    init(search: GameSearch, game: Game, platform: IGDBPlatform, linked: @escaping () -> Void) {
+    init(search: GameSearch, game: Game, platform: IGDBPlatform, canChangePlatform: Bool = false, linked: @escaping () -> Void) {
         self.search = search
         self.game = game
         self.platform = platform
+        self.canChangePlatform = canChangePlatform
         self.linked = linked
         _query = State(initialValue: game.name)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Link \(game.name) to IGDB").font(.title2)
+            Text(game.igdbGameId == nil ? "Link \(game.name) to IGDB" : "Change \(game.name)'s IGDB link").font(.title2)
+            if canChangePlatform {
+                Text("It has no ROMs, so it can move to another Platform: choose the platform on a result.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             IGDBSearchView(
-                search: search, platforms: [platform], usedPlatforms: [platform.id], query: $query, platformFilter: platform, linking: true
+                search: search, platforms: canChangePlatform && !allPlatforms.isEmpty ? allPlatforms : [platform],
+                usedPlatforms: [platform.id], query: $query, platformFilter: platform, linking: !canChangePlatform
             ) {
-                result, _ in
+                result, chosen in
                 do {
-                    try search.link(game.id, to: result)
+                    try search.link(
+                        game.id, to: result, replacing: game.igdbGameId != nil,
+                        platform: canChangePlatform && chosen.id != platform.id ? chosen : nil)
                     linked()
                     dismiss()
                 } catch JournalError.igdbLinkTaken {
@@ -429,5 +442,6 @@ struct LinkGameSheet: View {
         }
         .padding()
         .frame(width: 640, height: 520)
+        .task { if canChangePlatform { allPlatforms = (try? await search.platforms()) ?? [] } }
     }
 }

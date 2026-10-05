@@ -8,21 +8,46 @@ struct CoverView: View {
     let services: Services
     let game: GameID
     let name: String
+    /// Takes the image's own shape (no tile around it) once there is one; Game detail uses this.
+    var fitsImage = false
     @State private var image: NSImage?
 
+    init(services: Services, game: GameID, name: String, fitsImage: Bool = false) {
+        self.services = services
+        self.game = game
+        self.name = name
+        self.fitsImage = fitsImage
+        // Already loaded: show it at once, with no placeholder flash.
+        _image = State(initialValue: services.memory.cover(game, revision: services.changes.coverRevision) ?? nil)
+    }
+
     var body: some View {
+        Group {
+            if fitsImage, let image {
+                Image(nsImage: image).resizable().interpolation(.high).antialiased(true).scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            } else {
+                tile
+            }
+        }
+        .task(id: CoverKey(game: game, revision: services.changes.coverRevision)) {
+            image = await loadCover(services, game)
+        }
+    }
+
+    private var tile: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6).fill(.quaternary)
             if let image {
-                Image(nsImage: image).resizable().scaledToFill()
+                // Fit, not fill: box scans come in every shape (SNES boxes are landscape), and a
+                // filled image grows past the tile. High-quality interpolation keeps downscaling smooth.
+                Image(nsImage: image).resizable().interpolation(.high).antialiased(true).scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Text(name).font(.caption).foregroundStyle(.secondary).padding(6).multilineTextAlignment(.center)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        .task(id: CoverKey(game: game, revision: services.changes.coverRevision)) {
-            image = await loadCover(services, game)
-        }
     }
 
     private struct CoverKey: Equatable {
@@ -33,11 +58,23 @@ struct CoverView: View {
 
 /// The Cover's image, or nil for the placeholder (including when it couldn't be fetched).
 @MainActor func loadCover(_ services: Services, _ game: GameID) async -> NSImage? {
-    switch try? await services.covers?.cover(for: game) {
-    case .upload(let cover): NSImage(data: cover.jpeg)
-    case .libretro(let file, _), .openEmu(let file, _), .igdb(let file, _): NSImage(contentsOf: file)
-    case .placeholder, nil: nil
-    }
+    let revision = services.changes.coverRevision
+    if let cached = services.memory.cover(game, revision: revision) { return cached }
+    guard let source = try? await services.covers?.cover(for: game) else { return nil }  // a failed download: try again later
+    // Decode off the main thread.
+    let image = await Task.detached(priority: .userInitiated) { () -> NSImage? in
+        let image: NSImage? =
+            switch source {
+            case .upload(let cover): NSImage(data: cover.jpeg)
+            case .libretro(let file, _), .openEmu(let file, _), .igdb(let file, _): NSImage(contentsOf: file)
+            case .placeholder: nil
+            }
+        // Force the decode now rather than at first draw.
+        _ = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        return image
+    }.value
+    services.memory.store(cover: image, for: game, revision: revision)
+    return image
 }
 
 /// Game detail's Cover, with Upload, Replace and Remove (by picker or drag-and-drop) on any Game.

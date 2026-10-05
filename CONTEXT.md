@@ -27,7 +27,7 @@ One of several ROMs that together make up a single Version of a multi-disc game,
 _Avoid_: Part, volume, CD
 
 **IGDB link**:
-An optional reference from a Game to one IGDB game on the Game's Platform, used for metadata, the Game's name and its Cover. A Game has at most one, and no two Games share one. A Game with no IGDB link can gain one later, but a link is never changed or removed.
+An optional reference from a Game to one IGDB game on the Game's Platform, used for metadata, the Game's name and its Cover. A Game has at most one, and no two Games share one. A Game with no IGDB link can gain one later, and a mistaken link can be changed to another (never removed).
 _Avoid_: Anchor, source game
 
 **Match**:

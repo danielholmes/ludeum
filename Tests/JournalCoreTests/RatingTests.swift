@@ -92,3 +92,21 @@ import Testing
         #expect(Rating(tenths: 100) != nil)
     }
 }
+
+@Suite struct ConfirmingImportedRatingTests {
+    @Test func settingTheImportedValueMakesItMine() throws {
+        let j = try JournalHarness()
+        try j.journal.addPlatform(id: 18, name: "NES")
+        let contra = try j.journal.addGameByHand(name: "Contra", platformId: 18)
+        try j.journal.importRating(contra, Rating(tenths: 100)!)
+        #expect(try j.journal.game(contra).ratingImported)
+
+        try j.journal.setRating(contra, Rating(tenths: 100)!)
+
+        let game = try j.journal.game(contra)
+        #expect(game.rating == Rating(tenths: 100))
+        #expect(!game.ratingImported)
+        try j.journal.setRating(contra, Rating(tenths: 100)!)
+        #expect(try j.journal.ratingHistory(contra).count == 2)  // a second Set is still no change
+    }
+}

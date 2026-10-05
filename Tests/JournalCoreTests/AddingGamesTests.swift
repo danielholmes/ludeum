@@ -179,3 +179,36 @@ import Testing
         #expect(throws: JournalError.alreadyLinked) { try j.journal.link(id, igdbGameId: 9, igdbName: "Other") }
     }
 }
+
+@Suite struct ChangingALinkTests {
+    @Test func aMistakenLinkCanBeChangedButNotToOneAnotherGameHolds() throws {
+        let j = try JournalHarness()
+        try j.journal.addPlatform(id: 7, name: "PlayStation")
+        let game = try j.journal.addGame(platformId: 7, name: "Einhander", igdbGameId: 1, igdbName: "Wrong Game")
+        try j.journal.addGame(platformId: 7, name: "Taken", igdbGameId: 2, igdbName: "Taken")
+
+        #expect(throws: JournalError.alreadyLinked) { try j.journal.link(game, igdbGameId: 1360, igdbName: "Einhänder") }
+        try j.journal.link(game, igdbGameId: 1360, igdbName: "Einhänder", replacing: true)
+        #expect(try j.journal.game(game).igdbGameId == 1360)
+        #expect(try j.journal.game(game).name == "Einhänder")
+        #expect(throws: JournalError.igdbLinkTaken) { try j.journal.link(game, igdbGameId: 2, igdbName: "Taken", replacing: true) }
+    }
+}
+
+@Suite struct ChangingPlatformTests {
+    @Test func aGameWithoutROMsCanMovePlatformWithItsNewLinkButOneWithROMsCant() throws {
+        let j = try JournalHarness()
+        try j.journal.addPlatform(id: 6, name: "PC")
+        let pc = try j.journal.addGame(platformId: 6, name: "Doom", igdbGameId: 1, igdbName: "Doom")
+
+        try j.journal.link(pc, igdbGameId: 2, igdbName: "Doom", replacing: true, platform: IGDBPlatform(id: 13, name: "DOS"))
+
+        #expect(try j.journal.game(pc).platformId == 13)
+        try j.journal.db.write { db in
+            try db.execute(sql: "INSERT INTO rom (openEmuPk, md5, fileName, systemId, gameId, matchKind, matchedAt) VALUES (1, 'a', 'doom.zip', 'x', ?, 'manual', 0)", arguments: [pc])
+        }
+        #expect(throws: JournalError.gameHasROMs) {
+            try j.journal.link(pc, igdbGameId: 3, igdbName: "Doom", replacing: true, platform: IGDBPlatform(id: 6, name: "PC"))
+        }
+    }
+}

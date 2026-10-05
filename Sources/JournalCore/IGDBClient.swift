@@ -90,7 +90,29 @@ public final class IGDBClient: Sendable {
             let ids = (try JSONValue.decode(try await post("games", body)).array ?? []).compactMap { $0["id"]?.int }
             return [s: try JSONEncoder().encode(ids)]
         }
-        return try payloads.mapValues { try JSONDecoder().decode([Int].self, from: $0) }
+        var results = try payloads.mapValues { try JSONDecoder().decode([Int].self, from: $0) }
+        // IGDB's search index misses some games entirely (Einhänder isn't found even as "Einh"), so a
+        // search with no results falls back to matching the name, an alternative name or the slug.
+        let empty = searches.filter { results[$0]?.isEmpty ?? false }
+        if !empty.isEmpty {
+            let fallback = try await cache.resolve(
+                empty, key: { "igdb:search-fallback:" + $0.cacheKey.dropFirst("igdb:search:".count) }, maxAge: maxAge, batchSize: 1,
+                servesStale: servesStale
+            ) { batch in
+                let s = batch[0]
+                let text = s.name.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "\"", with: "")
+                let slug = text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+                    .split { !($0.isLetter || $0.isNumber) }.joined(separator: "-")
+                let body = """
+                    fields id; where (name ~ *"\(text)"* | alternative_names.name ~ *"\(text)"* | slug = "\(slug)") \
+                    & game_type != (1,2,7,13,14)\(s.platformID.map { " & platforms = (\($0))" } ?? ""); limit 20;
+                    """
+                let ids = (try JSONValue.decode(try await post("games", body)).array ?? []).compactMap { $0["id"]?.int }
+                return [s: try JSONEncoder().encode(ids)]
+            }
+            for (s, data) in fallback { results[s] = try JSONDecoder().decode([Int].self, from: data) }
+        }
+        return results
     }
 
     /// Every IGDB platform: the journal's Platforms. Cached as one entry, like any other record.
