@@ -180,7 +180,7 @@ struct KeywordsSection: View {
                 let limit = 10
                 let collapsed = !showingAll && keywords.count > limit
                 ForEach(collapsed ? Array(keywords.prefix(limit)) : keywords, id: \.self) { k in
-                    Text(k).font(FactStyle.value).padding(.horizontal, 10).padding(.vertical, 3).background(.quaternary, in: .capsule)
+                    Text(k).font(FactStyle.value).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
                 }
                 if collapsed {
                     Button("+\(keywords.count - limit) more") { showingAll = true }

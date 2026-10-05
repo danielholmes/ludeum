@@ -89,7 +89,7 @@ private func pill(_ text: String, systemImage: String?) -> some View {
         Text(text)
         if let systemImage { Image(systemName: systemImage).imageScale(.small).foregroundStyle(.secondary) }
     }
-    .font(FactStyle.value).padding(.horizontal, 10).padding(.vertical, 3).background(.quaternary, in: .capsule)
+    .font(FactStyle.value).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
 }
 
 struct Screenshot: Identifiable {
@@ -322,11 +322,11 @@ struct CommunityScores: View {
     }
 }
 
-/// Text sizes for the IGDB facts on Game detail (Genre, Theme, Companies, Links…): 1.5× the
-/// caption labels and subheadline values they started as.
+/// Text for the IGDB facts on Game detail (Genre, Theme, Companies, Links…): the panel's body size,
+/// labels in grey, so they read like the rest of it.
 enum FactStyle {
-    static let label = Font.system(size: 15)
-    static let value = Font.system(size: 16.5)
+    static let label = Font.body
+    static let value = Font.body
     /// The label column's width, so the values line up.
-    static let labelWidth: CGFloat = 100
+    static let labelWidth: CGFloat = 92
 }
