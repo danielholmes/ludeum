@@ -40,7 +40,7 @@ struct MainWindow: View {
         } content: {
             switch selection {
             case .library:
-                LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter)
+                LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter, bar: .filters)
                     .id(libraryRequest)
             case .platform(let id, let name):
                 LibraryScreen(
@@ -56,7 +56,8 @@ struct MainWindow: View {
                 }
             case .finished, .childhood:
                 if let screen = selection, let filter = screen.shortcutFilter {
-                    LibraryScreen(services: services, selection: $selectedGame, initialFilter: filter, title: screen.title).id(selection)
+                    LibraryScreen(services: services, selection: $selectedGame, initialFilter: filter, title: screen.title, bar: .count).id(
+                        selection)
                 }
             case .whatToPlayNext:
                 WhatToPlayNextScreen(services: services, selection: $selectedGame)

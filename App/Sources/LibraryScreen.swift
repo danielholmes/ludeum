@@ -7,6 +7,9 @@ struct LibraryScreen: View {
     /// Set when showing one List: its Games, with the List filter fixed.
     var list: GameList?
     var title: String?
+    /// How the bar above the Games works: the Library adds and removes filters as pills; Finished and
+    /// Childhood just count; the rest (Platforms, Lists, Pinned) say what they're showing.
+    var bar = Bar.summary
     @Binding var selection: GameID?
     @State private var filter: LibraryFilter
     @State private var sort = LibrarySort.name
@@ -28,9 +31,10 @@ struct LibraryScreen: View {
     /// `title` replaces "Library", e.g. for a Platform opened from the sidebar.
     init(
         services: Services, list: GameList? = nil, selection: Binding<GameID?>, initialFilter: LibraryFilter = LibraryFilter(),
-        title: String? = nil
+        title: String? = nil, bar: Bar = .summary
     ) {
         self.services = services
+        self.bar = bar
         self.list = list
         self.title = title
         _selection = selection
@@ -48,7 +52,7 @@ struct LibraryScreen: View {
                 VStack {
                     ContentUnavailableView(
                         filter == LibraryFilter() ? "No Games yet" : "No Games match", systemImage: "books.vertical",
-                        description: Text(filter == LibraryFilter() ? "Add one with +." : filter.name.isEmpty ? "" : "Try another search.")
+                        description: Text(filter == LibraryFilter() ? "Add one with +." : "Try fewer filters or another search.")
                     )
                     .fixedSize(horizontal: false, vertical: true)
                     Spacer()
@@ -75,7 +79,14 @@ struct LibraryScreen: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count)
+            switch bar {
+            case .summary: FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count)
+            case .count: LibraryBar(count: rows.count, filter: nil, platforms: [], lists: [], genres: [], themes: [])
+            case .filters:
+                LibraryBar(
+                    count: rows.count, filter: $filter, platforms: platforms, lists: lists,
+                    genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted())
+            }
         }
         .navigationTitle(list?.name ?? title ?? "Library")
         .toolbar { toolbar }
@@ -126,6 +137,8 @@ struct LibraryScreen: View {
             if !filter.usesIGDBFacts, filter.name.trimmed.isEmpty {
                 rows = try journal.library(effective, sort: sort, ascending: ascending)
                 loaded = true
+                // The Add filter menu's genres and themes can follow.
+                if bar == .filters { facts = await services.memory.facts(services) }
             } else {
                 // A search also matches companies, franchises and series, which live in the cache.
                 facts = await services.memory.facts(services)
@@ -138,6 +151,10 @@ struct LibraryScreen: View {
             self.error = error.localizedDescription
         }
     }
+}
+
+extension LibraryScreen {
+    enum Bar { case filters, count, summary }
 }
 
 /// The Platforms and Lists the filter menu offers.
@@ -448,50 +465,133 @@ struct FilterSummary: View {
         }
     }
 
-    private struct Chip {
-        let text: String
-        let clear: (inout LibraryFilter) -> Void
-    }
+    private var chips: [FilterChip] { filterChips(filter, platforms: platforms, lists: lists) }
+}
 
-    private var chips: [Chip] {
-        var c: [Chip] = []
-        if let id = filter.platformId {
-            c.append(Chip(text: platforms.first { $0.id == id }?.name ?? "One Platform") { $0.platformId = nil })
-        }
-        switch filter.rating {
-        case .unrated: c.append(Chip(text: "Unrated") { $0.rating = nil })
-        case .atLeast(let r): c.append(Chip(text: "Rated \(ratingText(r)) or more") { $0.rating = nil })
-        case nil: break
-        }
-        switch filter.intent {
-        case .some(nil): c.append(Chip(text: "No Intent") { $0.intent = nil })
-        case .some(.some(let i)): c.append(Chip(text: intentText(i)) { $0.intent = nil })
-        case nil: break
-        }
-        if let id = filter.listId {
-            c.append(Chip(text: "In \(lists.first { $0.id == id }?.name ?? "a List")") { $0.listId = nil })
-        }
-        if let o = filter.outcome {
-            let text =
-                switch o {
-                case .playing: "Playing"
-                case .finished: "Finished"
-                case .dropped: "Dropped"
-                case .notPlayed: "Not played"
+/// One filter as a pill: what it says, and how to remove it.
+struct FilterChip {
+    let text: String
+    let clear: (inout LibraryFilter) -> Void
+}
+
+func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [GameList]) -> [FilterChip] {
+    typealias Chip = FilterChip
+    var c: [Chip] = []
+    if let id = filter.platformId {
+        c.append(Chip(text: platforms.first { $0.id == id }?.name ?? "One Platform") { $0.platformId = nil })
+    }
+    switch filter.rating {
+    case .unrated: c.append(Chip(text: "Unrated") { $0.rating = nil })
+    case .atLeast(let r): c.append(Chip(text: "Rated \(ratingText(r)) or more") { $0.rating = nil })
+    case nil: break
+    }
+    switch filter.intent {
+    case .some(nil): c.append(Chip(text: "No Intent") { $0.intent = nil })
+    case .some(.some(let i)): c.append(Chip(text: intentText(i)) { $0.intent = nil })
+    case nil: break
+    }
+    if let id = filter.listId {
+        c.append(Chip(text: "In \(lists.first { $0.id == id }?.name ?? "a List")") { $0.listId = nil })
+    }
+    if let o = filter.outcome {
+        let text =
+            switch o {
+            case .playing: "Playing"
+            case .finished: "Finished"
+            case .dropped: "Dropped"
+            case .notPlayed: "Not played"
+            }
+        c.append(Chip(text: text) { $0.outcome = nil })
+    }
+    if let ch = filter.childhood {
+        c.append(Chip(text: ch ? "Childhood" : "Not childhood") { $0.childhood = nil })
+    }
+    if filter.undatedPlaythroughs {
+        c.append(Chip(text: "Playthroughs with no dates") { $0.undatedPlaythroughs = false })
+    }
+    if let genre = filter.genre { c.append(Chip(text: genre) { $0.genre = nil }) }
+    if let theme = filter.theme { c.append(Chip(text: theme) { $0.theme = nil }) }
+    if let franchise = filter.franchise { c.append(Chip(text: "Franchise: \(franchise)") { $0.franchise = nil }) }
+    if let series = filter.series { c.append(Chip(text: "Series: \(series)") { $0.series = nil }) }
+    if let company = filter.company { c.append(Chip(text: "Company: \(company)") { $0.company = nil }) }
+    return c
+}
+
+/// The bar above the Library's Games: how many there are, then (with a `filter`) each filter as a
+/// removable pill and an Add filter menu on the right. Filters combine.
+struct LibraryBar: View {
+    let count: Int
+    let filter: Binding<LibraryFilter>?
+    let platforms: [IGDBPlatform]
+    let lists: [GameList]
+    let genres: [String]
+    let themes: [String]
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("\(count) Game\(count == 1 ? "" : "s")").foregroundStyle(.secondary)
+            if let filter {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(filterChips(filter.wrappedValue, platforms: platforms, lists: lists), id: \.text) { chip in
+                            HStack(spacing: 4) {
+                                Text(chip.text)
+                                Button("Remove filter", systemImage: "xmark") { chip.clear(&filter.wrappedValue) }
+                                    .labelStyle(.iconOnly).buttonStyle(.hover).imageScale(.small)
+                            }
+                            .padding(.leading, 8).padding(.vertical, 2)
+                            .background(.quaternary, in: .capsule)
+                        }
+                    }
                 }
-            c.append(Chip(text: text) { $0.outcome = nil })
+                AddFilterMenu(filter: filter, platforms: platforms, lists: lists, genres: genres, themes: themes)
+            } else {
+                Spacer()
+            }
         }
-        if let ch = filter.childhood {
-            c.append(Chip(text: ch ? "Childhood" : "Not childhood") { $0.childhood = nil })
+        .font(.callout)
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(.bar)
+    }
+}
+
+/// Adds one filter (replacing any of the same kind), as a pill in the Library bar.
+private struct AddFilterMenu: View {
+    @Binding var filter: LibraryFilter
+    let platforms: [IGDBPlatform]
+    let lists: [GameList]
+    let genres: [String]
+    let themes: [String]
+
+    var body: some View {
+        Menu("Add filter", systemImage: "line.3.horizontal.decrease.circle") {
+            Menu("Platform") { ForEach(platforms) { p in Button(p.name) { filter.platformId = p.id } } }
+            Menu("Rating") {
+                Button("Unrated") { filter.rating = .unrated }
+                ForEach([9, 8, 7, 6, 5], id: \.self) { n in
+                    Button("\(n).0 or more") { filter.rating = .atLeast(Rating(tenths: n * 10)!) }
+                }
+            }
+            Menu("Intent") {
+                Button("None") { filter.intent = .some(nil) }
+                Button("Backlog") { filter.intent = .backlog }
+                Button("Up next") { filter.intent = .upNext }
+            }
+            if !lists.isEmpty { Menu("List") { ForEach(lists, id: \.id) { l in Button(l.name) { filter.listId = l.id } } } }
+            if !genres.isEmpty { Menu("Genre") { ForEach(genres, id: \.self) { g in Button(g) { filter.genre = g } } } }
+            if !themes.isEmpty { Menu("Theme") { ForEach(themes, id: \.self) { t in Button(t) { filter.theme = t } } } }
+            Menu("Played") {
+                Button("Playing") { filter.outcome = .playing }
+                Button("Finished") { filter.outcome = .finished }
+                Button("Dropped") { filter.outcome = .dropped }
+                Button("Not played") { filter.outcome = .notPlayed }
+            }
+            Menu("Childhood") {
+                Button("Childhood") { filter.childhood = true }
+                Button("Not childhood") { filter.childhood = false }
+            }
+            Button("Playthroughs with no dates") { filter.undatedPlaythroughs = true }
         }
-        if filter.undatedPlaythroughs {
-            c.append(Chip(text: "Playthroughs with no dates") { $0.undatedPlaythroughs = false })
-        }
-        if let genre = filter.genre { c.append(Chip(text: genre) { $0.genre = nil }) }
-        if let theme = filter.theme { c.append(Chip(text: theme) { $0.theme = nil }) }
-        if let franchise = filter.franchise { c.append(Chip(text: "Franchise: \(franchise)") { $0.franchise = nil }) }
-        if let series = filter.series { c.append(Chip(text: "Series: \(series)") { $0.series = nil }) }
-        if let company = filter.company { c.append(Chip(text: "Company: \(company)") { $0.company = nil }) }
-        return c
+        .menuStyle(.borderlessButton).fixedSize()
     }
 }
