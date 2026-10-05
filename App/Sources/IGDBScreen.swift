@@ -119,6 +119,7 @@ struct IGDBGameDetailView: View {
             if !facts.screenshots.isEmpty, let igdb = services.igdb {
                 ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots)
             }
+            if !facts.keywords.isEmpty { KeywordsSection(keywords: facts.keywords) }
         }
         .formStyle(.grouped)
         .task(id: services.changes.revision) {

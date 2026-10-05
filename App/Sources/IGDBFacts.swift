@@ -20,12 +20,18 @@ struct IGDBFactsRows: View {
             if !facts.franchises.isEmpty { pinnable("Franchise", .franchise, facts.franchises) }
             if !facts.series.isEmpty { pinnable("Series", .series, facts.series) }
             if !facts.credits.isEmpty { companies }
-            if !facts.links.isEmpty {
+            if let t = facts.timeToBeat, let text = timeToBeatText(t) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Time to beat").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
+                    Text(text).font(.subheadline)
+                }
+            }
+            if !facts.links.isEmpty || facts.trailer != nil {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Links").font(.caption).foregroundStyle(.secondary).frame(width: 66, alignment: .leading)
                     FlowLayout(spacing: 8) {
                         ForEach(facts.links, id: \.title) { link in
-                            Link(link.title, destination: link.url).font(.caption).help(link.url.absoluteString)
+                            Link(link.title, destination: link.url).font(.subheadline).help(link.url.absoluteString)
                         }
                     }
                 }
@@ -115,6 +121,50 @@ struct ScreenshotsSection: View {
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .frame(minWidth: 640, idealWidth: 1280, maxWidth: 1280)
                 .onTapGesture { viewing = nil }
+        }
+    }
+}
+
+/// IGDB's summary: a few lines, with More to read the rest.
+private struct SummaryText: View {
+    let text: String
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(text).lineLimit(expanded ? nil : 4).fixedSize(horizontal: false, vertical: true)
+            if !expanded, text.count > 280 {
+                Button("More") { expanded = true }.buttonStyle(.link).font(.caption)
+            }
+        }
+    }
+}
+
+/// "Rushed 3.5 h · Normally 10 h · 100% 12 h", leaving out what IGDB doesn't know.
+func timeToBeatText(_ t: TimeToBeat) -> String? {
+    func hours(_ seconds: Int?) -> String? {
+        guard let seconds, seconds > 0 else { return nil }
+        let h = Double(seconds) / 3600
+        return h < 10 ? String(format: "%.1f h", h) : "\(Int(h.rounded())) h"
+    }
+    let parts = [
+        hours(t.hastily).map { "Rushed \($0)" }, hours(t.normally).map { "Normally \($0)" },
+        hours(t.completely).map { "100% \($0)" },
+    ].compactMap { $0 }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
+}
+
+/// IGDB's keywords, at the foot of a game's page.
+struct KeywordsSection: View {
+    let keywords: [String]
+
+    var body: some View {
+        Section("Keywords") {
+            FlowLayout(spacing: 4) {
+                ForEach(keywords, id: \.self) { k in
+                    Text(k).font(.subheadline).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
+                }
+            }
         }
     }
 }

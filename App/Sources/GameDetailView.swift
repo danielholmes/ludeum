@@ -187,6 +187,8 @@ struct GameDetailView: View {
                 }
             }
 
+            if !facts.keywords.isEmpty { KeywordsSection(keywords: facts.keywords) }
+
             if let error { Text(error).foregroundStyle(.red) }
         }
         .formStyle(.grouped)

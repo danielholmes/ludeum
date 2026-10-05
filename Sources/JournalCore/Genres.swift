@@ -34,11 +34,12 @@ extension LibraryFilter {
 }
 
 extension GameFacts {
-    /// Whether a company, franchise or series contains `text`, ignoring case.
+    /// Whether a company, franchise, series or keyword contains `text`, ignoring case.
     func mentions(_ text: String) -> Bool {
         credits.contains { $0.name.localizedCaseInsensitiveContains(text) }
             || franchises.contains { $0.localizedCaseInsensitiveContains(text) }
             || series.contains { $0.localizedCaseInsensitiveContains(text) }
+            || keywords.contains { $0.localizedCaseInsensitiveContains(text) }
     }
 }
 

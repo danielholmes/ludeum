@@ -24,6 +24,14 @@ public struct GameFacts: Sendable, Equatable {
     public let releaseYear: Int?
     /// IGDB image ids, in IGDB's order.
     public let screenshots: [String]
+    /// IGDB's description of the game.
+    public var summary: String? = nil
+    /// How long players say it takes.
+    public var timeToBeat: TimeToBeat? = nil
+    /// IGDB's fine-grained tags, e.g. metroidvania, female protagonist.
+    public var keywords: [String] = []
+    /// The first of IGDB's videos called a trailer, on YouTube.
+    public var trailer: URL? = nil
 
     public init(
         genres: [String], themes: [String], franchises: [String] = [], series: [String] = [], credits: [CompanyCredit] = [],
@@ -43,6 +51,19 @@ public struct GameFacts: Sendable, Equatable {
     }
 
     public static let none = GameFacts(genres: [], themes: [], screenshots: [])
+}
+
+/// IGDB's time to beat, in seconds: rushing, a normal playthrough, and 100%.
+public struct TimeToBeat: Sendable, Equatable {
+    public let hastily: Int?
+    public let normally: Int?
+    public let completely: Int?
+
+    public init(hastily: Int?, normally: Int?, completely: Int?) {
+        self.hastily = hastily
+        self.normally = normally
+        self.completely = completely
+    }
 }
 
 /// An average score from IGDB, 0–100, and how many ratings or reviews it averages.
@@ -126,7 +147,7 @@ extension IGDBGame {
                 credits.append(CompanyCredit(name: name, roles: roles))
             }
         }
-        return GameFacts(
+        var facts = GameFacts(
             genres: names("genres"), themes: names("themes"), franchises: franchises, series: names("collections"),
             credits: credits,
             releaseYear: record["first_release_date"]?.int.map {
@@ -136,6 +157,15 @@ extension IGDBGame {
             playerScore: CommunityScore(record["rating"], count: record["rating_count"]),
             criticScore: CommunityScore(record["aggregated_rating"], count: record["aggregated_rating_count"]),
             screenshots: (record["screenshots"]?.array ?? []).compactMap { $0["image_id"]?.string })
+        facts.summary = record["summary"]?.string
+        facts.keywords = names("keywords")
+        let ttb = record["time_to_beat"]
+        let times = TimeToBeat(hastily: ttb?["hastily"]?.int, normally: ttb?["normally"]?.int, completely: ttb?["completely"]?.int)
+        if times.hastily != nil || times.normally != nil || times.completely != nil { facts.timeToBeat = times }
+        facts.trailer = (record["videos"]?.array ?? [])
+            .first { ($0["name"]?.string ?? "").localizedCaseInsensitiveContains("trailer") }?["video_id"]?.string
+            .flatMap { URL(string: "https://www.youtube.com/watch?v=\($0)") }
+        return facts
     }
 }
 

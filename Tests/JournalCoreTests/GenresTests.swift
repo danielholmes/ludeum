@@ -88,6 +88,35 @@ import Testing
     }
 }
 
+@Suite struct MoreFactsTests {
+    @Test func summaryTimeToBeatKeywordsAndTheTrailer() async throws {
+        let h = try Harness()
+        h.internet.addGame(
+            1103, "Super Metroid",
+            fields: [
+                "summary": "The Space Pirates have stolen the last Metroid.",
+                "keywords": [["name": "metroidvania"], ["name": "female protagonist"]],
+                "videos": [["name": "Game intro", "video_id": "intro1"], ["name": "Trailer", "video_id": "trail1"]],
+            ])
+        h.internet.state.withLock { $0.timeToBeat[1103] = 36_000 }
+
+        let facts = try await h.igdb.facts(igdbGameId: 1103)
+
+        #expect(facts.summary == "The Space Pirates have stolen the last Metroid.")
+        #expect(facts.keywords == ["metroidvania", "female protagonist"])
+        #expect(facts.timeToBeat == TimeToBeat(hastily: nil, normally: 36_000, completely: nil))
+        #expect(facts.trailer == URL(string: "https://www.youtube.com/watch?v=trail1"))
+    }
+
+    @Test func noTrailerWithoutAVideoCalledOne() async throws {
+        let h = try Harness()
+        h.internet.addGame(1, "X", fields: ["videos": [["name": "Gameplay Video", "video_id": "g1"]]])
+
+        #expect(try await h.igdb.facts(igdbGameId: 1).trailer == nil)
+        #expect(try await h.igdb.facts(igdbGameId: 1).timeToBeat == nil)
+    }
+}
+
 @Suite struct GameReleaseTests {
     @Test func releasesOnTheROMsPlatformsByRegionEarliestFirst() async throws {
         let h = try Harness()
@@ -118,7 +147,7 @@ import Testing
         h.internet.addGame(
             1, "Mega Man X",
             fields: ["involved_companies": [["developer": true, "company": ["name": "Capcom"]]], "collections": [["name": "Mega Man X"]]])
-        h.internet.addGame(2, "Taz-Mania", fields: ["franchises": [["name": "Looney Tunes"]]])
+        h.internet.addGame(2, "Taz-Mania", fields: ["franchises": [["name": "Looney Tunes"]], "keywords": [["name": "metroidvania"]]])
         h.internet.addGame(3, "Capcom's Soccer Shootout")
         for (id, name) in [(1, "Mega Man X"), (2, "Taz-Mania"), (3, "Capcom's Soccer Shootout")] {
             try j.journal.addGame(platformId: 19, name: name, igdbGameId: Int64(id), igdbName: name)
@@ -132,6 +161,8 @@ import Testing
         #expect(try search("capcom") == ["Capcom's Soccer Shootout", "Mega Man X"])
         #expect(try search("looney") == ["Taz-Mania"])
         #expect(try search("man x") == ["Mega Man X"])
+        #expect(try search("soccer") == ["Capcom's Soccer Shootout"])
+        #expect(try search("metroidvania") == ["Taz-Mania"])
         #expect(try search("").count == 3)
     }
 }

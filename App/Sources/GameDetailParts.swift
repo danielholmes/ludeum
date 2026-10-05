@@ -89,7 +89,7 @@ private func pill(_ text: String, systemImage: String?) -> some View {
         Text(text)
         if let systemImage { Image(systemName: systemImage).imageScale(.small).foregroundStyle(.secondary) }
     }
-    .font(.caption).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
+    .font(.subheadline).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
 }
 
 struct Screenshot: Identifiable {
