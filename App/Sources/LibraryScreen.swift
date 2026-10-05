@@ -100,6 +100,8 @@ struct LibraryScreen: View {
         }
         .navigationTitle(list?.name ?? title ?? "Library")
         .toolbar { toolbar }
+        // The search pill cleared (or any other change to the filter's search) shows in the field.
+        .onChange(of: filter.name) { searchText = filter.name }
         .task(id: searchText) {
             // Debounced: the Library reloads 300 ms after the last keystroke, not on every one.
             guard searchText != filter.name else { return }
@@ -548,6 +550,8 @@ struct FilterChip {
 func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [GameList]) -> [FilterChip] {
     typealias Chip = FilterChip
     var c: [Chip] = []
+    let search = filter.name.trimmingCharacters(in: .whitespaces)
+    if !search.isEmpty { c.append(Chip(text: "“\(search)”") { $0.name = "" }) }
     if let id = filter.platformId {
         c.append(Chip(text: platforms.first { $0.id == id }?.name ?? "One Platform") { $0.platformId = nil })
     }
