@@ -16,10 +16,10 @@ public struct Emulator: Sendable, Equatable {
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
         switch platformId {
-        // NES, Family Computer, SNES, Super Famicom, Game Boy, Game Boy Color, GBA, Master System
-        case 18, 99, 19, 58, 33, 22, 24, 64: .mesenCE
+        // NES, Family Computer, SNES, Super Famicom, Game Boy, Game Boy Color, GBA, Master System, PC Engine, PC Engine CD
+        case 18, 99, 19, 58, 33, 22, 24, 64, 86, 150: .mesenCE
         case 7: .duckStation  // PlayStation
-        case 21: .dolphin  // GameCube
+        case 21, 5: .dolphin  // GameCube, Wii
         case 4: .ares  // Nintendo 64
         case 29: .ares  // Mega Drive/Genesis
         case 78: .ares  // Sega CD

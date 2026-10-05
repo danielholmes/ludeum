@@ -5,9 +5,10 @@ import Testing
 
 @Suite struct EmulatorTests {
     @Test func nesAndSNESGamesArePlayedInMesenCE() {
-        for platform: Int64 in [18, 99, 19, 58, 33, 22, 24, 64] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
+        for platform: Int64 in [18, 99, 19, 58, 33, 22, 24, 64, 86, 150] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
         #expect(Emulator.of(platformId: 7) == .duckStation)  // PlayStation
         #expect(Emulator.of(platformId: 21) == .dolphin)  // GameCube
+        #expect(Emulator.of(platformId: 5) == .dolphin)  // Wii
         #expect(Emulator.of(platformId: 29) == .ares)  // Mega Drive/Genesis
         #expect(Emulator.of(platformId: 4) == .ares)  // Nintendo 64
         #expect(Emulator.of(platformId: 20) == .melonDS)  // Nintendo DS
