@@ -1,3 +1,5 @@
+import Foundation
+import GRDB
 import Testing
 
 @testable import LudeumCore
@@ -13,7 +15,7 @@ import Testing
 
     private func history() throws -> [String] {
         try h.journal.ratingHistory(game).map {
-            "\($0.day) \($0.rating.map { String($0.tenths) } ?? "unrated")\($0.imported ? " imported" : "")"
+            "\($0.day) \($0.rating.map { String($0.tenths) } ?? "unrated")"
         }
     }
 
@@ -64,17 +66,6 @@ import Testing
         #expect(try history() == ["2027-01-16 unrated", "2027-01-15 0"])
     }
 
-    @Test func anImportedRatingIsNeverReplacedAndRatingThatDayIsCurrent() throws {
-        try h.journal.importRating(game, Rating(tenths: 60)!)
-        #expect(try h.journal.game(game).ratingImported)
-
-        try h.journal.setRating(game, Rating(tenths: 75))
-
-        #expect(try h.journal.game(game).rating == Rating(tenths: 75))
-        #expect(try !h.journal.game(game).ratingImported)
-        #expect(try history() == ["2027-01-15 75", "2027-01-15 60 imported"])
-    }
-
     @Test func deletingTheLatestEntryMakesThePreviousOneTheRating() throws {
         try h.journal.setRating(game, Rating(tenths: 85))
         h.clock.advance(days: 1)
@@ -93,20 +84,29 @@ import Testing
     }
 }
 
-@Suite struct ConfirmingImportedRatingTests {
-    @Test func settingTheImportedValueMakesItMine() throws {
-        let j = try LudeumHarness()
-        try j.journal.addPlatform(id: 18, name: "NES")
-        let contra = try j.journal.addGameByHand(name: "Contra", platformId: 18)
-        try j.journal.importRating(contra, Rating(tenths: 100)!)
-        #expect(try j.journal.game(contra).ratingImported)
+/// The migration that drops Ratings imported from OpenEmu stars.
+@Suite struct NoImportedRatingsMigrationTests {
+    @Test func importedEntriesGoAndMyOwnStay() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: "v9 playthrough start required")
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform VALUES (19, 'SNES');
+                    INSERT INTO game (id, platformId, name) VALUES (1, 19, 'Contra'), (2, 19, 'Zelda');
+                    INSERT INTO ratingEntry (gameId, day, rating, imported) VALUES
+                        (1, '2026-01-01', 60, 1), (1, '2026-01-01', 75, 0), (2, '2026-01-01', 80, 1);
+                    """)
+        }
+        try db.close()
 
-        try j.journal.setRating(contra, Rating(tenths: 100)!)
+        let journal = try LudeumStore(directory: directory)
 
-        let game = try j.journal.game(contra)
-        #expect(game.rating == Rating(tenths: 100))
-        #expect(!game.ratingImported)
-        try j.journal.setRating(contra, Rating(tenths: 100)!)
-        #expect(try j.journal.ratingHistory(contra).count == 2)  // a second Set is still no change
+        #expect(try journal.ratingHistory(1).map(\.rating) == [Rating(tenths: 75)])
+        #expect(try journal.game(2).rating == nil)
     }
 }

@@ -38,15 +38,9 @@ struct TopRatedScreen: View {
                     TableColumn("#") { Text("\($0.rank)").monospacedDigit() }.width(40)
                     TableColumn("Name") { Text($0.game.name) }
                     TableColumn("Rating") { row in
-                        HStack(spacing: 4) {
-                            Text(row.game.rating.map(ratingText) ?? "").monospacedDigit()
-                            if row.game.ratingImported {
-                                Text("≈ imported").font(.caption).foregroundStyle(.secondary)
-                                    .help("Brought over from OpenEmu stars. Re-rate to replace it.")
-                            }
-                        }
+                        Text(row.game.rating.map(ratingText) ?? "").monospacedDigit()
                     }
-                    .width(120)
+                    .width(60)
                     TableColumn("Platform") { Text($0.game.platformName) }
                 }
             }

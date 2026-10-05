@@ -23,21 +23,10 @@ import Testing
         #expect(try h.journal.playthroughs(game) == [Playthrough(id: id, draft)])
     }
 
-    @Test func everyFieldIsOptionalOnceItHasAnOutcome() throws {
-        _ = try h.journal.addPlaythrough(game, PlaythroughDraft(outcome: .dropped))
+    @Test func everyFieldButTheStartIsOptional() throws {
+        _ = try h.journal.addPlaythrough(game, PlaythroughDraft(start: date("2026")))
 
         #expect(try h.journal.playthroughs(game).count == 1)
-    }
-
-    @Test func anInProgressPlaythroughMustHaveAStartDate() throws {
-        #expect(throws: LudeumError.inProgressNeedsStart) {
-            try h.journal.addPlaythrough(game, PlaythroughDraft())
-        }
-        let id = try h.journal.addPlaythrough(game, PlaythroughDraft(start: date("2026")))
-
-        #expect(throws: LudeumError.inProgressNeedsStart) {
-            try h.journal.updatePlaythrough(id, PlaythroughDraft())
-        }
     }
 
     @Test func refusesAnEndBeforeTheStart() throws {

@@ -5,7 +5,6 @@ public typealias GameID = Int64
 
 public enum LudeumError: Error, Equatable {
     case igdbLinkTaken
-    case inProgressNeedsStart
     case endBeforeStart
     case listNameTaken
     case gameHasPresentROMs
@@ -32,8 +31,6 @@ public struct Game: Sendable, Equatable {
     public let intentSetAt: Date?
     /// The current Rating: the latest Rating history entry. Nil when unrated.
     public let rating: Rating?
-    /// Whether the current Rating was imported from OpenEmu stars (approximate).
-    public let ratingImported: Bool
 }
 
 public enum Intent: String, Sendable {
@@ -116,7 +113,7 @@ public final class LudeumStore: Sendable {
                 db,
                 sql: """
                     SELECT g.*, COALESCE(g.nameOverride, g.igdbName, g.name) AS displayName,
-                        r.rating AS currentRating, r.imported AS ratingImported
+                        r.rating AS currentRating
                     FROM game g
                     LEFT JOIN ratingEntry r ON r.id = (
                         SELECT id FROM ratingEntry WHERE gameId = g.id \(Self.ratingOrder) LIMIT 1)
@@ -128,8 +125,7 @@ public final class LudeumStore: Sendable {
                 name: row["displayName"], childhood: row["childhood"],
                 intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)),
                 intentSetAt: row["intentSetAt"],
-                rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) },
-                ratingImported: row["ratingImported"] ?? false)
+                rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) })
         }
     }
 }

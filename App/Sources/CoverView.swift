@@ -11,6 +11,7 @@ struct CoverView: View {
     /// Takes the image's own shape (no tile around it) once there is one; Game detail uses this.
     var fitsImage = false
     @State private var image: NSImage?
+    @State private var enlarged = false
 
     init(services: Services, game: GameID, name: String, fitsImage: Bool = false) {
         self.services = services
@@ -26,6 +27,9 @@ struct CoverView: View {
             if fitsImage, let image {
                 Image(nsImage: image).resizable().interpolation(.high).antialiased(true).scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .onTapGesture { enlarged = true }
+                    .help("Show the Cover full size")
+                    .sheet(isPresented: $enlarged) { EnlargedCover(image: image, name: name) }
             } else {
                 tile
             }
@@ -53,6 +57,23 @@ struct CoverView: View {
     private struct CoverKey: Equatable {
         let game: GameID
         let revision: Int
+    }
+}
+
+/// The Cover as large as the screen allows; a click or Escape closes it.
+private struct EnlargedCover: View {
+    let image: NSImage
+    let name: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let screen = NSScreen.main?.visibleFrame.size ?? CGSize(width: 1200, height: 900)
+        Image(nsImage: image).resizable().interpolation(.high).antialiased(true).scaledToFit()
+            .frame(maxWidth: screen.width * 0.9, maxHeight: screen.height * 0.9)
+            .accessibilityLabel(name)
+            .contentShape(Rectangle())
+            .onTapGesture { dismiss() }
+            .onExitCommand { dismiss() }
     }
 }
 

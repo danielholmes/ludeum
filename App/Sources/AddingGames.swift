@@ -93,6 +93,7 @@ struct IGDBSearchView: View {
             HStack {
                 TextField("Search IGDB", text: $query, prompt: Text("Search IGDB, then press Return")).textFieldStyle(.roundedBorder)
                     .onSubmit(run)
+                Button("Search", action: run).disabled(query.trimmed.isEmpty && filters.isEmpty)
                 if linking {
                     Text(platformFilter?.name ?? "").foregroundStyle(.secondary)
                 } else {

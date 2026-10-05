@@ -34,8 +34,6 @@ public struct YearInReview: Sendable, Equatable {
     public let dropped: [YearPlaythrough]
     public let alsoPlayed: [YearPlaythrough]
     public let summary: YearSummary
-    /// Playthroughs (matching the filter) with no dates, which appear in no year.
-    public let undatedPlaythroughs: Int
 }
 
 extension LudeumStore {
@@ -45,7 +43,7 @@ extension LudeumStore {
         let current = calendar.component(.year, from: clock.now())
         var years = Set<Int>()
         for (game, p) in try allPlaythroughs() where games.contains(game) {
-            if let span = Self.years(of: p.draft, current: current) { years.formUnion(span) }
+            years.formUnion(Self.years(of: p.draft, current: current))
         }
         return years.sorted(by: >)
     }
@@ -57,13 +55,12 @@ extension LudeumStore {
         var dropped: [YearPlaythrough] = []
         var alsoPlayed: [YearPlaythrough] = []
         var started = 0
-        var undated = 0
         for (game, p) in try allPlaythroughs() {
             guard let row = rows[game] else { continue }
             let d = p.draft
-            if d.start == nil, d.end == nil { undated += 1 }
             if Self.year(d.start) == year { started += 1 }
-            guard let span = Self.years(of: d, current: current), span.contains(year) else { continue }
+            let span = Self.years(of: d, current: current)
+            guard span.contains(year) else { continue }
             let entry = YearPlaythrough(game: row, playthrough: p, endDateUnknown: d.outcome != nil && d.end == nil)
             switch year == span.upperBound ? d.outcome : nil {
             case .finished: finished.append(entry)
@@ -75,7 +72,7 @@ extension LudeumStore {
         let byEnd: (YearPlaythrough, YearPlaythrough) -> Bool = {
             let a = $0.playthrough.draft
             let b = $1.playthrough.draft
-            return ((a.end ?? a.start)?.text ?? "", $0.game.name.lowercased()) < ((b.end ?? b.start)?.text ?? "", $1.game.name.lowercased())
+            return ((a.end ?? a.start).text, $0.game.name.lowercased()) < ((b.end ?? b.start).text, $1.game.name.lowercased())
         }
         let sections = [finished, dropped, alsoPlayed].map { $0.sorted(by: byEnd) }
         var platforms: [String: Int] = [:]
@@ -86,22 +83,19 @@ extension LudeumStore {
                 .sorted { ($0.playthroughs, $1.name) > ($1.playthroughs, $0.name) })
         return YearInReview(
             year: year, isCurrentYear: year == current, finished: sections[0], dropped: sections[1], alsoPlayed: sections[2],
-            summary: summary, undatedPlaythroughs: undated)
+            summary: summary)
     }
 
     // MARK: Which years
 
-    private static func year(_ date: PartialDate?) -> Int? { date.flatMap { Int($0.text.prefix(4)) } }
+    private static func year(_ date: PartialDate) -> Int { Int(date.text.prefix(4))! }
 
     /// The years a Playthrough counts for: start year to end year (to `current` while in progress).
-    /// Ended with no end date: its start year. No start date: its end year. No dates: none.
-    static func years(of d: PlaythroughDraft, current: Int) -> ClosedRange<Int>? {
-        switch (year(d.start), year(d.end)) {
-        case (let start?, let end?): start...max(start, end)
-        case (let start?, nil): d.outcome == nil ? start...max(start, current) : start...start
-        case (nil, let end?): end...end
-        case (nil, nil): nil
-        }
+    /// Ended with no end date: its start year.
+    static func years(of d: PlaythroughDraft, current: Int) -> ClosedRange<Int> {
+        let start = year(d.start)
+        if let end = d.end { return start...max(start, year(end)) }
+        return d.outcome == nil ? start...max(start, current) : start...start
     }
 
     private func allPlaythroughs() throws -> [(GameID, Playthrough)] {
@@ -112,7 +106,7 @@ extension LudeumStore {
                     Playthrough(
                         id: row["id"],
                         PlaythroughDraft(
-                            start: (row["start"] as String?).flatMap(PartialDate.init),
+                            start: PartialDate(row["start"])!,
                             end: (row["end"] as String?).flatMap(PartialDate.init),
                             outcome: (row["outcome"] as String?).flatMap(Outcome.init(rawValue:)),
                             notes: row["notes"], version: row["version"], playedVia: row["playedVia"]))

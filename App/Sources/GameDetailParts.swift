@@ -9,7 +9,6 @@ func ratingColor(_ rating: Rating) -> Color {
 /// The current Rating, big, or "Unrated".
 struct RatingBadge: View {
     let rating: Rating?
-    let imported: Bool
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -17,7 +16,6 @@ struct RatingBadge: View {
                 Text(ratingText(rating)).font(.system(size: 40, weight: .bold, design: .rounded)).monospacedDigit()
                     .foregroundStyle(ratingColor(rating))
                 Text("/ 10").foregroundStyle(.secondary)
-                if imported { Text("≈ from OpenEmu stars").font(.caption).foregroundStyle(.secondary) }
             } else {
                 Text("Unrated").font(.system(size: 24, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
             }
@@ -194,7 +192,6 @@ struct RatingHistorySheet: View {
                 HStack {
                     Text(entry.day).monospacedDigit()
                     Text(entry.rating.map(ratingText) ?? "Unrated")
-                    if entry.imported { Text("imported").font(.caption).foregroundStyle(.secondary) }
                     Spacer()
                     Button("Delete", systemImage: "trash") { delete(entry) }.labelStyle(.iconOnly).buttonStyle(.hover)
                 }
@@ -213,7 +210,6 @@ struct RatingHistorySheet: View {
 /// An empty field clears it. The clock opens the Rating history.
 struct RatingEditor: View {
     let rating: Rating?
-    let imported: Bool
     let hasHistory: Bool
     let set: (Rating?) -> Void
     let showHistory: () -> Void
@@ -242,7 +238,7 @@ struct RatingEditor: View {
                 if invalid { Text("0.0 to 10.0, in steps of 0.1").font(.caption).foregroundStyle(.red) }
             } else {
                 Button(action: startEditing) {
-                    RatingBadge(rating: rating, imported: imported)
+                    RatingBadge(rating: rating)
                 }
                 .buttonStyle(.plain).help(rating == nil ? "Click to rate" : "Click to change the Rating")
             }
@@ -265,8 +261,7 @@ struct RatingEditor: View {
         if trimmed.isEmpty {
             if rating != nil { set(nil) }
         } else if let new = parseRating(trimmed) {
-            // Re-entering an imported value confirms it as mine.
-            if new != rating || imported { set(new) }
+            if new != rating { set(new) }
         } else {
             invalid = true
             return

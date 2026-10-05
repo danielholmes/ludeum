@@ -17,11 +17,11 @@ import Testing
     @Test func eachGameAppearsOnceInTheFirstSectionThatFits() throws {
         let playingAndUpNext = try h.addGame("Chrono Trigger")
         try h.journal.setIntent(playingAndUpNext, .upNext)
-        try h.journal.addPlaythrough(playingAndUpNext, PlaythroughDraft(start: PartialDate("2026")))
+        try h.journal.addPlaythrough(playingAndUpNext, PlaythroughDraft(start: PartialDate("2026")!))
         try h.journal.setIntent(try h.addGame("Earthbound"), .upNext)
         try h.journal.setIntent(try h.addGame("Secret of Mana"), .backlog)
         let finished = try h.addGame("Super Metroid")
-        try h.journal.addPlaythrough(finished, PlaythroughDraft(outcome: .finished))
+        try h.journal.addPlaythrough(finished, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
         _ = try h.addGame("F-Zero")
 
         let next = try names()
@@ -42,13 +42,13 @@ import Testing
 
     @Test func playingDefaultsToTheLatestInProgressStartNewestFirst() throws {
         let twoRuns = try h.addGame("Doom")
-        try h.journal.addPlaythrough(twoRuns, PlaythroughDraft(start: PartialDate("2020")))
-        try h.journal.addPlaythrough(twoRuns, PlaythroughDraft(start: PartialDate("2026-03")))
-        try h.journal.addPlaythrough(try h.addGame("Quake"), PlaythroughDraft(start: PartialDate("2026-01-15")))
-        try h.journal.addPlaythrough(try h.addGame("Heretic"), PlaythroughDraft(start: PartialDate("2025")))
+        try h.journal.addPlaythrough(twoRuns, PlaythroughDraft(start: PartialDate("2020")!))
+        try h.journal.addPlaythrough(twoRuns, PlaythroughDraft(start: PartialDate("2026-03")!))
+        try h.journal.addPlaythrough(try h.addGame("Quake"), PlaythroughDraft(start: PartialDate("2026-01-15")!))
+        try h.journal.addPlaythrough(try h.addGame("Heretic"), PlaythroughDraft(start: PartialDate("2025")!))
         let finishedLater = try h.addGame("Hexen")
-        try h.journal.addPlaythrough(finishedLater, PlaythroughDraft(start: PartialDate("2019")))
-        try h.journal.addPlaythrough(finishedLater, PlaythroughDraft(start: PartialDate("2026-09"), outcome: .finished))
+        try h.journal.addPlaythrough(finishedLater, PlaythroughDraft(start: PartialDate("2019")!))
+        try h.journal.addPlaythrough(finishedLater, PlaythroughDraft(start: PartialDate("2026-09")!, outcome: .finished))
 
         #expect(try names().playing == ["Doom", "Quake", "Heretic", "Hexen"])
         #expect(try h.journal.whatToPlayNext(LibraryFilter(), sort: nil, ascending: true).playing[0].playingSince == PartialDate("2026-03"))
@@ -73,7 +73,7 @@ import Testing
         try h.journal.startPlaying(game)
 
         let playthroughs = try h.journal.playthroughs(game)
-        #expect(playthroughs.map(\.draft) == [PlaythroughDraft(start: PartialDate(h.journal.today()))])
+        #expect(playthroughs.map(\.draft) == [PlaythroughDraft(start: PartialDate(h.journal.today())!)])
         #expect(h.journal.today().count == 10)
         #expect(try names() == PlayNext(playing: ["Earthbound"], upNext: [], backlog: []))
         #expect(try h.journal.library(LibraryFilter(), sort: .name, ascending: true)[0].intent == nil)
@@ -112,16 +112,6 @@ import Testing
         try h.journal.setRating(game, nil)
 
         #expect(try h.journal.topRated(LibraryFilter()).isEmpty)
-    }
-
-    @Test func importedRatingsAreMarkedUntilIReRate() throws {
-        let game = try h.addGame("Contra")
-        try h.journal.importRating(game, Rating(tenths: 60)!)
-        #expect(try h.journal.topRated(LibraryFilter()).map(\.game.ratingImported) == [true])
-
-        try h.journal.setRating(game, Rating(tenths: 70))
-
-        #expect(try h.journal.topRated(LibraryFilter()).map(\.game.ratingImported) == [false])
     }
 
     @Test func theLibrarysFiltersApply() throws {

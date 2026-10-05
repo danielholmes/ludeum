@@ -24,7 +24,7 @@ import Testing
     @discardableResult
     func unmatched(
         _ pk: Int64, _ name: String, suggestion: Int64? = nil, kind: String? = nil, namesAgree: Bool? = nil, checksumGame: Int64? = nil,
-        stars: Int = 0, collections: [String] = [], start: String? = nil, missing: Bool = false
+        collections: [String] = [], start: String? = nil, missing: Bool = false
     ) throws -> Int64 {
         try j.journal.db.write { db in
             try db.execute(
@@ -37,8 +37,8 @@ import Testing
             let id = db.lastInsertedRowID
             let json = String(decoding: try JSONEncoder().encode(collections), as: UTF8.self)
             try db.execute(
-                sql: "INSERT INTO heldOpenEmuData (romId, stars, collections, currentStart) VALUES (?, ?, ?, ?)",
-                arguments: [id, stars, json, start])
+                sql: "INSERT INTO heldOpenEmuData (romId, collections, currentStart) VALUES (?, ?, ?)",
+                arguments: [id, json, start])
             return id
         }
     }
@@ -69,7 +69,7 @@ import Testing
 
     @Test func confirmingMatchesTheROMAndAppliesItsHeldOpenEmuData() async throws {
         let rom = try unmatched(
-            1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true, stars: 4,
+            1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true,
             collections: ["_TODO", "_Current", "Kirby"], start: "2026-09")
         let item = try #require(try j.journal.reviewQueue().namesAgree.first)
 
@@ -81,7 +81,7 @@ import Testing
         #expect(g.igdbGameId == 7)
         #expect(g.platformId == 19)
         #expect(g.intent == .backlog)
-        #expect(g.rating == Rating(tenths: 80))
+        #expect(g.rating == nil)
         #expect(try j.journal.playthroughs(game).map(\.draft.start) == [PartialDate("2026-09")])
         #expect(try j.journal.lists(containing: game).map(\.name) == ["Kirby"])
         #expect(try j.journal.reviewQueue().count == 0)
@@ -123,13 +123,12 @@ import Testing
     }
 
     @Test func makingAGameByHandMatchesTheROM() throws {
-        let rom = try unmatched(4, "Hermano 1.1 jam", stars: 5)
+        let rom = try unmatched(4, "Hermano 1.1 jam")
         let item = try #require(try j.journal.reviewQueue().noSuggestion.first)
 
         let game = try j.journal.makeByHand(item, name: "Hermano", platform: IGDBPlatform(id: 33, name: "Game Boy"))
 
         #expect(try match(rom) == (game, "manual"))
-        #expect(try j.journal.game(game).rating == Rating(tenths: 100))
     }
 
     @Test func confirmingIntoAGameThatHasAVersionWarns() async throws {
@@ -142,17 +141,6 @@ import Testing
         let item = try #require(try j.journal.reviewQueue().namesAgree.first)
 
         #expect(try await queue.confirmWouldGiveDuplicateVersions(item))
-    }
-
-    @Test func aSecondCompletedROMDoesntAddAnotherFinishedPlaythrough() throws {
-        try j.journal.addPlatform(id: 19, name: "SNES")
-        let game = try j.journal.addGame(platformId: 19, name: "Sweet Home", igdbGameId: 70, igdbName: "Sweet Home")
-        try unmatched(1, "Sweet Home (Japan)", collections: ["_Completed"])
-        try unmatched(2, "Sweet Home (Japan) [T+Eng]", collections: ["_Completed"])
-
-        for item in try j.journal.reviewQueue().noSuggestion { try j.journal.assign(item, to: game) }
-
-        #expect(try j.journal.playthroughs(game).count == 1)
     }
 
     @Test func confirmAllSkipsItemsAnsweredMeanwhile() async throws {

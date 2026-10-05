@@ -27,7 +27,7 @@ import Testing
     @Test func takesItsJournalDataAndMissingROMsWithIt() throws {
         try recordROM(missing: true)
         try h.journal.setRating(game, Rating(tenths: 95))
-        try h.journal.addPlaythrough(game, PlaythroughDraft(outcome: .finished))
+        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
         let list = try h.journal.createList("Metroid")
         try h.journal.addToList(list, game)
 

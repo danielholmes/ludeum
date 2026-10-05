@@ -93,6 +93,7 @@ final class RunningFlag: @unchecked Sendable {
         let todoPK = try await oe.db.read { try Int64.fetchOne($0, sql: "SELECT Z_PK FROM ZABSTRACTCOLLECTION WHERE ZNAME = '_TODO'")! }
         try j.journal.setIntent(try game("Super Metroid"), nil)
         try j.journal.setIntent(try game("Super Mario World"), .upNext)
+        try j.journal.addPlaythrough(try game("Super Mario World"), PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
         let list = try j.journal.lists().first { $0.name == "Metroid" }!.id
         try j.journal.renameList(list, "Metroid series")
         try j.journal.addToList(list, try game("Super Mario World"))

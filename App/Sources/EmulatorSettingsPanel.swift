@@ -2,10 +2,11 @@ import LudeumCore
 import SwiftUI
 
 /// One Emulator setting a Game can change: what it's called, what it does, its choices and how it
-/// reads in a summary. Adding a setting is adding one of these to `rows(for:)`.
+/// reads in a summary. Adding a setting is adding one of these to `rows(for:platformId:)`.
 struct EmulatorSettingRow: Identifiable {
     let title: String
     let explanation: String
+    /// The setting as a choice's value; nil is Default.
     let value: WritableKeyPath<EmulatorSettings, Int?>
     /// The choices besides Default, as (label, value).
     let choices: [(label: String, value: Int)]
@@ -15,7 +16,7 @@ struct EmulatorSettingRow: Identifiable {
     let summary: (Int) -> String
     var id: String { title }
 
-    static func rows(for emulator: Emulator) -> [EmulatorSettingRow] {
+    static func rows(for emulator: Emulator, platformId: Int64) -> [EmulatorSettingRow] {
         switch emulator {
         case .mesenCE, .duckStation:
             [
@@ -27,6 +28,7 @@ struct EmulatorSettingRow: Identifiable {
                     choices: EmulatorSettings.runAheadRange.map { ("\($0) frame\($0 == 1 ? "" : "s")", $0) },
                     defaultLabel: "0 frames", summary: { "Run-ahead \($0)" })
             ]
+                + (emulator == .mesenCE && GameBoyModel.applies(to: platformId) ? [gameBoyModel] : [])
         case .ares:
             [
                 EmulatorSettingRow(
@@ -40,17 +42,28 @@ struct EmulatorSettingRow: Identifiable {
         default: []
         }
     }
+
+    private static var gameBoyModel: EmulatorSettingRow {
+        EmulatorSettingRow(
+            title: "Game Boy Model",
+            explanation: "The hardware MesenCE plays this Game as. Games made for only one model show a warning screen on the "
+                + "others.",
+            value: \.gameBoyModelChoice,
+            choices: GameBoyModel.allCases.enumerated().map { ($1.label, $0) },
+            defaultLabel: "Auto", summary: { GameBoyModel.allCases[$0].label })
+    }
 }
 
 /// Next to Play: "MesenCE · Run-ahead 2" (or "Default settings"), opening this Game's settings
 /// for its Emulator.
 struct EmulatorSettingsButton: View {
     let emulator: Emulator
+    let platformId: Int64
     let settings: EmulatorSettings
     let save: (EmulatorSettings) -> Void
     @State private var showing = false
 
-    private var rows: [EmulatorSettingRow] { EmulatorSettingRow.rows(for: emulator) }
+    private var rows: [EmulatorSettingRow] { EmulatorSettingRow.rows(for: emulator, platformId: platformId) }
 
     private var summary: String {
         let changed = rows.compactMap { row in settings[keyPath: row.value].map(row.summary) }
@@ -97,5 +110,23 @@ struct EmulatorSettingsButton: View {
                 changed[keyPath: value] = new
                 save(changed)
             })
+    }
+}
+
+extension GameBoyModel {
+    var label: String {
+        switch self {
+        case .gameBoy: "Game Boy"
+        case .gameBoyColor: "Game Boy Color"
+        case .superGameBoy: "Super Game Boy"
+        }
+    }
+}
+
+extension EmulatorSettings {
+    /// The Game Boy Model as a row choice: its index in `GameBoyModel.allCases`.
+    fileprivate var gameBoyModelChoice: Int? {
+        get { gameBoyModel.flatMap { GameBoyModel.allCases.firstIndex(of: $0) } }
+        set { gameBoyModel = newValue.map { GameBoyModel.allCases[$0] } }
     }
 }

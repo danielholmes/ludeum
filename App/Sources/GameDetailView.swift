@@ -71,7 +71,7 @@ struct GameDetailView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Mine").font(FactStyle.label).foregroundStyle(.secondary)
                         RatingEditor(
-                            rating: game.rating, imported: game.ratingImported, hasHistory: !history.isEmpty,
+                            rating: game.rating, hasHistory: !history.isEmpty,
                             set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
                     }
                     CommunityScores(players: facts.playerScore, critics: facts.criticScore, stacked: true)
@@ -111,7 +111,7 @@ struct GameDetailView: View {
                         Button("Delete…", role: .destructive) { deletingPlaythrough = p }
                     }
                 }
-                Button("Add Playthrough…", systemImage: "plus") { editing = PlaythroughEdit(id: nil, draft: PlaythroughDraft()) }
+                Button("Add Playthrough…", systemImage: "plus") { editing = PlaythroughEdit(id: nil, draft: nil) }
                     .buttonStyle(.hover)
             }
 
@@ -236,7 +236,7 @@ struct GameDetailView: View {
     /// ▶ Play in the Platform's Emulator, and beside it the Emulator's settings. A Platform with no
     /// Emulator says so instead.
     @ViewBuilder private var playControls: some View {
-        if let emulator {
+        if let emulator, let platformId = game?.platformId {
             HStack(spacing: 12) {
                 Button {
                     play(in: emulator)
@@ -245,8 +245,8 @@ struct GameDetailView: View {
                 }
                 .buttonStyle(.borderedProminent).help("Play in \(emulator.name)")
                 // Dolphin has no per-Game settings: every Game gets the same ones.
-                if !EmulatorSettingRow.rows(for: emulator).isEmpty {
-                    EmulatorSettingsButton(emulator: emulator, settings: emulatorSettings) { settings in
+                if !EmulatorSettingRow.rows(for: emulator, platformId: platformId).isEmpty {
+                    EmulatorSettingsButton(emulator: emulator, platformId: platformId, settings: emulatorSettings) { settings in
                         save { try $0.setEmulatorSettings(id, settings) }
                     }
                 }
@@ -374,7 +374,7 @@ private func deletionMessage(_ s: DeletionSummary) -> String {
 private func playthroughTitle(_ d: PlaythroughDraft) -> String {
     let outcome = d.outcome.map { $0 == .finished ? "Finished" : "Dropped" } ?? "In progress"
     // The same start and end shows once: "Finished, 2021", not "2021 – 2021".
-    let dates = (d.start == d.end ? [d.start?.text] : [d.start?.text, d.end?.text]).compactMap { $0 }.joined(separator: " – ")
+    let dates = [d.start.text, d.start == d.end ? nil : d.end?.text].compactMap { $0 }.joined(separator: " – ")
     return dates.isEmpty ? outcome : "\(outcome), \(dates)"
 }
 
@@ -386,7 +386,6 @@ private func playthroughDetails(_ d: PlaythroughDraft) -> String? {
 /// Messages for the journal's rules, as the UI says them.
 func journalErrorText(_ error: Error) -> String {
     switch error as? LudeumError {
-    case .inProgressNeedsStart: "A Playthrough in progress needs a start date: add one, or choose an Outcome."
     case .endBeforeStart: "The end date can't come before the start date."
     case .listNameTaken: "There's already a List with that name."
     case .gameHasPresentROMs: "This Game has ROMs in OpenEmu. Remove them in OpenEmu first."
@@ -405,12 +404,12 @@ extension String {
 }
 
 struct PlaythroughEdit: Identifiable {
-    /// Nil for a new Playthrough.
+    /// Both nil for a new Playthrough.
     let id: Int64?
-    let draft: PlaythroughDraft
+    let draft: PlaythroughDraft?
 }
 
-/// Adding or editing a Playthrough. Every field is optional, except that one in progress needs a start.
+/// Adding or editing a Playthrough. Every field is optional except the start date.
 struct PlaythroughSheet: View {
     let services: Services
     let game: GameID
@@ -449,13 +448,14 @@ struct PlaythroughSheet: View {
         .formStyle(.grouped)
         .frame(width: 440)
         .onAppear {
-            let d = edit.draft
-            start = d.start?.text ?? ""
-            end = d.end?.text ?? ""
-            outcome = d.outcome
-            notes = d.notes ?? ""
-            version = d.version ?? ""
-            playedVia = d.playedVia ?? ""
+            if let d = edit.draft {
+                start = d.start.text
+                end = d.end?.text ?? ""
+                outcome = d.outcome
+                notes = d.notes ?? ""
+                version = d.version ?? ""
+                playedVia = d.playedVia ?? ""
+            }
             versions = (try? services.journal?.versionSuggestions(for: game)) ?? []
             vias = (try? services.journal?.playedViaSuggestions(for: game)) ?? []
         }
@@ -478,9 +478,13 @@ struct PlaythroughSheet: View {
             guard let d = PartialDate(text.trimmed) else { throw DateError(label: label) }
             return d
         }
+        guard !start.trimmed.isEmpty else {
+            error = "A start date is required."
+            return
+        }
         do {
             let draft = PlaythroughDraft(
-                start: try date(start, "start"), end: try date(end, "end"), outcome: outcome, notes: notes.trimmed.nilIfEmpty,
+                start: try date(start, "start")!, end: try date(end, "end"), outcome: outcome, notes: notes.trimmed.nilIfEmpty,
                 version: version.trimmed.nilIfEmpty, playedVia: playedVia.trimmed.nilIfEmpty)
             if let id = edit.id { try journal.updatePlaythrough(id, draft) } else { try journal.addPlaythrough(game, draft) }
             done()

@@ -23,8 +23,8 @@ import Testing
         h.clock.advance(days: 1)
         try h.journal.setIntent(zelda, .upNext)
         try h.journal.setChildhood(zelda, true)
-        try h.journal.addPlaythrough(metroid, PlaythroughDraft(start: PartialDate("2024"), outcome: .finished))
-        try h.journal.addPlaythrough(doom, PlaythroughDraft(start: PartialDate("2026-09")))
+        try h.journal.addPlaythrough(metroid, PlaythroughDraft(start: PartialDate("2024")!, outcome: .finished))
+        try h.journal.addPlaythrough(doom, PlaythroughDraft(start: PartialDate("2026-09")!))
     }
 
     func names(_ filter: LibraryFilter = LibraryFilter(), sort: LibrarySort = .name, ascending: Bool = true) throws -> [String] {
@@ -136,8 +136,8 @@ import Testing
 
     @Test func playedViaSuggestionsAreWhatIveUsedBefore() throws {
         let other = try h.addGame("Doom")
-        try h.journal.addPlaythrough(other, PlaythroughDraft(outcome: .finished, playedVia: "Steam Deck"))
-        try h.journal.addPlaythrough(other, PlaythroughDraft(outcome: .finished, playedVia: "Switch Online"))
+        try h.journal.addPlaythrough(other, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished, playedVia: "Steam Deck"))
+        try h.journal.addPlaythrough(other, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished, playedVia: "Switch Online"))
 
         #expect(try h.journal.playedViaSuggestions(for: other) == ["Steam Deck", "Switch Online"])
         try rom(1, "Resident Evil 2 (USA).chd")
@@ -147,7 +147,7 @@ import Testing
     @Test func aDeletionSaysWhatGoesWithIt() throws {
         try rom(2, "Resident Evil 2 (Japan).chd", missing: true)
         try h.journal.setRating(game, Rating(tenths: 90))
-        try h.journal.addPlaythrough(game, PlaythroughDraft(outcome: .finished))
+        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
         try h.journal.addToList(try h.journal.createList("Horror"), game)
 
         let summary = try h.journal.deletionSummary(game)
@@ -193,7 +193,6 @@ import Testing
         #expect(combined.childhood == true)
         #expect(combined.genre == "Platform")
         #expect(combined.name == "mario")
-        #expect(LibraryFilter(undatedPlaythroughs: true).scoped(by: LibraryFilter()).undatedPlaythroughs)
         #expect(LibraryFilter().scoped(by: LibraryFilter(series: "Metroid", company: "Nintendo")).series == "Metroid")
     }
 }

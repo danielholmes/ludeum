@@ -18,8 +18,8 @@ import Testing
         return f.date(from: text)!
     }
 
-    func play(_ game: GameID, start: String? = nil, end: String? = nil, _ outcome: Outcome? = nil) throws {
-        _ = try h.journal.addPlaythrough(game, PlaythroughDraft(start: start.map(date), end: end.map(date), outcome: outcome))
+    func play(_ game: GameID, start: String, end: String? = nil, _ outcome: Outcome? = nil) throws {
+        _ = try h.journal.addPlaythrough(game, PlaythroughDraft(start: date(start), end: end.map(date), outcome: outcome))
     }
 
     func review(_ year: Int, _ filter: LibraryFilter = LibraryFilter()) throws -> YearInReview {
@@ -70,26 +70,6 @@ import Testing
         #expect(r.finished.map(\.endDateUnknown) == [true])
         #expect(try review(2023).finished.isEmpty)
         #expect(try h.journal.yearsInReview(LibraryFilter()) == [2022])
-    }
-
-    @Test func aPlaythroughWithOnlyAnEndDateCountsOnlyInItsEndYear() throws {
-        let game = try h.addGame()
-        try play(game, end: "2021-07", .finished)
-
-        #expect(try review(2021).finished.map(\.game.id) == [game])
-        #expect(try review(2021).summary.started == 0)
-        #expect(try h.journal.yearsInReview(LibraryFilter()) == [2021])
-    }
-
-    @Test func playthroughsWithNoDatesAreCountedForTheFooter() throws {
-        let game = try h.addGame()
-        try play(game, .finished)
-        try play(game, .dropped)
-        try play(game, start: "2020", .finished)
-
-        #expect(try review(2020).undatedPlaythroughs == 2)
-        #expect(try h.journal.yearsInReview(LibraryFilter()) == [2020])
-        #expect(try h.journal.library(LibraryFilter(undatedPlaythroughs: true), sort: .name, ascending: true).map(\.id) == [game])
     }
 
     @Test func libraryFiltersApply() throws {

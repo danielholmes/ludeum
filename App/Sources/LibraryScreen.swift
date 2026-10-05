@@ -341,7 +341,7 @@ struct CoverSizeSlider: View {
     }
 }
 
-private struct CoverTile: View {
+struct CoverTile: View {
     let services: Services
     let row: LibraryRow
     let width: Double
@@ -352,18 +352,15 @@ private struct CoverTile: View {
             .overlay(alignment: .bottomLeading) {
                 if let rating = row.rating {
                     // Grows with the Cover: about a ninth of its width, never under 13 pt.
-                    // An imported Rating (from OpenEmu stars, approximate) is amber with "≈", so it stands out to re-rate.
-                    Text(row.ratingImported ? "≈\(ratingText(rating))" : ratingText(rating))
+                    Text(ratingText(rating))
                         .font(.system(size: max(13, width / 9), weight: .bold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(row.ratingImported ? Color.black : ratingColor(rating))
+                        .foregroundStyle(ratingColor(rating))
                         .padding(.horizontal, max(6, width / 24)).padding(.vertical, 2)
-                        .background {
-                            // A dark pill, so the Rating's colour reads the same over any cover, light or dark.
-                            if row.ratingImported { Capsule().fill(Color.orange) } else { Capsule().fill(.black.opacity(0.75)) }
-                        }
+                        // A dark pill, so the Rating's colour reads the same over any cover, light or dark.
+                        .background(.black.opacity(0.75), in: .capsule)
                         .padding(5)
-                        .help(row.ratingImported ? "Rating \(ratingText(rating)), imported from OpenEmu stars" : "Rating")
+                        .help("Rating")
                 }
             }
             .overlay(alignment: .topTrailing) {

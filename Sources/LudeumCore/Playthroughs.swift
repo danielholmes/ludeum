@@ -8,7 +8,7 @@ public enum Outcome: String, Sendable {
 
 /// A Playthrough's fields, for adding or editing one.
 public struct PlaythroughDraft: Sendable, Equatable {
-    public var start: PartialDate?
+    public var start: PartialDate
     public var end: PartialDate?
     public var outcome: Outcome?
     public var notes: String?
@@ -16,7 +16,7 @@ public struct PlaythroughDraft: Sendable, Equatable {
     public var playedVia: String?
 
     public init(
-        start: PartialDate? = nil, end: PartialDate? = nil, outcome: Outcome? = nil,
+        start: PartialDate, end: PartialDate? = nil, outcome: Outcome? = nil,
         notes: String? = nil, version: String? = nil, playedVia: String? = nil
     ) {
         self.start = start
@@ -27,11 +27,10 @@ public struct PlaythroughDraft: Sendable, Equatable {
         self.playedVia = playedVia
     }
 
-    /// In progress needs a start; the end can't come before the start, though a less
-    /// precise date that contains the other is fine (start `2024-03`, end `2024`).
+    /// The end can't come before the start, though a less precise date that contains the
+    /// other is fine (start `2024-03`, end `2024`).
     func validate() throws {
-        if outcome == nil, start == nil { throw LudeumError.inProgressNeedsStart }
-        if let start, let end, end < start, !end.contains(start) { throw LudeumError.endBeforeStart }
+        if let end, end < start, !end.contains(start) { throw LudeumError.endBeforeStart }
     }
 }
 
@@ -79,16 +78,16 @@ extension LudeumStore {
         }
     }
 
-    /// A Game's Playthroughs, by start date (dateless last), then as added.
+    /// A Game's Playthroughs, by start date, then as added.
     public func playthroughs(_ game: GameID) throws -> [Playthrough] {
         try db.read { db in
             try Row.fetchAll(
-                db, sql: "SELECT * FROM playthrough WHERE gameId = ? ORDER BY start IS NULL, start, id", arguments: [game]
+                db, sql: "SELECT * FROM playthrough WHERE gameId = ? ORDER BY start, id", arguments: [game]
             ).map { row in
                 Playthrough(
                     id: row["id"],
                     PlaythroughDraft(
-                        start: (row["start"] as String?).flatMap(PartialDate.init),
+                        start: PartialDate(row["start"])!,
                         end: (row["end"] as String?).flatMap(PartialDate.init),
                         outcome: (row["outcome"] as String?).flatMap(Outcome.init(rawValue:)),
                         notes: row["notes"], version: row["version"], playedVia: row["playedVia"]))
@@ -97,6 +96,6 @@ extension LudeumStore {
     }
 
     private static func arguments(_ d: PlaythroughDraft) -> StatementArguments {
-        [d.start?.text, d.end?.text, d.outcome?.rawValue, d.notes, d.version, d.playedVia]
+        [d.start.text, d.end?.text, d.outcome?.rawValue, d.notes, d.version, d.playedVia]
     }
 }

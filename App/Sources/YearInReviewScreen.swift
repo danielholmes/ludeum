@@ -5,8 +5,6 @@ import SwiftUI
 struct YearInReviewScreen: View {
     let services: Services
     @Binding var selection: GameID?
-    /// Opens the Library with a filter (the "no dates" footer).
-    let openLibrary: (LibraryFilter) -> Void
 
     @State private var filter = LibraryFilter()
     @State private var years: [Int] = []
@@ -27,7 +25,7 @@ struct YearInReviewScreen: View {
             } else {
                 EmptyResults(
                     title: "Nothing to review", systemImage: "calendar",
-                    description: filter == LibraryFilter() ? "Playthroughs with dates show up here." : "Try fewer filters.",
+                    description: filter == LibraryFilter() ? "Playthroughs show up here." : "Try fewer filters.",
                     clearFilters: filter == LibraryFilter() ? nil : { filter = LibraryFilter() })
             }
         }
@@ -82,16 +80,6 @@ struct YearInReviewScreen: View {
             playthroughSection("Finished", r.finished)
             playthroughSection("Dropped", r.dropped)
             playthroughSection("Also played", r.alsoPlayed)
-            if r.undatedPlaythroughs > 0 {
-                Button(
-                    "\(r.undatedPlaythroughs) Playthrough\(r.undatedPlaythroughs == 1 ? " has" : "s have") no dates"
-                ) {
-                    var f = filter
-                    f.undatedPlaythroughs = true
-                    openLibrary(f)
-                }
-                .buttonStyle(.hoverLink)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -134,15 +122,10 @@ struct YearInReviewScreen: View {
                             selection = entry.game.id
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                CoverView(services: services, game: entry.game.id, name: entry.game.name)
-                                    .frame(width: 130, height: 174)
+                                CoverTile(services: services, row: entry.game, width: 130)
                                 Text(entry.game.name).lineLimit(2)
                                 Text(entry.game.platformName).font(.caption).foregroundStyle(.secondary)
-                                HStack(spacing: 4) {
-                                    if let rating = entry.game.rating { Text(ratingText(rating)).monospacedDigit() }
-                                    if entry.endDateUnknown { Text("end date unknown").foregroundStyle(.secondary) }
-                                }
-                                .font(.caption)
+                                if entry.endDateUnknown { Text("end date unknown").font(.caption).foregroundStyle(.secondary) }
                             }
                             .frame(width: 130, alignment: .leading)
                         }

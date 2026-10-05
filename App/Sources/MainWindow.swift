@@ -51,6 +51,7 @@ struct MainWindow: View {
                 }
             case .platform(let id, let name):
                 LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(platformId: id), title: name)
+                    .navigationSubtitle(Emulator.of(platformId: id)?.name ?? "")
                     .id(selection)
             case .pinned(let pin):
                 LibraryScreen(services: services, selection: $selectedGame, scope: pin.filter, title: pin.name)
@@ -64,7 +65,7 @@ struct MainWindow: View {
             case .topRated:
                 TopRatedScreen(services: services, selection: $selectedGame)
             case .yearInReview:
-                YearInReviewScreen(services: services, selection: $selectedGame, openLibrary: showInLibrary)
+                YearInReviewScreen(services: services, selection: $selectedGame)
             case .igdb:
                 IGDBScreen(services: services, query: $igdbQuery, shown: $igdbResult, open: openGame)
             case .reviewQueue:

@@ -165,12 +165,10 @@ import Testing
         #expect(sm.childhood)
         #expect(sm.isPlaying)
         #expect(try j.journal.playthroughs(sm.id).map(\.draft.start) == [PartialDate("2026-09")])
-        #expect(sm.rating == Rating(tenths: 80))
-        #expect(try j.journal.ratingHistory(sm.id).first?.imported == true)
+        #expect(sm.rating == nil)
         #expect(smw.intent == .backlog)
-        #expect(smw.outcomes == [.finished])
-        #expect(try j.journal.playthroughs(smw.id).first?.draft == PlaythroughDraft(outcome: .finished))
-        #expect(smw.rating == Rating(tenths: 60))
+        #expect(try j.journal.playthroughs(smw.id).isEmpty)
+        #expect(smw.rating == nil)
         #expect(Set(try j.journal.lists().map(\.name)) == ["Metroid", "Mario"])
         #expect(try j.journal.firstImportDone())
         #expect(try firstImport.loadDraft() == nil)
@@ -196,7 +194,6 @@ import Testing
         #expect(rows[0]["suggestedIgdbGameId"] as Int64? == 7)
         #expect(rows[0]["suggestionKind"] as String? == "name")
         #expect(rows[0]["namesAgree"] as Bool? == true)
-        #expect(rows[0]["stars"] as Int == 5)
         #expect(rows[0]["collections"] as String == #"["Kirby","_TODO"]"#)
         #expect(rows[1]["suggestedIgdbGameId"] as Int64? == nil)
     }
@@ -209,7 +206,6 @@ import Testing
 
         let game = try #require(try j.journal.library(LibraryFilter(), sort: .name, ascending: true).first)
         #expect(game.noROMInOpenEmu)
-        #expect(game.rating == Rating(tenths: 100))
     }
 
     @Test func nothingIsCarriedIntoTheJournalOpenEmusBoxArtIsCached() async throws {

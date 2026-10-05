@@ -29,7 +29,7 @@ extension LudeumStore {
     }
 
     /// Writes the first Import in one transaction: Games and their ROMs, OpenEmu's collections as
-    /// Intent, Playthroughs, Childhood and Lists, stars ×2 as imported Ratings,
+    /// Intent, Playthroughs, Childhood and Lists,
     /// unmatched ROMs with their suggestions and held data.
     func commitFirstImport(_ plan: FirstImportPlan) throws {
         let now = clock.now()
@@ -83,8 +83,8 @@ extension LudeumStore {
                     return s
                 }.first
                 try Self.applyOpenEmuData(
-                    db, game: game, stars: planned.roms.map(\.stars).max() ?? 0, collections: Set(planned.roms.flatMap(\.collections)),
-                    start: start, day: day)
+                    db, game: game, collections: Set(planned.roms.flatMap(\.collections)),
+                    start: start)
             }
 
             for (rom, match) in plan.unmatched {
@@ -105,8 +105,8 @@ extension LudeumStore {
                     }
                 let collections = String(decoding: try JSONEncoder().encode(rom.collections.sorted()), as: UTF8.self)
                 try db.execute(
-                    sql: "INSERT INTO heldOpenEmuData (romId, stars, collections, currentStart) VALUES (?, ?, ?, ?)",
-                    arguments: [romId, rom.stars, collections, start])
+                    sql: "INSERT INTO heldOpenEmuData (romId, collections, currentStart) VALUES (?, ?, ?)",
+                    arguments: [romId, collections, start])
             }
         }
     }
@@ -114,11 +114,9 @@ extension LudeumStore {
 
 extension LudeumStore {
     /// Applies a Game's OpenEmu data, from the first Import or a resolved Review queue item: the
-    /// collections as Intent (undated, never over Intent it has), Childhood, a Finished Playthrough,
-    /// an in-progress one from a `_Current` start date, and Lists; stars ×2 as an imported Rating.
-    static func applyOpenEmuData(_ db: Database, game: GameID, stars: Int, collections: Set<String>, start: PartialDate?, day: String)
-        throws
-    {
+    /// collections as Intent (undated, never over Intent it has), Childhood, an in-progress
+    /// Playthrough from a `_Current` start date, and Lists.
+    static func applyOpenEmuData(_ db: Database, game: GameID, collections: Set<String>, start: PartialDate?) throws {
         let intent: Intent? =
             collections.contains(SpecialCollection.upNext) ? .upNext : collections.contains(SpecialCollection.backlog) ? .backlog : nil
         if let intent {
@@ -126,12 +124,6 @@ extension LudeumStore {
         }
         if collections.contains(SpecialCollection.childhood) {
             try db.execute(sql: "UPDATE game SET childhood = 1 WHERE id = ?", arguments: [game])
-        }
-        if collections.contains(SpecialCollection.completed),
-            try !Bool.fetchOne(
-                db, sql: "SELECT EXISTS (SELECT 1 FROM playthrough WHERE gameId = ? AND outcome = 'finished')", arguments: [game])!
-        {
-            try db.execute(sql: "INSERT INTO playthrough (gameId, outcome) VALUES (?, 'finished')", arguments: [game])
         }
         if collections.contains(SpecialCollection.current), let start,
             try !Bool.fetchOne(
@@ -143,11 +135,6 @@ extension LudeumStore {
             try db.execute(sql: "INSERT OR IGNORE INTO list (name) VALUES (?)", arguments: [name])
             try db.execute(
                 sql: "INSERT OR IGNORE INTO listGame (listId, gameId) SELECT id, ? FROM list WHERE name = ?", arguments: [game, name])
-        }
-        if stars > 0 {
-            try db.execute(
-                sql: "INSERT OR IGNORE INTO ratingEntry (gameId, day, rating, imported) VALUES (?, ?, ?, 1)",
-                arguments: [game, day, min(stars, 5) * 20])
         }
     }
 }

@@ -10,8 +10,6 @@ public struct LibraryFilter: Sendable, Equatable {
     public var listId: Int64?
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
-    /// Only Games with a Playthrough that has no dates (Year in review's footer links here).
-    public var undatedPlaythroughs: Bool
     /// An IGDB genre. Not applied by `library(_:sort:ascending:)`: genres live in the cache, so
     /// the caller narrows the rows with `having(genre:in:)`.
     public var genre: String?
@@ -26,7 +24,7 @@ public struct LibraryFilter: Sendable, Equatable {
 
     public init(
         platformId: Int64? = nil, rating: RatingFilter? = nil, intent: Intent?? = nil, listId: Int64? = nil,
-        outcome: OutcomeFilter? = nil, childhood: Bool? = nil, undatedPlaythroughs: Bool = false, genre: String? = nil,
+        outcome: OutcomeFilter? = nil, childhood: Bool? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         name: String = ""
     ) {
@@ -36,7 +34,6 @@ public struct LibraryFilter: Sendable, Equatable {
         self.theme = theme
         self.franchise = franchise
         self.series = series
-        self.undatedPlaythroughs = undatedPlaythroughs
         self.platformId = platformId
         self.rating = rating
         self.intent = intent
@@ -57,7 +54,6 @@ extension LibraryFilter {
         if let v = scope.listId { f.listId = v }
         if let v = scope.outcome { f.outcome = v }
         if let v = scope.childhood { f.childhood = v }
-        if scope.undatedPlaythroughs { f.undatedPlaythroughs = true }
         if let v = scope.genre { f.genre = v }
         if let v = scope.theme { f.theme = v }
         if let v = scope.franchise { f.franchise = v }
@@ -112,8 +108,6 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let platformName: String
     public let igdbGameId: Int64?
     public let rating: Rating?
-    /// The current Rating was brought over from OpenEmu stars ("≈ imported").
-    public let ratingImported: Bool
     public let intent: Intent?
     public let intentSetAt: Date?
     public let childhood: Bool
@@ -180,9 +174,6 @@ extension LudeumStore {
                 .replacingOccurrences(of: "_", with: "\\_")
             arguments += Array(repeating: "%\(escaped)%", count: 3)
         }
-        if filter.undatedPlaythroughs {
-            conditions.append("EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.start IS NULL AND p.end IS NULL)")
-        }
         let direction = ascending ? "ASC" : "DESC"
         let name = "displayName COLLATE NOCASE ASC"
         let order =
@@ -200,7 +191,7 @@ extension LudeumStore {
             SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood,
                 COALESCE(g.nameOverride, g.igdbName, g.name) AS displayName,
                 \(PlatformGroups.shownNameSQL(platformId: "g.platformId", name: "pl.name")) AS platformName,
-                r.rating AS currentRating, COALESCE(r.imported, 0) AS ratingImported,
+                r.rating AS currentRating,
                 EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playing,
                 (SELECT MAX(start) FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playingSince,
                 (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
@@ -217,7 +208,6 @@ extension LudeumStore {
                 LibraryRow(
                     id: row["id"], name: row["displayName"], platformId: row["platformId"], platformName: row["platformName"],
                     igdbGameId: row["igdbGameId"], rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) },
-                    ratingImported: row["ratingImported"],
                     intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)), intentSetAt: row["intentSetAt"],
                     childhood: row["childhood"], isPlaying: row["playing"],
                     playingSince: (row["playingSince"] as String?).flatMap(PartialDate.init),

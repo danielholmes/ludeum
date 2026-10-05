@@ -148,8 +148,8 @@ extension LudeumStore {
         if let held = try Row.fetchOne(db, sql: "SELECT * FROM heldOpenEmuData WHERE romId = ?", arguments: [rom]) {
             let collections = (try? JSONDecoder().decode([String].self, from: Data((held["collections"] as String).utf8))) ?? []
             try applyOpenEmuData(
-                db, game: game, stars: held["stars"] ?? 0, collections: Set(collections),
-                start: (held["currentStart"] as String?).flatMap(PartialDate.init), day: day)
+                db, game: game, collections: Set(collections),
+                start: (held["currentStart"] as String?).flatMap(PartialDate.init))
             try db.execute(sql: "DELETE FROM heldOpenEmuData WHERE romId = ?", arguments: [rom])
         }
     }

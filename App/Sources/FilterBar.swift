@@ -4,7 +4,7 @@ import SwiftUI
 /// The kinds of filter the Add filter menu offers. A screen offers the ones it applies, less the
 /// ones its scope already fixes.
 enum FilterKind: CaseIterable {
-    case platform, rating, intent, list, genre, theme, played, childhood, undated
+    case platform, rating, intent, list, genre, theme, played, childhood
 
     /// What every Library-shaped screen offers.
     static let library = Set(allCases)
@@ -20,7 +20,6 @@ enum FilterKind: CaseIterable {
         if scope.theme != nil { k.insert(.theme) }
         if scope.outcome != nil { k.insert(.played) }
         if scope.childhood != nil { k.insert(.childhood) }
-        if scope.undatedPlaythroughs { k.insert(.undated) }
         return k
     }
 }
@@ -140,7 +139,6 @@ private struct AddFilterMenu: View {
                     Button("Not childhood") { filter.childhood = false }
                 }
             }
-            if kinds.contains(.undated) { Button("Playthroughs with no dates") { filter.undatedPlaythroughs = true } }
         }
         .menuStyle(.borderlessButton).fixedSize()
         .help("Add a filter")
@@ -221,9 +219,6 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
     }
     if let ch = filter.childhood {
         c.append(Chip(text: ch ? "Childhood" : "Not childhood") { $0.childhood = nil })
-    }
-    if filter.undatedPlaythroughs {
-        c.append(Chip(text: "Playthroughs with no dates") { $0.undatedPlaythroughs = false })
     }
     if let genre = filter.genre { c.append(Chip(text: genre) { $0.genre = nil }) }
     if let theme = filter.theme { c.append(Chip(text: theme) { $0.theme = nil }) }

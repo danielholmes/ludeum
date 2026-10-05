@@ -2,18 +2,18 @@ import GRDB
 
 /// The journal's migrations. Append-only since the first real Import into the production database.
 enum LudeumSchema {
+    /// A Partial date column holds `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, or nothing.
+    private static func partialDateCheck(_ column: String) -> String {
+        let year = "[0-9][0-9][0-9][0-9]"
+        let pair = "-[0-9][0-9]"
+        return "\(column) IS NULL OR "
+            + ["\(year)", "\(year)\(pair)", "\(year)\(pair)\(pair)"].map { "\(column) GLOB '\($0)'" }
+            .joined(separator: " OR ")
+    }
+
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in
-            /// A Partial date column holds `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, or nothing.
-            func partialDateCheck(_ column: String) -> String {
-                let year = "[0-9][0-9][0-9][0-9]"
-                let pair = "-[0-9][0-9]"
-                return "\(column) IS NULL OR "
-                    + ["\(year)", "\(year)\(pair)", "\(year)\(pair)\(pair)"].map { "\(column) GLOB '\($0)'" }
-                    .joined(separator: " OR ")
-            }
-
             try db.create(table: "platform") { t in
                 t.primaryKey("id", .integer)  // IGDB platform id
                 t.column("name", .text).notNull()
@@ -191,6 +191,45 @@ enum LudeumSchema {
         }
         migrator.registerMigration("v8 emulator settings") { db in
             try db.alter(table: "game") { t in t.add(column: "runAheadFrames", .integer) }
+        }
+        // Every Playthrough has a start date: the column becomes NOT NULL, which SQLite does by rebuilding the table.
+        migrator.registerMigration("v9 playthrough start required") { db in
+            try db.create(table: "newPlaythrough") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("gameId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.column("start", .text).notNull().check(sql: partialDateCheck("start"))
+                t.column("end", .text).check(sql: partialDateCheck("end"))
+                t.column("outcome", .text).check { ["finished", "dropped"].contains($0) }
+                t.column("notes", .text)
+                t.column("version", .text)
+                t.column("playedVia", .text)
+            }
+            try db.execute(
+                sql: """
+                    INSERT INTO newPlaythrough SELECT id, gameId, start, end, outcome, notes, version, playedVia FROM playthrough;
+                    DROP TABLE playthrough;
+                    ALTER TABLE newPlaythrough RENAME TO playthrough;
+                    """)
+        }
+        // Ratings are no longer imported from OpenEmu stars: imported entries go, with the flag and held stars.
+        migrator.registerMigration("v10 no imported ratings") { db in
+            try db.create(table: "newRatingEntry") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("gameId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.column("day", .text).notNull()
+                t.column("rating", .integer).check { $0 >= 0 && $0 <= 100 }  // tenths; NULL = cleared
+                t.uniqueKey(["gameId", "day"])
+            }
+            try db.execute(
+                sql: """
+                    INSERT INTO newRatingEntry SELECT id, gameId, day, rating FROM ratingEntry WHERE NOT imported;
+                    DROP TABLE ratingEntry;
+                    ALTER TABLE newRatingEntry RENAME TO ratingEntry;
+                    """)
+            try db.alter(table: "heldOpenEmuData") { t in t.drop(column: "stars") }
+        }
+        migrator.registerMigration("v11 game boy model") { db in
+            try db.alter(table: "game") { t in t.add(column: "gameBoyModel", .text) }
         }
         return migrator
     }

@@ -19,8 +19,16 @@ One specific edition of a Game, e.g. a region, a revision, or a fan translation 
 _Avoid_: Release, revision, dump
 
 **ROM**:
-A game file in an emulator library. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten. It is forgotten only when its Game is deleted, and a Game can't be deleted while it has a present ROM.
+A game file in an emulator library: OpenEmu's, or a ROM folder. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten. It is forgotten only when its Game is deleted, and a Game can't be deleted while it has a present ROM.
 _Avoid_: File, image
+
+**ROM folder**:
+A folder of a Platform's ROMs that the journal reads directly, for Platforms OpenEmu doesn't have (e.g. PS2). A ROM there is known by its file name without the extension, so extracting `Okami (USA).7z` to `Okami (USA).iso`, or archiving it again, is the same ROM changing state. When both files exist, the playable one is used. Subfolders are ignored.
+_Avoid_: Library folder, watch folder
+
+**Archived ROM**:
+A ROM that is still in its library but packed in a form its Platform's Emulator can't open, so it can't be Played until I extract it. It is present, not missing. Whether a ROM is archived depends on the Emulator: a `.7z` that one Emulator opens directly is an ordinary ROM there.
+_Avoid_: Compressed, needs extraction (that's the fix, not the state)
 
 **Disc**:
 One of several ROMs that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A playlist ROM that loads the Discs belongs to the same Version.
@@ -41,11 +49,11 @@ My score for a Game, from 0.0 to 10.0 in steps of 0.1. A Game with no Rating is 
 _Avoid_: Stars, score
 
 **Rating history**:
-Every Rating a Game has had, each with the date it was set, including being cleared back to unrated. There is at most one entry per day: changing a Rating again that day replaces the day's entry. Ratings brought over from OpenEmu stars are marked as imported and approximate, and are never replaced.
+Every Rating a Game has had, each with the date it was set, including being cleared back to unrated. There is at most one entry per day: changing a Rating again that day replaces the day's entry.
 _Avoid_: Rating log, previous ratings
 
 **Playthrough**:
-One time I played a Game. Every field is optional (start date, end date, Outcome, notes, and the Version I played), except that a Playthrough still in progress must have a start date. Its end date can't come before its start date. A Game can have any number.
+One time I played a Game. Every Playthrough has a start date; the rest is optional (end date, Outcome, notes, and the Version I played). Its end date can't come before its start date. A Game can have any number.
 _Avoid_: Completion, run, session
 
 **Outcome**:
@@ -97,6 +105,10 @@ _Avoid_: Core, player
 The few settings of a Game's Emulator that the journal chooses on each Play, e.g. run-ahead frames. A Game without its own value gets the Emulator's default. Every Play sets all of them, so one Game's settings never carry into the next.
 _Avoid_: Config, overrides
 
+**Game Boy Model**:
+An Emulator setting for Game Boy and Game Boy Color Games: the hardware the Emulator pretends to be on Play. It is Auto, Game Boy, Game Boy Color or Super Game Boy, and defaults to Auto. It never changes the Game's Platform.
+_Avoid_: Forced platform, hardware mode
+
 **Play**:
 Opening a Game's present ROM in its Platform's Emulator. Play never changes journal data.
 _Avoid_: Launch, run
@@ -104,7 +116,7 @@ _Avoid_: Launch, run
 ### Working with OpenEmu
 
 **Import**:
-Reading ROMs from OpenEmu into the journal. Import never changes OpenEmu.
+Reading ROMs from OpenEmu and the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
 
 **Import draft**:

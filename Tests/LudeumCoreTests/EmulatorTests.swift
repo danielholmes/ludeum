@@ -5,7 +5,7 @@ import Testing
 
 @Suite struct EmulatorTests {
     @Test func nesAndSNESGamesArePlayedInMesenCE() {
-        for platform: Int64 in [18, 99, 19, 58, 33, 22, 24, 64, 86, 150] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
+        for platform: Int64 in [18, 99, 19, 58, 33, 22, 24, 64, 35, 86, 150] { #expect(Emulator.of(platformId: platform) == .mesenCE) }
         #expect(Emulator.of(platformId: 7) == .duckStation)  // PlayStation
         #expect(Emulator.of(platformId: 21) == .dolphin)  // GameCube
         #expect(Emulator.of(platformId: 5) == .dolphin)  // Wii
@@ -26,6 +26,30 @@ import Testing
         #expect(
             try Emulator.mesenCE.arguments(rom: rom, platformId: 18, settings: EmulatorSettings(runAheadFrames: 2))
                 == ["--doNotSaveSettings", "--emulation.runAheadFrames=2", "/Games/roms/NES/Super Mario Bros. 3 (USA).nes"])
+    }
+
+    @Test func gameBoyPlaysSetTheGameBoyModelAutoByDefault() throws {
+        let rom = URL(filePath: "/Games/GB/Tetris (World).gb")
+        func play(_ platformId: Int64, _ model: GameBoyModel?) throws -> [String] {
+            try Emulator.mesenCE.arguments(rom: rom, platformId: platformId, settings: EmulatorSettings(gameBoyModel: model))
+        }
+
+        #expect(
+            try play(33, nil)
+                == ["--doNotSaveSettings", "--emulation.runAheadFrames=0", "--gameboy.model=AutoFavorGbc", "/Games/GB/Tetris (World).gb"])
+        #expect(try play(33, .gameBoy).contains("--gameboy.model=Gameboy"))
+        #expect(try play(22, .gameBoyColor).contains("--gameboy.model=GameboyColor"))
+        #expect(try play(33, .superGameBoy).contains("--gameboy.model=SuperGameboy"))
+        #expect(!(try play(18, .superGameBoy)).contains { $0.hasPrefix("--gameboy.model") })  // NES
+    }
+
+    @Test func aGamesGameBoyModelIsKept() throws {
+        let h = try LudeumHarness()
+        let game = try h.addGame("Tetris")
+
+        try h.journal.setEmulatorSettings(game, EmulatorSettings(gameBoyModel: .superGameBoy))
+        try h.reopen()
+        #expect(try h.journal.emulatorSettings(game) == EmulatorSettings(gameBoyModel: .superGameBoy))
     }
 
     @Test func aresRunAheadIsOnOrOff() throws {
@@ -130,5 +154,37 @@ import Testing
         #expect(
             DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 3), to: "[Other]\nRunaheadFrameCount = 9\n[Main]\n")
                 == "[Other]\nRunaheadFrameCount = 9\n[Main]\nRunaheadFrameCount = 3\n")
+    }
+}
+
+@Suite struct PPSSPPSettingsTests {
+    let folder = FileManager.default.temporaryDirectory.appending(
+        path: "ppsspp tests \(UUID().uuidString)", directoryHint: .isDirectory)
+
+    @Test func pspGamesArePlayedInPPSSPP() {
+        #expect(Emulator.of(platformId: 38) == .ppsspp)
+    }
+
+    @Test func aPlayStartsFromACopyOfPPSSPPsOwnSettingsWithLowLatencyDisplay() throws {
+        let base = folder.appending(path: "ppsspp.ini")
+        let copy = folder.appending(path: "copy.ini")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try "[Graphics]\nInflightFrames = 2\nVerticalSync = True\n\n[Sound]\nEnable = True\n".write(
+            to: base, atomically: true, encoding: .utf8)
+        let rom = URL(filePath: "/Games/PSP/Patapon (USA).iso")
+
+        let arguments = try Emulator.ppsspp.arguments(
+            rom: rom, platformId: 38, settings: EmulatorSettings(), ppsspp: PPSSPPSettings(base: base, copy: copy))
+
+        #expect(arguments == ["--config=\(copy.path(percentEncoded: false))", "/Games/PSP/Patapon (USA).iso"])
+        #expect(
+            try String(contentsOf: copy, encoding: .utf8)
+                == "[Graphics]\nFrameSkip = 0\nLowLatencyPresent = True\nInflightFrames = 1\nVerticalSync = True\n\n[Sound]\nEnable = True\n"
+        )
+        #expect(try String(contentsOf: base, encoding: .utf8).contains("InflightFrames = 2"))
+    }
+
+    @Test func withNoPPSSPPSettingsYetTheCopyHasJustTheLatencySettings() {
+        #expect(PPSSPPSettings.applying(to: "") == "[Graphics]\nFrameSkip = 0\nLowLatencyPresent = True\nInflightFrames = 1\n\n")
     }
 }
