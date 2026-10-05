@@ -13,9 +13,9 @@ struct LibraryScreen: View {
     @State private var filter: LibraryFilter
     /// What's typed in the search field; it reaches `filter.name` after a pause in typing.
     @State private var searchText: String
-    @State private var sort = LibrarySort.name
-    @State private var ascending = true
     // Remembered across screens and launches, shared by the Library and every List.
+    @AppStorage("librarySort") private var sort = LibrarySort.name
+    @AppStorage("librarySortAscending") private var ascending = true
     @AppStorage("libraryShowsCovers") private var showCovers = false
     /// Cover width in the Covers view, in points.
     @AppStorage("libraryCoverWidth") private var coverWidth = 120.0
@@ -94,7 +94,8 @@ struct LibraryScreen: View {
             case .summary: FilterSummary(filter: $filter, platforms: platforms, lists: lists, count: rows.count, busy: busy)
             case .filters:
                 LibraryBar(
-                    count: rows.count, busy: busy, filter: $filter, platforms: platforms, lists: lists,
+                    count: rows.count, busy: busy, sortStatus: "Sorted by \(sortText(sort)) \(ascending ? "↑" : "↓")", filter: $filter,
+                    platforms: platforms, lists: lists,
                     genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted())
             }
         }
@@ -602,6 +603,8 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
 struct LibraryBar: View {
     let count: Int
     var busy = false
+    /// The current sort, on the right.
+    var sortStatus: String? = nil
     let filter: Binding<LibraryFilter>?
     let platforms: [IGDBPlatform]
     let lists: [GameList]
@@ -624,12 +627,14 @@ struct LibraryBar: View {
                             .padding(.leading, 8).padding(.vertical, 2)
                             .background(.quaternary, in: .capsule)
                         }
+                        // Snug after the pills.
+                        AddFilterMenu(filter: filter, platforms: platforms, lists: lists, genres: genres, themes: themes)
                     }
                 }
-                AddFilterMenu(filter: filter, platforms: platforms, lists: lists, genres: genres, themes: themes)
             } else {
                 Spacer()
             }
+            if let sortStatus { Text(sortStatus).foregroundStyle(.secondary).fixedSize() }
         }
         .font(.callout)
         .padding(.horizontal, 12).padding(.vertical, 6)
