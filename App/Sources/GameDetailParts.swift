@@ -19,7 +19,7 @@ struct RatingBadge: View {
                 Text("/ 10").foregroundStyle(.secondary)
                 if imported { Text("≈ from OpenEmu stars").font(.caption).foregroundStyle(.secondary) }
             } else {
-                Text("Unrated").font(.title2).foregroundStyle(.secondary)
+                Text("Unrated").font(.system(size: 24, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
             }
         }
     }
@@ -289,10 +289,12 @@ func readableVersion(_ version: String?) -> String? {
 struct CommunityScores: View {
     let players: CommunityScore?
     let critics: CommunityScore?
+    /// Label above value, to sit beside my Rating on Game detail.
+    var stacked = false
 
     var body: some View {
         if players != nil || critics != nil {
-            HStack(spacing: 14) {
+            HStack(alignment: .lastTextBaseline, spacing: stacked ? 24 : 14) {
                 if let players { score("Players", players, noun: "rating") }
                 if let critics { score("Critics", critics, noun: "review") }
                 Text("IGDB").font(.caption2).foregroundStyle(.tertiary)
@@ -301,10 +303,20 @@ struct CommunityScores: View {
     }
 
     private func score(_ title: String, _ s: CommunityScore, noun: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(title).font(FactStyle.label).foregroundStyle(.secondary)
-            Text(ratingText(s.rating)).font(FactStyle.value.bold()).monospacedDigit().foregroundStyle(ratingColor(s.rating))
-            Text("(\(s.count) \(noun)\(s.count == 1 ? "" : "s"))").font(FactStyle.label).foregroundStyle(.secondary)
+        Group {
+            if stacked {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(title) · \(s.count)").font(FactStyle.label).foregroundStyle(.secondary)
+                    Text(ratingText(s.rating)).font(.system(size: 24, weight: .bold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(ratingColor(s.rating))
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(title).font(FactStyle.label).foregroundStyle(.secondary)
+                    Text(ratingText(s.rating)).font(FactStyle.value.bold()).monospacedDigit().foregroundStyle(ratingColor(s.rating))
+                    Text("(\(s.count) \(noun)\(s.count == 1 ? "" : "s"))").font(FactStyle.label).foregroundStyle(.secondary)
+                }
+            }
         }
         .help("IGDB \(title.lowercased()): \(String(format: "%.1f", s.score / 10)) from \(s.count) \(noun)\(s.count == 1 ? "" : "s")")
     }

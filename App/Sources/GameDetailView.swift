@@ -66,11 +66,15 @@ struct GameDetailView: View {
 
             // My journal: what I think of it and when I played it.
             Section("My journal") {
-                HStack(alignment: .firstTextBaseline, spacing: 24) {
-                    RatingEditor(
-                        rating: game.rating, imported: game.ratingImported, hasHistory: !history.isEmpty,
-                        set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
-                    CommunityScores(players: facts.playerScore, critics: facts.criticScore)
+                // Mine, Players and Critics alike: a label above the value, lined up along the bottom.
+                HStack(alignment: .lastTextBaseline, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Mine").font(FactStyle.label).foregroundStyle(.secondary)
+                        RatingEditor(
+                            rating: game.rating, imported: game.ratingImported, hasHistory: !history.isEmpty,
+                            set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
+                    }
+                    CommunityScores(players: facts.playerScore, critics: facts.criticScore, stacked: true)
                 }
                 HStack {
                     Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
