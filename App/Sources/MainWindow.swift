@@ -36,7 +36,8 @@ struct MainWindow: View {
         NavigationSplitView {
             Sidebar(
                 services: services, selection: $selection, lists: lists, platforms: platformCounts, pins: pins,
-                reviewQueueCount: reviewQueueCount)
+                reviewQueueCount: reviewQueueCount
+            )
             // The sidebar is always shown: no toggle to hide it.
             .toolbar(removing: .sidebarToggle)
         } content: {
