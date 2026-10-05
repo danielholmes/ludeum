@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var hasheousKey = ""
     @State private var openEmuLibrary: URL?
     @State private var backupFolder: URL?
+    @State private var ps2Folder: URL?
     @State private var needsCredentials = false
     @State private var check: CheckState = .idle
     /// Bumped by every edit, so a test that finishes after one doesn't report on values no longer shown.
@@ -27,7 +28,7 @@ struct SettingsView: View {
     }
 
     enum Folder: Identifiable {
-        case openEmuLibrary, backups
+        case openEmuLibrary, backups, ps2
         var id: Self { self }
     }
 
@@ -66,6 +67,14 @@ struct SettingsView: View {
                 folderRow("Library", openEmuLibrary, .openEmuLibrary)
             }
 
+            Section {
+                folderRow("PS2", ps2Folder, .ps2)
+            } header: {
+                Text("ROM folders")
+            } footer: {
+                Text("For Platforms OpenEmu doesn't have. A .7z there is Archived: extract it to play.").foregroundStyle(.secondary)
+            }
+
             BackupsSection(journal: journal, backups: settings.backups()) { choosingFolder = .backups }
                 .id(backupFolder)
 
@@ -89,6 +98,7 @@ struct SettingsView: View {
             switch folder {
             case .openEmuLibrary: settings.openEmuLibrary = url
             case .backups: settings.backupFolder = url
+            case .ps2: settings.ps2Folder = url
             }
             load()
         }
@@ -118,6 +128,7 @@ struct SettingsView: View {
         hasheousKey = settings.hasheousKey ?? hasheousKey
         openEmuLibrary = settings.openEmuLibrary
         backupFolder = settings.backupFolder
+        ps2Folder = settings.ps2Folder
         needsCredentials = settings.needsCredentials
     }
 

@@ -145,11 +145,12 @@ import SwiftUI
             igdb: igdb, hasheous: hasheous, journal: journal, backups: services.settings.backups(),
             snapshotFile: AppSettings.appFolder.appending(path: "OpenEmu snapshot.sqlite"), libretro: services.libretro)
         let library = services.settings.openEmuLibrary
+        let romFolders = services.settings.romFolders
         ongoingProgress = (.snapshot, 0)
         ongoingTask = Task {
             do {
                 let work = services.work
-                let result = try await run.run(library: library) { phase, fraction in
+                let result = try await run.run(library: library, romFolders: romFolders) { phase, fraction in
                     Task { @MainActor in self.ongoingProgress = (phase, fraction) }
                 } writing: {
                     await MainActor.run { work.lockJournal(true) }

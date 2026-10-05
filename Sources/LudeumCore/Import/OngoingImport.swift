@@ -44,12 +44,12 @@ public final class OngoingImport: Sendable {
         self.snapshotFile = snapshotFile
     }
 
-    /// Reads OpenEmu and brings the journal up to date. Refused before the first Import, and when
+    /// Reads OpenEmu and the ROM folders and brings the journal up to date. Refused before the first Import, and when
     /// the library was rebuilt or replaced (a new store UUID). `writing` is awaited just before the
     /// write step (the backup and the one transaction), so the app can stop journal edits first;
     /// `wrote` just after it, before the Box art step, which never touches what I edit.
     public func run(
-        library: URL, progress: @escaping @Sendable (ImportPhase, Double) -> Void = { _, _ in },
+        library: URL, romFolders: [ROMFolder] = [], progress: @escaping @Sendable (ImportPhase, Double) -> Void = { _, _ in },
         writing: @Sendable () async -> Void = {}, wrote: @Sendable () async -> Void = {}
     ) async throws
         -> OngoingImportResult
@@ -80,10 +80,38 @@ public final class OngoingImport: Sendable {
         let seenIDs = Set(plan.seen.map(\.0.id))
         plan.gone = known.filter { !$0.missing && !seenIDs.contains($0.id) }
 
-        progress(.lookups, 0)
-        let results = try await matcher.match(newROMs.map(\.matcherROM)) { done, total in
-            progress(.lookups, total == 0 ? 1 : Double(done) / Double(total))
+        // ROM folders: known ROMs by name; one that can't be read is left alone.
+        var newFolderROMs: [(systemId: String, file: FolderROMFile)] = []
+        let knownInFolders = Dictionary(grouping: try journal.knownFolderROMs(), by: \.systemId)
+        for folder in romFolders {
+            guard let files = try? folder.scan() else { continue }
+            let known = Dictionary(uniqueKeysWithValues: (knownInFolders[folder.systemId] ?? []).map { ($0.name, $0) })
+            for file in files {
+                if let row = known[file.name] {
+                    plan.folderSeen.append((row, file))
+                } else {
+                    newFolderROMs.append((folder.systemId, file))
+                }
+            }
+            let names = Set(files.map(\.name))
+            plan.folderGone += known.values.filter { !$0.missing && !names.contains($0.name) }.sorted { $0.id < $1.id }
         }
+
+        progress(.lookups, 0)
+        let openEmuLookups = newROMs.count
+        let lookups = openEmuLookups + newFolderROMs.count
+        let results = try await matcher.match(newROMs.map(\.matcherROM)) { done, _ in
+            progress(.lookups, lookups == 0 ? 1 : Double(done) / Double(lookups))
+        }
+        // No checksum, so a folder ROM is only ever suggested: always the Review queue (ADR 0004).
+        let folderResults = try await matcher.match(
+            newFolderROMs.enumerated().map { i, rom in
+                OpenEmuROM(id: i, name: rom.file.name, openVGDBTitle: nil, system: rom.systemId, md5: "", file: nil)
+            }
+        ) { done, _ in
+            progress(.lookups, Double(openEmuLookups + done) / Double(max(lookups, 1)))
+        }
+        plan.folderNew = newFolderROMs.enumerated().map { i, rom in (rom.systemId, rom.file, folderResults[i] ?? .noSuggestion) }
         progress(.matching, 0)
         let automatic = results.values.compactMap { if case .automatic(let id) = $0 { id } else { nil } }
         let records = try await igdb.games(ids: Array(Set(automatic)))
@@ -101,7 +129,10 @@ public final class OngoingImport: Sendable {
             }
         }
 
-        let touchesROMs = !newROMs.isEmpty || !plan.gone.isEmpty || plan.seen.contains { $0.0.missing || $0.0.openEmuPk != $0.1.pk }
+        let touchesROMs =
+            !newROMs.isEmpty || !plan.gone.isEmpty || plan.seen.contains { $0.0.missing || $0.0.openEmuPk != $0.1.pk }
+            || !plan.folderNew.isEmpty || !plan.folderGone.isEmpty
+            || plan.folderSeen.contains { $0.0.missing || $0.0.archived != $0.1.archived }
         try Task.checkCancellation()
         progress(.review, 1)
         await writing()
@@ -111,6 +142,16 @@ public final class OngoingImport: Sendable {
         await boxArt.run(snapshot)
         return result
     }
+}
+
+/// A ROM folder's ROM the journal already has.
+struct KnownFolderROM {
+    let id: Int64
+    let systemId: String
+    let name: String
+    let missing: Bool
+    let archived: Bool
+    let gameId: GameID?
 }
 
 /// A ROM row the journal already has.
@@ -138,6 +179,12 @@ struct OngoingImportPlan {
     var gone: [KnownROM] = []
     var matched: [Matched] = []
     var unmatched: [(OpenEmuROMRecord, MatchResult)] = []
+    /// Known ROM folder ROMs still (or again) in their folder.
+    var folderSeen: [(KnownFolderROM, FolderROMFile)] = []
+    /// Known, present ROM folder ROMs whose files are all gone.
+    var folderGone: [KnownFolderROM] = []
+    /// New ROM folder ROMs, for the Review queue.
+    var folderNew: [(systemId: String, file: FolderROMFile, match: MatchResult)] = []
 }
 
 extension LudeumStore {
@@ -145,10 +192,25 @@ extension LudeumStore {
         try db.read { db in try String.fetchOne(db, sql: "SELECT storeUUID FROM openEmuLibrary WHERE id = 1") }
     }
 
+    func knownFolderROMs() throws -> [KnownFolderROM] {
+        try db.read { db in
+            try Row.fetchAll(
+                db, sql: "SELECT id, systemId, folderName, missing, archived, gameId FROM rom WHERE folderName IS NOT NULL ORDER BY id"
+            )
+            .map {
+                KnownFolderROM(
+                    id: $0["id"], systemId: $0["systemId"], name: $0["folderName"], missing: $0["missing"], archived: $0["archived"],
+                    gameId: $0["gameId"])
+            }
+        }
+    }
+
     func knownROMs() throws -> [KnownROM] {
         try db.read { db in
             try Row.fetchAll(
-                db, sql: "SELECT id, openEmuPk, md5, COALESCE(name, fileName) AS displayName, missing, gameId FROM rom ORDER BY id"
+                db,
+                sql:
+                    "SELECT id, openEmuPk, md5, COALESCE(name, fileName) AS displayName, missing, gameId FROM rom WHERE openEmuPk IS NOT NULL ORDER BY id"
             ).map {
                 KnownROM(
                     id: $0["id"], openEmuPk: $0["openEmuPk"], md5: $0["md5"], fileName: $0["displayName"], missing: $0["missing"],
@@ -208,17 +270,73 @@ extension LudeumStore {
                 _ = try insertROM(m.rom, game: game)
                 result.matched.append(ImportedROM(romName: m.rom.name, game: game))
             }
+            func suggest(_ match: MatchResult, rom id: Int64) throws {
+                guard case .suggestion(let s) = match else { return }
+                try db.execute(
+                    sql: "UPDATE rom SET suggestedIgdbGameId = ?, suggestionKind = ?, checksumIgdbGameId = ?, namesAgree = ? WHERE id = ?",
+                    arguments: [s.gameID, s.source == .nameSearch ? "name" : "checksum", s.checksumGameID, s.namesAgree, id])
+            }
             for (rom, match) in plan.unmatched {
-                let id = try insertROM(rom, game: nil)
-                if case .suggestion(let s) = match {
-                    try db.execute(
-                        sql:
-                            "UPDATE rom SET suggestedIgdbGameId = ?, suggestionKind = ?, checksumIgdbGameId = ?, namesAgree = ? WHERE id = ?",
-                        arguments: [s.gameID, s.source == .nameSearch ? "name" : "checksum", s.checksumGameID, s.namesAgree, id])
-                }
+                try suggest(match, rom: try insertROM(rom, game: nil))
                 result.sentToReview.append(ImportedROM(romName: rom.name, game: nil))
             }
+            // ROM folders: extracting or archiving is silent; coming back or going missing is as for OpenEmu's.
+            for (known, file) in plan.folderSeen {
+                if known.missing { result.returned.append(ImportedROM(romName: known.name, game: known.gameId)) }
+                try Self.setFolderROM(db, known.id, to: file)
+            }
+            for known in plan.folderGone {
+                try Self.setFolderROM(db, known.id, to: nil)
+                result.goneMissing.append(ImportedROM(romName: known.name, game: known.gameId))
+            }
+            for (systemId, file, match) in plan.folderNew {
+                let parsed = ROMName(file.name)
+                try db.execute(
+                    sql: """
+                        INSERT INTO rom (folderName, archived, fileName, name, systemId, version, discNumber, discLabel)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                    arguments: [
+                        file.name, file.archived, file.fileName, file.name, systemId,
+                        parsed.version, parsed.disc, parsed.discLabel,
+                    ])
+                try suggest(match, rom: db.lastInsertedRowID)
+                result.sentToReview.append(ImportedROM(romName: file.name, game: nil))
+            }
             return result
+        }
+    }
+}
+
+extension LudeumStore {
+    /// Re-reads one Game's ROM folder ROMs: archived, ready, or missing. New files wait for an Import.
+    /// Throws when a folder can't be read, rather than marking its ROMs missing.
+    public func checkROMsAgain(_ game: GameID, in folders: [ROMFolder]) throws {
+        let roms = try db.read { db in
+            try Row.fetchAll(
+                db, sql: "SELECT id, systemId, folderName FROM rom WHERE gameId = ? AND folderName IS NOT NULL", arguments: [game])
+        }
+        var scans: [String: [FolderROMFile]] = [:]
+        for folder in folders where roms.contains(where: { $0["systemId"] == folder.systemId }) {
+            scans[folder.systemId] = try folder.scan()
+        }
+        try db.write { db in
+            for row in roms {
+                guard let files = scans[row["systemId"]] else { continue }
+                let name: String = row["folderName"]
+                try Self.setFolderROM(db, row["id"], to: files.first { $0.name == name })
+            }
+        }
+    }
+
+    /// A ROM folder ROM's state from its files: nil is missing (keeping whether it was archived).
+    static func setFolderROM(_ db: Database, _ id: Int64, to file: FolderROMFile?) throws {
+        if let file {
+            try db.execute(
+                sql: "UPDATE rom SET missing = 0, archived = ?, fileName = ? WHERE id = ?",
+                arguments: [file.archived, file.fileName, id])
+        } else {
+            try db.execute(sql: "UPDATE rom SET missing = 1 WHERE id = ?", arguments: [id])
         }
     }
 }

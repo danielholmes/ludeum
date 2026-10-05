@@ -51,12 +51,15 @@ import Testing
         let s = settings()
         #expect(s.backupFolder.path(percentEncoded: false).hasSuffix("/Dropbox/Ludeum Backups/"))
         #expect(s.openEmuLibrary == AppSettings.openEmuDefaultLibrary)
+        #expect(s.ps2Folder.path(percentEncoded: false).hasSuffix("/Dropbox/games/PS2/"))
 
         s.backupFolder = URL(filePath: "/tmp/journal backups", directoryHint: .isDirectory)
         s.openEmuLibrary = URL(filePath: "/tmp/OpenEmu Library", directoryHint: .isDirectory)
+        s.ps2Folder = URL(filePath: "/tmp/PS2", directoryHint: .isDirectory)
 
         #expect(settings().backupFolder.path(percentEncoded: false) == "/tmp/journal backups/")
         #expect(settings().openEmuLibrary.path(percentEncoded: false) == "/tmp/OpenEmu Library/")
+        #expect(settings().romFolders == [.ps2(URL(filePath: "/tmp/PS2", directoryHint: .isDirectory))])
     }
 }
 

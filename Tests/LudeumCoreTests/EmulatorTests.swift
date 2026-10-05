@@ -188,3 +188,20 @@ import Testing
         #expect(PPSSPPSettings.applying(to: "") == "[Graphics]\nFrameSkip = 0\nLowLatencyPresent = True\nInflightFrames = 1\n\n")
     }
 }
+
+@Suite struct PCSX2Tests {
+    @Test func ps2GamesArePlayedInPCSX2() {
+        #expect(Emulator.of(platformId: 8) == .pcsx2)
+    }
+
+    @Test func aPlayBootsTheGameWithOptimalFramePacingFromAGameSettingsFile() throws {
+        let copy = FileManager.default.temporaryDirectory.appending(path: "pcsx2 \(UUID().uuidString)/game.ini")
+        let rom = URL(filePath: "/Games/PS2/Okami (USA).iso")
+
+        let arguments = try Emulator.pcsx2.arguments(
+            rom: rom, platformId: 8, settings: EmulatorSettings(), pcsx2: PCSX2GameSettings(file: copy))
+
+        #expect(arguments == ["-batch", "-fastboot", "-gamecfg", copy.path(percentEncoded: false), "--", "/Games/PS2/Okami (USA).iso"])
+        #expect(try String(contentsOf: copy, encoding: .utf8) == "[EmuCore/GS]\nVsyncQueueSize = 0\n")
+    }
+}

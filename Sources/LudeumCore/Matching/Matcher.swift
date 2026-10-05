@@ -67,6 +67,7 @@ public let openEmuSystemPlatforms: [String: [Int]] = [
     "openemu.system.nds": [20], "openemu.system.psp": [38], "openemu.system.n64": [4],
     "openemu.system.gc": [21], "openemu.system.sms": [64], "openemu.system.scd": [78],
     "openemu.system.saturn": [32], "openemu.system.gg": [35], "openemu.system.pcecd": [150],
+    ROMFolder.ps2SystemId: [8],
 ]
 
 /// Matches OpenEmu ROMs to IGDB games, from the cache where it can.
@@ -125,6 +126,8 @@ public final class Matcher: Sendable {
 
     /// Hasheous by OpenEmu's MD5, then for an NES/SNES dump already on disk, by its MD5 without the header.
     private func checksumGameID(_ rom: OpenEmuROM) async throws -> Int? {
+        // A ROM folder's ROM has no checksum, so it's only ever suggested by name (ADR 0004).
+        guard !rom.md5.isEmpty else { return nil }
         if let id = try await hasheous.lookup(md5: rom.md5).match?.igdbGameID { return id }
         guard let file = rom.file, let md5 = headerlessMD5(file, system: rom.system) else { return nil }
         return try await hasheous.lookup(md5: md5).match?.igdbGameID

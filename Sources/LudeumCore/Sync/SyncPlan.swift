@@ -308,7 +308,9 @@ extension LudeumStore {
                     FROM game g ORDER BY g.id
                     """)
         }
-        let roms = try db.read { db in try Row.fetchAll(db, sql: "SELECT id, gameId, openEmuPk FROM rom WHERE gameId IS NOT NULL") }
+        let roms = try db.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, gameId, openEmuPk FROM rom WHERE gameId IS NOT NULL AND openEmuPk IS NOT NULL")
+        }
         let romsByGame = Dictionary(grouping: roms, by: { $0["gameId"] as GameID })
         var special: [String: Set<Int64>] = ["_TODO": [], "_TODO Next": [], "_Current": [], "_Completed": []]
         var openEmuGames: [GameID: Set<Int64>] = [:]

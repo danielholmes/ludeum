@@ -56,6 +56,7 @@ public final class LibretroThumbnails: Sendable {
         "openemu.system.2600": ["Atari_-_2600"],
         "openemu.system.ngp": ["SNK_-_Neo_Geo_Pocket_Color"],
         "openemu.system.ws": ["Bandai_-_WonderSwan_Color"],
+        ROMFolder.ps2SystemId: ["Sony_-_PlayStation_2"],
     ]
 
     static let folders = ["Named_Boxarts", "Named_Snaps", "Named_Titles"]

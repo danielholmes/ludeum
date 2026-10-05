@@ -4,8 +4,11 @@ import GRDB
 /// A ROM as Game detail shows it.
 public struct LudeumROM: Sendable, Equatable, Identifiable {
     public let id: Int64
-    /// The ROM's `Z_PK` in OpenEmu's library.
-    public let openEmuPk: Int64
+    /// The ROM's `Z_PK` in OpenEmu's library; nil for a ROM folder's ROM.
+    public let openEmuPk: Int64?
+    /// A ROM folder ROM's name (its file name without the extension); nil for an OpenEmu ROM.
+    public let folderName: String?
+    public let systemId: String
     public let fileName: String
     /// OpenEmu's name for it, or the file name when unknown.
     public let name: String
@@ -13,6 +16,8 @@ public struct LudeumROM: Sendable, Equatable, Identifiable {
     public let version: String
     public let disc: Int?
     public let missing: Bool
+    /// In its ROM folder, but only as a `.7z`: present, but not playable until extracted.
+    public let archived: Bool
 }
 
 /// What deleting a Game takes with it, for the confirmation.
@@ -46,7 +51,7 @@ extension LudeumStore {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.id, r.openEmuPk, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing
+                    SELECT r.id, r.openEmuPk, r.folderName, r.systemId, r.archived, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing
                     FROM rom r
                     WHERE r.gameId = ?
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
@@ -55,9 +60,10 @@ extension LudeumStore {
                 let fileName: String = row["fileName"]
                 let parsed = ROMName((fileName as NSString).deletingPathExtension)
                 return LudeumROM(
-                    id: row["id"], openEmuPk: row["openEmuPk"], fileName: fileName, name: row["displayName"],
-                    version: row["version"] ?? parsed.version,
-                    disc: row["discNumber"] ?? parsed.disc, missing: row["missing"])
+                    id: row["id"], openEmuPk: row["openEmuPk"], folderName: row["folderName"], systemId: row["systemId"],
+                    fileName: fileName,
+                    name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
+                    missing: row["missing"], archived: row["archived"])
             }
         }
     }

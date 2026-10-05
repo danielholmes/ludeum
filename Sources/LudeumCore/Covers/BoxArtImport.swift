@@ -56,7 +56,9 @@ struct BoxArtImport {
         }
         for row in rows {
             let id: Int64 = row["id"]
-            let titles = [row["name"], openVGDBTitles[row["openEmuPk"]] ?? nil, row["igdbName"]].compactMap { $0 as String? }
+            let titles = [row["name"], (row["openEmuPk"] as Int64?).flatMap { openVGDBTitles[$0] } ?? nil, row["igdbName"]].compactMap {
+                $0 as String?
+            }
             let names = try await libretro.names(system: row["systemId"], fileName: row["fileName"], titles: titles) ?? LibretroNames()
             try await journal.db.write { db in
                 try db.execute(

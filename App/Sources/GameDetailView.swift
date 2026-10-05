@@ -136,14 +136,15 @@ struct GameDetailView: View {
         .task(id: roms.map(\.id)) {
             // Off the main thread: it reads OpenEmu's library and the files' attributes.
             let library = services.settings.openEmuLibrary
-            let present = roms.filter { !$0.missing }.map { ($0.id, $0.openEmuPk) }
+            let folders = services.settings.romFolders
+            let present = roms.filter { !$0.missing }
             fileDates = await Task.detached(priority: .utility) {
                 var out: [Int64: (created: Date?, modified: Date?)] = [:]
-                for (id, pk) in present {
-                    guard let file = try? OpenEmuLibrary.romFile(library: library, openEmuPk: pk),
+                for rom in present {
+                    guard let file = try? romFile(rom, library: library, folders: folders),
                         let values = try? file.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
                     else { continue }
-                    out[id] = (values.creationDate, values.contentModificationDate)
+                    out[rom.id] = (values.creationDate, values.contentModificationDate)
                 }
                 return out
             }.value
@@ -236,7 +237,12 @@ struct GameDetailView: View {
     /// ▶ Play in the Platform's Emulator, and beside it the Emulator's settings. A Platform with no
     /// Emulator says so instead.
     @ViewBuilder private var playControls: some View {
-        if let emulator, let platformId = game?.platformId {
+        if isArchived {
+            HStack(spacing: 12) {
+                Label("Archived: extract the .7z to play", systemImage: "archivebox").foregroundStyle(.orange)
+                checkAgainButton
+            }
+        } else if let emulator, let platformId = game?.platformId {
             HStack(spacing: 12) {
                 Button {
                     play(in: emulator)
@@ -256,19 +262,41 @@ struct GameDetailView: View {
         }
     }
 
+    /// Every present ROM is archived, so there's nothing to Play until one is extracted.
+    private var isArchived: Bool {
+        let present = roms.filter { !$0.missing }
+        return !present.isEmpty && present.allSatisfy(\.archived)
+    }
+
+    /// Re-reads this Game's ROM folder files, after extracting or archiving one by hand.
+    private var checkAgainButton: some View {
+        Button("Check again", systemImage: "arrow.clockwise") {
+            save { try $0.checkROMsAgain(id, in: services.settings.romFolders) }
+        }
+        .help("Look at this Game's files in its ROM folder again")
+    }
+
     @ViewBuilder private var romRows: some View {
         if roms.isEmpty {
             Text("No ROMs").foregroundStyle(.secondary)
         } else {
-            if roms.allSatisfy(\.missing) { Text("No ROM in OpenEmu").foregroundStyle(.orange) }
+            if roms.allSatisfy(\.missing) {
+                HStack {
+                    Text(roms.contains { $0.folderName != nil } ? "No ROM in its ROM folder" : "No ROM in OpenEmu").foregroundStyle(.orange)
+                    if roms.contains(where: { $0.folderName != nil }) { checkAgainButton }
+                }
+            }
             ForEach(roms) { rom in
                 HStack {
                     VStack(alignment: .leading) {
                         // Without its extension; GoodTools region codes spelled out.
                         Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
                         Text(
-                            [readableVersion(rom.version), rom.disc.map { "Disc \($0)" }, rom.missing ? "missing" : nil]
-                                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                            [
+                                readableVersion(rom.version), rom.disc.map { "Disc \($0)" },
+                                rom.missing ? "missing" : rom.archived ? "archived" : nil,
+                            ]
+                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                         )
                         .font(.caption).foregroundStyle(.secondary)
                         if let dates = fileDates[rom.id] {
@@ -296,16 +324,17 @@ struct GameDetailView: View {
     /// The file a Play opens: the playlist of a multi-disc Version, else the first present ROM. Nil
     /// (with the error shown) when it can't be found.
     private func playFile() -> URL? {
-        let present = roms.filter { !$0.missing }
+        let present = roms.filter { !$0.missing && !$0.archived }
         guard let rom = present.first(where: { $0.fileName.lowercased().hasSuffix(".m3u") }) ?? present.first else { return nil }
         do {
-            guard let file = try OpenEmuLibrary.romFile(library: services.settings.openEmuLibrary, openEmuPk: rom.openEmuPk) else {
-                error = "Couldn't find \(rom.fileName) in OpenEmu's library. Run an Import, then try again."
+            guard let file = try romFile(rom, library: services.settings.openEmuLibrary, folders: services.settings.romFolders, ready: true)
+            else {
+                error = "Couldn't find \(rom.fileName). Run an Import, or Check again, then try again."
                 return nil
             }
             return file
         } catch {
-            self.error = "Couldn't read OpenEmu's library: \(error.localizedDescription)"
+            self.error = "Couldn't look for \(rom.fileName): \(error.localizedDescription)"
             return nil
         }
     }
@@ -335,13 +364,13 @@ struct GameDetailView: View {
     /// Reveals the ROM's file in OpenEmu's library folder.
     private func showInFinder(_ rom: LudeumROM) {
         do {
-            guard let file = try OpenEmuLibrary.romFile(library: services.settings.openEmuLibrary, openEmuPk: rom.openEmuPk) else {
-                error = "Couldn't find \(rom.fileName) in OpenEmu's library. Run an Import, then try again."
+            guard let file = try romFile(rom, library: services.settings.openEmuLibrary, folders: services.settings.romFolders) else {
+                error = "Couldn't find \(rom.fileName). Run an Import, then try again."
                 return
             }
             NSWorkspace.shared.activateFileViewerSelecting([file])
         } catch {
-            self.error = "Couldn't read OpenEmu's library: \(error.localizedDescription)"
+            self.error = "Couldn't look for \(rom.fileName): \(error.localizedDescription)"
         }
     }
 
@@ -349,6 +378,16 @@ struct GameDetailView: View {
         save { try $0.deleteGame(id) }
         if error == nil { deleted() }
     }
+}
+
+/// Where a ROM's file is: in OpenEmu's library, or in its ROM folder. `ready` asks for the file a
+/// Play opens, so an archived ROM has none.
+private func romFile(_ rom: LudeumROM, library: URL, folders: [ROMFolder], ready: Bool = false) throws -> URL? {
+    if let pk = rom.openEmuPk { return try OpenEmuLibrary.romFile(library: library, openEmuPk: pk) }
+    guard let name = rom.folderName, let folder = folders.first(where: { $0.systemId == rom.systemId }) else { return nil }
+    if ready { return try folder.readyFile(named: name) }
+    let file = folder.url.appending(path: rom.fileName)
+    return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
 }
 
 /// "9.5" → 95 tenths. Nil for anything else, including a second decimal place.

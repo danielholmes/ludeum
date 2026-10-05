@@ -55,6 +55,15 @@ public final class AppSettings: @unchecked Sendable {
         set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.backupFolder) }
     }
 
+    /// The PS2 ROM folder, normally in Dropbox.
+    public var ps2Folder: URL {
+        get { folder(Keys.ps2Folder) ?? .homeDirectory.appending(path: "Dropbox/games/PS2", directoryHint: .isDirectory) }
+        set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.ps2Folder) }
+    }
+
+    /// Every ROM folder an Import reads.
+    public var romFolders: [ROMFolder] { [.ps2(ps2Folder)] }
+
     /// `~/Library/Application Support/Ludeum/`: the journal database, the cache and the fallback `Backups/`.
     public static let appFolder = URL.applicationSupportDirectory.appending(path: "Ludeum", directoryHint: .isDirectory)
 
@@ -80,5 +89,6 @@ public final class AppSettings: @unchecked Sendable {
         static let hasheousKey = "hasheous-api-key"
         static let openEmuLibrary = "openEmuLibrary"
         static let backupFolder = "backupFolder"
+        static let ps2Folder = "ps2Folder"
     }
 }

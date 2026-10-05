@@ -231,6 +231,52 @@ enum LudeumSchema {
         migrator.registerMigration("v11 game boy model") { db in
             try db.alter(table: "game") { t in t.add(column: "gameBoyModel", .text) }
         }
+        // ROM folders: a ROM is OpenEmu's (Z_PK and MD5) or a ROM folder's (its name), and a folder
+        // ROM can be archived. Loosening NOT NULL is a table rebuild in SQLite.
+        migrator.registerMigration("v12 rom folders") { db in
+            try db.create(table: "newRom") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("openEmuPk", .integer).unique()
+                t.column("md5", .text)
+                t.column("folderName", .text)
+                t.column("archived", .boolean).notNull().defaults(to: false)
+                t.column("fileName", .text).notNull()
+                t.column("name", .text)
+                t.column("systemId", .text).notNull()
+                t.column("missing", .boolean).notNull().defaults(to: false)
+                t.column("version", .text)
+                t.column("discNumber", .integer)
+                t.column("discLabel", .text)
+                t.column("gameId", .integer).references("game", onDelete: .cascade)
+                t.column("matchKind", .text).check { ["automatic", "confirmed", "manual"].contains($0) }
+                t.column("matchedAt", .datetime)
+                t.column("suggestedIgdbGameId", .integer)
+                t.column("suggestionKind", .text).check { ["checksum", "name"].contains($0) }
+                t.column("checksumIgdbGameId", .integer)
+                t.column("namesAgree", .boolean)
+                t.column("libretroLookedUp", .boolean).notNull().defaults(to: false)
+                t.column("libretroBoxart", .text)
+                t.column("libretroSnap", .text)
+                t.column("libretroTitle", .text)
+                t.column("openEmuBoxArt", .text)
+                t.uniqueKey(["systemId", "folderName"])
+                t.check(sql: "(gameId IS NULL) = (matchKind IS NULL) AND (gameId IS NULL) = (matchedAt IS NULL)")
+                t.check(sql: "(openEmuPk IS NULL) = (md5 IS NULL) AND (openEmuPk IS NULL) <> (folderName IS NULL)")
+                t.check(sql: "NOT archived OR folderName IS NOT NULL")
+            }
+            let columns = """
+                id, openEmuPk, md5, fileName, name, systemId, missing, version, discNumber, discLabel, gameId, matchKind,
+                matchedAt, suggestedIgdbGameId, suggestionKind, checksumIgdbGameId, namesAgree, libretroLookedUp,
+                libretroBoxart, libretroSnap, libretroTitle, openEmuBoxArt
+                """
+            try db.execute(
+                sql: """
+                    INSERT INTO newRom (\(columns)) SELECT \(columns) FROM rom;
+                    DROP TABLE rom;
+                    ALTER TABLE newRom RENAME TO rom;
+                    CREATE INDEX rom_on_gameId ON rom(gameId);
+                    """)
+        }
         return migrator
     }
 }

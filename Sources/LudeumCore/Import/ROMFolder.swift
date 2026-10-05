@@ -1,0 +1,73 @@
+import Foundation
+
+/// A ROM folder: a Platform's ROMs read straight from a folder, for Platforms OpenEmu doesn't have.
+/// A ROM there is known by its file name without the extension, so extracting `Okami (USA).7z` to
+/// `Okami (USA).iso` is the same ROM changing from archived to ready. Subfolders are ignored.
+public struct ROMFolder: Sendable, Equatable {
+    /// Stands in for an OpenEmu system identifier on the folder's ROMs.
+    public let systemId: String
+    public let url: URL
+    /// What its Emulator opens, most preferred first. Anything else but a `.7z` is ignored.
+    let readyExtensions: [String]
+
+    public static let ps2SystemId = "ludeum.folder.ps2"
+
+    /// PS2, played in PCSX2.
+    public static func ps2(_ url: URL) -> ROMFolder {
+        ROMFolder(systemId: ps2SystemId, url: url, readyExtensions: ["iso", "chd", "cso", "zso", "gz", "cue", "bin", "mdf"])
+    }
+
+    /// Every ROM in the folder, by name. Throws when the folder can't be read (Dropbox not there,
+    /// say), so an Import leaves its ROMs alone instead of marking them all missing.
+    public func scan() throws -> [FolderROMFile] {
+        let files = try FileManager.default.contentsOfDirectory(atPath: url.path(percentEncoded: false))
+            .map { url.appending(path: $0, directoryHint: .notDirectory) }
+            .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+        // A cue sheet's tracks belong to it.
+        let tracks = Set(files.filter { $0.pathExtension.lowercased() == "cue" }.flatMap(Self.cueTracks).map { $0.lowercased() })
+        var ready: [String: URL] = [:]
+        var archives: [String: URL] = [:]
+        for file in files where !tracks.contains(file.lastPathComponent.lowercased()) {
+            let name = file.deletingPathExtension().lastPathComponent
+            let ext = file.pathExtension.lowercased()
+            if ext == "7z" {
+                archives[name] = file
+            } else if let rank = readyExtensions.firstIndex(of: ext) {
+                if let current = ready[name], let currentRank = readyExtensions.firstIndex(of: current.pathExtension.lowercased()),
+                    currentRank <= rank
+                {
+                    continue
+                }
+                ready[name] = file
+            }
+        }
+        return Set(ready.keys).union(archives.keys).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            .map { FolderROMFile(name: $0, ready: ready[$0], archive: archives[$0]) }
+    }
+
+    /// The file a Play opens for the ROM `name`, if it isn't archived.
+    public func readyFile(named name: String) throws -> URL? {
+        try scan().first { $0.name == name }?.ready
+    }
+
+    /// The file names a cue sheet's `FILE` lines name, without any folder.
+    private static func cueTracks(_ cue: URL) -> [String] {
+        guard let text = try? String(contentsOf: cue, encoding: .utf8) else { return [] }
+        return text.split(whereSeparator: \.isNewline).compactMap { line in
+            let parts = line.trimmingCharacters(in: .whitespaces).split(separator: "\"")
+            guard parts.count >= 2, parts[0].trimmingCharacters(in: .whitespaces).uppercased() == "FILE" else { return nil }
+            return String(parts[1].split(whereSeparator: { $0 == "/" || $0 == "\\" }).last ?? parts[1])
+        }
+    }
+}
+
+/// One ROM in a ROM folder: its ready file, its `.7z` archive, or both. Archived when there's no ready file.
+public struct FolderROMFile: Sendable, Equatable {
+    public let name: String
+    public let ready: URL?
+    public let archive: URL?
+
+    public var archived: Bool { ready == nil }
+    /// The file the journal shows for it: the ready one, else the archive.
+    var fileName: String { (ready ?? archive)?.lastPathComponent ?? name }
+}

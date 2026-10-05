@@ -13,6 +13,7 @@ public struct Emulator: Sendable, Equatable {
     public static let melonDS = Emulator(name: "melonDS", bundleIdentifier: "net.kuribo64.melonDS")
     public static let ymir = Emulator(name: "Ymir", bundleIdentifier: "io.github.strikerx3.ymir")
     public static let ppsspp = Emulator(name: "PPSSPP", bundleIdentifier: "org.ppsspp.ppsspp")
+    public static let pcsx2 = Emulator(name: "PCSX2", bundleIdentifier: "net.pcsx2.pcsx2")
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
@@ -27,6 +28,7 @@ public struct Emulator: Sendable, Equatable {
         case 20: .melonDS  // Nintendo DS
         case 32: .ymir  // Saturn
         case 38: .ppsspp  // PlayStation Portable
+        case 8: .pcsx2  // PlayStation 2
         default: nil
         }
     }
@@ -37,7 +39,7 @@ public struct Emulator: Sendable, Equatable {
     /// `PPSSPPSettings`).
     public func arguments(
         rom: URL, platformId: Int64, settings: EmulatorSettings, duckStation: DuckStationSettings = .init(),
-        ppsspp: PPSSPPSettings = .init()
+        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2GameSettings = .init()
     ) throws -> [String] {
         switch self {
         case .duckStation:
@@ -59,6 +61,9 @@ public struct Emulator: Sendable, Equatable {
         case .melonDS, .ymir:
             // No settings: it just opens the Game.
             [rom.path(percentEncoded: false)]
+        case .pcsx2:
+            // The game settings layer comes from Ludeum's file; PCSX2's own settings (controllers, BIOS) still apply.
+            ["-batch", "-fastboot", "-gamecfg", try pcsx2.write().path(percentEncoded: false), "--", rom.path(percentEncoded: false)]
         case .ppsspp:
             // Not `--appendconfig`: PPSSPP saves the merged settings into its own ppsspp.ini.
             ["--config=\(try ppsspp.write().path(percentEncoded: false))", rom.path(percentEncoded: false)]
@@ -207,5 +212,22 @@ extension LudeumStore {
                 sql: "UPDATE game SET runAheadFrames = ?, gameBoyModel = ? WHERE id = ?",
                 arguments: [settings.runAheadFrames, settings.gameBoyModel?.rawValue, game])
         }
+    }
+}
+
+/// The game settings file every PCSX2 Play uses, in place of PCSX2's own per-game settings: Optimal
+/// Frame Pacing (no frames queued for VSync), the lowest input latency PCSX2 has. PS2 emulators have no run-ahead.
+public struct PCSX2GameSettings: Sendable {
+    let file: URL
+
+    public init(file: URL = AppSettings.appFolder.appending(path: "PCSX2 game settings.ini")) {
+        self.file = file
+    }
+
+    /// Writes the file and returns where it is.
+    func write() throws -> URL {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "[EmuCore/GS]\nVsyncQueueSize = 0\n".write(to: file, atomically: true, encoding: .utf8)
+        return file
     }
 }
