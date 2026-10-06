@@ -272,7 +272,7 @@ struct Sidebar: View {
         }
     }
 
-    /// `running` animates the icon while an Import runs.
+    /// `running` swaps the icon while an Import runs.
     private func row(_ screen: Screen, badge: Int = 0, running: Bool = false) -> some View {
         // The badge goes inside the tag: a badge outside it hides the tag, and the row can't be selected.
         Label {
@@ -282,7 +282,6 @@ struct Sidebar: View {
                 PlatformIcon(platformId: id)
             } else {
                 Image(systemName: running ? "arrow.triangle.2.circlepath" : screen.systemImage)
-                    .symbolEffect(.rotate, isActive: running)
             }
         }
         .help(running ? "Import running" : "")
