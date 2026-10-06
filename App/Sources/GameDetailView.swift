@@ -370,6 +370,7 @@ struct GameDetailView: View {
                     }
                     .font(.callout)
                     .padding(.leading, 18)
+                    if rom.archived, file.url.pathExtension.lowercased() == "7z" { ArchiveContentsList(archive: file.url) }
                 }
             }
         }
@@ -492,6 +493,59 @@ struct GameDetailView: View {
     private func deleteGame() {
         save { try $0.deleteGame(id) }
         if error == nil { deleted() }
+    }
+}
+
+/// What's inside an archived ROM's `.7z`, read when its file list is opened. An online-only archive
+/// isn't read: that would download all of it just to list it.
+private struct ArchiveContentsList: View {
+    let archive: URL
+
+    private enum Contents {
+        case loading, onlineOnly
+        case listed([SevenZip.Entry])
+        case failed(String)
+    }
+
+    @State private var contents = Contents.loading
+
+    var body: some View {
+        Group {
+            switch contents {
+            case .loading: ProgressView().controlSize(.small)
+            case .onlineOnly:
+                Text("Online-only in Dropbox: what's inside shows once it's downloaded.").foregroundStyle(.secondary)
+            case .listed(let entries):
+                ForEach(entries, id: \.path) { entry in
+                    HStack {
+                        Text(entry.path).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)).foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+            case .failed(let message): Text(message).foregroundStyle(.secondary)
+            }
+        }
+        .font(.callout)
+        .padding(.leading, 36)
+        .task(id: archive) { await load() }
+    }
+
+    private func load() async {
+        guard let sevenZip = SevenZip.find() else {
+            contents = .failed("Install 7-Zip (`brew install sevenzip`) to see what's inside.")
+            return
+        }
+        guard SevenZip.isOnDisk(archive) else {
+            contents = .onlineOnly
+            return
+        }
+        do {
+            contents = .listed(try await sevenZip.contents(of: archive))
+        } catch {
+            contents = .failed("Couldn't read what's inside: \(BackgroundTasks.describe(error))")
+        }
     }
 }
 

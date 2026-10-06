@@ -19,6 +19,18 @@ public struct SevenZip: Sendable {
             .map { SevenZip(executable: URL(filePath: $0)) }
     }
 
+    /// What's in the archive, read from its index without unpacking it: quick when the archive is
+    /// on disk, but an online-only one is downloaded first (check `isOnDisk(_:)`).
+    public func contents(of archive: URL) async throws -> [Entry] { try await list(archive) }
+
+    /// False for a cloud file (Dropbox, iCloud) that's online-only: reading it would download it all.
+    public static func isOnDisk(_ file: URL) -> Bool {
+        guard let values = try? file.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
+            values.isUbiquitousItem == true
+        else { return true }
+        return values.ubiquitousItemDownloadingStatus != .notDownloaded
+    }
+
     /// The archive's files (not its folders).
     func list(_ archive: URL) async throws -> [Entry] {
         let output = try await run(["l", "-slt", "-ba", archive.path(percentEncoded: false)])

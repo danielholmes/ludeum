@@ -94,6 +94,23 @@ struct ROMArchiverTests {
         #expect(FileManager.default.fileExists(atPath: ps2.url.appending(path: "ICO/readme.html").path(percentEncoded: false)))
     }
 
+    @Test func anArchivesContentsCanBeListedWithoutUnarchivingIt() async throws {
+        try ps2.add("ICO/ICO.bin", "image")
+        try ps2.add("ICO/readme.html", "readme")
+        try await archiver().archive("ICO", in: ps2.folder)
+
+        let contents = try await SevenZip.find()!.contents(of: ps2.url.appending(path: "ICO.7z"))
+
+        #expect(contents.map(\.path).sorted() == ["ICO.bin", "readme.html"])
+        #expect(contents.first { $0.path == "ICO.bin" }?.size == 5)
+    }
+
+    @Test func aFileOnThisDiskIsOnDisk() throws {
+        let file = try ps2.add("ICO.7z")
+
+        #expect(SevenZip.isOnDisk(file))
+    }
+
     @Test func withoutEnoughSpaceNothingHappens() async throws {
         try ps2.add("ICO.bin", String(repeating: "PS2", count: 1000))
 
