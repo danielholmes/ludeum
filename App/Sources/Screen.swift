@@ -3,9 +3,10 @@ import LudeumCore
 /// A screen the main window's sidebar can select, shown in the middle column.
 enum Screen: Hashable, Codable {
     case library
-    /// Library shortcuts: the Library scoped to Finished or Childhood, like a Platform.
+    /// Library shortcuts: the Library scoped to Finished, Childhood or Want to buy, like a Platform.
     case finished
     case childhood
+    case wantToBuy
     case whatToPlayNext
     case topRated
     case faceOff
@@ -23,6 +24,7 @@ enum Screen: Hashable, Codable {
         case .library: "Library"
         case .finished: "Finished"
         case .childhood: "Childhood"
+        case .wantToBuy: "Want to buy"
         case .whatToPlayNext: "What to play next"
         case .topRated: "Top-rated"
         case .faceOff: "Face-off"
@@ -40,6 +42,7 @@ enum Screen: Hashable, Codable {
         case .library: "books.vertical"
         case .finished: "flag.checkered"
         case .childhood: "teddybear"
+        case .wantToBuy: "cart"
         case .whatToPlayNext: "play.circle"
         case .topRated: "star"
         case .faceOff: "rectangle.on.rectangle"
@@ -63,11 +66,12 @@ enum Screen: Hashable, Codable {
         switch self {
         case .finished: LibraryFilter(outcome: .finished)
         case .childhood: LibraryFilter(childhood: true)
+        case .wantToBuy: LibraryFilter(intent: .wantToBuy)
         default: nil
         }
     }
 
     static let journal: [Screen] = [
-        .library, .finished, .childhood, .whatToPlayNext, .topRated, .faceOff, .yearInReview, .igdb,
+        .library, .finished, .childhood, .whatToPlayNext, .wantToBuy, .topRated, .faceOff, .yearInReview, .igdb,
     ]
 }

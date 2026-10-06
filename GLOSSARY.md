@@ -84,7 +84,7 @@ A date known only to the day, month or year, e.g. "2024-03-17", "2024-03" or "19
 _Avoid_: Approximate date, fuzzy date
 
 **Intent**:
-What I plan to do with a Game next: Backlog or Up next, or nothing. Intent doesn't depend on Playthroughs, so a finished Game can still be Up next. It remembers when it was set, except Intent brought over from OpenEmu, which is undated.
+What I plan to do with a Game next: Backlog, Up next or Want to buy (I don't own it yet), or nothing. Intent doesn't depend on Playthroughs, so a finished Game can still be Up next. It remembers when it was set, except Intent brought over from OpenEmu, which is undated.
 _Avoid_: Status, queue, TODO
 
 **Playing**:

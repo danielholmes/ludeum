@@ -67,7 +67,7 @@ struct MainWindow: View {
                 case .library:
                     LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter)
                         .id(libraryRequest)
-                case .finished, .childhood:
+                case .finished, .childhood, .wantToBuy:
                     if let screen = selection, let scope = screen.shortcutFilter {
                         LibraryScreen(services: services, selection: $selectedGame, scope: scope, title: screen.title).id(selection)
                     }

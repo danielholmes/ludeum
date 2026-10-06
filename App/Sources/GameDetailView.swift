@@ -96,8 +96,7 @@ struct GameDetailView: View {
                 HStack {
                     Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
                         Text("None").tag(Intent?.none)
-                        Text("Backlog").tag(Intent?.some(.backlog))
-                        Text("Up next").tag(Intent?.some(.upNext))
+                        ForEach(Intent.allCases, id: \.self) { Text(intentText($0)).tag(Intent?.some($0)) }
                     }
                     .pickerStyle(.segmented)
                     .help(game.intentSetAt.map { "Set \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")

@@ -241,6 +241,7 @@ func intentText(_ intent: Intent) -> String {
     switch intent {
     case .backlog: "Backlog"
     case .upNext: "Up next"
+    case .wantToBuy: "Want to buy"
     }
 }
 
@@ -388,9 +389,9 @@ private enum ROMBadge {
     }
 }
 
-/// A Cover's status badge: Playing, else Finished, else Up next, else Backlog; none otherwise.
+/// A Cover's status badge: Playing, else Finished, else its Intent (Up next, Backlog or Want to buy); none otherwise.
 private enum CoverStatus {
-    case playing, finished, upNext, backlog
+    case playing, finished, upNext, backlog, wantToBuy
 
     init?(_ row: LibraryRow) {
         if row.isPlaying {
@@ -401,6 +402,8 @@ private enum CoverStatus {
             self = .upNext
         } else if row.intent == .backlog {
             self = .backlog
+        } else if row.intent == .wantToBuy {
+            self = .wantToBuy
         } else {
             return nil
         }
@@ -419,6 +422,8 @@ private enum CoverStatus {
             PostIt(color: Color(red: 1, green: 0.9, blue: 0.4), side: height)
         case .finished:
             RoundBadge(symbol: "checkmark", color: .green, side: height, weight: .bold)
+        case .wantToBuy:
+            RoundBadge(symbol: "cart.fill", color: .blue, side: height)
         }
     }
 
@@ -428,6 +433,7 @@ private enum CoverStatus {
         case .finished: "Finished"
         case .upNext: "Up next"
         case .backlog: "Backlog"
+        case .wantToBuy: "Want to buy"
         }
     }
 }

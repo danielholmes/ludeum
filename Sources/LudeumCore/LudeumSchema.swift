@@ -477,6 +477,44 @@ enum LudeumSchema {
                 t.column("afterBattleId", .integer).notNull()
             }
         }
+        // Want to buy joins the Intents. SQLite can't change a CHECK in place, so `game` is rebuilt as it stands, keeping
+        // its AUTOINCREMENT high-water mark so a new Game never takes a deleted one's id.
+        migrator.registerMigration("v21 want to buy") { db in
+            let seq = try Int64.fetchOne(db, sql: "SELECT seq FROM sqlite_sequence WHERE name = 'game'")
+            try db.create(table: "newGame") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("platformId", .integer).notNull().references("platform")
+                t.column("igdbGameId", .integer)
+                t.column("igdbName", .text)
+                t.column("name", .text)
+                t.column("nameOverride", .text)
+                t.column("childhood", .boolean).notNull().defaults(to: false)
+                t.column("intent", .text).check { ["backlog", "upNext", "wantToBuy"].contains($0) }
+                t.column("intentSetAt", .datetime)
+                t.column("runAheadFrames", .integer)
+                t.column("gameBoyModel", .text)
+                t.uniqueKey(["igdbGameId", "platformId"])
+                t.check(sql: "COALESCE(nameOverride, igdbName, name) IS NOT NULL")
+                t.check(sql: "intent IS NOT NULL OR intentSetAt IS NULL")
+            }
+            let columns = [
+                "id", "platformId", "igdbGameId", "igdbName", "name", "nameOverride", "childhood", "intent", "intentSetAt",
+                "runAheadFrames", "gameBoyModel",
+            ].joined(separator: ", ")
+            try db.execute(
+                sql: """
+                    INSERT INTO newGame (\(columns)) SELECT \(columns) FROM game;
+                    DROP TABLE game;
+                    ALTER TABLE newGame RENAME TO game;
+                    """)
+            if let seq {
+                // An empty `game` has no row here yet.
+                try db.execute(sql: "UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'game'", arguments: [seq])
+                if db.changesCount == 0 {
+                    try db.execute(sql: "INSERT INTO sqlite_sequence (name, seq) VALUES ('game', ?)", arguments: [seq])
+                }
+            }
+        }
         return migrator
     }
 }

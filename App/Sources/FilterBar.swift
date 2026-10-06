@@ -135,8 +135,7 @@ private struct AddFilterMenu: View {
             if kinds.contains(.intent) {
                 Menu("Intent") {
                     Button("None") { filter.intent = .some(nil) }
-                    Button("Backlog") { filter.intent = .backlog }
-                    Button("Up next") { filter.intent = .upNext }
+                    ForEach(Intent.allCases, id: \.self) { intent in Button(intentText(intent)) { filter.intent = intent } }
                 }
             }
             if kinds.contains(.list), !lists.isEmpty {
