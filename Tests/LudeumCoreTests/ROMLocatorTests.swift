@@ -6,7 +6,7 @@ import Testing
 /// A ROM as Game detail has it.
 func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, missing: Bool = false, id: Int64 = 1) -> LudeumROM {
     LudeumROM(
-        id: id, openEmuPk: nil, folderName: name, platformId: ROMPlatform.ps2, fileName: fileName ?? "\(name).iso", name: name,
+        id: id, folderName: name, platformId: ROMPlatform.ps2, fileName: fileName ?? "\(name).iso", name: name,
         version: "", disc: nil, missing: missing, archived: archived)
 }
 
@@ -16,7 +16,7 @@ func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, 
     @Test func aFolderROMsReadyFileIsWhatPlayOpens() throws {
         let ps2 = try FakeROMFolder(in: directory)
         let iso = try ps2.add("Okami (USA).iso")
-        let locator = ROMLocator(openEmuLibrary: directory, romFolders: [ps2.folder])
+        let locator = ROMLocator(romFolders: [ps2.folder])
 
         #expect(try locator.file(of: folderROM("Okami (USA)"), ready: true) == iso)
     }
@@ -24,7 +24,7 @@ func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, 
     @Test func anArchivedROMHasNoFileToPlay() throws {
         let ps2 = try FakeROMFolder(in: directory)
         let archive = try ps2.add("Okami (USA).7z")
-        let locator = ROMLocator(openEmuLibrary: directory, romFolders: [ps2.folder])
+        let locator = ROMLocator(romFolders: [ps2.folder])
         let rom = folderROM("Okami (USA)", fileName: "Okami (USA).7z", archived: true)
 
         #expect(try locator.file(of: rom, ready: true) == nil)
@@ -35,7 +35,7 @@ func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, 
         let ps2 = try FakeROMFolder(in: directory)
         try ps2.add("Okami (USA)/Okami (USA).cue")
         try ps2.add("Okami (USA)/Okami (USA).bin", "12345")
-        let locator = ROMLocator(openEmuLibrary: directory, romFolders: [ps2.folder])
+        let locator = ROMLocator(romFolders: [ps2.folder])
 
         let files = locator.files(of: folderROM("Okami (USA)"))
 
@@ -43,20 +43,8 @@ func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, 
         #expect(files.first?.size == 5)
     }
 
-    @Test func anOpenEmuROMIsFoundInOpenEmusLibrary() throws {
-        let openEmu = try FakeOpenEmu(in: directory)
-        let pk = try openEmu.addROM("Zelda", md5: "abc", fileName: "zelda.sfc")
-        let locator = ROMLocator(openEmuLibrary: openEmu.folder, romFolders: [])
-        let rom = LudeumROM(
-            id: 1, openEmuPk: pk, folderName: nil, platformId: 19, fileName: "zelda.sfc", name: "Zelda",
-            version: "", disc: nil, missing: false, archived: false)
-
-        #expect(try locator.file(of: rom, ready: true)?.lastPathComponent == "\(pk)-zelda.sfc")
-        #expect(locator.files(of: rom).map(\.name) == ["\(pk)-zelda.sfc"])
-    }
-
     @Test func aROMWithNoROMFolderSetIsNotFound() throws {
-        let locator = ROMLocator(openEmuLibrary: directory, romFolders: [])
+        let locator = ROMLocator(romFolders: [])
 
         #expect(try locator.file(of: folderROM("Okami (USA)"), ready: true) == nil)
         #expect(locator.files(of: folderROM("Okami (USA)")).isEmpty)

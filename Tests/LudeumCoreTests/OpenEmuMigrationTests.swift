@@ -14,7 +14,7 @@ import Testing
 
     init() throws {
         h = try Harness()
-        j = try LudeumHarness()
+        j = try LudeumHarness(beforeOpenEmuMigration: true)
         // OpenEmu keeps its library inside its Application Support folder, beside each core's saves.
         let support = j.directory.appending(path: "OpenEmu", directoryHint: .isDirectory)
         openEmu = try FakeOpenEmu(in: support)
@@ -81,7 +81,6 @@ import Testing
         let rom = try #require(try j.journal.roms(of: gold).first)
         #expect(rom.platformId == 22)
         #expect(rom.folderName == "1-Pokemon Gold (USA)")
-        #expect(rom.openEmuPk == nil)
         #expect(rom.fileName == "1-Pokemon Gold (USA).gbc")
         #expect(!rom.missing)
         #expect(try await j.journal.db.read { try String.fetchOne($0, sql: "SELECT md5 FROM rom") } == "md5-Pokemon Gold")
@@ -134,7 +133,7 @@ import Testing
         #expect(plan.isRunnable)
         #expect(plan.roms.map(\.moves.first?.to) == [roms.appending(path: "Game Boy Color/1-Gold.gbc")])
         #expect(exists("roms/openemu.system.gb/1-Gold.gbc", in: openEmu.folder))
-        #expect(try j.journal.roms(of: gold).first?.openEmuPk == 1)
+        #expect(try await j.journal.db.read { try Int64.fetchOne($0, sql: "SELECT openEmuPk FROM rom") } == 1)
         #expect(try Backups(folder: backupFolder, fallback: backupFolder).all().isEmpty)
     }
 
@@ -155,7 +154,7 @@ import Testing
             return plan.clashes == ["Game Boy Color/1-Gold.gbc: a file is already there"]
         }
         #expect(exists("roms/openemu.system.gb/1-Gold.gbc", in: openEmu.folder))
-        #expect(try j.journal.roms(of: gold).first?.openEmuPk == 1)
+        #expect(try await j.journal.db.read { try Int64.fetchOne($0, sql: "SELECT openEmuPk FROM rom") } == 1)
         #expect(try Backups(folder: backupFolder, fallback: backupFolder).all().isEmpty)
     }
 
@@ -184,6 +183,25 @@ import Testing
             #expect(try await j.journal.db.read { try $0.tableExists(table) } == false)
         }
         #expect(try await j.journal.db.read { try $0.tableExists("heldOpenEmuData") })
+    }
+
+    @Test func afterwardsTheJournalNoLongerUsesOpenEmu() async throws {
+        let gold = try game("Pokemon Gold", platform: 22)
+        try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Gold.gbc", to: gold)
+        #expect(try j.journal.needsOpenEmuMigration())
+
+        try await migration().run()
+
+        #expect(try !j.journal.needsOpenEmuMigration())
+        #expect(try await j.journal.db.read { try $0.columns(in: "rom").map(\.name) }.contains("openEmuPk") == false)
+        try j.reopen()
+        #expect(try j.journal.roms(of: gold).map(\.folderName) == ["1-Gold"])
+    }
+
+    @Test func aJournalAlreadyMigratedIsLeftAlone() async throws {
+        try await migration().run()
+
+        #expect(throws: OpenEmuMigrationError.alreadyMigrated) { try migration().plan() }
     }
 
     @Test func batterySavesAreCopiedUnchangedIntoAnArchive() async throws {
@@ -259,5 +277,69 @@ import Testing
         try await migration().run()
 
         #expect(h.cache.cachedImage(at: "openemu/ART-1") == nil)
+    }
+}
+
+/// A journal opened by this build before `migrate-openemu` has moved its OpenEmu ROMs.
+@Suite struct UnmigratedJournalTests {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "unmigrated \(UUID().uuidString)", directoryHint: .isDirectory)
+
+    /// A journal from the build before OpenEmu went, with `setUp` run against it, then opened by this one.
+    func journal(_ setUp: (Database) throws -> Void) throws -> LudeumStore {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: "v15 no openemu box art")
+        try db.write(setUp)
+        try db.close()
+        return try LudeumStore(directory: directory)
+    }
+
+    func openEmuROM(_ db: Database) throws {
+        try db.execute(
+            sql: """
+                INSERT INTO platform VALUES (19, 'SNES');
+                INSERT INTO game (id, platformId, name) VALUES (1, 19, 'Super Metroid');
+                INSERT INTO rom (openEmuPk, md5, fileName, platformId, gameId, matchKind, matchedAt)
+                    VALUES (10, 'aa', 'Super Metroid.sfc', 19, 1, 'manual', 0);
+                INSERT INTO syncedCollection (openEmuPk, special) VALUES (5, '_TODO');
+                """)
+    }
+
+    @Test func itWaitsForMigrateOpenEmuWithItsOpenEmuROMsUntouched() throws {
+        let journal = try journal(openEmuROM)
+
+        #expect(try journal.needsOpenEmuMigration())
+        #expect(try journal.db.read { try Int64.fetchOne($0, sql: "SELECT openEmuPk FROM rom WHERE gameId = 1") } == 10)
+        #expect(try journal.db.read { try $0.tableExists("syncedCollection") })
+        #expect(try journal.roms(of: 1).map(\.fileName) == ["Super Metroid.sfc"])
+    }
+
+    @Test func itsImportIsRefused() async throws {
+        let h = try Harness()
+        let journal = try journal(openEmuROM)
+        let snes = try FakeROMFolder(in: directory, platform: 19)
+        try snes.add("Super Metroid (USA).sfc")
+
+        await #expect(throws: ImportError.openEmuMigrationNeeded) {
+            try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: journal, backups: nil).run(romFolders: [snes.folder])
+        }
+        #expect(try journal.reviewQueue().count == 0)
+    }
+
+    @Test func oneWithNoOpenEmuROMsDropsOpenEmuStraightAway() throws {
+        let journal = try journal { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform VALUES (8, 'PlayStation 2');
+                    INSERT INTO rom (folderName, fileName, platformId) VALUES ('Okami (USA)', 'Okami (USA).iso', 8);
+                    """)
+        }
+
+        #expect(try !journal.needsOpenEmuMigration())
+        #expect(try journal.db.read { try $0.columns(in: "rom").map(\.name) }.contains("openEmuPk") == false)
+        #expect(try journal.db.read { try $0.tableExists("syncedCollection") } == false)
+        #expect(throws: DatabaseError.self) {
+            try journal.db.write { try $0.execute(sql: "INSERT INTO rom (fileName, platformId) VALUES ('Ico.iso', 8)") }
+        }
     }
 }

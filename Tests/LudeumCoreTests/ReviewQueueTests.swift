@@ -20,7 +20,7 @@ import Testing
 
     var queue: ReviewQueue { ReviewQueue(journal: j.journal, igdb: h.igdb) }
 
-    /// An unmatched ROM as the first Import leaves it.
+    /// An unmatched ROM, with OpenEmu data held for it as the first Import from OpenEmu left some.
     @discardableResult
     func unmatched(
         _ pk: Int64, _ name: String, suggestion: Int64? = nil, kind: String? = nil, namesAgree: Bool? = nil, checksumGame: Int64? = nil,
@@ -30,11 +30,11 @@ import Testing
             try ROMPlatform.ensureKnown(db, 19)
             try db.execute(
                 sql: """
-                    INSERT INTO rom (openEmuPk, md5, fileName, platformId, missing, version, suggestedIgdbGameId, suggestionKind,
+                    INSERT INTO rom (folderName, md5, fileName, platformId, missing, version, suggestedIgdbGameId, suggestionKind,
                         checksumIgdbGameId, namesAgree)
                     VALUES (?, ?, ?, 19, ?, ?, ?, ?, ?, ?)
                     """,
-                arguments: [pk, "md5-\(pk)", name, missing, ROMName(name).version, suggestion, kind, checksumGame, namesAgree])
+                arguments: [name, "md5-\(pk)", name, missing, ROMName(name).version, suggestion, kind, checksumGame, namesAgree])
             let id = db.lastInsertedRowID
             let json = String(decoding: try JSONEncoder().encode(collections), as: UTF8.self)
             try db.execute(

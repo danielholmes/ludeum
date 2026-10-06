@@ -16,10 +16,10 @@ import Testing
         #expect(ROMArchiving.action(for: folderROM("Okami (USA)", missing: true)) == nil)
     }
 
-    @Test func anOpenEmuROMCantBeEither() {
+    @Test func anotherPlatformsROMCantBeEither() {
         let rom = LudeumROM(
-            id: 1, openEmuPk: 7, folderName: nil, platformId: 19, fileName: "zelda.sfc", name: "Zelda",
-            version: "", disc: nil, missing: false, archived: false)
+            id: 1, folderName: "Zelda", platformId: 19, fileName: "Zelda.sfc", name: "Zelda", version: "", disc: nil, missing: false,
+            archived: false)
 
         #expect(ROMArchiving.action(for: rom) == nil)
     }
@@ -35,7 +35,7 @@ extension ROMFolderImportTests {
         let rom = try #require(try j.journal.roms(of: game).first)
 
         try await Self.archive(
-            rom, of: game, journal: j.journal, locator: ROMLocator(openEmuLibrary: h.directory, romFolders: [ps2.folder]),
+            rom, of: game, journal: j.journal, locator: ROMLocator(romFolders: [ps2.folder]),
             trash: h.directory.appending(path: "Trash", directoryHint: .isDirectory))
 
         #expect(try j.journal.roms(of: game).map(\.archived) == [true])

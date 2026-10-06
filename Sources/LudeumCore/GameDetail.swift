@@ -4,13 +4,11 @@ import GRDB
 /// A ROM as Game detail shows it.
 public struct LudeumROM: Sendable, Equatable, Identifiable {
     public let id: Int64
-    /// The ROM's `Z_PK` in OpenEmu's library; nil for a ROM folder's ROM.
-    public let openEmuPk: Int64?
-    /// A ROM folder ROM's name (its file name without the extension); nil for an OpenEmu ROM.
-    public let folderName: String?
+    /// Its name in its Platform's ROM folder: its file's without the extension, or its subfolder's.
+    public let folderName: String
     public let platformId: Int64
     public let fileName: String
-    /// OpenEmu's name for it, or the file name when unknown.
+    /// Its name as shown: from its file name, else the file name.
     public let name: String
     /// The ROM's Version text: stored by Import, else read from its name.
     public let version: String
@@ -26,7 +24,7 @@ public struct DeletionSummary: Sendable, Equatable {
     public let playthroughs: Int
     public let lists: Int
     public let missingROMs: Int
-    /// A Game with present ROMs can't be deleted: they're removed in OpenEmu first.
+    /// A Game with present ROMs can't be deleted: they're moved out of their ROM folder first.
     public let presentROMs: Int
     public var canDelete: Bool { presentROMs == 0 }
 
@@ -51,7 +49,8 @@ extension LudeumStore {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.id, r.openEmuPk, r.folderName, r.platformId, r.archived, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing
+                    SELECT r.id, \(Self.folderNameSQL) AS folderName, r.platformId, r.archived, r.fileName,
+                        COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing
                     FROM rom r
                     WHERE r.gameId = ?
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
@@ -60,13 +59,17 @@ extension LudeumStore {
                 let fileName: String = row["fileName"]
                 let parsed = ROMName((fileName as NSString).deletingPathExtension)
                 return LudeumROM(
-                    id: row["id"], openEmuPk: row["openEmuPk"], folderName: row["folderName"], platformId: row["platformId"],
+                    id: row["id"], folderName: row["folderName"], platformId: row["platformId"],
                     fileName: fileName,
                     name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
                     missing: row["missing"], archived: row["archived"])
             }
         }
     }
+
+    /// A ROM's folder name. Only an OpenEmu ROM waiting for `migrate-openemu` has none: its OpenEmu file name
+    /// stands in, which no ROM folder ROM's name has (they have no extension).
+    private static let folderNameSQL = "COALESCE(r.folderName, r.fileName)"
 
     /// Version suggestions for a Playthrough: the Game's ROMs' Versions, without repeats.
     public func versionSuggestions(for game: GameID) throws -> [String] {

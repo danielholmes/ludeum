@@ -295,7 +295,7 @@ struct GameDetailView: View {
             Text("No ROMs").foregroundStyle(.secondary)
         } else {
             if roms.allSatisfy(\.missing) {
-                Text(roms.contains { $0.folderName != nil } ? "No ROM in its ROM folder" : "No ROM in OpenEmu").foregroundStyle(.orange)
+                Text("No ROM in its ROM folder").foregroundStyle(.orange)
             }
             ForEach(roms) { rom in
                 VStack(alignment: .leading, spacing: 4) {
@@ -399,7 +399,7 @@ struct GameDetailView: View {
     }
 
     private var locator: ROMLocator {
-        ROMLocator(openEmuLibrary: services.settings.openEmuLibrary, romFolders: services.settings.romFolders)
+        ROMLocator(romFolders: services.settings.romFolders)
     }
 
     /// Archive or Unarchive, whichever it needs. Once done, whichever screen is showing sees the change.

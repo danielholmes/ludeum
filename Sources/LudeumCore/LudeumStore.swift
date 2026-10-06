@@ -58,17 +58,52 @@ public final class LudeumStore: Sendable {
     /// Where a backup is taken before every deletion of a Game, List or Playthrough.
     let backups: Backups?
 
-    public init(directory: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current, backups: Backups? = nil) throws {
+    /// Opens the journal, migrating it as far as it can go: a journal that still has OpenEmu ROMs stays at
+    /// `LudeumSchema.lastWithOpenEmu` until `migrate-openemu` has moved them (`needsOpenEmuMigration()`).
+    public convenience init(
+        directory: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current, backups: Backups? = nil
+    ) throws {
+        try self.init(directory: directory, clock: clock, timeZone: timeZone, backups: backups, beforeOpenEmuMigration: false)
+    }
+
+    /// `beforeOpenEmuMigration` stops at `LudeumSchema.lastWithOpenEmu` whatever the ROMs are, as a journal
+    /// with OpenEmu ROMs does.
+    init(
+        directory: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current, backups: Backups? = nil,
+        beforeOpenEmuMigration: Bool
+    )
+        throws
+    {
         self.backups = backups
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var config = Configuration()
         config.foreignKeysEnabled = true
         db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false), configuration: config)
-        try LudeumSchema.migrator.migrate(db)
+        if try db.read({ try LudeumSchema.migrator.appliedIdentifiers($0).contains(LudeumSchema.withoutOpenEmu) }) {
+            try LudeumSchema.migrator.migrate(db)
+        } else {
+            try LudeumSchema.migrator.migrate(db, upTo: LudeumSchema.lastWithOpenEmu)
+        }
         self.clock = clock
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         self.calendar = calendar
+        if !beforeOpenEmuMigration { try completeMigrations() }
+    }
+
+    /// Takes the migrations held back while ROMs were OpenEmu's, once none are. Does nothing while some are.
+    func completeMigrations() throws {
+        let hasOpenEmuROMs = try db.read { db in
+            try db.columns(in: "rom").contains { $0.name == "openEmuPk" }
+                && Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE openEmuPk IS NOT NULL)")!
+        }
+        if !hasOpenEmuROMs { try LudeumSchema.migrator.migrate(db) }
+    }
+
+    /// The journal still has OpenEmu ROMs: `migrate-openemu` hasn't moved them into ROM folders yet. Until it has,
+    /// Import is refused.
+    public func needsOpenEmuMigration() throws -> Bool {
+        try db.read { try !LudeumSchema.migrator.hasCompletedMigrations($0) }
     }
 
     // MARK: Platforms and Games

@@ -22,7 +22,13 @@ public struct ImportResult: Sendable, Equatable {
     public var changedSomething: Bool { !(matched.isEmpty && sentToReview.isEmpty && goneMissing.isEmpty) }
 }
 
+public enum ImportError: Error, Equatable {
+    /// The journal still has OpenEmu ROMs: `migrate-openemu` has to move them into ROM folders first.
+    case openEmuMigrationNeeded
+}
+
 /// Reading the ROM folders into the journal: at launch, and by hand. It never changes the folders.
+/// Refused until `migrate-openemu` has run.
 public final class Import: Sendable {
     let matcher: Matcher
     let journal: LudeumStore
@@ -43,6 +49,7 @@ public final class Import: Sendable {
     public func run(
         romFolders: [ROMFolder], writing: @Sendable () async -> Void = {}, wrote: @Sendable () async -> Void = {}
     ) async throws -> ImportResult {
+        guard try !journal.needsOpenEmuMigration() else { throw ImportError.openEmuMigrationNeeded }
         var plan = ImportPlan()
         var newROMs: [(platformId: Int64, file: FolderROMFile)] = []
         let knownInFolders = Dictionary(grouping: try journal.knownFolderROMs(), by: \.platformId)

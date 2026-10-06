@@ -26,6 +26,9 @@ func migrateOpenEmuRun(_ arguments: [String]) async throws {
         plan = try migration.plan()
     } catch OpenEmuMigrationError.openEmuRunning {
         fail("OpenEmu is running. Quit it, then run migrate-openemu again.")
+    } catch OpenEmuMigrationError.alreadyMigrated {
+        print("This journal no longer uses OpenEmu: there's nothing to migrate.")
+        return
     }
     print(describe(plan))
     guard plan.isRunnable else { fail("nothing was changed: fix the problems above, then run migrate-openemu again") }

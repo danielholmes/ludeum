@@ -23,6 +23,8 @@ struct MainWindow: View {
     @State private var reviewQueueCount = 0
     @State private var platformCounts: [PlatformCount] = []
     @State private var pins: [Pin] = []
+    /// The journal still has OpenEmu ROMs: `migrate-openemu` hasn't run.
+    @State private var needsOpenEmuMigration = false
 
     /// Opens a Game in the detail column, leaving any IGDB result.
     private func openGame(_ id: GameID) {
@@ -85,7 +87,7 @@ struct MainWindow: View {
                 case .igdb:
                     IGDBScreen(services: services, query: $igdbQuery, shown: $igdbResult, open: openGame)
                 case .reviewQueue:
-                    ReviewQueueScreen(services: services, checkAgain: importModel.importNow, shownGame: $selectedGame)
+                    ReviewQueueScreen(services: services, checkAgain: { importModel.importNow() }, shownGame: $selectedGame)
                         .disabled(services.work.journalLocked)
                 case let screen?:
                     PlaceholderScreen(screen: screen)
@@ -110,17 +112,7 @@ struct MainWindow: View {
             }
             .navigationSplitViewColumnWidth(min: 360, ideal: 600, max: 900)
         }
-        .overlay(alignment: .bottom) {
-            VStack(spacing: 0) {
-                if let error = importModel.error {
-                    ImportErrorBanner(message: error) { importModel.error = nil }.frame(maxWidth: 520)
-                }
-                if let summary = importModel.summary {
-                    ImportSummaryBanner(summary: summary, open: { selectedGame = $0 }, dismiss: { importModel.summary = nil })
-                        .frame(maxWidth: 520)
-                }
-            }
-        }
+        .modifier(ImportBanners(model: importModel, needsOpenEmuMigration: needsOpenEmuMigration) { selectedGame = $0 })
         .onChange(of: selection) {
             if selection != .library { libraryFilter = LibraryFilter() }
             savedScreen = (try? JSONEncoder().encode(selection)) ?? Data()
@@ -155,6 +147,7 @@ struct MainWindow: View {
             reviewQueueCount = (try? services.journal?.reviewQueue().count) ?? 0
             platformCounts = (try? services.journal?.platformCounts()) ?? []
             pins = (try? services.journal?.pins()) ?? []
+            needsOpenEmuMigration = (try? services.journal?.needsOpenEmuMigration()) == true
             if case .pinned(let pin) = selection, !pins.contains(pin) { selection = .library }
             if case .list(let id, _) = selection, !lists.contains(where: { $0.id == id }) { selection = .library }
             if case .platform(let id, _) = selection, !platformCounts.contains(where: { $0.id == id }) { selection = .library }

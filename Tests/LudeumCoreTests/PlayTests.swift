@@ -49,7 +49,7 @@ import Testing
         let mesen = mesen
         return Play(platformId: 18, platformName: "NES", roms: roms, settings: settings)
             .prepare(
-                locator: ROMLocator(openEmuLibrary: directory, romFolders: [folder.folder]), version: version,
+                locator: ROMLocator(romFolders: [folder.folder]), version: version,
                 app: { installed && $0 == Emulator.mesenCE.bundleIdentifier ? mesen : nil })
     }
 
@@ -64,21 +64,23 @@ import Testing
                     arguments: ["--doNotSaveSettings", "--emulation.runAheadFrames=2", rom.path(percentEncoded: false)], warning: nil))
     }
     @Test func aMultiDiscVersionOpensItsPlaylist() throws {
-        let openEmu = try FakeOpenEmu(in: directory)
-        let disc = try openEmu.addROM("Disc 1", md5: "a", fileName: "Disc 1.nes")
-        let playlist = try openEmu.addROM("Game", md5: "b", fileName: "Game.m3u")
-        func rom(_ pk: Int64, _ fileName: String) -> LudeumROM {
-            LudeumROM(
-                id: pk, openEmuPk: pk, folderName: nil, platformId: 18, fileName: fileName, name: fileName,
-                version: "", disc: nil, missing: false, archived: false)
+        // Sega CD, in ares, whose settings are all on the command line too.
+        let segaCD = try FakeROMFolder(in: directory, platform: 78)
+        try segaCD.add("Game (Disc 1).cue")
+        let playlist = try segaCD.add("Game.m3u")
+        func rom(_ id: Int64, _ fileName: String) -> LudeumROM {
+            let name = (fileName as NSString).deletingPathExtension
+            return LudeumROM(
+                id: id, folderName: name, platformId: 78, fileName: fileName, name: name, version: "", disc: nil, missing: false,
+                archived: false)
         }
 
         let outcome = Play(
-            platformId: 18, platformName: "NES", roms: [rom(disc, "Disc 1.nes"), rom(playlist, "Game.m3u")], settings: .init()
+            platformId: 78, platformName: "Sega CD", roms: [rom(1, "Game (Disc 1).cue"), rom(2, "Game.m3u")], settings: .init()
         )
-        .prepare(locator: ROMLocator(openEmuLibrary: openEmu.folder, romFolders: []), version: .ok, app: { _ in mesen })
+        .prepare(locator: ROMLocator(romFolders: [segaCD.folder]), version: .ok, app: { _ in mesen })
 
-        #expect(outcome.arguments?.last?.hasSuffix("\(playlist)-Game.m3u") == true)
+        #expect(outcome.arguments?.last == playlist.path(percentEncoded: false))
     }
 
     @Test func aWarningGoesAlongWithThePlay() throws {

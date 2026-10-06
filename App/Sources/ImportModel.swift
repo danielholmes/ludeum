@@ -19,7 +19,8 @@ import SwiftUI
         self.services = services
     }
 
-    func importNow() {
+    /// `byHand` is false for the launch Import, which says nothing when it's refused: the main window's banner does.
+    func importNow(byHand: Bool = true) {
         guard let igdb = services.igdb, let hasheous = services.hasheous, let journal = services.journal else { return }
         guard !importing else {
             runAgain = true
@@ -42,6 +43,8 @@ import SwiftUI
                 if result.changedSomething { summary = result }
                 error = nil
                 services.changes.coverChanged()  // the Box art step can change Covers
+            } catch ImportError.openEmuMigrationNeeded {
+                if byHand { error = OpenEmuMigrationBanner.message }
             } catch {
                 self.error = "Import failed: \(error.localizedDescription)"
             }
@@ -65,7 +68,7 @@ struct ImportOnLaunch: ViewModifier {
         content.task {
             guard !Self.launched else { return }
             Self.launched = true
-            model.importNow()
+            model.importNow(byHand: false)
         }
     }
 }

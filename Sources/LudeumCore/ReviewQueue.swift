@@ -4,9 +4,9 @@ import GRDB
 /// An unmatched ROM in the Review queue, with its stored suggestion.
 public struct ReviewItem: Sendable, Equatable, Identifiable {
     public let romId: Int64
-    /// OpenEmu's name for the ROM.
+    /// The ROM's name.
     public let romName: String
-    /// The IGDB platform it's on: its ROM folder's (an unmatched OpenEmu ROM's is its system's most likely one).
+    /// The IGDB platform it's on: its ROM folder's.
     public let platformId: Int64
     public let missing: Bool
     public let suggestedIgdbGameId: Int64?
@@ -136,7 +136,7 @@ extension LudeumStore {
         }
     }
 
-    /// Sets the ROM's Match, clears its suggestion, and applies the OpenEmu data held for it.
+    /// Sets the ROM's Match, clears its suggestion, and applies any OpenEmu data held for it since the first Import.
     static func match(_ db: Database, rom: Int64, to game: GameID, kind: String, day: String, now: Date) throws {
         try db.execute(
             sql: """
@@ -145,10 +145,6 @@ extension LudeumStore {
                 WHERE id = ? AND gameId IS NULL
                 """, arguments: [game, kind, now, rom])
         guard db.changesCount == 1 else { throw ReviewError.alreadyMatched }
-        // An OpenEmu ROM takes its Game's Platform, whose ROM folder it moves to when it's migrated.
-        try db.execute(
-            sql: "UPDATE rom SET platformId = (SELECT platformId FROM game WHERE id = ?) WHERE id = ? AND openEmuPk IS NOT NULL",
-            arguments: [game, rom])
         if let held = try Row.fetchOne(db, sql: "SELECT * FROM heldOpenEmuData WHERE romId = ?", arguments: [rom]) {
             let collections = (try? JSONDecoder().decode([String].self, from: Data((held["collections"] as String).utf8))) ?? []
             try applyOpenEmuData(

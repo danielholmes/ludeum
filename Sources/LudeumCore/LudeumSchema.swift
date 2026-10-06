@@ -2,6 +2,15 @@ import GRDB
 
 /// The journal's migrations. Append-only since the first real Import into the production database.
 enum LudeumSchema {
+    /// The last migration a journal with OpenEmu ROMs can take. `LudeumStore` goes no further until
+    /// `migrate-openemu` has moved them into ROM folders.
+    static let lastWithOpenEmu = "v15 no openemu box art"
+    /// The migration that drops OpenEmu, which waits for `migrate-openemu`.
+    static let withoutOpenEmu = "v16 no openemu"
+
+    /// A migration that drops OpenEmu was asked to run while ROMs are still OpenEmu's.
+    struct OpenEmuROMsRemain: Error {}
+
     /// A Partial date column holds `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, or nothing.
     private static func partialDateCheck(_ column: String) -> String {
         let year = "[0-9][0-9][0-9][0-9]"
@@ -368,6 +377,54 @@ enum LudeumSchema {
         // Covers no longer fall back to OpenEmu's Box art: upload, then libretro, then IGDB.
         migrator.registerMigration("v15 no openemu box art") { db in
             try db.alter(table: "rom") { t in t.drop(column: "openEmuBoxArt") }
+        }
+        // OpenEmu is gone (ADR 0009): every ROM is a ROM folder's, known by its name, so `openEmuPk` goes and
+        // `folderName` is required; Sync's tables go too. Only once no ROM is OpenEmu's: `LudeumStore` holds a
+        // journal at `lastWithOpenEmu` until `migrate-openemu` has run, and this refuses rather than lose a ROM.
+        // Migrations after this one wait with it.
+        migrator.registerMigration(withoutOpenEmu) { db in
+            if try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE openEmuPk IS NOT NULL)")! {
+                throw OpenEmuROMsRemain()
+            }
+            for table in ["syncedCollection", "syncedCover", "openEmuLibrary"] { try db.execute(sql: "DROP TABLE IF EXISTS \(table)") }
+            try db.create(table: "newRom") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("platformId", .integer).notNull().references("platform")
+                t.column("folderName", .text).notNull()
+                t.column("md5", .text)
+                t.column("archived", .boolean).notNull().defaults(to: false)
+                t.column("fileName", .text).notNull()
+                t.column("name", .text)
+                t.column("missing", .boolean).notNull().defaults(to: false)
+                t.column("version", .text)
+                t.column("discNumber", .integer)
+                t.column("discLabel", .text)
+                t.column("gameId", .integer).references("game", onDelete: .cascade)
+                t.column("matchKind", .text).check { ["automatic", "confirmed", "manual"].contains($0) }
+                t.column("matchedAt", .datetime)
+                t.column("suggestedIgdbGameId", .integer)
+                t.column("suggestionKind", .text).check { ["checksum", "name"].contains($0) }
+                t.column("checksumIgdbGameId", .integer)
+                t.column("namesAgree", .boolean)
+                t.column("libretroLookedUp", .boolean).notNull().defaults(to: false)
+                t.column("libretroBoxart", .text)
+                t.column("libretroSnap", .text)
+                t.column("libretroTitle", .text)
+                t.uniqueKey(["platformId", "folderName"])
+                t.check(sql: "(gameId IS NULL) = (matchKind IS NULL) AND (gameId IS NULL) = (matchedAt IS NULL)")
+            }
+            let columns = [
+                "id", "platformId", "folderName", "md5", "archived", "fileName", "name", "missing", "version", "discNumber",
+                "discLabel", "gameId", "matchKind", "matchedAt", "suggestedIgdbGameId", "suggestionKind", "checksumIgdbGameId",
+                "namesAgree", "libretroLookedUp", "libretroBoxart", "libretroSnap", "libretroTitle",
+            ].joined(separator: ", ")
+            try db.execute(
+                sql: """
+                    INSERT INTO newRom (\(columns)) SELECT \(columns) FROM rom;
+                    DROP TABLE rom;
+                    ALTER TABLE newRom RENAME TO rom;
+                    CREATE INDEX rom_on_gameId ON rom(gameId);
+                    """)
         }
         return migrator
     }

@@ -4,10 +4,10 @@ import GRDB
 /// `migrate-openemu`: run once, by hand, to move every OpenEmu ROM the journal has into its Platform's
 /// ROM folder, so the journal no longer needs OpenEmu (ADR 0009). No journal data is lost.
 ///
-/// Order: refuse while OpenEmu is running; plan and check everything (the dry run stops there);
-/// take a `before-migration` backup; copy OpenEmu's battery saves, unchanged, into an archive beside it;
-/// move the files, logging each old path → new path beside the backup; then rewrite the ROM rows and
-/// drop OpenEmu's link tables in one transaction; last, delete OpenEmu's cached Box art and look each
+/// Order: refuse on a journal already migrated, and while OpenEmu is running; plan and check everything (the dry
+/// run stops there); take a `before-migration` backup; copy OpenEmu's battery saves, unchanged, into an archive
+/// beside it; move the files, logging each old path → new path beside the backup; then rewrite the ROM rows in one
+/// transaction, after which the journal drops OpenEmu's columns and link tables; last, delete OpenEmu's cached Box art and look each
 /// moved ROM up in libretro again (a miss keeps its old Box art; a failed lookup never fails the migration).
 /// A failed move stops before that transaction: restore nothing, and the log says what moved. Undo is restoring the backup and moving the logged files back.
 public struct OpenEmuMigration {
@@ -33,6 +33,7 @@ public struct OpenEmuMigration {
 
     /// The dry run: everything the migration would do, and anything that stops it. Changes nothing.
     public func plan() throws -> OpenEmuMigrationPlan {
+        guard try journal.needsOpenEmuMigration() else { throw OpenEmuMigrationError.alreadyMigrated }
         guard !isOpenEmuRunning() else { throw OpenEmuMigrationError.openEmuRunning }
         let snapshotFile = FileManager.default.temporaryDirectory.appending(path: "ludeum-migrate-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: snapshotFile) }
@@ -150,8 +151,9 @@ public struct OpenEmuMigration {
                         "UPDATE rom SET openEmuPk = NULL, platformId = ?, folderName = ?, fileName = ?, name = ?, missing = ? WHERE id = ?",
                     arguments: [rom.platformId, rom.folderName, rom.fileName, rom.folderName, rom.missing, rom.romId])
             }
-            for table in ["syncedCollection", "syncedCover", "openEmuLibrary"] { try db.execute(sql: "DROP TABLE IF EXISTS \(table)") }
         }
+        // No ROM is OpenEmu's now, so the journal takes the migrations it held back: OpenEmu's columns and tables go.
+        try journal.completeMigrations()
         // Box art: OpenEmu's cached copies go, and libretro is looked up again by the new names.
         libretro?.cache.removeImages(under: "openemu")
         let ids = plan.roms.map { String($0.romId) }.joined(separator: ", ")
@@ -244,6 +246,8 @@ public struct OpenEmuMigrationResult: Sendable {
 }
 
 public enum OpenEmuMigrationError: Error, Equatable {
+    /// The journal has no OpenEmu ROMs left: it was migrated already.
+    case alreadyMigrated
     case openEmuRunning
     case blocked(OpenEmuMigrationPlan)
     /// Nothing in the journal changed; the log lists what moved before it failed.

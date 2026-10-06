@@ -22,16 +22,17 @@ import Foundation
         self.archiver = archiver
     }
 
-    /// What can be done to the ROM: nil for a missing ROM, an OpenEmu ROM or another Platform's.
+    /// What can be done to the ROM: nil for a missing ROM or another Platform's than PS2.
     public nonisolated static func action(for rom: LudeumROM) -> Action? {
-        guard !rom.missing, rom.folderName != nil, rom.platformId == ROMPlatform.ps2 else { return nil }
+        guard !rom.missing, rom.platformId == ROMPlatform.ps2 else { return nil }
         return rom.archived ? .unarchive : .archive
     }
 
     /// Queues the ROM's Archive or Unarchive. Once it's done, the Game's ROMs are checked again so
     /// the journal sees the change, then `finished` runs.
     public func start(_ rom: LudeumROM, of game: GameID, finished: @escaping @MainActor () -> Void = {}) {
-        guard let action = Self.action(for: rom), let folder = locator.folder(of: rom), let name = rom.folderName else { return }
+        guard let action = Self.action(for: rom), let folder = locator.folder(of: rom) else { return }
+        let name = rom.folderName
         let archiver = archiver
         let journal = journal
         let folders = locator.romFolders
