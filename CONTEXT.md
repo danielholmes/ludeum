@@ -27,8 +27,12 @@ A folder of a Platform's ROMs that the journal reads directly, for Platforms Ope
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
-A ROM that is still in its library but packed in a form its Platform's Emulator can't open, so it can't be Played until I extract it. It is present, not missing. Whether a ROM is archived depends on the Emulator: a `.7z` that one Emulator opens directly is an ordinary ROM there.
+A ROM that is still in its library but packed in a form its Platform's Emulator can't open, so it can't be Played until I Unarchive it. It is present, not missing. Whether a ROM is archived depends on the Emulator: a `.7z` that one Emulator opens directly is an ordinary ROM there.
 _Avoid_: Compressed, needs extraction (that's the fix, not the state)
+
+**Archive / Unarchive**:
+Packing a ROM folder ROM into a `.7z`, or unpacking it so it can be Played. Either way only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2 ROMs can be Archived or Unarchived so far.
+_Avoid_: Extract, compress, decompress
 
 **Disc**:
 One of several ROMs that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A playlist ROM that loads the Discs belongs to the same Version.
@@ -119,6 +123,10 @@ _Avoid_: Forced platform, hardware mode
 **Play**:
 Opening a Game's present ROM in its Platform's Emulator. Play never changes journal data.
 _Avoid_: Launch, run
+
+**Background task**:
+Long-running work the app does while I carry on, such as Archiving a ROM or refreshing the cache. Tasks queue and run one at a time, and keep running when I move to another screen.
+_Avoid_: Job, operation
 
 ### Working with OpenEmu
 

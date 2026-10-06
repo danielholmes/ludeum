@@ -1,9 +1,9 @@
 import Foundation
 import GRDB
 
-/// A Player's badge colour, from a palette that reads in light and dark.
+/// A Player's badge colour: hues spread around the wheel, each dark enough for white initials.
 public enum PlayerColour: String, Sendable, CaseIterable {
-    case red, orange, yellow, green, mint, teal, cyan, blue, indigo, purple, pink, brown
+    case red, orange, amber, lime, green, teal, sky, blue, violet, purple, pink, brown
 }
 
 /// A Player's fields, for adding or editing one.

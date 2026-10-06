@@ -51,7 +51,7 @@ import Testing
     @Test func aNewPlayerSuggestsTheFirstUnusedColour() throws {
         #expect(try h.journal.nextPlayerColour() == .red)
         try h.journal.addPlayer(PlayerDraft(firstName: "Alex", lastName: "Smith", colour: .red))
-        try h.journal.addPlayer(PlayerDraft(firstName: "Sam", lastName: "Jones", colour: .yellow))
+        try h.journal.addPlayer(PlayerDraft(firstName: "Sam", lastName: "Jones", colour: .amber))
 
         #expect(try h.journal.nextPlayerColour() == .orange)
     }

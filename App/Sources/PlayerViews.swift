@@ -3,20 +3,22 @@ import SwiftUI
 
 extension PlayerColour {
     var color: Color {
-        switch self {
-        case .red: .red
-        case .orange: .orange
-        case .yellow: .yellow
-        case .green: .green
-        case .mint: .mint
-        case .teal: .teal
-        case .cyan: .cyan
-        case .blue: .blue
-        case .indigo: .indigo
-        case .purple: .purple
-        case .pink: .pink
-        case .brown: .brown
-        }
+        let (r, g, b): (Double, Double, Double) =
+            switch self {
+            case .red: (0.85, 0.23, 0.23)
+            case .orange: (0.88, 0.48, 0.12)
+            case .amber: (0.78, 0.62, 0.0)
+            case .lime: (0.42, 0.66, 0.18)
+            case .green: (0.18, 0.62, 0.36)
+            case .teal: (0.08, 0.57, 0.54)
+            case .sky: (0.12, 0.56, 0.77)
+            case .blue: (0.20, 0.38, 0.82)
+            case .violet: (0.36, 0.27, 0.79)
+            case .purple: (0.57, 0.25, 0.76)
+            case .pink: (0.79, 0.24, 0.56)
+            case .brown: (0.54, 0.35, 0.24)
+            }
+        return Color(red: r, green: g, blue: b)
     }
 }
 
