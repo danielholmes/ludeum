@@ -185,7 +185,7 @@ A nice-to-have: built after the rest of v1 works.
 - **How:** SQLite's backup API, written under a temporary name and then renamed, so Dropbox never syncs a half-written file. The cache isn't backed up.
 - **Where:** straight into a Dropbox folder, by default `~/Dropbox/Ludeum Backups/`, changeable in Settings. There's no extra local copy. If the folder isn't there, backups go to `Backups/` in the app's folder and the app shows a warning.
 - **Names:** dated, plus the operation that triggered them, e.g. `2026-10-02T1430-before-import.sqlite`.
-- **How many are kept:** every backup from the last 7 days, then one a day for 30 days, then one a month forever. The database is a few MB, so this costs little and still covers a mistake noticed weeks later.
+- **How many are kept:** every backup from the last 7 days, then one a day for 30 days, then one a month forever. The database is a few MB, so this costs little and still covers a mistake noticed weeks later. The `before-migration` backup, with its battery-save archive and move log, is never pruned.
 - **Restore:** "Restore from backup…" in Settings lists the backups. It backs up the current state first, copies the backup into the journal with the backup API (rather than swapping files under an open WAL database) and relaunches. Only the journal changes.
 
 ### Settings and credentials

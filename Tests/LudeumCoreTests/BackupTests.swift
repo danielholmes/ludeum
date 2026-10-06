@@ -147,6 +147,25 @@ import Testing
         #expect(try backups().all().count == 2)  // today's, and the newer of the two from 40 days ago
     }
 
+    @Test func theBeforeMigrationBackupAndWhatsBesideItAreNeverPruned() throws {
+        let migration = try backups().backUp(h.journal, operation: .beforeMigration)
+        let stem = migration.url.deletingPathExtension()
+        try FileManager.default.createDirectory(at: stem.appendingPathExtension("openemu-battery-saves"), withIntermediateDirectories: true)
+        try Data("a\tb\n".utf8).write(to: stem.appendingPathExtension("moves.log"))
+        h.clock.advance(seconds: 3_600)
+        _ = try backups().backUp(h.journal, operation: .daily)
+        h.clock.advance(days: 400)
+
+        _ = try backups().backUp(h.journal, operation: .daily)
+
+        #expect(try backups().all().map(\.operation).contains(.beforeMigration))
+        #expect(
+            try files(dropbox).filter { $0.hasPrefix("\(stamp)-before-migration") } == [
+                "\(stamp)-before-migration.moves.log", "\(stamp)-before-migration.openemu-battery-saves",
+                "\(stamp)-before-migration.sqlite",
+            ])
+    }
+
     @Test func deletingAGameBacksUpFirst() throws {
         let journal = try LudeumStore(directory: h.directory, clock: h.clock, timeZone: h.timeZone, backups: backups())
         try journal.addPlatform(id: 19, name: "SNES")
