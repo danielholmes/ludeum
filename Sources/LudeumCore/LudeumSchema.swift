@@ -455,6 +455,28 @@ enum LudeumSchema {
         migrator.registerMigration("v19 rom crc") { db in
             try db.alter(table: "rom") { t in t.add(column: "crc", .text) }
         }
+        // Face-off: Battles (`result` says which of `gameAId` and `gameBId` won, or `same`), skipped pairs, and
+        // Kept Ratings, set aside until their Game fights a Battle after `afterBattleId`. Days are local, like Ratings'.
+        migrator.registerMigration("v20 face-off") { db in
+            try db.create(table: "battle") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("gameAId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.column("gameBId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.column("result", .text).notNull().check { ["a", "b", "same"].contains($0) }
+                t.column("day", .text).notNull()
+                t.check(sql: "gameAId <> gameBId")
+            }
+            try db.create(table: "battleSkip") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("gameAId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.column("gameBId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.column("day", .text).notNull()
+            }
+            try db.create(table: "keptRating") { t in
+                t.primaryKey("gameId", .integer).references("game", onDelete: .cascade)
+                t.column("afterBattleId", .integer).notNull()
+            }
+        }
         return migrator
     }
 }

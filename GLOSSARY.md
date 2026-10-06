@@ -57,7 +57,7 @@ _Avoid_: Mapping, association
 ### Journal data
 
 **Rating**:
-My score for a Game, from 0.0 to 10.0 in steps of 0.1. A Game with no Rating is unrated, which is different from a Rating of 0.0. It is the latest entry in the Game's Rating history.
+My score for how much I liked a Game, from 0.0 to 10.0 in steps of 0.1. A Game with no Rating is unrated, which is different from a Rating of 0.0. It is the latest entry in the Game's Rating history.
 _Avoid_: Stars, score
 
 **Rating history**:
@@ -113,6 +113,24 @@ _Avoid_: Box art
 
 **Screenshot**:
 An image of a game being played, or its title screen. From IGDB (several per game) and libretro-thumbnails (one gameplay shot and one title screen).
+
+### Face-off
+
+**Face-off**:
+Checking my Ratings against each other: I'm shown two rated Games at a time, without their Ratings, and pick the one I liked more. Every rated Game takes part. My current Ratings are the starting belief, so pairs go where they're most likely wrong. I can stop at any point and still see its Disagreements.
+_Avoid_: Calibration, ranking, Match (that's a ROM's link to its Game)
+
+**Battle**:
+One pick in a Face-off between two Games: one wins, or they're About the same. A skipped pair isn't a Battle. Battles are kept with the day they were fought and build up across Face-offs, but older ones count for less: half as much after a week, a quarter after two. A Game that becomes unrated keeps its Battles, and they count again if it's rated again. Deleting a Game deletes its Battles.
+_Avoid_: Comparison, Match, Duel, vote
+
+**Disagreement**:
+A rated Game whose Battles consistently place it among different Ratings than the one it has, e.g. one rated 8.0 that beats Games rated up to 7.0 but loses to most rated 7.5 or more, so it belongs around 7.0–7.5. Until it has a Battle on the far side too (a win, or About the same, for one rated too high; a loss for one rated too low), it can only say which way: "belongs below 8.5". Any gap counts, however small, as long as the Battles show it consistently: so does a Game I keep preferring to one with the same Rating, since I could have called them About the same. I resolve it by changing the Rating, or by Keeping it: standing by the Rating, which sets the Disagreement aside until the Game fights another Battle. Battles outlive a Rating change, since they record what I prefer, not what I rated.
+_Avoid_: Conflict, inconsistency
+
+**Upset**:
+A Battle won by the lower-rated Game, or won by either when the two share a Rating. One Upset can't say which of the two Ratings is wrong, so it isn't a Disagreement until more Battles settle it.
+_Avoid_: Disagreement (that's about one Game, and needs more evidence)
 
 ### Playing
 

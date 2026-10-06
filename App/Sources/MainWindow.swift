@@ -85,6 +85,8 @@ struct MainWindow: View {
                     WhatToPlayNextScreen(services: services, selection: $selectedGame)
                 case .topRated:
                     TopRatedScreen(services: services, selection: $selectedGame)
+                case .faceOff:
+                    FaceOffScreen(services: services, selection: $selectedGame)
                 case .yearInReview:
                     YearInReviewScreen(services: services, selection: $selectedGame)
                 case .igdb:

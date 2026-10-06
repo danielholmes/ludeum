@@ -8,6 +8,7 @@ enum Screen: Hashable, Codable {
     case childhood
     case whatToPlayNext
     case topRated
+    case faceOff
     case yearInReview
     /// Searching IGDB to add Games.
     case igdb
@@ -24,6 +25,7 @@ enum Screen: Hashable, Codable {
         case .childhood: "Childhood"
         case .whatToPlayNext: "What to play next"
         case .topRated: "Top-rated"
+        case .faceOff: "Face-off"
         case .yearInReview: "Year in review"
         case .igdb: "IGDB"
         case .list(_, let name): name
@@ -40,6 +42,7 @@ enum Screen: Hashable, Codable {
         case .childhood: "teddybear"
         case .whatToPlayNext: "play.circle"
         case .topRated: "star"
+        case .faceOff: "rectangle.on.rectangle"
         case .yearInReview: "calendar"
         case .igdb: "magnifyingglass"
         case .list: "list.bullet"
@@ -65,6 +68,6 @@ enum Screen: Hashable, Codable {
     }
 
     static let journal: [Screen] = [
-        .library, .finished, .childhood, .whatToPlayNext, .topRated, .yearInReview, .igdb,
+        .library, .finished, .childhood, .whatToPlayNext, .topRated, .faceOff, .yearInReview, .igdb,
     ]
 }
