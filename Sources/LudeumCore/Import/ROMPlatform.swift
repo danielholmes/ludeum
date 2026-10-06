@@ -120,6 +120,9 @@ public struct ROMPlatform: Sendable, Equatable {
             name: "Turbografx-16/PC Engine CD", folderName: "PC Engine CD", readyExtensions: ["m3u", "chd", "cue", "bin"],
             libretroRepo: "NEC_-_PC_Engine_CD_-_TurboGrafx-CD",
             archiving: .intoFolder),
+        // No Emulator yet, so nothing to Compact into.
+        53: .init(
+            name: "MSX2", folderName: "MSX2", readyExtensions: ["rom", "mx2", "mx1", "dsk", "cas"], libretroRepo: "Microsoft_-_MSX2"),
     ]
 
     /// Platforms OpenEmu kept under one system, so a ROM from it may belong on any of them.

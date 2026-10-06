@@ -49,6 +49,15 @@ struct FakeROMFolder {
             ])
     }
 
+    @Test func msx2HasAROMFolderOfRomFilesThoughNoEmulatorYet() throws {
+        let msx2 = try FakeROMFolder(in: directory, platform: 53)
+        let rom = try msx2.add("Metal Gear (Europe).rom")
+
+        #expect(try msx2.folder.scan() == [FolderROMFile(name: "Metal Gear (Europe)", ready: rom, archive: nil)])
+        #expect(ROMPlatform.all[53]?.folderName == "MSX2")
+        #expect(Emulator.of(platformId: 53) == nil)
+    }
+
     @Test func otherFilesAndSubfoldersAreIgnored() throws {
         let ps2 = try FakeROMFolder(in: directory)
         try ps2.add(".DS_Store")

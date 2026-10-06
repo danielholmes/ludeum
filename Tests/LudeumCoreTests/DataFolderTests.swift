@@ -57,7 +57,7 @@ import Testing
         let folders = ludeum.romFolders
         let roms = data.appending(path: "ROMs").path(percentEncoded: false)
 
-        #expect(folders.count == 19)
+        #expect(folders.count == 20)
         #expect(folders.first { $0.platformId == 22 }?.url.path(percentEncoded: false) == "\(roms)/Game Boy Color/")
         #expect(folders.first { $0.platformId == 99 }?.url.path(percentEncoded: false) == "\(roms)/Famicom/")
         #expect(folders.first { $0.platformId == ROMPlatform.ps2 }?.url.path(percentEncoded: false) == "\(roms)/PS2/")
