@@ -274,6 +274,37 @@ struct FakeROMFolder {
         #expect(try j.journal.roms(of: game).map(\.missing) == [false])
     }
 
+    @Test func aROMUnarchivedWhileTheImportRanStaysAsItWasCheckedThen() async throws {
+        let game = try await okamiInTheJournal()
+        let id: Int64 = try #require(try rom("Okami (USA)")?["id"])
+        let ps2 = ps2
+        let journal = j.journal
+
+        // An Unarchive finishing after the Import read the ROM folder, which checks its ROM again.
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: journal, backups: nil).run(romFolders: [ps2.folder]) {
+            _ = try? ps2.add("Okami (USA).iso")
+            try? ps2.remove("Okami (USA).7z")
+            try? journal.checkROMAgain(id, in: ps2.folder)
+        }
+
+        let roms = try journal.roms(of: game)
+        #expect(roms.map(\.archived) == [false])
+        #expect(roms.map(\.fileName) == ["Okami (USA).iso"])
+    }
+
+    @Test func aROMThatWentMissingWhileTheImportRanStaysMissing() async throws {
+        let game = try await okamiInTheJournal()
+        let ps2 = ps2
+        let journal = j.journal
+
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: journal, backups: nil).run(romFolders: [ps2.folder]) {
+            try? ps2.remove("Okami (USA).7z")
+            try? journal.checkROMsAgain(game, in: [ps2.folder])
+        }
+
+        #expect(try journal.roms(of: game).map(\.missing) == [true])
+    }
+
     @Test func checkingAGameAgainUpdatesOnlyItsROMs() async throws {
         let game = try await okamiInTheJournal()
         try ps2.add("Okami (USA).iso")

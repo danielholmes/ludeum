@@ -134,11 +134,21 @@ struct KnownFolderROM {
     let id: Int64
     let platformId: Int64
     let name: String
-    let missing: Bool
-    let archived: Bool
     let gameId: GameID?
     /// Whether it has an MD5 or a CRC32 to be looked up by.
     let hasChecksum: Bool
+    /// What the journal last read from its files.
+    let files: Files
+    var missing: Bool { files.missing }
+    var archived: Bool { files.archived }
+
+    struct Files: Equatable {
+        let missing: Bool
+        let archived: Bool
+        let fileName: String
+        let needsPlaylist: Bool
+        let inBothForms: Bool
+    }
 }
 
 /// A Matcher result with the IGDB name an Automatic Match gives its Game.
@@ -168,19 +178,24 @@ struct ImportPlan {
 
 extension LudeumStore {
     func knownFolderROMs() throws -> [KnownFolderROM] {
-        try db.read { db in
-            try Row.fetchAll(
-                db,
-                sql: """
-                    SELECT id, platformId, folderName, missing, archived, gameId, md5 IS NOT NULL OR crc IS NOT NULL AS hasChecksum
-                    FROM rom WHERE folderName IS NOT NULL ORDER BY id
-                    """
-            )
-            .map {
-                KnownFolderROM(
-                    id: $0["id"], platformId: $0["platformId"], name: $0["folderName"], missing: $0["missing"], archived: $0["archived"],
-                    gameId: $0["gameId"], hasChecksum: $0["hasChecksum"])
-            }
+        try db.read(Self.knownFolderROMs)
+    }
+
+    private static func knownFolderROMs(_ db: Database) throws -> [KnownFolderROM] {
+        try Row.fetchAll(
+            db,
+            sql: """
+                SELECT id, platformId, folderName, missing, archived, gameId, md5 IS NOT NULL OR crc IS NOT NULL AS hasChecksum,
+                    fileName, needsPlaylist, inBothForms
+                FROM rom WHERE folderName IS NOT NULL ORDER BY id
+                """
+        )
+        .map {
+            KnownFolderROM(
+                id: $0["id"], platformId: $0["platformId"], name: $0["folderName"], gameId: $0["gameId"], hasChecksum: $0["hasChecksum"],
+                files: KnownFolderROM.Files(
+                    missing: $0["missing"], archived: $0["archived"], fileName: $0["fileName"], needsPlaylist: $0["needsPlaylist"],
+                    inBothForms: $0["inBothForms"]))
         }
     }
 
@@ -191,12 +206,15 @@ extension LudeumStore {
         return try db.write { db in
             var result = ImportResult()
             try db.execute(sql: "INSERT INTO import (startedAt, isFirst) VALUES (?, 0)", arguments: [now])
+            // A ROM whose files were read again while the Import ran (its Archive finished, say) stays as it was read
+            // then: the Import's own reading of it is the older one.
+            let filesNow = Dictionary(uniqueKeysWithValues: try Self.knownFolderROMs(db).map { ($0.id, $0.files) })
             // Extracting or archiving is silent; coming back or going missing is in the summary.
-            for (known, file) in plan.seen {
+            for (known, file) in plan.seen where filesNow[known.id] == known.files {
                 if known.missing { result.returned.append(ImportedROM(romName: known.name, game: known.gameId)) }
                 try Self.setFolderROM(db, known.id, to: file)
             }
-            for known in plan.gone {
+            for known in plan.gone where filesNow[known.id] == known.files {
                 try Self.setFolderROM(db, known.id, to: nil)
                 result.goneMissing.append(ImportedROM(romName: known.name, game: known.gameId))
             }
