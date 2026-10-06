@@ -108,6 +108,7 @@ struct IGDBSearchView: View {
                 TextField("Search IGDB", text: $query, prompt: Text("Search IGDB, then press Return")).textFieldStyle(.roundedBorder)
                     .onSubmit(run)
                 Button("Search", action: run).disabled(query.trimmed.isEmpty && filters.isEmpty)
+                if searching { ProgressView().controlSize(.small) }
                 if linking {
                     Text(platformFilter?.name ?? "").foregroundStyle(.secondary)
                 } else {
@@ -141,7 +142,6 @@ struct IGDBSearchView: View {
                     }
                     .fixedSize()
                 }
-                if searching { ProgressView().controlSize(.small) }
             }
             if !filters.isEmpty { SearchFilterPills(filters: $filters) }
             if let error { Text(error).foregroundStyle(.red) }
