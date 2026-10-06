@@ -37,6 +37,11 @@ extension LudeumStore {
         }
     }
 
+    /// Forgets every missing ROM of the Game at once, as `forgetROM(_:)` does each; its present ROMs stay.
+    public func forgetMissingROMs(of game: GameID) throws {
+        try db.write { db in try db.execute(sql: "DELETE FROM rom WHERE gameId = ? AND missing", arguments: [game]) }
+    }
+
     private func hasPresentROMs(_ db: Database, _ game: GameID) throws -> Bool {
         try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ? AND NOT missing)", arguments: [game])!
     }

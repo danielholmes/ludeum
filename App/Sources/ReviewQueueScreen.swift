@@ -18,6 +18,7 @@ struct ReviewQueueScreen: View {
         case duplicateVersions = "Duplicate Versions"
         case noPlaylist = "No playlist"
         case missingROMs = "Missing ROMs"
+        case oldMissingROMs = "Old missing ROMs"
         case notCompacted = "Not compacted"
         var id: Self { self }
     }
@@ -83,6 +84,18 @@ struct ReviewQueueScreen: View {
                             }
                             .tag(m.id)
                         }
+                    } else if kind == .oldMissingROMs {
+                        ForEach(items.oldMissingROMs) { m in
+                            VStack(alignment: .leading) {
+                                Text(m.game.name)
+                                Text(
+                                    "\(m.missing.count) old missing ROM\(m.missing.count == 1 ? "" : "s") · "
+                                        + "\(m.present.count) present"
+                                )
+                                .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .tag(m.id)
+                        }
                     } else {
                         ForEach(romItems) { item in
                             VStack(alignment: .leading) {
@@ -101,7 +114,9 @@ struct ReviewQueueScreen: View {
                 if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
                     DuplicateVersionsDetail(item: d, checkAgain: checkAgain)
                 } else if kind == .missingROMs, let m = items.missingROMs.first(where: { $0.id == selection }) {
-                    MissingROMsDetail(
+                    MissingROMsDetail(item: m, checkAgain: checkAgain, showGame: { shownGame = m.id })
+                } else if kind == .oldMissingROMs, let m = items.oldMissingROMs.first(where: { $0.id == selection }) {
+                    OldMissingROMsDetail(
                         services: services, item: m, checkAgain: checkAgain, showGame: { shownGame = m.id }, failed: { error = $0 })
                 } else if kind == .noPlaylist, let item = items.noPlaylist.first(where: { $0.id == selection }) {
                     NoPlaylistDetail(services: services, item: item, failed: { error = $0 })
@@ -149,7 +164,7 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions
         case .name: items.nameSuggestions
         case .noSuggestion: items.noSuggestion
-        case .duplicateVersions, .noPlaylist, .missingROMs, .notCompacted, nil: []
+        case .duplicateVersions, .noPlaylist, .missingROMs, .oldMissingROMs, .notCompacted, nil: []
         }
     }
 
@@ -162,6 +177,7 @@ struct ReviewQueueScreen: View {
         case .duplicateVersions: items.duplicateVersions.count
         case .noPlaylist: items.noPlaylist.count
         case .missingROMs: items.missingROMs.count
+        case .oldMissingROMs: items.oldMissingROMs.count
         case .notCompacted: items.notCompacted.count
         }
     }
@@ -172,6 +188,7 @@ struct ReviewQueueScreen: View {
         case .duplicateVersions: items.duplicateVersions.map(\.id)
         case .noPlaylist: items.noPlaylist.map(\.id)
         case .missingROMs: items.missingROMs.map(\.id)
+        case .oldMissingROMs: items.oldMissingROMs.map(\.id)
         case .notCompacted: items.notCompacted.map(\.id)
         default: romItems.map(\.romId)
         }
@@ -693,11 +710,35 @@ private struct NoPlaylistDetail: View {
     }
 }
 
-/// A Missing ROMs item: a Game with ROMs gone from its ROM folder. I put a file back and Check again, or Forget the
-/// ROM; when they're all gone, I can delete the Game instead.
+/// A Missing ROMs item: a Game whose ROMs are all gone from its ROM folder. I put a file back and Check again, or
+/// delete the Game.
 private struct MissingROMsDetail: View {
-    let services: Services
     let item: MissingROMsGame
+    let checkAgain: () -> Void
+    let showGame: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                Text(item.game.name).font(.title2).bold()
+                Text("Its ROMs are all missing from its ROM folder. Put one back, then Check again, or delete the Game.")
+                    .foregroundStyle(.secondary)
+            }
+            Section("Missing ROMs") { ForEach(item.roms) { ROMRow(rom: $0) } }
+            HStack {
+                Button("Show Game", action: showGame)
+                Button("Check again", action: checkAgain)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// An Old missing ROMs item: a Game that still has a present ROM, with missing ones left over. Its files, present and
+/// missing, side by side, so I can Forget the old ones (one at a time, or all), or put a file back and Check again.
+private struct OldMissingROMsDetail: View {
+    let services: Services
+    let item: OldMissingROMsGame
     let checkAgain: () -> Void
     let showGame: () -> Void
     let failed: (String?) -> Void
@@ -707,26 +748,27 @@ private struct MissingROMsDetail: View {
             Section {
                 Text(item.game.name).font(.title2).bold()
                 Text(
-                    item.allMissing
-                        ? "Its ROMs are all missing from its ROM folder. Put one back, then Check again, forget it, or delete the Game."
-                        : "Some of its ROMs are missing from its ROM folder. Put one back, then Check again, or forget it."
+                    "It still has \(item.present.count == 1 ? "a ROM" : "ROMs") in its ROM folder, so these missing ones are "
+                        + "likely old: a file renamed or replaced. Forget them, or put one back, then Check again."
                 )
                 .foregroundStyle(.secondary)
             }
-            Section("Missing ROMs") {
-                ForEach(item.roms) { rom in
+            Section("Present") { ForEach(item.present) { ROMRow(rom: $0) } }
+            Section("Missing") {
+                ForEach(item.missing) { rom in
                     HStack {
-                        VStack(alignment: .leading) {
-                            Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
-                            Text(rom.fileName).font(.caption).textSelection(.enabled)
-                        }
+                        ROMRow(rom: rom)
                         Spacer()
-                        Button("Forget") { forget(rom) }
+                        Button("Forget") { forget { try $0.forgetROM(rom.id) } }
                             .help("Stop showing this missing ROM. If its file comes back, an Import finds it again.")
                     }
                 }
             }
             HStack {
+                Button(item.missing.count == 1 ? "Forget it" : "Forget all \(item.missing.count)") {
+                    forget { try $0.forgetMissingROMs(of: item.game.id) }
+                }
+                .help("Stop showing its missing ROMs. Its present ones stay.")
                 Button("Show Game", action: showGame)
                 Button("Check again", action: checkAgain)
             }
@@ -734,15 +776,27 @@ private struct MissingROMsDetail: View {
         .formStyle(.grouped)
     }
 
-    private func forget(_ rom: LudeumROM) {
+    private func forget(_ write: (LudeumStore) throws -> Void) {
         guard let journal = services.journal else { return }
         do {
-            try journal.forgetROM(rom.id)
+            try write(journal)
             failed(nil)
         } catch {
             failed(journalErrorText(error))
         }
         services.changes.changed()
+    }
+}
+
+/// A ROM by its Version text, then its file name.
+private struct ROMRow: View {
+    let rom: LudeumROM
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
+            Text(rom.fileName).font(.caption).textSelection(.enabled)
+        }
     }
 }
 

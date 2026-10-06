@@ -33,14 +33,21 @@ public struct DuplicateVersionsGame: Sendable, Equatable, Identifiable {
     public var id: GameID { game.id }
 }
 
-/// A Game with missing ROMs: each waits until its file comes back or I forget it. When they're all missing, it
-/// can't be Played, and I can delete the Game instead.
+/// A Game whose ROMs are all missing: it can't be Played until a file comes back, or I delete it.
 public struct MissingROMsGame: Sendable, Equatable, Identifiable {
     public let game: Game
-    /// Its missing ROMs.
+    /// Its ROMs, all missing.
     public let roms: [LudeumROM]
-    /// It has no present ROM.
-    public let allMissing: Bool
+    public var id: GameID { game.id }
+}
+
+/// A Game that still has a present ROM, with missing ones left over (a file renamed or replaced, which Import found
+/// as a new ROM): I forget them, or put a file back.
+public struct OldMissingROMsGame: Sendable, Equatable, Identifiable {
+    public let game: Game
+    public let missing: [LudeumROM]
+    /// What it still has, to set the missing ones against.
+    public let present: [LudeumROM]
     public var id: GameID { game.id }
 }
 
@@ -73,6 +80,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var noSuggestion: [ReviewItem] = []
     public var duplicateVersions: [DuplicateVersionsGame] = []
     public var missingROMs: [MissingROMsGame] = []
+    public var oldMissingROMs: [OldMissingROMsGame] = []
     public var noPlaylist: [NoPlaylistItem] = []
     /// Bulk-compactable.
     public var notCompacted: [NotCompactedROM] = []
@@ -82,7 +90,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     /// The sidebar badge.
     public var count: Int {
         namesAgree.count + checksumSuggestions.count + nameSuggestions.count + noSuggestion.count + duplicateVersions.count
-            + noPlaylist.count + missingROMs.count + notCompacted.count
+            + noPlaylist.count + missingROMs.count + oldMissingROMs.count + notCompacted.count
     }
 }
 
@@ -122,11 +130,18 @@ extension LudeumStore {
         let missing = try db.read { db in
             try GameID.fetchAll(db, sql: "SELECT DISTINCT gameId FROM rom WHERE gameId IS NOT NULL AND missing")
         }
-        items.missingROMs = try missing.map { game in
-            let roms = try roms(of: game)
-            return MissingROMsGame(game: try self.game(game), roms: roms.filter(\.missing), allMissing: roms.allSatisfy(\.missing))
+        for id in missing {
+            let roms = try roms(of: id)
+            let game = try self.game(id)
+            let present = roms.filter { !$0.missing }
+            if present.isEmpty {
+                items.missingROMs.append(MissingROMsGame(game: game, roms: roms))
+            } else {
+                items.oldMissingROMs.append(OldMissingROMsGame(game: game, missing: roms.filter(\.missing), present: present))
+            }
         }
-        .sorted { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
+        items.missingROMs.sort { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
+        items.oldMissingROMs.sort { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
         items.noPlaylist = try db.read { db in
             guard try Self.hasNeedsPlaylist(db) else { return [] }
             return try Row.fetchAll(
