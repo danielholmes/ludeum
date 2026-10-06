@@ -4,7 +4,13 @@ import LudeumCore
 /// Decoded Covers and the Library's genres and themes, kept in memory so screens open without re-reading
 /// the cache. Covers are dropped when any Cover changes; genres when the journal does.
 @MainActor final class MemoryCache {
-    private var covers: [GameID: NSImage?] = [:]
+    /// Tile-sized Covers, up to a limit: past it, or when the system is short of memory, some are dropped and decoded
+    /// again when next shown.
+    private let covers: NSCache<NSNumber, DecodedCover> = {
+        let covers = NSCache<NSNumber, DecodedCover>()
+        covers.totalCostLimit = 256 << 20
+        return covers
+    }()
     private var coverRevision = -1
     private var facts: [Int64: GameFacts]?
     private var factsRevision = -1
@@ -14,15 +20,17 @@ import LudeumCore
     /// A Game's Cover if it's been loaded since the last Cover change: `.some(nil)` is the placeholder.
     func cover(_ game: GameID, revision: Int) -> NSImage?? {
         if revision != coverRevision {
-            covers = [:]
+            covers.removeAllObjects()
             coverRevision = revision
         }
-        return covers[game]
+        return covers.object(forKey: NSNumber(value: game)).map(\.image)
     }
 
     func store(cover: NSImage?, for game: GameID, revision: Int) {
         guard revision == coverRevision else { return }
-        covers[game] = .some(cover)
+        // Its cost is its decoded size: four bytes a pixel.
+        let bytes = cover.map { Int($0.size.width * $0.size.height) * 4 } ?? 0
+        covers.setObject(DecodedCover(image: cover), forKey: NSNumber(value: game), cost: bytes)
     }
 
     /// Every linked Game's IGDB genres and themes, read once per journal revision. A load that fails isn't kept, so the
@@ -53,4 +61,10 @@ import LudeumCore
         }
         return loaded
     }
+}
+
+/// A Game's decoded Cover, or its placeholder (no image), as `NSCache` holds it.
+private final class DecodedCover {
+    let image: NSImage?
+    init(image: NSImage?) { self.image = image }
 }

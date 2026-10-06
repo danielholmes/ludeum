@@ -29,7 +29,7 @@ struct CoverView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .onTapGesture { enlarged = true }
                     .help("Show the Cover full size")
-                    .sheet(isPresented: $enlarged) { EnlargedCover(image: image, name: name) }
+                    .sheet(isPresented: $enlarged) { EnlargedCover(services: services, game: game, name: name, tileSized: image) }
             } else {
                 tile
             }
@@ -60,42 +60,69 @@ struct CoverView: View {
     }
 }
 
-/// The Cover as large as the screen allows; a click or Escape closes it.
+/// The Cover as large as the screen allows; a click or Escape closes it. It opens on the tile-sized image and swaps in
+/// the full one once that's read.
 private struct EnlargedCover: View {
-    let image: NSImage
+    let services: Services
+    let game: GameID
     let name: String
+    let tileSized: NSImage
+    @State private var full: NSImage?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let screen = NSScreen.main?.visibleFrame.size ?? CGSize(width: 1200, height: 900)
-        Image(nsImage: image).resizable().interpolation(.high).antialiased(true).scaledToFit()
+        Image(nsImage: full ?? tileSized).resizable().interpolation(.high).antialiased(true).scaledToFit()
             .frame(maxWidth: screen.width * 0.9, maxHeight: screen.height * 0.9)
             .accessibilityLabel(name)
             .contentShape(Rectangle())
             .onTapGesture { dismiss() }
             .onExitCommand { dismiss() }
+            .task { full = await loadFullCover(services, game) }
     }
 }
 
-/// The Cover's image, or nil for the placeholder (including when it couldn't be fetched).
+/// The largest a Cover tile gets, in pixels on a Retina display: the Library's biggest, 300 by 400 points.
+private let coverTilePixels = 800
+
+/// The Cover's image at tile size, or nil for the placeholder (including when it couldn't be fetched).
 @MainActor func loadCover(_ services: Services, _ game: GameID) async -> NSImage? {
     let revision = services.changes.coverRevision
     if let cached = services.memory.cover(game, revision: revision) { return cached }
     guard let source = try? await services.covers?.cover(for: game) else { return nil }  // a failed download: try again later
-    // Decode off the main thread.
+    // Decoded off the main thread, there and then rather than at first draw, and no larger than a tile shows it.
     let image = await Task.detached(priority: .userInitiated) { () -> NSImage? in
-        let image: NSImage? =
-            switch source {
-            case .upload(let cover): NSImage(data: cover.jpeg)
-            case .libretro(let file, _), .igdb(let file, _): NSImage(contentsOf: file)
-            case .placeholder: nil
-            }
-        // Force the decode now rather than at first draw.
-        _ = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        return image
+        guard let imageSource = coverImageSource(source) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: coverTilePixels,
+        ]
+        guard let tile = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else { return nil }
+        return NSImage(cgImage: tile, size: NSSize(width: tile.width, height: tile.height))
     }.value
     services.memory.store(cover: image, for: game, revision: revision)
     return image
+}
+
+/// The Cover's image as it is, for looking at full size. Not kept: only tile-sized Covers are.
+@MainActor func loadFullCover(_ services: Services, _ game: GameID) async -> NSImage? {
+    guard let source = try? await services.covers?.cover(for: game) else { return nil }
+    return await Task.detached(priority: .userInitiated) { () -> NSImage? in
+        guard let imageSource = coverImageSource(source), let image = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+            return nil
+        }
+        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+    }.value
+}
+
+private nonisolated func coverImageSource(_ source: CoverSource) -> CGImageSource? {
+    switch source {
+    case .upload(let cover): CGImageSourceCreateWithData(cover.jpeg as CFData, nil)
+    case .libretro(let file, _), .igdb(let file, _): CGImageSourceCreateWithURL(file as CFURL, nil)
+    case .placeholder: nil
+    }
 }
 
 /// Game detail's Cover, with Upload, Replace and Remove (by picker or drag-and-drop) on any Game.
