@@ -9,7 +9,7 @@ public struct LibraryFacts: Sendable {
 
     /// Each Game's facts, by IGDB game id. Games IGDB doesn't know are absent.
     public func byGame(_ igdbGameIDs: [Int64]) async throws -> [Int64: GameFacts] {
-        let records = try await igdb.games(ids: igdbGameIDs.map(Int.init))
+        let records = try await igdb.cachedGames(ids: igdbGameIDs.map(Int.init))
         return Dictionary(uniqueKeysWithValues: records.map { (Int64($0.key), $0.value.facts) })
     }
 }

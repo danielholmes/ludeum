@@ -28,6 +28,19 @@ import Testing
         #expect(facts[6]?.genres == [])
     }
 
+    @Test func recordsThatHaveExpiredStillGiveTheirFactsWithoutWaitingOnIGDB() async throws {
+        _ = try await LibraryFacts(igdb: h.igdb).byGame([1103, 6])
+        h.clock.advance(days: 61)
+        h.internet.resetSent()
+
+        let facts = try await LibraryFacts(igdb: h.igdb).byGame([1103, 6])
+        let detail = try await h.igdb.facts(igdbGameId: 1103)
+
+        #expect(facts[1103]?.genres == ["Platform", "Adventure"])
+        #expect(detail.genres == ["Platform", "Adventure"])
+        #expect(h.internet.sent.isEmpty)
+    }
+
     @Test func theLibraryNarrowsToOneGenreOrThemeAndUnlinkedGamesNeverMatch() async throws {
         for (id, name) in [(1103, "Super Metroid"), (1070, "Super Mario World"), (5, "Chrono Trigger")] {
             try j.journal.addGame(platformId: 19, name: name, igdbGameId: Int64(id), igdbName: name)

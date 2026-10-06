@@ -119,6 +119,33 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(file.lastPathComponent == "co1.jpg")
     }
 
+    @Test func aCoverWhoseIGDBRecordHasExpiredShowsWithoutWaitingOnIGDB() async throws {
+        let game = try await superMetroid([])
+        _ = try await covers.cover(for: game)
+        h.clock.advance(days: 61)
+        h.internet.resetSent()
+
+        guard case .igdb(_, "co1") = try await covers.cover(for: game) else {
+            Issue.record("expected IGDB's Cover art")
+            return
+        }
+        #expect(h.internet.sent.isEmpty)
+    }
+
+    @Test func aRecordFetchedAgainGivesItsNewCoverArt() async throws {
+        let game = try await superMetroid([])
+        _ = try await covers.cover(for: game)
+        h.internet.addGame(1103, "Super Metroid", fields: ["cover": ["image_id": "co2"]])
+        h.clock.advance(days: 61)
+
+        _ = try await h.igdb.games(ids: [1103])
+
+        guard case .igdb(_, "co2") = try await covers.cover(for: game) else {
+            Issue.record("expected the new Cover art")
+            return
+        }
+    }
+
     @Test func aGameWithNoROMShowsIGDBsCoverArtAndAHandMadeOneAPlaceholder() async throws {
         let pc = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
         let hand = try j.journal.addGameByHand(name: "Hermano", platformId: 19)

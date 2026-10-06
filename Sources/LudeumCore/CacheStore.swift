@@ -44,9 +44,11 @@ public final class CacheStore: Sendable {
     /// so an interrupted run resumes where it stopped. If a batch fails and every item in
     /// it has an expired copy, those copies are served instead. Items `fetch` doesn't
     /// return are absent from the result and not cached. With `servesStale` false (a refresh),
-    /// a failed batch always throws.
+    /// a failed batch always throws. With `usesExpired`, a copy counts as fresh however old it is, so only what isn't
+    /// cached at all is fetched: for what a screen is waiting on, as the launch refresh fetches expired copies again.
     func resolve<Item: Hashable>(
         _ items: [Item], key: (Item) -> String, maxAge: TimeInterval, batchSize: Int, servesStale: Bool = true,
+        usesExpired: Bool = false,
         fetch: ([Item]) async throws -> [Item: Data]
     ) async throws -> [Item: Data] {
         let unique = Array(Set(items))
@@ -56,7 +58,11 @@ public final class CacheStore: Sendable {
         var stale: [Item: Data] = [:]
         for item in unique {
             guard let entry = cached[key(item)] else { continue }
-            if now.timeIntervalSince(entry.fetchedAt) <= maxAge { result[item] = entry.payload } else { stale[item] = entry.payload }
+            if usesExpired || now.timeIntervalSince(entry.fetchedAt) <= maxAge {
+                result[item] = entry.payload
+            } else {
+                stale[item] = entry.payload
+            }
         }
         for batch in unique.filter({ result[$0] == nil }).chunked(batchSize) {
             do {

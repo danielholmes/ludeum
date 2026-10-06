@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 public struct IGDBCredentials: Sendable, Equatable {
     public let clientID: String
@@ -89,6 +90,8 @@ public final class IGDBClient: Sendable {
     let maxAge: TimeInterval
     let api: Throttle
     let tokenStore: (any SecretStore)?
+    /// Each game's Cover art image id (nil for none) as its cached record last gave it.
+    private let coverImageIDs = Mutex<[Int: String?]>([:])
 
     /// With a `tokenStore` (the app's Keychain), the Twitch token is kept there; otherwise in the cache.
     public init(
@@ -110,13 +113,32 @@ public final class IGDBClient: Sendable {
         try await games(ids: ids, servesStale: true)
     }
 
-    func games(ids: [Int], servesStale: Bool) async throws -> [Int: IGDBGame] {
+    /// Full records, each from the cache if it's there at all, however old, and fetched only if it isn't. For what a
+    /// screen is waiting on (a Cover, the Library's facts, Game detail), which shouldn't wait on IGDB for a record it
+    /// has: the launch refresh fetches expired ones again.
+    public func cachedGames(ids: [Int]) async throws -> [Int: IGDBGame] {
+        try await games(ids: ids, servesStale: true, usesExpired: true)
+    }
+
+    func games(ids: [Int], servesStale: Bool, usesExpired: Bool = false) async throws -> [Int: IGDBGame] {
         let payloads = try await cache.resolve(
-            ids, key: Self.gameKey, maxAge: maxAge, batchSize: Self.maxBatch, servesStale: servesStale
+            ids, key: Self.gameKey, maxAge: maxAge, batchSize: Self.maxBatch, servesStale: servesStale, usesExpired: usesExpired
         ) { batch in
-            try await fetchGames(ids: batch).mapValues { try $0.record.encoded() }
+            let fetched = try await fetchGames(ids: batch).mapValues { try $0.record.encoded() }
+            // Their Cover art may have changed.
+            coverImageIDs.withLock { known in for id in batch { known[id] = nil } }
+            return fetched
         }
         return try payloads.reduce(into: [:]) { $0[$1.key] = IGDBGame(id: $1.key, record: try JSONValue.decode($1.value)) }
+    }
+
+    /// The image id of a game's Cover art, from its cached record, however old. It's remembered until the record is
+    /// fetched again, so showing a Cover reads its whole record once, not every time.
+    public func coverImageID(game id: Int) async throws -> String? {
+        if let known = coverImageIDs.withLock({ $0[id] }) { return known }
+        let imageID = try await cachedGames(ids: [id])[id]?.record["cover"]?["image_id"]?.string
+        coverImageIDs.withLock { $0[id] = .some(imageID) }
+        return imageID
     }
 
     /// IGDB game ids matching each name search on its platform, best match first.

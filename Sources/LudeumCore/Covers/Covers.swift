@@ -123,9 +123,7 @@ public struct Covers: Sendable {
         if let libretro, let path = roms.compactMap({ $0 }).first {
             return .libretro(try await libretro.image(path), path: path)
         }
-        if let igdb, let id = try journal.game(game).igdbGameId.map(Int.init),
-            let imageID = try await igdb.games(ids: [id])[id]?.record["cover"]?["image_id"]?.string
-        {
+        if let igdb, let id = try journal.game(game).igdbGameId.map(Int.init), let imageID = try await igdb.coverImageID(game: id) {
             return .igdb(try await igdb.cover(imageID: imageID), imageID: imageID)
         }
         return .placeholder
