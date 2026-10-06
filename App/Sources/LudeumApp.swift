@@ -21,7 +21,7 @@ struct LudeumApp: App {
             }
             // AppKit won't quit while a sheet is attached, so Quit takes the sheet down first and quits once it's gone.
             .sheet(
-                isPresented: Binding(get: { launch.dataFolderMissing != nil && !launch.quitting }, set: { _ in }),
+                isPresented: Binding(get: { launch.blocked && !launch.quitting }, set: { _ in }),
                 onDismiss: {
                     guard launch.quitting else { return }
                     NSApp.terminate(nil)
@@ -29,7 +29,7 @@ struct LudeumApp: App {
                     launch.quitting = false
                 }
             ) {
-                DataFolderSheet(launch: launch)
+                if launch.dataFolderMissing != nil { DataFolderSheet(launch: launch) } else { JournalSheet(launch: launch) }
             }
             // The Data folder can go (Dropbox quit, the link broken) while Ludeum is open.
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -43,7 +43,7 @@ struct LudeumApp: App {
             TrimmedMenus()
             CommandGroup(replacing: .appTermination) {
                 Button("Quit Ludeum") {
-                    if launch.dataFolderMissing != nil { launch.quitting = true } else { NSApp.terminate(nil) }
+                    if launch.blocked { launch.quitting = true } else { NSApp.terminate(nil) }
                 }
                 .keyboardShortcut("q")
             }
@@ -64,13 +64,18 @@ struct LudeumApp: App {
 }
 
 /// Nothing works until the Data folder is found (ADR 0010): the journal isn't opened, and no Import or backup runs,
-/// until it is. Once it's running, losing the Data folder blocks the window again until it's back.
+/// until it is. Once it's running, losing the Data folder blocks the window again until it's back. A journal that can't be
+/// opened blocks the window too: an empty Library in its place would look as if the journal were lost.
 @Observable @MainActor final class AppLaunch {
     let settings = AppSettings()
     /// Nil until the Data folder has been found.
     private(set) var running: Running?
     /// Shown in a sheet that blocks the window while it's set.
     private(set) var dataFolderMissing: DataFolderMissing?
+    /// Why the journal couldn't be opened. Shown in a sheet that blocks the window while it's set.
+    private(set) var journalError: String?
+    /// A sheet is blocking the window.
+    var blocked: Bool { dataFolderMissing != nil || journalError != nil }
     /// Set by the sheet's Quit, which takes the sheet down so the app can quit.
     var quitting = false
 
@@ -92,12 +97,24 @@ struct LudeumApp: App {
             dataFolderMissing = error
             return
         }
-        guard running == nil else { return }
+        // A journal that wouldn't open is only tried again when asked: opening it can take a backup first.
+        guard running == nil, journalError == nil else { return }
         // What an interrupted Archive or Unarchive left behind.
         for folder in settings.romFolders { ROMArchiver.cleanUp(folder) }
-        let journal = try? LudeumStore(directory: settings.folder.url, backups: settings.backups())
+        let journal: LudeumStore
+        do {
+            journal = try LudeumStore(directory: settings.folder.url, backups: settings.backups())
+        } catch {
+            journalError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+            return
+        }
         let services = Services(settings: settings, journal: journal)
         running = Running(services: services, importModel: ImportModel(services: services))
+    }
+
+    func openJournalAgain() {
+        journalError = nil
+        checkDataFolder()
     }
 }
 
@@ -117,6 +134,37 @@ struct DataFolderSheet: View {
                 Button("Check again") {
                     launch.checkDataFolder()
                     checked = true
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding()
+        .frame(width: 520)
+        .interactiveDismissDisabled()
+    }
+}
+
+/// The journal can't be opened: says why, and tries again. It can't be dismissed any other way.
+struct JournalSheet: View {
+    let launch: AppLaunch
+    @State private var tried = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Ludeum can't open its journal", systemImage: "exclamationmark.triangle").font(.headline)
+            Text(
+                "The journal is journal.sqlite in \(launch.settings.folder.url.path(percentEncoded: false)), and its backups are in \(launch.settings.folder.backups.path(percentEncoded: false))."
+            )
+            .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+            Text(launch.journalError ?? "").textSelection(.enabled).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                if tried { Text("Still won't open.").foregroundStyle(.secondary) }
+                Spacer()
+                Button("Quit") { launch.quitting = true }
+                Button("Try again") {
+                    launch.openJournalAgain()
+                    tried = true
                 }
                 .keyboardShortcut(.defaultAction)
             }
