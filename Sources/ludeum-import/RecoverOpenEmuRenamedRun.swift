@@ -77,7 +77,13 @@ private func describe(_ plan: OpenEmuRecoveryPlan) -> String {
             "\(playlist) loads the discs already in its ROM folder; their own ROMs are forgotten: "
                 + discs.map(\.name).joined(separator: ", "))
     }
-    section("Playlists whose discs in the ROM folder differ, left missing", plan.playlistsLeftMissing)
+    for into in plan.playlistsIntoFolders {
+        let what = into.move == nil ? "already has a playlist, so it stays in OpenEmu" : "gets it, so its ROM can be Played"
+        lines.append(
+            "\(into.playlist): its discs are \(into.folder) (ROM \(into.folderROM)), which \(what); its own ROM \(into.forgottenROM) is forgotten"
+        )
+    }
+    section("Playlists left missing", plan.playlistsLeftMissing)
     section("More than one file each could be, left missing", plan.ambiguous)
     section("No file found, left missing", plan.unmatched)
     section("ROMs on a Platform with no ROM folder", plan.noROMFolder)

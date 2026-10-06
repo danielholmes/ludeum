@@ -110,7 +110,7 @@ public struct OpenEmuMigration {
                 plan.roms.append(rom)
             }
         }
-        plan.unwritableFolders = moves.finish(plan.roms)
+        plan.unwritableFolders = moves.finish(plan.roms.flatMap(\.moves))
         plan.noROMFolder = moves.noROMFolder
         plan.clashes = moves.clashes
         plan.unreadableFiles = moves.unreadableFiles
@@ -136,7 +136,7 @@ public struct OpenEmuMigration {
         let archive = folder.batterySaveArchive
         try archiveBatterySaves(plan.batterySaves, into: archive)
 
-        try OpenEmuMoves.move(plan.roms, log: log)
+        try OpenEmuMoves.move(plan.roms.flatMap(\.moves), log: log)
 
         // Each ROM is to be looked up in libretro again by its new name: one whose lookup doesn't run below waits
         // for the next Import.

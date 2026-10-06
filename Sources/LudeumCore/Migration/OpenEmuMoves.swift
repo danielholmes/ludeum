@@ -38,9 +38,11 @@ struct OpenEmuMoves {
 
     /// Places a ROM in its Platform's ROM folder, named after `main`, its file; one with no file stays missing, named
     /// after `fileName`. `files` move with it, each to the same place relative to `main`'s folder: by default `main`
-    /// with a cue sheet's tracks or a playlist's discs. Nil when its Platform has no ROM folder.
+    /// with a cue sheet's tracks or a playlist's discs. `inSubfolder` puts them in a subfolder named after it, as
+    /// `into-folders` keeps a disc Platform's ROMs. Nil when its Platform has no ROM folder.
     mutating func place(
-        romId: Int64, platformId: Int64, label: String, main: URL?, fileName storedFileName: String, files: [URL]? = nil
+        romId: Int64, platformId: Int64, label: String, main: URL?, fileName storedFileName: String, files: [URL]? = nil,
+        inSubfolder: Bool = false
     ) -> OpenEmuMigrationPlan.ROM? {
         guard let romFolder = folder.romFolder(platform: platformId) else {
             noROMFolder.append("\(label): Platform \(platformId) has no ROM folder")
@@ -55,12 +57,21 @@ struct OpenEmuMoves {
             let ext = (fileName as NSString).pathExtension.lowercased()
             unreadableFiles.append("\(romFolder.lastPathComponent)/\(fileName): its ROM folder doesn't read .\(ext) files")
         }
+        let subfolder = inSubfolder && main != nil
+        if subfolder, FileManager.default.fileExists(atPath: romFolder.appending(path: name).path(percentEncoded: false)) {
+            clashes.append("\(romFolder.lastPathComponent)/\(name): already a ROM or folder there")
+        }
 
         var moves: [OpenEmuMigrationPlan.Move] = []
+        var shownFileName = fileName
         if let main {
+            if subfolder { shownFileName = "\(name)/\(main.lastPathComponent)" }
             for file in files ?? ROMFiles.files(of: main) {
-                let relative = Self.relativePath(of: file, besideMain: main)
-                let to = romFolder.appending(path: relative)
+                let to =
+                    subfolder
+                    ? IntoFolders.destination(of: file, from: main.deletingLastPathComponent(), rom: name, in: romFolder)
+                    : romFolder.appending(path: Self.relativePath(of: file, from: main.deletingLastPathComponent()))
+                let relative = Self.relativePath(of: to, from: romFolder)
                 if let other = destinations[to], other != file {
                     clashes.append("\(romFolder.lastPathComponent)/\(relative): two ROMs' files")
                 } else if destinations[to] == nil {
@@ -72,43 +83,42 @@ struct OpenEmuMoves {
                 }
             }
         }
-        return .init(romId: romId, platformId: platformId, folderName: name, fileName: fileName, missing: main == nil, moves: moves)
+        return .init(
+            romId: romId, platformId: platformId, folderName: name, fileName: shownFileName, missing: main == nil, moves: moves)
     }
 
-    /// Where one of a ROM's files goes in its ROM folder: its path from `main`'s folder, else just its name.
-    static func relativePath(of file: URL, besideMain main: URL) -> String {
-        let base = main.deletingLastPathComponent().standardizedFileURL.path(percentEncoded: false)
+    /// A file's path from `folder`, else just its name: where one of a ROM's files goes, from its main file's folder.
+    static func relativePath(of file: URL, from folder: URL) -> String {
+        let base = folder.standardizedFileURL.path(percentEncoded: false)
         let path = file.standardizedFileURL.path(percentEncoded: false)
         return path.hasPrefix(base) ? String(path.dropFirst(base.count)).trimmingPrefix("/").description : file.lastPathComponent
     }
 
     /// Once every ROM is placed: two ROMs with one name join the clashes, and returns the ROM folders the moves can't
     /// be written into.
-    mutating func finish(_ roms: [OpenEmuMigrationPlan.ROM]) -> [URL] {
+    mutating func finish(_ moves: [OpenEmuMigrationPlan.Move]) -> [URL] {
         for (key, labels) in keys where labels.count > 1 {
             clashes.append("\(key.name) on Platform \(key.platformId): \(labels.joined(separator: ", "))")
         }
-        let folders = Set(roms.flatMap { $0.moves.map { $0.to.deletingLastPathComponent() } })
+        let folders = Set(moves.map { $0.to.deletingLastPathComponent() })
         return folders.filter { !Self.canWrite(into: $0) }.sorted { $0.path < $1.path }
     }
 
-    /// Moves every ROM's files, logging each `old path<TAB>new path` to `log` as it goes. A failed move stops there
+    /// Moves every file, logging each `old path<TAB>new path` to `log` as it goes. A failed move stops there
     /// (`moveFailed`), with the log saying what moved.
-    static func move(_ roms: [OpenEmuMigrationPlan.ROM], log: URL) throws {
+    static func move(_ moves: [OpenEmuMigrationPlan.Move], log: URL) throws {
         FileManager.default.createFile(atPath: log.path(percentEncoded: false), contents: nil)
         let handle = try FileHandle(forWritingTo: log)
         defer { try? handle.close() }
-        for rom in roms {
-            for move in rom.moves {
-                do {
-                    try FileManager.default.createDirectory(at: move.to.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try FileManager.default.moveItem(at: move.from, to: move.to)
-                } catch {
-                    throw OpenEmuMigrationError.moveFailed(file: move.from, log: log, underlying: String(describing: error))
-                }
-                try handle.write(
-                    contentsOf: Data("\(move.from.path(percentEncoded: false))\t\(move.to.path(percentEncoded: false))\n".utf8))
+        for move in moves {
+            do {
+                try FileManager.default.createDirectory(at: move.to.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try FileManager.default.moveItem(at: move.from, to: move.to)
+            } catch {
+                throw OpenEmuMigrationError.moveFailed(file: move.from, log: log, underlying: String(describing: error))
             }
+            try handle.write(
+                contentsOf: Data("\(move.from.path(percentEncoded: false))\t\(move.to.path(percentEncoded: false))\n".utf8))
         }
     }
 

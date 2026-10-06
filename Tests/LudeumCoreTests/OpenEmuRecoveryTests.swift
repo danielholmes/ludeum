@@ -123,7 +123,7 @@ import Testing
         #expect(try rom(sparkster)?.folderName == "Sparkster (USA)")
     }
 
-    @Test func aPS1CueSheetInTheSameSubfolderOfTheOtherPlayStationFolderMovesWithItsTrack() async throws {
+    @Test func aPS1CueSheetInTheSameSubfolderOfTheOtherPlayStationFolderMovesWithItsTrackIntoASubfolderNamedAfterIt() async throws {
         let name = "Wu-Tang - Shaolin Style (USA)"
         let wuTang = try recorded("Sony PlayStation/\(name) 2/\(name).cue", system: "openemu.system.psx", platform: 7)
         // Its track named in another case, as a cue sheet may.
@@ -138,9 +138,27 @@ import Testing
 
         #expect(result.plan.ambiguous == [])
         #expect(result.plan.roms.first?.moves.first?.from == found)
-        #expect(exists("PS1/\(name).cue", in: roms))
-        #expect(exists("PS1/\(name).bin", in: roms))
-        #expect(try rom(wuTang) == Keyed(folderName: name, fileName: "\(name).cue", missing: true, lookedUp: false))
+        #expect(exists("PS1/\(name)/\(name).cue", in: roms))
+        #expect(exists("PS1/\(name)/\(name).bin", in: roms))
+        #expect(try rom(wuTang) == Keyed(folderName: name, fileName: "\(name)/\(name).cue", missing: true, lookedUp: false))
+
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: nil)
+            .run(romFolders: folder.romFolders)
+
+        #expect(try rom(wuTang)?.missing == false)
+    }
+
+    @Test func aPS1SubfolderAlreadyThereStopsIt() async throws {
+        let name = "Clock Tower (USA)"
+        try recorded("Sony PlayStation/\(name)/\(name).cue", system: "openemu.system.psx", platform: 7)
+        try openEmu.addFile("Playstation (PSX)/\(name)/\(name).cue", "FILE \"\(name).bin\" BINARY\n")
+        try openEmu.addFile("Playstation (PSX)/\(name)/\(name).bin", "track")
+        try await migrateOpenEmu()
+        try FileManager.default.createDirectory(at: roms.appending(path: "PS1/\(name)/Extras"), withIntermediateDirectories: true)
+
+        let plan = try recovery().plan()
+
+        #expect(plan.clashes == ["PS1/\(name): already a ROM or folder there"])
     }
 
     @Test func aROMThatCouldBeEitherOfTwoFilesIsLeftMissingWithBothInPlace() async throws {
@@ -258,14 +276,16 @@ import Testing
     // MARK: A playlist whose discs already moved
 
     /// Fear Effect 2 as OpenEmu had it: a playlist recorded under `Sony PlayStation/` but moved to `Playstation (PSX)/`
-    /// with its two discs, and each disc added again later as its own ROM, with copies of the playlist's disc files.
-    /// `migrate-openemu` has moved the per-disc ROMs into PS1's ROM folder and left the playlist missing.
-    /// Returns the playlist's and the per-disc ROMs' journal ids, and the Game.
-    func fearEffect2(disc2Bin: String = "disc 2") async throws -> (playlist: Int64, discs: [Int64], game: GameID) {
+    /// with its two discs, and each disc added again later as its own ROM, with copies of the playlist's disc files, on
+    /// `discGame` (else the playlist's Game). `migrate-openemu` has moved the per-disc ROMs loose into PS1's ROM folder and
+    /// left the playlist missing. Returns the playlist's and the per-disc ROMs' journal ids, and the playlist's Game.
+    func fearEffect2(disc2Bin: String = "disc 2", discGame: GameID? = nil) async throws -> (
+        playlist: Int64, discs: [Int64], game: GameID
+    ) {
         let psx = "openemu.system.psx"
         try j.journal.addPlatform(id: 7, name: "PlayStation")
         let game = try j.journal.addGame(platformId: 7, name: "Fear Effect 2")
-        func disc(_ n: Int) -> String { "Fear Effect 2 (Disc \(n))" }
+        func disc(_ n: Int) -> String { "Fear Effect 2 (Europe) (Disc \(n))" }
         func cue(_ n: Int) -> String { "FILE \"\(disc(n)).bin\" BINARY\n" }
         let playlist = try recorded("Sony PlayStation/Fear Effect 2/Fear Effect 2.m3u", system: psx, platform: 7, game: game)
         try openEmu.addFile("Playstation (PSX)/Fear Effect 2/Fear Effect 2.m3u", "\(disc(1)).cue\n\(disc(2)).cue\n")
@@ -275,15 +295,104 @@ import Testing
             try openEmu.addFile("Playstation (PSX)/Fear Effect 2/\(disc(n)).bin", "disc \(n)")
             try openEmu.addFile("Sony PlayStation/\(disc(n))/\(disc(n)).cue", cue(n))
             try openEmu.addFile("Sony PlayStation/\(disc(n))/\(disc(n)).bin", n == 2 ? disc2Bin : "disc 1")
-            discs.append(try recorded("Sony PlayStation/\(disc(n))/\(disc(n)).cue", system: psx, platform: 7, game: game))
+            discs.append(
+                try recorded("Sony PlayStation/\(disc(n))/\(disc(n)).cue", system: psx, platform: 7, game: discGame ?? game))
         }
         try await migrateOpenEmu()
         return (playlist, discs, game)
     }
 
+    /// `into-folders`, as already run on the live journal: the loose discs become one ROM, Disc 1's row, in
+    /// `PS1/Fear Effect 2 (Europe)/`, waiting for a playlist.
+    func intoFolders() async throws {
+        let plan = try await IntoFolders(journal: j.journal, folder: folder, libretro: nil).run().plan
+        #expect(plan.folders.map(\.name) == ["Fear Effect 2 (Europe)"])
+    }
+
     func romIds() throws -> [Int64] { try j.journal.db.read { try Int64.fetchAll($0, sql: "SELECT id FROM rom ORDER BY id") } }
 
-    @Test func aPlaylistWhoseDiscsAlreadyMovedJoinsThemAndTheirOwnROMsAreForgotten() async throws {
+    func needsPlaylist(_ id: Int64) throws -> Bool? {
+        try j.journal.db.read { try Bool.fetchOne($0, sql: "SELECT needsPlaylist FROM rom WHERE id = ?", arguments: [id]) }
+    }
+
+    @Test func aPlaylistGoesIntoTheSubfolderOfItsDiscsWhichMakesThemPlayableAndItsOwnROMIsForgotten() async throws {
+        let fearEffect = try await fearEffect2()
+        try await intoFolders()
+        #expect(try needsPlaylist(fearEffect.discs[0]) == true)
+
+        let result = try await recovery().run()
+
+        #expect(result.plan.roms == [])
+        let into = try #require(result.plan.playlistsIntoFolders.first)
+        #expect(into.playlist == "Sony PlayStation/Fear Effect 2/Fear Effect 2.m3u")
+        #expect(into.folder == "PS1/Fear Effect 2 (Europe)")
+        #expect(into.forgottenROM == fearEffect.playlist)
+        #expect(into.folderROM == fearEffect.discs[0])
+        #expect(into.move?.to == roms.appending(path: "PS1/Fear Effect 2 (Europe)/Fear Effect 2.m3u"))
+        #expect(exists("PS1/Fear Effect 2 (Europe)/Fear Effect 2.m3u", in: roms))
+        #expect(try romIds() == [fearEffect.discs[0]])
+        #expect(
+            try rom(fearEffect.discs[0])?.fileName == "Fear Effect 2 (Europe)/Fear Effect 2.m3u")
+        #expect(try needsPlaylist(fearEffect.discs[0]) == false)
+        #expect(try j.journal.roms(of: fearEffect.game).count == 1)
+        // Its own copies of the discs are left in OpenEmu.
+        #expect(exists("roms/Playstation (PSX)/Fear Effect 2/Fear Effect 2 (Europe) (Disc 1).bin", in: openEmu.folder))
+        let log = try String(contentsOf: result.log, encoding: .utf8)
+        #expect(log.hasSuffix("PS1/Fear Effect 2 (Europe)/Fear Effect 2.m3u\n"))
+    }
+
+    @Test func aPlaylistWhoseDiscsSubfolderHasOneAlreadyStaysInOpenEmuAndItsOwnROMIsForgotten() async throws {
+        let fearEffect = try await fearEffect2()
+        try await intoFolders()
+        try "Fear Effect 2 (Europe) (Disc 1).cue\nFear Effect 2 (Europe) (Disc 2).cue\n".write(
+            to: roms.appending(path: "PS1/Fear Effect 2 (Europe)/Fear Effect 2 (Europe).m3u"), atomically: true, encoding: .utf8)
+
+        let result = try await recovery().run()
+
+        #expect(result.plan.playlistsIntoFolders.map(\.forgottenROM) == [fearEffect.playlist])
+        #expect(result.plan.playlistsIntoFolders.first?.move == nil)
+        #expect(try romIds() == [fearEffect.discs[0]])
+        #expect(!exists("PS1/Fear Effect 2 (Europe)/Fear Effect 2.m3u", in: roms))
+        #expect(exists("roms/Playstation (PSX)/Fear Effect 2/Fear Effect 2.m3u", in: openEmu.folder))
+    }
+
+    @Test func aPlaylistWhoseDiscsInASubfolderDifferIsLeftMissing() async throws {
+        let fearEffect = try await fearEffect2(disc2Bin: "disc 2, dumped again")
+        try await intoFolders()
+        let before = try rom(fearEffect.playlist)
+
+        let result = try await recovery().run()
+
+        #expect(result.plan.roms == [])
+        #expect(result.plan.playlistsIntoFolders == [])
+        #expect(
+            result.plan.playlistsLeftMissing == [
+                "Sony PlayStation/Fear Effect 2/Fear Effect 2.m3u: its discs in PS1/Fear Effect 2 (Europe) differ"
+            ])
+        #expect(try romIds() == [fearEffect.playlist, fearEffect.discs[0]])
+        #expect(try rom(fearEffect.playlist) == before)
+        #expect(!exists("PS1/Fear Effect 2 (Europe)/Fear Effect 2.m3u", in: roms))
+    }
+
+    @Test func aPlaylistWhoseDiscsAreAnotherGamesROMIsLeftMissing() async throws {
+        try j.journal.addPlatform(id: 7, name: "PlayStation")
+        let other = try j.journal.addGame(platformId: 7, name: "Fear Effect 2: Retro Helix")
+        let fearEffect = try await fearEffect2(discGame: other)
+        try await intoFolders()
+
+        let plan = try recovery().plan()
+
+        #expect(plan.playlistsIntoFolders == [])
+        #expect(
+            plan.playlistsLeftMissing == [
+                "Sony PlayStation/Fear Effect 2/Fear Effect 2.m3u: its discs in PS1/Fear Effect 2 (Europe) are another Game's ROM"
+            ])
+        #expect(try romIds() == [fearEffect.playlist, fearEffect.discs[0]])
+    }
+
+    // Before into-folders, as on a Platform whose Discs are ROMs of their own.
+
+    @Test func aPlaylistWhoseDiscsAreLooseInTheROMFolderJoinsThemAndTheirOwnROMsAreForgotten() async throws {
         let fearEffect = try await fearEffect2()
 
         let result = try await recovery().run()
@@ -291,43 +400,17 @@ import Testing
         #expect(result.plan.roms.flatMap { $0.moves.map(\.to.lastPathComponent) } == ["Fear Effect 2.m3u"])
         #expect(
             result.plan.forgottenDiscs.map { "\($0.name) of \($0.playlist)" } == [
-                "Fear Effect 2 (Disc 1).cue of Fear Effect 2.m3u", "Fear Effect 2 (Disc 2).cue of Fear Effect 2.m3u",
+                "Fear Effect 2 (Europe) (Disc 1).cue of Fear Effect 2.m3u", "Fear Effect 2 (Europe) (Disc 2).cue of Fear Effect 2.m3u",
             ])
         #expect(exists("PS1/Fear Effect 2.m3u", in: roms))
         #expect(try romIds() == [fearEffect.playlist])
         #expect(
             try rom(fearEffect.playlist)
                 == Keyed(folderName: "Fear Effect 2", fileName: "Fear Effect 2.m3u", missing: true, lookedUp: false))
-        #expect(try j.journal.roms(of: fearEffect.game).count == 1)
-        // Its own copies of the discs are left in OpenEmu.
-        #expect(exists("roms/Playstation (PSX)/Fear Effect 2/Fear Effect 2 (Disc 1).bin", in: openEmu.folder))
-        #expect(exists("PS1/Fear Effect 2 (Disc 1).bin", in: roms))
+        #expect(exists("roms/Playstation (PSX)/Fear Effect 2/Fear Effect 2 (Europe) (Disc 1).bin", in: openEmu.folder))
     }
 
-    @Test func aPlaylistWhoseDiscsAreInASubfolderOfTheROMFolderIsLeftMissingAndTheyArentMovedAgain() async throws {
-        let fearEffect = try await fearEffect2()
-        let subfolder = roms.appending(path: "PS1/Fear Effect 2 (Europe)", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: subfolder, withIntermediateDirectories: true)
-        for n in 1...2 {
-            for ext in ["cue", "bin"] {
-                try FileManager.default.moveItem(
-                    at: roms.appending(path: "PS1/Fear Effect 2 (Disc \(n)).\(ext)"),
-                    to: subfolder.appending(path: "Fear Effect 2 (Disc \(n)).\(ext)"))
-            }
-        }
-
-        let plan = try recovery().plan()
-
-        #expect(plan.roms == [])
-        #expect(plan.forgottenDiscs == [])
-        #expect(
-            plan.playlistsLeftMissing == [
-                "Sony PlayStation/Fear Effect 2/Fear Effect 2.m3u: its discs are in PS1/Fear Effect 2 (Europe) already"
-            ])
-        #expect(try romIds() == [fearEffect.playlist] + fearEffect.discs)
-    }
-
-    @Test func aPlaylistWhoseDiscsInTheROMFolderDifferIsLeftMissing() async throws {
+    @Test func aPlaylistWhoseLooseDiscsDifferIsLeftMissing() async throws {
         let fearEffect = try await fearEffect2(disc2Bin: "disc 2, dumped again")
         let before = try rom(fearEffect.playlist)
 

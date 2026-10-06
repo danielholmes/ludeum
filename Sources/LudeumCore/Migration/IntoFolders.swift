@@ -85,7 +85,7 @@ public struct IntoFolders {
             singles[romName(cue), default: []] += members
             claimed.formUnion(members)
         }
-        for file in files where !claimed.contains(file) && ext(file) != "7z" {
+        for file in files where !claimed.contains(file) && Self.keepsInSubfolder(platformId: platformId, fileName: file.lastPathComponent) {
             guard romFolder.reads(fileName: file.lastPathComponent) else {
                 plan.leftLoose.append("\(label)/\(file.lastPathComponent): not a ROM")
                 continue
@@ -119,13 +119,25 @@ public struct IntoFolders {
             plan.folders.append(
                 IntoFoldersPlan.Folder(
                     platformId: platformId, name: name,
-                    moves: members.map { file in
-                        let relative = file.standardizedFileURL.pathComponents.dropFirst(url.standardizedFileURL.pathComponents.count)
-                        return .init(from: file, to: url.appending(path: name).appending(path: relative.joined(separator: "/")))
-                    },
+                    moves: members.map { .init(from: $0, to: Self.destination(of: $0, from: url, rom: name, in: url)) },
                     keptROM: kept?["id"], renamed: kept.map { $0["folderName"] as String != name } ?? false,
                     forgottenROMs: romRows.filter { $0["id"] as Int64 != kept?["id"] }.map { $0["id"] }, needsPlaylist: needsPlaylist))
         }
+    }
+
+    /// A disc Platform's ROM is kept in a subfolder named after it, but a `.7z`, which stays loose beside it.
+    static func keepsInSubfolder(platformId: Int64, fileName: String) -> Bool {
+        platforms.contains(platformId) && (fileName as NSString).pathExtension.lowercased() != "7z"
+    }
+
+    /// Where one of the ROM `name`'s files goes in its subfolder of `romFolder`: at its path from `base`, else by its name.
+    static func destination(of file: URL, from base: URL, rom name: String, in romFolder: URL) -> URL {
+        let components = file.standardizedFileURL.pathComponents
+        let baseComponents = base.standardizedFileURL.pathComponents
+        let relative =
+            components.starts(with: baseComponents)
+            ? components.dropFirst(baseComponents.count).joined(separator: "/") : file.lastPathComponent
+        return romFolder.appending(path: name).appending(path: relative)
     }
 
     /// Runs it. Throws `blocked` (with the plan) when the dry run found anything that stops it, before anything is

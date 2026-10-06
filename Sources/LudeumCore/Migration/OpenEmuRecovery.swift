@@ -48,7 +48,7 @@ public struct OpenEmuRecovery {
         let finder = RenamedFiles(roms: library.appending(path: "roms", directoryHint: .isDirectory), recorded: snapshot.roms)
 
         let rows = try journal.db.read { db in
-            try Row.fetchAll(db, sql: "SELECT id, platformId, folderName, fileName, missing FROM rom ORDER BY id")
+            try Row.fetchAll(db, sql: "SELECT id, platformId, folderName, fileName, missing, gameId FROM rom ORDER BY id")
         }
         var plan = OpenEmuRecoveryPlan()
         // Each missing OpenEmu ROM still under the name `migrate-openemu` gave it, with the files it could be.
@@ -79,55 +79,81 @@ public struct OpenEmuRecovery {
             }
         }
 
-        // A playlist whose discs are in its ROM folder already, moved there as ROMs of their own while it looked missing:
-        // it moves alone, to load them, and their own ROMs are forgotten, as `migrate-openemu` forgets a duplicate disc.
+        // A playlist whose discs are in its ROM folder already, moved there as ROMs of their own while it looked missing.
         // Their files must have its discs' names and sizes, from metadata alone, or it stays missing.
-        var placing: [(row: Row, label: String, file: URL, files: [URL]?)] = []
+        var placing: [(row: Row, label: String, file: URL, files: [URL]?, inSubfolder: Bool)] = []
         for (row, label, file) in matched {
-            guard file.pathExtension.lowercased() == "m3u", let romFolder = folder.romFolder(platform: row["platformId"]) else {
-                placing.append((row, label, file, nil))
+            let platformId: Int64 = row["platformId"]
+            let inSubfolder = IntoFolders.keepsInSubfolder(platformId: platformId, fileName: file.lastPathComponent)
+            guard file.pathExtension.lowercased() == "m3u", let romFolder = folder.romFolder(platform: platformId) else {
+                placing.append((row, label, file, nil, inSubfolder))
                 continue
             }
             let discs = ROMFiles.files(of: file).dropFirst().map { disc in
-                (stamp: FileStamp(disc), relative: OpenEmuMoves.relativePath(of: disc, besideMain: file))
+                (stamp: FileStamp(disc), relative: OpenEmuMoves.relativePath(of: disc, from: file.deletingLastPathComponent()))
             }
+            func matching(in dir: URL) -> Bool {
+                zip(discs, discs.map { FileStamp(dir.appending(path: $0.relative)) }).allSatisfy { $0.stamp != nil && $0.stamp == $1 }
+            }
+            // In a subfolder ROM of their own, as `into-folders` keeps a multi-disc Version: that ROM is the Version, so
+            // the playlist goes in beside them, unless it has one, and its own ROM is forgotten.
+            if let subfolder = Self.subfolders(of: romFolder).first(where: { subfolder in
+                discs.contains {
+                    FileManager.default.fileExists(atPath: subfolder.appending(path: $0.relative).path(percentEncoded: false))
+                }
+            }) {
+                let shown = "\(romFolder.lastPathComponent)/\(subfolder.lastPathComponent)"
+                let folderROM = rows.first { $0["platformId"] == platformId && $0["folderName"] == subfolder.lastPathComponent }
+                if !matching(in: subfolder) {
+                    plan.playlistsLeftMissing.append("\(label): its discs in \(shown) differ")
+                } else if let folderROM, folderROM["gameId"] as GameID? == row["gameId"] as GameID? {
+                    let to = subfolder.appending(path: file.lastPathComponent)
+                    let hasPlaylist = Self.files(in: subfolder).contains { $0.pathExtension.lowercased() == "m3u" }
+                    if !hasPlaylist, FileManager.default.fileExists(atPath: to.path(percentEncoded: false)) {
+                        plan.clashes.append("\(shown)/\(file.lastPathComponent): a file is already there")
+                    }
+                    plan.playlistsIntoFolders.append(
+                        .init(
+                            playlist: label, forgottenROM: row["id"], folderROM: folderROM["id"], folder: shown,
+                            move: hasPlaylist ? nil : .init(from: file, to: to)))
+                } else {
+                    plan.playlistsLeftMissing.append(
+                        "\(label): its discs in \(shown) are \(folderROM == nil ? "no ROM in the journal" : "another Game's ROM")")
+                }
+                continue
+            }
+            // Loose, as ROMs of their own: it moves alone, to load them, and their own ROMs are forgotten, as
+            // `migrate-openemu` forgets a duplicate disc.
             let inFolder = discs.map { FileStamp(romFolder.appending(path: $0.relative)) }
             if inFolder.allSatisfy({ $0 == nil }) {
-                // In a subfolder of their own already: they aren't moved in again, and it isn't guessed where it goes.
-                if let subfolder = Self.subfolders(of: romFolder).first(where: { subfolder in
-                    discs.contains { FileStamp(subfolder.appending(path: $0.relative)) != nil }
-                }) {
-                    plan.playlistsLeftMissing.append(
-                        "\(label): its discs are in \(romFolder.lastPathComponent)/\(subfolder.lastPathComponent) already")
-                    continue
-                }
-                placing.append((row, label, file, nil))
-            } else if zip(discs, inFolder).allSatisfy({ $0.stamp != nil && $0.stamp == $1 }) {
+                placing.append((row, label, file, nil, inSubfolder))
+            } else if matching(in: romFolder) {
                 let relatives = Set(discs.map(\.relative))
-                for disc in rows where disc["platformId"] == row["platformId"] as Int64 && relatives.contains(disc["fileName"]) {
+                for disc in rows where disc["platformId"] == platformId && relatives.contains(disc["fileName"]) {
                     plan.forgottenDiscs.append(.init(romId: disc["id"], name: disc["fileName"], playlist: file.lastPathComponent))
                 }
-                placing.append((row, label, file, [file]))
+                placing.append((row, label, file, [file], false))
             } else {
                 plan.playlistsLeftMissing.append("\(label): its discs in \(romFolder.lastPathComponent) differ")
             }
         }
 
-        let rekeyed = Set(placing.map { $0.row["id"] as Int64 } + plan.forgottenDiscs.map(\.romId))
+        let rekeyed = Set(
+            placing.map { $0.row["id"] as Int64 } + plan.forgottenDiscs.map(\.romId) + plan.playlistsIntoFolders.map(\.forgottenROM))
         let taken = Set(
             rows.filter { !rekeyed.contains($0["id"]) }.map { ROMKey(platformId: $0["platformId"], name: $0["folderName"]) })
         var moves = OpenEmuMoves(folder: folder, taken: taken)
-        for (row, label, file, files) in placing {
+        for (row, label, file, files, inSubfolder) in placing {
             if let rom = moves.place(
                 romId: row["id"], platformId: row["platformId"], label: "\(label) → \(finder.label(file))", main: file,
-                fileName: file.lastPathComponent, files: files)
+                fileName: file.lastPathComponent, files: files, inSubfolder: inSubfolder)
             {
                 plan.roms.append(rom)
             }
         }
-        plan.unwritableFolders = moves.finish(plan.roms)
+        plan.unwritableFolders = moves.finish(plan.moves)
         plan.noROMFolder = moves.noROMFolder
-        plan.clashes = moves.clashes.sorted()
+        plan.clashes = (plan.clashes + moves.clashes).sorted()
         plan.unreadableFiles = moves.unreadableFiles
         return plan
     }
@@ -140,11 +166,27 @@ public struct OpenEmuRecovery {
         guard plan.isRunnable else { throw OpenEmuRecoveryError.blocked(plan) }
         let backup = try backups.backUp(journal, operation: .beforeRecovery)
         let log = backup.url.deletingPathExtension().appendingPathExtension("moves.log")
-        try OpenEmuMoves.move(plan.roms, log: log)
+        try OpenEmuMoves.move(plan.moves, log: log)
+        // A subfolder ROM given its playlist is read again, as an Import would, so it's no longer waiting for one.
+        var folderROMs: [Int64: FolderROMFile] = [:]
+        for into in plan.playlistsIntoFolders {
+            guard
+                let row = try journal.db.read({
+                    try Row.fetchOne($0, sql: "SELECT platformId, folderName FROM rom WHERE id = ?", arguments: [into.folderROM])
+                }),
+                let url = folder.romFolder(platform: row["platformId"]), let romFolder = ROMFolder.platform(row["platformId"], url)
+            else { continue }
+            folderROMs[into.folderROM] = try romFolder.scan().first { $0.name == row["folderName"] as String }
+        }
+        let scanned = folderROMs
         // Still missing, under its real name: the next Import finds its file, and looks it up in libretro again.
         try await journal.db.write { db in
-            // A disc a recovered playlist now loads is forgotten, with what hangs off its row; its Game stays.
+            // A ROM a recovered playlist now stands for is forgotten, with what hangs off its row; its Game stays.
             for disc in plan.forgottenDiscs { try db.execute(sql: "DELETE FROM rom WHERE id = ?", arguments: [disc.romId]) }
+            for into in plan.playlistsIntoFolders {
+                try db.execute(sql: "DELETE FROM rom WHERE id = ?", arguments: [into.forgottenROM])
+                if let file = scanned[into.folderROM] { try LudeumStore.setFolderROM(db, into.folderROM, to: file) }
+            }
             for rom in plan.roms {
                 try db.execute(
                     sql: "UPDATE rom SET folderName = ?, fileName = ?, name = ?, libretroLookedUp = 0 WHERE id = ?",
@@ -173,6 +215,12 @@ public struct OpenEmuRecovery {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? []
         return names.filter { !$0.hasPrefix(".") }.sorted().map { folder.appending(path: $0, directoryHint: .isDirectory) }
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+    }
+
+    /// Every file in a folder, at any depth.
+    private static func files(in folder: URL) -> [URL] {
+        ((try? FileManager.default.subpathsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? [])
+            .map { folder.appending(path: $0, directoryHint: .notDirectory) }
     }
 
     /// The newest `before-migration` Backup in the Data folder.
@@ -267,9 +315,29 @@ public struct OpenEmuRecoveryPlan: Sendable, Equatable {
     public var ambiguous: [String] = []
     /// Each ROM of its own whose files a recovered playlist now loads, in the ROM folder already: forgotten.
     public var forgottenDiscs: [OpenEmuMigrationPlan.DuplicateDisc] = []
-    /// A playlist with some disc files in its ROM folder already, but not all with its discs' names and sizes: it
-    /// stays missing.
+    /// Each playlist whose discs are a subfolder ROM already (`into-folders`' multi-disc Version): it goes into that
+    /// subfolder, unless it has a playlist, and its own ROM is forgotten.
+    public var playlistsIntoFolders: [PlaylistIntoFolder] = []
+    /// A playlist with disc files in its ROM folder already, but not all with its discs' names and sizes, or a subfolder
+    /// that isn't its Game's ROM: it stays missing.
     public var playlistsLeftMissing: [String] = []
+
+    /// A playlist whose discs are a subfolder ROM already.
+    public struct PlaylistIntoFolder: Sendable, Equatable {
+        /// Where OpenEmu recorded it.
+        public let playlist: String
+        /// The playlist's own ROM, forgotten: the subfolder's ROM is the Version.
+        public let forgottenROM: Int64
+        /// The subfolder's ROM, which the playlist makes playable.
+        public let folderROM: Int64
+        /// The subfolder, in its ROM folder: "PS1/Fear Effect 2 - Retro Helix (Europe) (En,Fr,De)".
+        public let folder: String
+        /// Into the subfolder, unless it has a playlist already.
+        public let move: OpenEmuMigrationPlan.Move?
+    }
+
+    /// Every file that moves.
+    public var moves: [OpenEmuMigrationPlan.Move] { roms.flatMap(\.moves) + playlistsIntoFolders.compactMap(\.move) }
     /// A ROM whose Platform has no ROM folder.
     public var noROMFolder: [String] = []
     /// Two ROMs with one name in a Platform's folder, or a file already where one would go. Resolved by hand.
