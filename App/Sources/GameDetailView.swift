@@ -256,7 +256,9 @@ struct GameDetailView: View {
                 } label: {
                     Label("Play", systemImage: "play.fill")
                 }
-                .buttonStyle(.borderedProminent).help("Play in \(emulator.name)")
+                .buttonStyle(.borderedProminent)
+                .disabled(isBeingArchived)
+                .help(isBeingArchived ? "Waiting for Archive or Unarchive to finish" : "Play in \(emulator.name)")
                 // Dolphin has no per-Game settings: every Game gets the same ones.
                 if !EmulatorSettingRow.rows(for: emulator, platformId: platformId).isEmpty {
                     EmulatorSettingsButton(emulator: emulator, platformId: platformId, settings: emulatorSettings) { settings in
@@ -268,6 +270,9 @@ struct GameDetailView: View {
             Text("No \(platform?.name ?? "") emulator yet").foregroundStyle(.secondary)
         }
     }
+
+    /// One of this Game's ROMs is queued or running in Background tasks: its files are about to change.
+    private var isBeingArchived: Bool { roms.contains { services.tasks.isQueuedOrRunning(Self.taskSubject($0)) } }
 
     /// Every present ROM is archived, so there's nothing to Play until one is Unarchived.
     private var isArchived: Bool {
@@ -362,8 +367,17 @@ struct GameDetailView: View {
 
     /// Archive or Unarchive, as a Background task; while it's queued or running, its progress.
     @ViewBuilder private func archiveButton(_ rom: LudeumROM) -> some View {
-        if services.tasks.isQueuedOrRunning(Self.taskSubject(rom)) {
-            ProgressView().controlSize(.small).help("In Background tasks")
+        if let task = services.tasks.active(Self.taskSubject(rom)) {
+            if task.state == .running {
+                HStack(spacing: 6) {
+                    ProgressView(value: task.progress ?? 0).controlSize(.small).frame(width: 80)
+                    Text(task.progress.map { "\(Int($0 * 100))%" } ?? "").font(.caption).monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .help(task.title)
+            } else {
+                Text("Queued").font(.caption).foregroundStyle(.secondary).help("Waiting in Background tasks")
+            }
         } else if rom.archived {
             Button("Unarchive", systemImage: "archivebox") { unarchive(rom) }
                 .help("Unpack it into a folder named after it, so it can be Played. The .7z goes to the Trash.")
