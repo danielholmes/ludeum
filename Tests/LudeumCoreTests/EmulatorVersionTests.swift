@@ -41,8 +41,9 @@ import Testing
             EmulatorVersions.check(
                 found: "DuckStation Version 0.1-12070-g4122fed9a (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)
         #expect(EmulatorVersions.check(found: "v147", for: .ares) == .tooOld(found: "147"))
-        // App versions: Ymir has no version flag (`--version` opens its window), and Dolphin's matches its flag.
+        // App versions: Ymir and melonDS have no version flag (Ymir's `--version` opens its window), and Dolphin's matches its flag.
         #expect(EmulatorVersions.check(found: "0.3.3", for: .ymir) == .ok)
+        #expect(EmulatorVersions.check(found: "1.1", for: .melonDS) == .ok)
         #expect(EmulatorVersions.check(found: "2609", for: .dolphin) == .ok)
         #expect(EmulatorVersions.check(found: "Dolphin 2609", for: .dolphin) == .ok)
     }
