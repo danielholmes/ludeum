@@ -63,7 +63,8 @@ struct FilterBar<Trailing: View>: View {
                         }
                     }
             }
-            if let count { Text("\(count) Game\(count == 1 ? "" : "s")").foregroundStyle(.secondary).fixedSize() }
+            // While busy the count is the last results' (or 0 before the first), so only the spinner shows.
+            if let count, !busy { Text("\(count) Game\(count == 1 ? "" : "s")").foregroundStyle(.secondary).fixedSize() }
             if busy { ProgressView().controlSize(.small) }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
