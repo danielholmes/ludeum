@@ -313,7 +313,7 @@ struct CoverTile: View {
 
     var body: some View {
         // Every badge is this tall (the Rating's pill as wide as its text needs), growing with the Cover, and sits the
-        // same margin in from the Cover's sides. Only the status badges that hang from the top edge touch an edge.
+        // same margin in from the Cover's edges.
         let height = max(24, width / 5.5)
         let margin = 5.0
         CoverView(services: services, game: row.id, name: row.name)
@@ -335,8 +335,7 @@ struct CoverTile: View {
             .overlay(alignment: .topTrailing) {
                 if let status = CoverStatus(row) {
                     status.badge(height: height)
-                        .padding(.trailing, margin)
-                        .padding(.top, status.hangsFromTop ? 0 : margin)
+                        .padding(margin)
                         .help(status.help)
                         .accessibilityLabel(status.help)
                 }
@@ -407,9 +406,6 @@ private enum CoverStatus {
         }
     }
 
-    /// Playing's bookmark and Up next's and Backlog's post-its hang from the Cover's top edge; Finished's tick sits off it.
-    var hangsFromTop: Bool { self != .finished }
-
     @ViewBuilder
     func badge(height: Double) -> some View {
         switch self {
@@ -436,7 +432,7 @@ private enum CoverStatus {
     }
 }
 
-/// A symbol on a disc of frosted glass, for the badges that sit off the Cover's edges.
+/// A symbol on a disc of frosted glass, for the badges that aren't a bookmark or post-it.
 private struct RoundBadge: View {
     let symbol: String
     let color: Color
