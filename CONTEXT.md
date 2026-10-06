@@ -134,10 +134,6 @@ _Avoid_: Job, operation
 Reading the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
 
-**Import draft**:
-The first Import before I commit it: the ROM folders' snapshot plus my answers so far, none of it journal data yet. It can't be committed while any Game has Duplicate Versions, and it can be discarded.
-_Avoid_: Pending import, staging
-
 **Review queue**:
 Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), and Duplicate Versions.
 _Avoid_: Inbox, conflicts

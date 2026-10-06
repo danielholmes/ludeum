@@ -1,5 +1,7 @@
 # Platforms are IGDB's platforms
 
+Amended by [0009](0009-ludeum-reads-rom-folders-openemu-is-gone.md): a ROM's Platform now comes from its ROM folder, one per IGDB platform, not from an OpenEmu system.
+
 The journal owns Game identity ([ADR 0002](0002-game-identity-is-journal-owned.md)), but not the list of Platforms: a Platform is one of IGDB's platforms, and there are no custom ones. Every Game has one, including a Game with no IGDB link, which picks from the same list. We considered a journal-owned Platform list mapped onto IGDB's, which would allow Platforms IGDB lacks. We rejected it because IGDB's list already covers everything I play (Arcade, Web browser and phones included), a mapping would need maintaining, and with one list the Game's Platform and the platform in its IGDB link are always the same thing, so the Library's Platform filter treats linked and unlinked Games alike. An OpenEmu system maps to one or more IGDB platforms (`openemu.system.gb` is both Game Boy and Game Boy Color), so a ROM's Platform comes from that mapping.
 
 **Shown as one (2026-10-05):** some IGDB platforms are shown together without changing any Game's platform: DOS and PC (Microsoft Windows) appear as one "PC", Super Famicom as Super Nintendo Entertainment System, and Family Computer as Nintendo Entertainment System, in the sidebar, the Platform filter, the Library and Year in review (`PlatformGroups`).
