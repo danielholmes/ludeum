@@ -17,6 +17,7 @@ struct ReviewQueueScreen: View {
         case noSuggestion = "No suggestion"
         case duplicateVersions = "Duplicate Versions"
         case noPlaylist = "No playlist"
+        case missingROMs = "Missing ROMs"
         var id: Self { self }
     }
 
@@ -56,6 +57,15 @@ struct ReviewQueueScreen: View {
                             }
                             .tag(item.romId)
                         }
+                    } else if kind == .missingROMs {
+                        ForEach(items.missingROMs) { m in
+                            VStack(alignment: .leading) {
+                                Text(m.game.name)
+                                Text(m.roms.count == 1 ? "1 missing ROM" : "\(m.roms.count) missing ROMs")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .tag(m.id)
+                        }
                     } else {
                         ForEach(romItems) { item in
                             VStack(alignment: .leading) {
@@ -73,6 +83,8 @@ struct ReviewQueueScreen: View {
             Group {
                 if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
                     DuplicateVersionsDetail(item: d, checkAgain: checkAgain)
+                } else if kind == .missingROMs, let m = items.missingROMs.first(where: { $0.id == selection }) {
+                    MissingROMsDetail(item: m, checkAgain: checkAgain, showGame: { shownGame = m.id })
                 } else if kind == .noPlaylist, let item = items.noPlaylist.first(where: { $0.id == selection }) {
                     NoPlaylistDetail(services: services, item: item, failed: { error = $0 })
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
@@ -105,7 +117,7 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions
         case .name: items.nameSuggestions
         case .noSuggestion: items.noSuggestion
-        case .duplicateVersions, .noPlaylist, nil: []
+        case .duplicateVersions, .noPlaylist, .missingROMs, nil: []
         }
     }
 
@@ -117,6 +129,7 @@ struct ReviewQueueScreen: View {
         case .noSuggestion: items.noSuggestion.count
         case .duplicateVersions: items.duplicateVersions.count
         case .noPlaylist: items.noPlaylist.count
+        case .missingROMs: items.missingROMs.count
         }
     }
 
@@ -125,6 +138,7 @@ struct ReviewQueueScreen: View {
         switch kind {
         case .duplicateVersions: items.duplicateVersions.map(\.id)
         case .noPlaylist: items.noPlaylist.map(\.id)
+        case .missingROMs: items.missingROMs.map(\.id)
         default: romItems.map(\.romId)
         }
     }
@@ -642,5 +656,36 @@ private struct NoPlaylistDetail: View {
             failed(journalErrorText(error))
         }
         services.changes.changed()
+    }
+}
+
+/// A Missing ROMs item: a Game whose ROMs are all gone from its ROM folder. For now I fix it by hand: put a file back
+/// and Check again, or delete the Game.
+private struct MissingROMsDetail: View {
+    let item: MissingROMsGame
+    let checkAgain: () -> Void
+    let showGame: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                Text(item.game.name).font(.title2).bold()
+                Text("Its ROMs are all missing from its ROM folder. Put one back, then Check again, or delete the Game.")
+                    .foregroundStyle(.secondary)
+            }
+            Section("Missing ROMs") {
+                ForEach(item.roms) { rom in
+                    VStack(alignment: .leading) {
+                        Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
+                        Text(rom.fileName).font(.caption).textSelection(.enabled)
+                    }
+                }
+            }
+            HStack {
+                Button("Show Game", action: showGame)
+                Button("Check again", action: checkAgain)
+            }
+        }
+        .formStyle(.grouped)
     }
 }

@@ -170,4 +170,24 @@ import Testing
         #expect(duplicates[0].game.id == game)
         #expect(duplicates[0].roms.map(\.fileName) == ["Double Dragon III (Japan)", "Double Dragon III (USA)"])
     }
+
+    @Test func gamesWhoseROMsAreAllMissingAreListed() throws {
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        let gone = try j.journal.addGame(
+            platformId: 19, name: "Zombies Ate My Neighbors", igdbGameId: 4, igdbName: "Zombies Ate My Neighbors")
+        let replaced = try j.journal.addGame(platformId: 19, name: "Pilotwings", igdbGameId: 5, igdbName: "Pilotwings")
+        try j.journal.addGame(platformId: 19, name: "No ROMs at all", igdbGameId: 6, igdbName: "No ROMs at all")
+        try unmatched(20, "Zombies Ate My Neighbors (USA)", missing: true)
+        try unmatched(21, "Zombies Ate My Neighbors (Europe)", missing: true)
+        try unmatched(22, "Pilotwings (Japan)", missing: true)
+        try unmatched(23, "Pilotwings (USA)")
+        for item in try j.journal.reviewQueue().noSuggestion {
+            try j.journal.assign(item, to: item.romName.hasPrefix("Zombies") ? gone : replaced)
+        }
+
+        let items = try j.journal.reviewQueue()
+        #expect(items.missingROMs.map(\.game.id) == [gone])
+        #expect(items.missingROMs[0].roms.map(\.fileName) == ["Zombies Ate My Neighbors (Europe)", "Zombies Ate My Neighbors (USA)"])
+        #expect(items.count == 1)
+    }
 }

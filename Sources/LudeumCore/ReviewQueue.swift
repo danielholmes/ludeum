@@ -33,6 +33,14 @@ public struct DuplicateVersionsGame: Sendable, Equatable, Identifiable {
     public var id: GameID { game.id }
 }
 
+/// A Game whose ROMs are all missing: it can't be Played until a file comes back, or I delete it.
+public struct MissingROMsGame: Sendable, Equatable, Identifiable {
+    public let game: Game
+    /// Its ROMs, all missing.
+    public let roms: [LudeumROM]
+    public var id: GameID { game.id }
+}
+
 /// A ROM whose subfolder holds its Discs but no playlist, so Play can't open them all: Make playlist writes one.
 public struct NoPlaylistItem: Sendable, Equatable, Identifiable {
     public let romId: Int64
@@ -50,6 +58,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var nameSuggestions: [ReviewItem] = []
     public var noSuggestion: [ReviewItem] = []
     public var duplicateVersions: [DuplicateVersionsGame] = []
+    public var missingROMs: [MissingROMsGame] = []
     public var noPlaylist: [NoPlaylistItem] = []
 
     public init() {}
@@ -57,7 +66,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     /// The sidebar badge.
     public var count: Int {
         namesAgree.count + checksumSuggestions.count + nameSuggestions.count + noSuggestion.count + duplicateVersions.count
-            + noPlaylist.count
+            + noPlaylist.count + missingROMs.count
     }
 }
 
@@ -94,6 +103,11 @@ extension LudeumStore {
             }
         }
         items.duplicateVersions.sort { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
+        let missing = try db.read { db in
+            try GameID.fetchAll(db, sql: "SELECT gameId FROM rom WHERE gameId IS NOT NULL GROUP BY gameId HAVING MIN(missing) = 1")
+        }
+        items.missingROMs = try missing.map { MissingROMsGame(game: try self.game($0), roms: try roms(of: $0)) }
+            .sorted { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
         items.noPlaylist = try db.read { db in
             guard try Self.hasNeedsPlaylist(db) else { return [] }
             return try Row.fetchAll(

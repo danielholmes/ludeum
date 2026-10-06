@@ -23,12 +23,16 @@ A game file in a ROM folder. A ROM identifies a Version of a Game, and is linked
 _Avoid_: File, image
 
 **ROM folder**:
-The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. When both exist, the playable one is used.
+The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. A ROM is never kept in both forms at once: when it is, it waits in the Review queue.
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
 A ROM that is still in its library but packed in a form its Platform's Emulator can't open, so it can't be Played until I Unarchive it. It is present, not missing. Whether a ROM is archived depends on the Emulator: a `.7z` that one Emulator opens directly is an ordinary ROM there.
 _Avoid_: Compressed, needs extraction (that's the fix, not the state)
+
+**Playable ROM**:
+A present ROM that isn't Archived. Every present ROM is either Playable or Archived.
+_Avoid_: Active, unarchived, ordinary ROM
 
 **Archive / Unarchive**:
 Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played. Either way only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2 ROMs can be Archived or Unarchived so far.
@@ -149,7 +153,7 @@ Reading the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
 
 **Review queue**:
-Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, and ROMs whose Discs have no playlist.
+Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, Games whose ROMs are all missing, ROMs whose Discs have no playlist, and ROMs kept in both forms.
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:
