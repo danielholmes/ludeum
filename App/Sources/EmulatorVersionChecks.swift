@@ -14,8 +14,6 @@ import SwiftUI
     private(set) var notInstalled: Set<String> = []
     /// The launch check has been through every Emulator.
     private(set) var finished = false
-    /// The Emulators sheet, opened from the app menu.
-    var showingSheet = false
     /// Emulators already warned about this launch.
     private var warned: Set<String> = []
 

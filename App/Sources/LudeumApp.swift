@@ -36,7 +36,8 @@ struct LudeumApp: App {
         .commands {
             TrimmedMenus()
             CommandGroup(after: .appSettings) {
-                Button("Emulators…") { services.versions.showingSheet = true }
+                Button("Players…") { services.sheets.players = true }
+                Button("Emulators…") { services.sheets.emulators = true }
             }
         }
 

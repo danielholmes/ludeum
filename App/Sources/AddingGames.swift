@@ -13,6 +13,12 @@ import SwiftUI
     }
 }
 
+/// The sheets the app menu opens over the main window.
+@Observable @MainActor final class AppSheets {
+    var emulators = false
+    var players = false
+}
+
 /// What the app's screens work with: the journal, and IGDB when credentials are set.
 @MainActor struct Services {
     let settings: AppSettings
@@ -27,6 +33,8 @@ import SwiftUI
     let tasks = BackgroundTasks()
     /// Each installed Emulator's version, checked at launch.
     let versions = EmulatorVersionChecks()
+    /// The app menu's sheets.
+    let sheets = AppSheets()
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
 

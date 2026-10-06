@@ -52,6 +52,27 @@ struct PlayerBadges: View {
 }
 
 /// Settings' Players: add, edit and delete the people I play with.
+/// The Players sheet, from Players… in the app menu.
+struct PlayersSheet: View {
+    let services: Services
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form { PlayersSection(journal: services.journal) }.formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+            .padding([.horizontal, .bottom], 20)
+        }
+        .frame(width: 520)
+        .frame(minHeight: 360)
+        // Badges on Playthroughs elsewhere show the changes.
+        .onDisappear { services.changes.changed() }
+    }
+}
+
 struct PlayersSection: View {
     let journal: LudeumStore?
 
