@@ -468,7 +468,22 @@ private struct DuplicateROMRow: View {
 
 /// Asks before quitting while the Import's phases are running.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated { MenuPruner.start() }
+    }
+
+    /// Clicking the Dock icon brings the one window back after it was closed.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool { true }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if MainActor.assumeIsolated({ BackgroundTasks.isBusy }) {
+            let alert = NSAlert()
+            alert.messageText = "Background tasks are running"
+            alert.informativeText = "Quitting stops them. Nothing is lost: a ROM being Archived or Unarchived keeps its original file."
+            alert.addButton(withTitle: "Keep running")
+            alert.addButton(withTitle: "Quit")
+            if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
+        }
         guard MainActor.assumeIsolated({ ImportModel.isRunning }) else { return .terminateNow }
         let alert = NSAlert()
         alert.messageText = "An Import is running"

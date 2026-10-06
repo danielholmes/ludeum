@@ -27,6 +27,8 @@ struct GameDetailView: View {
     @State private var editingGame = false
     @State private var deletion: DeletionSummary?
     @State private var deletingPlaythrough: Playthrough?
+    /// An Unarchive waiting for me to confirm discarded files or a rename.
+    @State private var unarchiving: (rom: LudeumROM, plan: UnarchivePlan)?
     @State private var error: String?
 
     var body: some View {
@@ -182,6 +184,21 @@ struct GameDetailView: View {
             }
         }
         .confirmationDialog(
+            "Unarchive \(unarchiving?.plan.romName ?? "")?",
+            isPresented: Binding(get: { unarchiving != nil }, set: { if !$0 { unarchiving = nil } })
+        ) {
+            if let (rom, plan) = unarchiving {
+                if plan.needsRename {
+                    Button("Rename to \(plan.renamedMainFile) and Unarchive") { unarchive(rom, plan, renaming: true) }
+                    Button("Keep \(plan.mainFile) and Unarchive") { unarchive(rom, plan, renaming: false) }
+                } else {
+                    Button("Unarchive") { unarchive(rom, plan, renaming: false) }
+                }
+            }
+        } message: {
+            if let plan = unarchiving?.plan { Text(unarchiveWarning(plan)) }
+        }
+        .confirmationDialog(
             "Delete this Playthrough?",
             isPresented: Binding(get: { deletingPlaythrough != nil }, set: { if !$0 { deletingPlaythrough = nil } })
         ) {
@@ -242,7 +259,8 @@ struct GameDetailView: View {
     @ViewBuilder private var playControls: some View {
         if isArchived {
             HStack(spacing: 12) {
-                Label("Archived: extract the .7z to play", systemImage: "archivebox").foregroundStyle(.orange)
+                Label("Archived: unarchive to play", systemImage: "archivebox").foregroundStyle(.orange)
+                if let rom = roms.first(where: { !$0.missing && $0.archived }) { archiveButton(rom) }
                 checkAgainButton
             }
         } else if let emulator, let platformId = game?.platformId {
@@ -265,13 +283,13 @@ struct GameDetailView: View {
         }
     }
 
-    /// Every present ROM is archived, so there's nothing to Play until one is extracted.
+    /// Every present ROM is archived, so there's nothing to Play until one is Unarchived.
     private var isArchived: Bool {
         let present = roms.filter { !$0.missing }
         return !present.isEmpty && present.allSatisfy(\.archived)
     }
 
-    /// Re-reads this Game's ROM folder files, after extracting or archiving one by hand.
+    /// Re-reads this Game's ROM folder files, after Archiving or Unarchiving one by hand.
     private var checkAgainButton: some View {
         Button("Check again", systemImage: "arrow.clockwise") {
             save { try $0.checkROMsAgain(id, in: services.settings.romFolders) }
@@ -313,6 +331,7 @@ struct GameDetailView: View {
                         }
                     }
                     Spacer()
+                    if !rom.missing, rom.systemId == ROMFolder.ps2SystemId { archiveButton(rom) }
                     if !rom.missing {
                         Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
                             .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
@@ -320,6 +339,68 @@ struct GameDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: Archive and Unarchive
+
+    /// Archive or Unarchive, as a Background task; while it's queued or running, its progress.
+    @ViewBuilder private func archiveButton(_ rom: LudeumROM) -> some View {
+        if services.tasks.isQueuedOrRunning(Self.taskSubject(rom)) {
+            ProgressView().controlSize(.small).help("In Background tasks")
+        } else if rom.archived {
+            Button("Unarchive", systemImage: "archivebox") { startUnarchive(rom) }
+                .help("Unpack it so it can be Played. The .7z goes to the Trash.")
+        } else {
+            Button("Archive", systemImage: "archivebox") { archive(rom) }
+                .help("Pack it into a .7z at maximum compression. The image goes to the Trash.")
+        }
+    }
+
+    private static func taskSubject(_ rom: LudeumROM) -> String { "rom \(rom.id)" }
+
+    private func folder(of rom: LudeumROM) -> ROMFolder? { services.settings.romFolders.first { $0.systemId == rom.systemId } }
+
+    /// Reads the archive's listing first: discarded files or a rename need confirming.
+    private func startUnarchive(_ rom: LudeumROM) {
+        guard let folder = folder(of: rom) else { return }
+        let archive = folder.url.appending(path: rom.fileName)
+        let name = rom.folderName ?? rom.name
+        Task {
+            do {
+                let plan = try await ROMArchiver.installed().planUnarchive(archive, romName: name, in: folder)
+                if plan.discarded.isEmpty, !plan.needsRename {
+                    unarchive(rom, plan, renaming: false)
+                } else {
+                    unarchiving = (rom, plan)
+                }
+            } catch {
+                self.error = BackgroundTasks.describe(error)
+            }
+        }
+    }
+
+    private func unarchive(_ rom: LudeumROM, _ plan: UnarchivePlan, renaming: Bool) {
+        guard let folder = folder(of: rom) else { return }
+        services.tasks.enqueue("Unarchiving \(plan.romName)", subject: Self.taskSubject(rom)) { progress in
+            try await ROMArchiver.installed().unarchive(plan, renaming: renaming, in: folder, progress: progress)
+        } finished: {
+            checkROMsAgain()
+        }
+    }
+
+    private func archive(_ rom: LudeumROM) {
+        guard let folder = folder(of: rom), let name = rom.folderName else { return }
+        services.tasks.enqueue("Archiving \(name)", subject: Self.taskSubject(rom)) { progress in
+            try await ROMArchiver.installed().archive(name, in: folder, progress: progress)
+        } finished: {
+            checkROMsAgain()
+        }
+    }
+
+    /// After a Background task: this Game's ROMs as they are now, whichever screen is showing.
+    private func checkROMsAgain() {
+        try? services.journal?.checkROMsAgain(id, in: services.settings.romFolders)
+        services.changes.changed()
     }
 
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
@@ -391,6 +472,21 @@ private func romFile(_ rom: LudeumROM, library: URL, folders: [ROMFolder], ready
     if ready { return try folder.readyFile(named: name) }
     let file = folder.url.appending(path: rom.fileName)
     return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
+}
+
+/// What an Unarchive will do that needs a yes first.
+private func unarchiveWarning(_ plan: UnarchivePlan) -> String {
+    var parts: [String] = []
+    if plan.needsRename {
+        parts.append(
+            "The game inside is \(plan.mainFile), which doesn't match this ROM. Renamed, it stays this ROM; kept as it is, "
+                + "this ROM goes missing and the next Import sees the file as a new ROM for the Review queue.")
+    }
+    if !plan.discarded.isEmpty {
+        parts.append("These aren't part of the game and won't be kept: \(plan.discarded.joined(separator: ", ")).")
+    }
+    parts.append("The .7z goes to the Trash once the game checks out.")
+    return parts.joined(separator: "\n\n")
 }
 
 /// "9.5" → 95 tenths. Nil for anything else, including a second decimal place.

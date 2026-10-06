@@ -72,7 +72,8 @@ struct SettingsView: View {
             } header: {
                 Text("ROM folders")
             } footer: {
-                Text("For Platforms OpenEmu doesn't have. A .7z there is Archived: extract it to play.").foregroundStyle(.secondary)
+                Text("For Platforms OpenEmu doesn't have. A .7z there is Archived: Unarchive it in Game detail to play.").foregroundStyle(
+                    .secondary)
             }
 
             PlayersSection(journal: journal)

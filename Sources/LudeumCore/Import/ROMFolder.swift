@@ -51,7 +51,7 @@ public struct ROMFolder: Sendable, Equatable {
     }
 
     /// The file names a cue sheet's `FILE` lines name, without any folder.
-    private static func cueTracks(_ cue: URL) -> [String] {
+    static func cueTracks(_ cue: URL) -> [String] {
         guard let text = try? String(contentsOf: cue, encoding: .utf8) else { return [] }
         return text.split(whereSeparator: \.isNewline).compactMap { line in
             let parts = line.trimmingCharacters(in: .whitespaces).split(separator: "\"")

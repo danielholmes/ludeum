@@ -23,6 +23,8 @@ import SwiftUI
     let memory = MemoryCache()
     /// The launch refresh, Import and Sync exclusivity, and the journal's edit lock.
     let work = BackgroundWork()
+    /// Archive and Unarchive, and other long work, one at a time.
+    let tasks = BackgroundTasks()
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
 

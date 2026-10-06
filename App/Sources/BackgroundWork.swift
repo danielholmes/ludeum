@@ -60,23 +60,6 @@ import os
     }
 }
 
-/// The refresh's small status indicator: nothing unless it's running.
-struct RefreshStatus: View {
-    let work: BackgroundWork
-
-    var body: some View {
-        if let progress = work.refreshing {
-            HStack(spacing: 6) {
-                ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
-                    .progressViewStyle(.circular).controlSize(.small)
-                Text(work.exclusive == nil ? "Refreshing \(progress.done)/\(progress.total)" : "Refresh paused")
-                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-            }
-            .help("Refreshing IGDB and Hasheous data older than 60 days. Pauses during an Import or Sync.")
-        }
-    }
-}
-
 /// Starts the cache refresh once per launch, not for every new main window.
 struct CacheRefreshOnLaunch: ViewModifier {
     let services: Services

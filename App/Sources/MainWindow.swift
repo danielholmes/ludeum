@@ -38,6 +38,7 @@ struct MainWindow: View {
                 services: services, selection: $selection, lists: lists, platforms: platformCounts, pins: pins,
                 reviewQueueCount: reviewQueueCount
             )
+            .safeAreaInset(edge: .bottom, spacing: 0) { BackgroundTasksPanel(tasks: services.tasks, work: services.work) }
             // The sidebar is always shown: no toggle to hide it.
             .toolbar(removing: .sidebarToggle)
         } content: {
@@ -102,7 +103,6 @@ struct MainWindow: View {
         .modifier(OngoingImportTriggers(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
         .toolbar {
-            ToolbarItem(placement: .status) { RefreshStatus(work: services.work) }
             ToolbarItem {
                 HStack(spacing: 6) {
                     if services.work.journalLocked {
