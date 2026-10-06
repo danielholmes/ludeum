@@ -17,16 +17,15 @@ import Testing
     init() throws {
         h = try Harness()
         j = try LudeumHarness(beforeOpenEmuMigration: true)
-        // OpenEmu keeps its library inside its Application Support folder, beside each core's saves.
-        let support = j.directory.appending(path: "OpenEmu", directoryHint: .isDirectory)
-        openEmu = try FakeOpenEmu(in: support)
+        openEmu = try FakeOpenEmu(in: j.directory.appending(path: "Home", directoryHint: .isDirectory))
         data = j.directory.appending(path: "Data", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
     }
 
-    func migration(openEmuRunning: Bool = false) -> OpenEmuMigration {
-        OpenEmuMigration(
-            journal: j.journal, library: openEmu.folder, folder: LudeumFolder(url: j.directory, data: data),
+    func migration(openEmuRunning: Bool = false, openEmu: FakeOpenEmu? = nil) -> OpenEmuMigration {
+        let openEmu = openEmu ?? self.openEmu
+        return OpenEmuMigration(
+            journal: j.journal, library: openEmu.folder, support: openEmu.support, folder: LudeumFolder(url: j.directory, data: data),
             isOpenEmuRunning: { openEmuRunning }, libretro: h.libretro)
     }
 
@@ -228,20 +227,40 @@ import Testing
         #expect(throws: OpenEmuMigrationError.alreadyMigrated) { try migration().plan() }
     }
 
-    @Test func batterySavesAreCopiedUnchangedIntoAnArchive() async throws {
-        let saves = openEmu.folder.deletingLastPathComponent().appending(path: "Gambatte/Battery Saves")
-        try FileManager.default.createDirectory(at: saves, withIntermediateDirectories: true)
-        try Data("save".utf8).write(to: saves.appending(path: "Pokemon Gold.sav"))
-        let states = openEmu.folder.deletingLastPathComponent().appending(path: "Save States/Gambatte")
+    @Test func batterySavesFromOpenEmusApplicationSupportFolderAreCopiedUnchangedIntoAnArchive() async throws {
+        let save = try openEmu.addBatterySave(core: "Gambatte", "Pokemon Gold.sav")
+        try openEmu.addBatterySave(core: "mGBA", "Pokemon Emerald.sav")
+        let states = openEmu.support.appending(path: "Save States/Gambatte")
         try FileManager.default.createDirectory(at: states, withIntermediateDirectories: true)
+        // Not OpenEmu's: its library has moved, and nothing beside it is read.
+        let besideLibrary = openEmu.folder.deletingLastPathComponent().appending(path: "SNES9x/Battery Saves")
+        try FileManager.default.createDirectory(at: besideLibrary, withIntermediateDirectories: true)
 
+        #expect(try migration().plan().batterySaves.map(\.lastPathComponent) == ["Battery Saves", "Battery Saves"])
         let result = try await migration().run()
 
         let archive = data.appending(path: "OpenEmu Battery Saves archive", directoryHint: .isDirectory)
         #expect(result.batterySaveArchive.standardizedFileURL == archive.standardizedFileURL)
         #expect(try Data(contentsOf: archive.appending(path: "Gambatte/Battery Saves/Pokemon Gold.sav")) == Data("save".utf8))
-        #expect(FileManager.default.fileExists(atPath: saves.appending(path: "Pokemon Gold.sav").path(percentEncoded: false)))
+        #expect(try Data(contentsOf: archive.appending(path: "mGBA/Battery Saves/Pokemon Emerald.sav")) == Data("save".utf8))
+        #expect(FileManager.default.fileExists(atPath: save.path(percentEncoded: false)))
         #expect(!exists("Save States", in: archive))
+        #expect(!exists("SNES9x", in: archive))
+    }
+
+    @Test func batterySavesInASymlinkedApplicationSupportFolderAreArchivedAsRealFiles() async throws {
+        let linked = try FakeOpenEmu(in: j.directory.appending(path: "Linked Home", directoryHint: .isDirectory), supportLinked: true)
+        try linked.addBatterySave(core: "Gambatte", "Pokemon Gold.sav")
+
+        #expect(try migration(openEmu: linked).plan().batterySaves.count == 1)
+        try await migration(openEmu: linked).run()
+
+        let archive = data.appending(path: "OpenEmu Battery Saves archive", directoryHint: .isDirectory)
+        for path in ["Gambatte", "Gambatte/Battery Saves", "Gambatte/Battery Saves/Pokemon Gold.sav"] {
+            let type = try FileManager.default.attributesOfItem(atPath: archive.appending(path: path).path(percentEncoded: false))[.type]
+            #expect(type as? FileAttributeType != .typeSymbolicLink, "\(path) is a symlink")
+        }
+        #expect(try Data(contentsOf: archive.appending(path: "Gambatte/Battery Saves/Pokemon Gold.sav")) == Data("save".utf8))
     }
 
     @Test func anArchiveAlreadyInTheDataFolderStopsTheMigration() async throws {

@@ -14,18 +14,26 @@ import GRDB
 public struct OpenEmuMigration {
     let journal: LudeumStore
     let library: URL
+    let support: URL
     let folder: LudeumFolder
     let backups: Backups
     let isOpenEmuRunning: () -> Bool
     let libretro: LibretroThumbnails?
 
+    /// OpenEmu's Application Support folder, where it keeps each core's battery saves wherever its library is.
+    public static var standardSupport: URL {
+        URL(filePath: ("~/Library/Application Support/OpenEmu" as NSString).expandingTildeInPath, directoryHint: .isDirectory)
+    }
+
+    /// `support` is OpenEmu's Application Support folder, whose battery saves are archived (a symlink is followed).
     /// `folder`'s Data folder gets the ROM folders, the backup and the battery-save archive.
     public init(
-        journal: LudeumStore, library: URL, folder: LudeumFolder, isOpenEmuRunning: @escaping () -> Bool,
+        journal: LudeumStore, library: URL, support: URL, folder: LudeumFolder, isOpenEmuRunning: @escaping () -> Bool,
         libretro: LibretroThumbnails?
     ) {
         self.journal = journal
         self.library = library
+        self.support = support
         self.folder = folder
         backups = Backups(folder: folder.backups, clock: journal.clock, timeZone: journal.calendar.timeZone)
         self.isOpenEmuRunning = isOpenEmuRunning
@@ -179,9 +187,10 @@ public struct OpenEmuMigration {
 
     // MARK: Battery saves
 
-    /// OpenEmu keeps each core's battery saves in `<Core>/Battery Saves/` beside its library.
+    /// OpenEmu keeps each core's battery saves in `<Core>/Battery Saves/` in its Application Support folder, wherever
+    /// its library is. A symlinked one is followed, so the archive gets the real files.
     private func batterySaveFolders() -> [URL] {
-        let support = library.deletingLastPathComponent()
+        let support = support.resolvingSymlinksInPath()
         let cores = (try? FileManager.default.contentsOfDirectory(at: support, includingPropertiesForKeys: nil)) ?? []
         return cores.map { $0.appending(path: "Battery Saves", directoryHint: .isDirectory) }
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }

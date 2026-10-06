@@ -2,10 +2,12 @@ import AppKit
 import Foundation
 import LudeumCore
 
-let migrateOpenEmuUsage = "migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--data <folder>]"
+let migrateOpenEmuUsage =
+    "migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--openemu-support <folder>] [--data <folder>]"
 
-/// `migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--data <folder>]`: run once, by hand,
-/// with OpenEmu closed. Folders default to the app's own: its journal, OpenEmu library and Data folder. `--data` stands
+/// `migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--openemu-support <folder>] [--data <folder>]`:
+/// run once, by hand, with OpenEmu closed. Folders default to the app's own: its journal, OpenEmu library, OpenEmu's
+/// Application Support folder (where its battery saves are, wherever the library is) and Data folder. `--data` stands
 /// in for the Data folder for this run only (its ROMs, Backups and battery-save archive), so a rehearsal never touches
 /// the real one. `--dry-run` prints what would happen and changes nothing.
 func migrateOpenEmuRun(_ arguments: [String]) async throws {
@@ -15,7 +17,7 @@ func migrateOpenEmuRun(_ arguments: [String]) async throws {
     while let argument = rest.popFirst() {
         switch argument {
         case "--dry-run": dryRun = true
-        case "--journal", "--library", "--data":
+        case "--journal", "--library", "--openemu-support", "--data":
             guard let value = rest.popFirst() else { fail("\(argument) needs a folder. usage: ludeum-import \(migrateOpenEmuUsage)") }
             options[argument] = URL(filePath: value, directoryHint: .isDirectory)
         default: fail("unknown option \(argument). usage: ludeum-import \(migrateOpenEmuUsage)")
@@ -29,7 +31,8 @@ func migrateOpenEmuRun(_ arguments: [String]) async throws {
     // Opening the journal may migrate its schema, so it's backed up first like the app's.
     let journal = try LudeumStore(directory: folder.url, backups: Backups(folder: folder.backups))
     let migration = OpenEmuMigration(
-        journal: journal, library: options["--library"] ?? settings.openEmuLibrary, folder: folder,
+        journal: journal, library: options["--library"] ?? settings.openEmuLibrary,
+        support: options["--openemu-support"] ?? OpenEmuMigration.standardSupport, folder: folder,
         isOpenEmuRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: "org.openemu.OpenEmu").isEmpty },
         libretro: LibretroThumbnails(cache: try CacheStore(directory: cacheDirectory)))
 
@@ -62,7 +65,7 @@ private func describe(_ plan: OpenEmuMigrationPlan) -> String {
         "\(moving.count) ROMs move (\(moving.map(\.moves.count).reduce(0, +)) files); \(plan.roms.count - moving.count) missing ROMs are re-keyed"
     )
     for (platform, roms) in Dictionary(grouping: plan.roms, by: \.platformId).sorted(by: { $0.key < $1.key }) {
-        lines.append("  Platform \(platform): \(roms.count)")
+        lines.append("  \(ROMPlatform.all[platform]?.name ?? "Platform \(platform)"): \(roms.count)")
     }
     lines.append("Battery saves to archive: \(plan.batterySaves.map(\.path).joined(separator: ", "))")
     func section(_ title: String, _ items: [String]) {

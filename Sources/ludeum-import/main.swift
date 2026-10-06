@@ -4,7 +4,8 @@ import LudeumCore
 // ludeum-import: command-line tools on top of LudeumCore.
 //
 //   ludeum-import check                    Live check of IGDB and Hasheous through the real cache.
-//   ludeum-import migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--data <folder>]
+//   ludeum-import migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>]
+//                                 [--openemu-support <folder>] [--data <folder>]
 //                                           Moves OpenEmu's ROMs into ROM folders, once (OpenEmu closed).
 //
 // Every command first needs the Data folder, and refuses without it in the app's words.
