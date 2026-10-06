@@ -26,13 +26,18 @@ public struct ROMLocator: Sendable {
         guard let folder = folder(of: rom) else { return [] }
         let files = (try? folder.files(named: rom.folderName)) ?? []
         let basePath = folder.url.standardizedFileURL.path(percentEncoded: false)
+        let subfolderPath = folder.url.appending(path: rom.folderName, directoryHint: .isDirectory).standardizedFileURL
+            .path(percentEncoded: false)
+        // Inside its subfolder, from there; anything beside it (its `.7z`), from the ROM folder.
+        func name(of file: URL) -> String {
+            let path = file.standardizedFileURL.path(percentEncoded: false)
+            guard let base = [subfolderPath, basePath].first(where: path.hasPrefix) else { return file.lastPathComponent }
+            return String(path.dropFirst(base.count)).trimmingPrefix("/").description
+        }
         return files.map { file in
             let values = try? file.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey])
-            let path = file.standardizedFileURL.path(percentEncoded: false)
             return ROMFileInfo(
-                url: file,
-                name: path.hasPrefix(basePath)
-                    ? String(path.dropFirst(basePath.count)).trimmingPrefix("/").description : file.lastPathComponent,
+                url: file, name: name(of: file),
                 size: values?.fileSize.map(Int64.init), created: values?.creationDate, modified: values?.contentModificationDate)
         }
     }
@@ -41,7 +46,7 @@ public struct ROMLocator: Sendable {
 /// One file of a ROM, as Game detail lists it.
 public struct ROMFileInfo: Sendable, Equatable {
     public let url: URL
-    /// Its path from its ROM folder.
+    /// Its path from its ROM's subfolder, if it's inside it, else from its ROM folder.
     public let name: String
     public let size: Int64?
     public let created: Date?

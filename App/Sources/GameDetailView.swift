@@ -301,8 +301,15 @@ struct GameDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         VStack(alignment: .leading) {
-                            // Its file's full name, extension and all.
-                            Text(rom.fileName).strikethrough(rom.missing)
+                            // Its subfolder, whose files show when it's opened; else its file's full name, extension and all.
+                            Group {
+                                if let subfolder = rom.subfolder {
+                                    Text("\(Image(systemName: "folder")) \(subfolder)")
+                                } else {
+                                    Text(rom.fileName)
+                                }
+                            }
+                            .strikethrough(rom.missing)
                             Text(
                                 [
                                     readableVersion(rom.version), rom.disc.map { "Disc \($0)" },

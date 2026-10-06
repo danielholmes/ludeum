@@ -18,6 +18,10 @@ public struct LudeumROM: Sendable, Equatable, Identifiable {
     public let archived: Bool
     /// Its subfolder holds its Discs but no playlist, so Play can't open them all.
     public var needsPlaylist = false
+
+    /// The subfolder it's kept in, named after it, when it's a ROM folder subfolder ROM; nil for a loose file
+    /// or an archive.
+    public var subfolder: String? { fileName.hasPrefix(folderName + "/") ? folderName : nil }
 }
 
 /// What deleting a Game takes with it, for the confirmation.

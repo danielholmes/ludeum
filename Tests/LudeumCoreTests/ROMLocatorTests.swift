@@ -31,16 +31,35 @@ func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, 
         #expect(try locator.file(of: rom) == archive)
     }
 
-    @Test func aFolderROMsFilesAreNamedFromTheROMFolder() throws {
+    @Test func aSubfolderROMsFilesAreNamedFromItsSubfolder() throws {
         let ps2 = try FakeROMFolder(in: directory)
         try ps2.add("Okami (USA)/Okami (USA).cue")
         try ps2.add("Okami (USA)/Okami (USA).bin", "12345")
+        try ps2.add("Okami (USA)/Extras/readme.txt")
         let locator = ROMLocator(romFolders: [ps2.folder])
 
-        let files = locator.files(of: folderROM("Okami (USA)"))
+        let files = locator.files(of: folderROM("Okami (USA)", fileName: "Okami (USA)/Okami (USA).cue"))
 
-        #expect(files.map(\.name) == ["Okami (USA)/Okami (USA).bin", "Okami (USA)/Okami (USA).cue"])
-        #expect(files.first?.size == 5)
+        #expect(Set(files.map(\.name)) == ["Okami (USA).bin", "Okami (USA).cue", "Extras/readme.txt"])
+        #expect(files.first { $0.name == "Okami (USA).bin" }?.size == 5)
+    }
+
+    @Test func aSubfolderROMsArchiveBesideItKeepsItsNameInTheROMFolder() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        try ps2.add("Okami (USA)/Okami (USA).iso")
+        try ps2.add("Okami (USA).7z")
+        let locator = ROMLocator(romFolders: [ps2.folder])
+
+        let files = locator.files(of: folderROM("Okami (USA)", fileName: "Okami (USA)/Okami (USA).iso"))
+
+        #expect(Set(files.map(\.name)) == ["Okami (USA).iso", "Okami (USA).7z"])
+    }
+
+    @Test func aSubfolderROMIsHeadedByItsSubfolderAndAFileROMByItsFile() {
+        #expect(folderROM("Okami (USA)", fileName: "Okami (USA)/Okami (USA).cue").subfolder == "Okami (USA)")
+        #expect(folderROM("Okami (USA)", fileName: "Okami (USA)/Disc 1/Okami (USA).cue").subfolder == "Okami (USA)")
+        #expect(folderROM("Okami (USA)", fileName: "Okami (USA).iso").subfolder == nil)
+        #expect(folderROM("Okami (USA)", fileName: "Okami (USA).7z", archived: true).subfolder == nil)
     }
 
     @Test func anArchivedOrCompactedROMsFileIsAnArchiveButAPlayableROMsImageIsNot() throws {
