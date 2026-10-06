@@ -41,57 +41,66 @@ struct MainWindow: View {
             .safeAreaInset(edge: .bottom, spacing: 0) { BackgroundTasksPanel(tasks: services.tasks, work: services.work) }
             // The sidebar is always shown: no toggle to hide it.
             .toolbar(removing: .sidebarToggle)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 300, max: 400)
         } content: {
-            switch selection {
-            case .library:
-                LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter)
-                    .id(libraryRequest)
-            case .finished, .childhood:
-                if let screen = selection, let scope = screen.shortcutFilter {
-                    LibraryScreen(services: services, selection: $selectedGame, scope: scope, title: screen.title).id(selection)
+            Group {
+                switch selection {
+                case .library:
+                    LibraryScreen(services: services, selection: $selectedGame, initialFilter: libraryFilter)
+                        .id(libraryRequest)
+                case .finished, .childhood:
+                    if let screen = selection, let scope = screen.shortcutFilter {
+                        LibraryScreen(services: services, selection: $selectedGame, scope: scope, title: screen.title).id(selection)
+                    }
+                case .platform(let id, let name):
+                    LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(platformId: id), title: name)
+                        .navigationSubtitle(Emulator.of(platformId: id)?.name ?? "")
+                        .id(selection)
+                case .pinned(let pin):
+                    LibraryScreen(services: services, selection: $selectedGame, scope: pin.filter, title: pin.name)
+                        .id(selection)
+                case .list(let id, _):
+                    if let list = lists.first(where: { $0.id == id }) {
+                        LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(listId: id), title: list.name).id(
+                            id)
+                    }
+                case .whatToPlayNext:
+                    WhatToPlayNextScreen(services: services, selection: $selectedGame)
+                case .topRated:
+                    TopRatedScreen(services: services, selection: $selectedGame)
+                case .yearInReview:
+                    YearInReviewScreen(services: services, selection: $selectedGame)
+                case .igdb:
+                    IGDBScreen(services: services, query: $igdbQuery, shown: $igdbResult, open: openGame)
+                case .reviewQueue:
+                    ReviewQueueScreen(services: services, checkAgain: importModel.importNow, shownGame: $selectedGame)
+                        .disabled(services.work.journalLocked)
+                case .syncPage:
+                    SyncPage(model: syncModel)
+                case .importPage:
+                    ImportPage(model: importModel)
+                case let screen?:
+                    PlaceholderScreen(screen: screen)
+                case nil:
+                    ContentUnavailableView("Nothing selected", systemImage: "sidebar.left")
                 }
-            case .platform(let id, let name):
-                LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(platformId: id), title: name)
-                    .navigationSubtitle(Emulator.of(platformId: id)?.name ?? "")
-                    .id(selection)
-            case .pinned(let pin):
-                LibraryScreen(services: services, selection: $selectedGame, scope: pin.filter, title: pin.name)
-                    .id(selection)
-            case .list(let id, _):
-                if let list = lists.first(where: { $0.id == id }) {
-                    LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(listId: id), title: list.name).id(id)
-                }
-            case .whatToPlayNext:
-                WhatToPlayNextScreen(services: services, selection: $selectedGame)
-            case .topRated:
-                TopRatedScreen(services: services, selection: $selectedGame)
-            case .yearInReview:
-                YearInReviewScreen(services: services, selection: $selectedGame)
-            case .igdb:
-                IGDBScreen(services: services, query: $igdbQuery, shown: $igdbResult, open: openGame)
-            case .reviewQueue:
-                ReviewQueueScreen(services: services, checkAgain: importModel.importNow, shownGame: $selectedGame)
-                    .disabled(services.work.journalLocked)
-            case .syncPage:
-                SyncPage(model: syncModel)
-            case .importPage:
-                ImportPage(model: importModel)
-            case let screen?:
-                PlaceholderScreen(screen: screen)
-            case nil:
-                ContentUnavailableView("Nothing selected", systemImage: "sidebar.left")
             }
+            // The rest of the window, after the sidebar and the Game.
+            .navigationSplitViewColumnWidth(min: 400, ideal: 800)
         } detail: {
-            if selection == .igdb, let igdbResult {
-                IGDBGameDetailView(services: services, result: igdbResult, browse: showInLibrary, open: openGame)
-                    .id(igdbResult.id)
-            } else if let selectedGame {
-                GameDetailView(services: services, id: selectedGame, browse: showInLibrary) { self.selectedGame = nil }
-                    .id(selectedGame)
-                    .disabled(services.work.journalLocked)
-            } else {
-                GameDetailPlaceholder()
+            Group {
+                if selection == .igdb, let igdbResult {
+                    IGDBGameDetailView(services: services, result: igdbResult, browse: showInLibrary, open: openGame)
+                        .id(igdbResult.id)
+                } else if let selectedGame {
+                    GameDetailView(services: services, id: selectedGame, browse: showInLibrary) { self.selectedGame = nil }
+                        .id(selectedGame)
+                        .disabled(services.work.journalLocked)
+                } else {
+                    GameDetailPlaceholder()
+                }
             }
+            .navigationSplitViewColumnWidth(min: 360, ideal: 600, max: 900)
         }
         .overlay(alignment: .bottom) {
             if let summary = importModel.summary {
@@ -165,7 +174,6 @@ struct Sidebar: View {
                 }
             }
         }
-        .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .sheet(item: $naming) { naming in
             ListNameSheet(naming: naming) { name in
                 apply {

@@ -468,6 +468,14 @@ private struct DuplicateROMRow: View {
 
 /// Asks before quitting while the Import's phases are running.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Each launch opens the main window's columns at their ideal widths, not as last dragged.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("NSSplitView Subview Frames main") {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated { MenuPruner.start() }
     }

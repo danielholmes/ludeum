@@ -30,7 +30,9 @@ struct LudeumApp: App {
                 .modifier(OpenSettingsWithoutCredentials(settings: settings))
                 .modifier(DailyBackupOnLaunch(journal: journal, backups: settings.backups()))
         }
-        .defaultSize(width: 1200, height: 760)
+        .defaultSize(width: 1700, height: 900)
+        // Every launch opens at this size with the columns at their ideal widths, not as last left.
+        .restorationBehavior(.disabled)
         .commands { TrimmedMenus() }
 
         Settings {
