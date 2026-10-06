@@ -547,7 +547,8 @@ private func playthroughDetails(_ d: PlaythroughDraft) -> String? {
 
 /// Messages for the journal's rules, as the UI says them.
 func journalErrorText(_ error: Error) -> String {
-    switch error as? LudeumError {
+    if let error = error as? ReviewError { return reviewErrorText(error) }
+    return switch error as? LudeumError {
     case .endBeforeStart: "The end date can't come before the start date."
     case .listNameTaken: "There's already a List with that name."
     case .playerNameTaken: "There's already a Player with that name."
@@ -559,6 +560,18 @@ func journalErrorText(_ error: Error) -> String {
     case .gameNotFound: "That Game no longer exists."
     case .runAheadOutOfRange: "Run-ahead is 0 to 10 frames."
     case nil: error.localizedDescription
+    }
+}
+
+private func reviewErrorText(_ error: ReviewError) -> String {
+    switch error {
+    case .alreadyMatched: "This ROM was already answered."
+    case .suggestionGone: "IGDB no longer has the suggested game."
+    case .notASiblingPlatform: "Confirm can only use this ROM's Platform or its sibling."
+    case .alreadyInROMFolder: "That Platform's ROM folder already has a ROM by this name. Nothing was moved."
+    case .romFilesNotFound: "This ROM's files aren't in its ROM folder, so it can't move. Check again first."
+    case .noROMFolder: "That Platform has no ROM folder."
+    case .siblingWontReadFile: "That Platform's ROM folder doesn't read this ROM's file type. Nothing was moved."
     }
 }
 

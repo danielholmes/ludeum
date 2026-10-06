@@ -16,6 +16,9 @@ public struct ReviewItem: Sendable, Equatable, Identifiable {
     public let checksumIgdbGameId: Int64?
     public let namesAgree: Bool
     public var id: Int64 { romId }
+    /// The Platforms Confirm offers: the ROM's, and its siblings (Game Boy and Game Boy Color, NES and Famicom,
+    /// SNES and Super Famicom). Choosing another moves the ROM into that Platform's ROM folder.
+    public var platformChoices: [Int64] { ROMPlatform.siblings(of: platformId) }
 
     public enum SuggestionKind: String, Sendable {
         case checksum, name
@@ -115,25 +118,57 @@ extension LudeumStore {
         }
     }
 
-    /// Matches the ROM to the Game with that IGDB link on that Platform, creating the Game if needed.
-    func match(_ item: ReviewItem, igdbGameId: Int64, igdbName: String, platform: IGDBPlatform, kind: String) throws -> GameID {
-        try db.write { db in
-            try db.execute(
-                sql: "INSERT INTO platform (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING", arguments: [platform.id, platform.name])
-            let game: GameID
-            if let existing = try GameID.fetchOne(
-                db, sql: "SELECT id FROM game WHERE igdbGameId = ? AND platformId = ?", arguments: [igdbGameId, platform.id])
-            {
-                game = existing
-            } else {
+    /// Matches the ROM to the Game with that IGDB link on that Platform, creating the Game if needed. With `romMove`,
+    /// the ROM goes to the Platform too: its files move first, and move back if the Match then fails.
+    func match(
+        _ item: ReviewItem, igdbGameId: Int64, igdbName: String, platform: IGDBPlatform, kind: String, romMove: ROMMove? = nil
+    ) throws -> GameID {
+        try romMove?.run()
+        do {
+            return try db.write { db in
                 try db.execute(
-                    sql: "INSERT INTO game (platformId, name, igdbGameId, igdbName) VALUES (?, ?, ?, ?)",
-                    arguments: [platform.id, cleanName(item.romName), igdbGameId, igdbName])
-                game = db.lastInsertedRowID
+                    sql: "INSERT INTO platform (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
+                    arguments: [platform.id, platform.name])
+                if romMove != nil {
+                    try db.execute(sql: "UPDATE rom SET platformId = ? WHERE id = ?", arguments: [platform.id, item.romId])
+                }
+                let game: GameID
+                if let existing = try GameID.fetchOne(
+                    db, sql: "SELECT id FROM game WHERE igdbGameId = ? AND platformId = ?", arguments: [igdbGameId, platform.id])
+                {
+                    game = existing
+                } else {
+                    try db.execute(
+                        sql: "INSERT INTO game (platformId, name, igdbGameId, igdbName) VALUES (?, ?, ?, ?)",
+                        arguments: [platform.id, cleanName(item.romName), igdbGameId, igdbName])
+                    game = db.lastInsertedRowID
+                }
+                try Self.match(db, rom: item.romId, to: game, kind: kind, day: today(), now: clock.now())
+                return game
             }
-            try Self.match(db, rom: item.romId, to: game, kind: kind, day: today(), now: clock.now())
-            return game
+        } catch {
+            romMove?.undo()
+            throw error
         }
+    }
+
+    /// Plans moving a ROM to a sibling Platform. A missing ROM, or one still OpenEmu's, has no files here to move, so
+    /// only its Platform changes. Throws, with nothing touched, when the ROM can't go there.
+    func romMove(_ item: ReviewItem, to platformId: Int64, romFolders: [ROMFolder]) throws -> ROMMove {
+        let row = try db.read { db in
+            try Row.fetchOne(db, sql: "SELECT folderName, missing FROM rom WHERE id = ?", arguments: [item.romId])
+        }
+        guard let row, let name = row["folderName"] as String? else { return ROMMove(moves: []) }
+        let taken = try db.read { db in
+            try Bool.fetchOne(
+                db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE platformId = ? AND folderName = ?)", arguments: [platformId, name])!
+        }
+        if taken { throw ReviewError.alreadyInROMFolder }
+        if row["missing"] { return ROMMove(moves: []) }
+        guard let from = romFolders.first(where: { $0.platformId == item.platformId }),
+            let to = romFolders.first(where: { $0.platformId == platformId })
+        else { throw ReviewError.noROMFolder }
+        return try ROMMove.plan(name, from: from, to: to)
     }
 
     /// Sets the ROM's Match, clears its suggestion, and applies any OpenEmu data held for it since the first Import.
@@ -160,6 +195,16 @@ public enum ReviewError: Error, Equatable {
     case alreadyMatched
     /// IGDB doesn't know the suggested game any more.
     case suggestionGone
+    /// Confirm offers only the ROM's Platform and its siblings.
+    case notASiblingPlatform
+    /// The sibling Platform already has a ROM by that name, or a file where one of its files would go.
+    case alreadyInROMFolder
+    /// The ROM is present, but its files aren't in its ROM folder (or the folder can't be read).
+    case romFilesNotFound
+    /// The ROM's Platform, or the sibling, has no ROM folder.
+    case noROMFolder
+    /// The sibling's ROM folder doesn't read the ROM's file type.
+    case siblingWontReadFile
 }
 
 private func gameROM(_ rom: LudeumROM) -> GameROM {
@@ -172,25 +217,35 @@ private func isPlaylist(_ fileName: String) -> Bool { (fileName as NSString).pat
 public struct ReviewQueue: Sendable {
     let journal: LudeumStore
     let igdb: IGDBClient
+    let romFolders: [ROMFolder]
 
-    public init(journal: LudeumStore, igdb: IGDBClient) {
+    /// `romFolders` are where Confirm on a sibling Platform moves a ROM's files from and to.
+    public init(journal: LudeumStore, igdb: IGDBClient, romFolders: [ROMFolder] = []) {
         self.journal = journal
         self.igdb = igdb
+        self.romFolders = romFolders
     }
 
-    /// Confirm: Matches the ROM to its suggestion, on the ROM's Platform.
+    /// Confirm: Matches the ROM to its suggestion, on the ROM's Platform or one of its siblings (`platformChoices`).
+    /// On a sibling, the ROM moves there too: into its ROM folder when present, only in the journal when missing or
+    /// still OpenEmu's.
     @discardableResult
-    public func confirm(_ item: ReviewItem) async throws -> GameID {
+    public func confirm(_ item: ReviewItem, on platformId: Int64? = nil) async throws -> GameID {
+        let platformId = platformId ?? item.platformId
+        guard item.platformChoices.contains(platformId) else { throw ReviewError.notASiblingPlatform }
         guard let suggested = item.suggestedIgdbGameId else { throw ReviewError.suggestionGone }
         guard let record = try await igdb.games(ids: [Int(suggested)])[Int(suggested)] else { throw ReviewError.suggestionGone }
-        let platform = try await platform(item.platformId)
+        let romMove = platformId == item.platformId ? nil : try journal.romMove(item, to: platformId, romFolders: romFolders)
+        let platform = try await platform(platformId)
         return try journal.match(
-            item, igdbGameId: suggested, igdbName: record.name ?? cleanName(item.romName), platform: platform, kind: "confirmed")
+            item, igdbGameId: suggested, igdbName: record.name ?? cleanName(item.romName), platform: platform, kind: "confirmed",
+            romMove: romMove)
     }
 
-    /// Whether confirming would give an existing Game Duplicate Versions. It warns, never blocks.
-    public func confirmWouldGiveDuplicateVersions(_ item: ReviewItem) async throws -> Bool {
-        guard let suggested = item.suggestedIgdbGameId, let game = try journal.gameID(igdbGameId: suggested, platformId: item.platformId)
+    /// Whether confirming on that Platform would give an existing Game Duplicate Versions. It warns, never blocks.
+    public func confirmWouldGiveDuplicateVersions(_ item: ReviewItem, on platformId: Int64? = nil) async throws -> Bool {
+        guard let suggested = item.suggestedIgdbGameId,
+            let game = try journal.gameID(igdbGameId: suggested, platformId: platformId ?? item.platformId)
         else { return false }
         return try journal.wouldHaveDuplicateVersions(game, adding: item.romId)
     }

@@ -159,6 +159,8 @@ private struct ReviewItemDetail: View {
     @State private var checksumGame: IGDBGame?
     /// The ROM's Platform, once IGDB's list of platforms is loaded.
     @State private var romPlatform: IGDBPlatform?
+    /// The Platform Confirm matches on: one of `item.platformChoices`, at first the one the suggestion is on.
+    @State private var confirmPlatform: Int64 = 0
     /// Every IGDB platform, for Make by hand's "any other Platform".
     @State private var allPlatforms: [IGDBPlatform] = []
     @State private var searching = false
@@ -289,6 +291,15 @@ private struct ReviewItemDetail: View {
                     }
                     HStack {
                         Button("Confirm", action: confirm).buttonStyle(.borderedProminent)
+                        if picked == nil, item.platformChoices.count > 1 {
+                            Picker("on", selection: $confirmPlatform) {
+                                ForEach(item.platformChoices, id: \.self) { id in
+                                    Text(ROMPlatform.all[id]?.name ?? "Platform \(id)").tag(id)
+                                }
+                            }
+                            .fixedSize()
+                            .help("Another Platform moves the ROM into its ROM folder")
+                        }
                         if picked != nil {
                             Button(item.suggestedIgdbGameId == nil ? "Clear" : "Back to the suggestion") {
                                 Task { await load() }
@@ -365,6 +376,7 @@ private struct ReviewItemDetail: View {
         picked = nil
         suggestion = nil
         checksumGame = nil
+        confirmPlatform = item.platformId
         let all = (try? await services.igdb?.platforms()) ?? []
         allPlatforms = all
         romPlatform = all.first { $0.id == item.platformId }
@@ -373,6 +385,11 @@ private struct ReviewItemDetail: View {
         let games = (try? await igdb.games(ids: wanted)) ?? [:]
         suggestion = item.suggestedIgdbGameId.flatMap { games[Int($0)] }
         checksumGame = item.checksumIgdbGameId.flatMap { games[Int($0)] }
+        // The ROM's own Platform if the suggestion is on it, else the first sibling it is on.
+        let listed = Set((suggestion?.record["platforms"]?.array ?? []).compactMap { $0["id"]?.int ?? $0.int }.map(Int64.init))
+        if !listed.contains(item.platformId), let sibling = item.platformChoices.first(where: listed.contains) {
+            confirmPlatform = sibling
+        }
     }
 
     /// A sheet that's closing can't present the warning, so it waits a moment.
@@ -389,11 +406,12 @@ private struct ReviewItemDetail: View {
             act { try await queue.choose(item, igdbGameId: picked.igdbGameId, name: picked.name, platform: picked.platform) }
             return
         }
+        let platform = confirmPlatform
         Task {
-            if (try? await queue.confirmWouldGiveDuplicateVersions(item)) == true {
-                duplicateWarning = { act { try await queue.confirm(item) } }
+            if (try? await queue.confirmWouldGiveDuplicateVersions(item, on: platform)) == true {
+                duplicateWarning = { act { try await queue.confirm(item, on: platform) } }
             } else {
-                act { try await queue.confirm(item) }
+                act { try await queue.confirm(item, on: platform) }
             }
         }
     }

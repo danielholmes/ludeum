@@ -112,3 +112,56 @@ public struct FolderROMFile: Sendable, Equatable {
 
     public static func == (a: Self, b: Self) -> Bool { a.name == b.name && a.ready == b.ready && a.archive == b.archive }
 }
+
+/// Moving one ROM from its ROM folder into another's: its ready file (with its subfolder, or a cue sheet's tracks)
+/// and its `.7z`, each to the same place in the other folder.
+struct ROMMove {
+    let moves: [(from: URL, to: URL)]
+
+    /// Checks everything before anything moves: the ROM's files are there, the other folder has nothing in their way,
+    /// and it reads the ROM's file.
+    static func plan(_ name: String, from: ROMFolder, to: ROMFolder) throws -> ROMMove {
+        guard let rom = try? from.scan().first(where: { $0.name == name }) else { throw ReviewError.romFilesNotFound }
+        if (try? to.scan())?.contains(where: { $0.name == name }) == true { throw ReviewError.alreadyInROMFolder }
+        let subfolder = from.url.appending(path: name, directoryHint: .isDirectory)
+        var items: [URL]
+        if (try? subfolder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            items = [subfolder]
+        } else if let ready = rom.ready {
+            guard to.reads(fileName: ready.lastPathComponent) else { throw ReviewError.siblingWontReadFile }
+            items = ROMFiles.files(of: ready)
+        } else {
+            items = []
+        }
+        items += rom.archive.map { [$0] } ?? []
+        let base = from.url.standardizedFileURL.path(percentEncoded: false)
+        let moves = items.map { item in
+            let path = item.standardizedFileURL.path(percentEncoded: false)
+            let relative =
+                path.hasPrefix(base) ? String(path.dropFirst(base.count)).trimmingPrefix("/").description : item.lastPathComponent
+            return (from: item, to: to.url.appending(path: relative))
+        }
+        if moves.contains(where: { FileManager.default.fileExists(atPath: $0.to.path(percentEncoded: false)) }) {
+            throw ReviewError.alreadyInROMFolder
+        }
+        return ROMMove(moves: moves)
+    }
+
+    /// Moves every file; on a failure, moves back the ones already moved.
+    func run() throws {
+        for (i, move) in moves.enumerated() {
+            do {
+                try FileManager.default.createDirectory(at: move.to.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try FileManager.default.moveItem(at: move.from, to: move.to)
+            } catch {
+                ROMMove(moves: Array(moves.prefix(i))).undo()
+                throw error
+            }
+        }
+    }
+
+    /// Moves the files back, as far as it can.
+    func undo() {
+        for move in moves.reversed() { try? FileManager.default.moveItem(at: move.to, to: move.from) }
+    }
+}
