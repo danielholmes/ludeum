@@ -1,6 +1,6 @@
 import Foundation
 
-public struct IGDBCredentials: Sendable {
+public struct IGDBCredentials: Sendable, Equatable {
     public let clientID: String
     public let clientSecret: String
 

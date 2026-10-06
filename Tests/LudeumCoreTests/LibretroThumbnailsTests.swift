@@ -60,6 +60,17 @@ import Testing
         #expect(h.internet.sent.isEmpty)
     }
 
+    @Test func imagesDontWaitTheirTurnAtGitHubsRateLimit() async throws {
+        let games = ["Parasite Eve II (USA)", "Vagrant Story (USA)", "Xenogears (USA)"]
+        h.internet.addLibretro("Sony_-_PlayStation", games)
+
+        for game in games { _ = try await h.libretro.image("Sony - PlayStation/Named_Boxarts/\(game).png") }
+
+        let times = h.internet.sent(to: FakeInternet.Hosts.libretro).map(\.at)
+        #expect(times.count == 3)
+        #expect(Set(times).count == 1)
+    }
+
     @Test func imagesComeFromTheCDNOnceAndAreCached() async throws {
         h.internet.addLibretro("Sony_-_PlayStation", ["Parasite Eve II (USA)"])
         let path = "Sony - PlayStation/Named_Boxarts/Parasite Eve II (USA).png"

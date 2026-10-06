@@ -38,20 +38,36 @@ import SwiftUI
     let sheets = AppSheets()
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
+    /// Made once: it holds GitHub's rate limiter.
+    let libretro: LibretroThumbnails?
+    private let clients = Clients()
 
     init(settings: AppSettings, journal: LudeumStore?) {
         self.settings = settings
         self.journal = journal
         cache = try? CacheStore(directory: CacheStore.defaultDirectory)
+        libretro = cache.map { LibretroThumbnails(cache: $0) }
     }
 
-    /// Nil until IGDB credentials are set in Settings. Cheap to make: the token lives in the Keychain.
+    /// Nil until IGDB credentials are set in Settings. The same client until they change, as it holds IGDB's rate
+    /// limiter: every screen, the Import and the refresh share it.
     var igdb: IGDBClient? {
         guard let credentials = settings.igdbCredentials, let cache else { return nil }
-        return IGDBClient(credentials: credentials, cache: cache, tokenStore: settings.secrets)
+        if let kept = clients.igdb, kept.credentials == credentials { return kept.client }
+        let client = IGDBClient(credentials: credentials, cache: cache, tokenStore: settings.secrets)
+        clients.igdb = (credentials, client)
+        return client
     }
 
-    var hasheous: HasheousClient? { cache.map { HasheousClient(cache: $0, apiKey: settings.hasheousKey) } }
+    /// The same client until its key changes, as it holds Hasheous's rate limiter.
+    var hasheous: HasheousClient? {
+        guard let cache else { return nil }
+        let key = settings.hasheousKey
+        if let kept = clients.hasheous, kept.key == key { return kept.client }
+        let client = HasheousClient(cache: cache, apiKey: key)
+        clients.hasheous = (key, client)
+        return client
+    }
 
     var reviewQueue: ReviewQueue? {
         guard let igdb, let journal else { return nil }
@@ -63,9 +79,14 @@ import SwiftUI
         return GameSearch(igdb: igdb, journal: journal)
     }
 
-    var libretro: LibretroThumbnails? { cache.map { LibretroThumbnails(cache: $0) } }
-
     var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb, libretro: libretro) } }
+}
+
+/// The IGDB and Hasheous clients last made, kept while their settings stay the same. A client holds its service's rate
+/// limiter, so a new one for every use would let every screen send at once.
+@MainActor private final class Clients {
+    var igdb: (credentials: IGDBCredentials, client: IGDBClient)?
+    var hasheous: (key: String?, client: HasheousClient)?
 }
 
 /// The one IGDB search component: a search box, an optional Platform filter, genre, theme and company

@@ -17,8 +17,11 @@ public struct LibretroNames: Sendable, Equatable {
 /// libretro-thumbnails: box scans, snaps and title screens named by No-Intro and Redump names.
 /// Each Platform's file listing comes from GitHub (one request per repo, cached); images come from
 /// `thumbnails.libretro.com`, which follows the repos' per-disc symlinks, else from GitHub when the CDN lags.
+/// Made once and shared, as it holds GitHub's rate limiter; the CDN's images don't wait their turn at it, so a
+/// screenful of Covers loads together.
 public final class LibretroThumbnails: Sendable {
     let cache: CacheStore
+    let transport: HTTPTransport
     let api: Throttle
     let maxAge: TimeInterval
 
@@ -27,6 +30,7 @@ public final class LibretroThumbnails: Sendable {
         maxAge: TimeInterval = CacheStore.defaultMaxAge
     ) {
         self.cache = cache
+        self.transport = transport
         self.maxAge = maxAge
         api = Throttle(requestsPerSecond: 1, transport: transport, clock: clock)
     }
@@ -55,7 +59,7 @@ public final class LibretroThumbnails: Sendable {
     public func image(_ path: String) async throws -> URL {
         try await cache.image(at: "libretro/\(path)") {
             let url = URL(string: "https://thumbnails.libretro.com")!.appending(path: path)
-            let (data, response) = try await api.send(URLRequest(url: url))
+            let (data, response) = try await transport.send(URLRequest(url: url))
             if response.statusCode == 200 { return data }
             guard response.statusCode == 404, let fromGitHub = try await fromGitHub(path) else {
                 throw HTTPStatusError(status: response.statusCode, url: url)
