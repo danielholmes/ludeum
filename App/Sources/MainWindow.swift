@@ -7,6 +7,9 @@ struct MainWindow: View {
     let importModel: ImportModel
     let syncModel: SyncModel
     @State private var selectedGame: GameID?
+    /// The selected screen and Game, kept for the next launch.
+    @AppStorage("mainSelectedScreen") private var savedScreen = Data()
+    @AppStorage("mainSelectedGame") private var savedGame = 0
     @State private var igdbQuery = ""
     /// What's typed in the toolbar's Search, until Return opens it in the Library.
     @State private var searchText = ""
@@ -118,7 +121,16 @@ struct MainWindow: View {
                     .frame(maxWidth: 520)
             }
         }
-        .onChange(of: selection) { if selection != .library { libraryFilter = LibraryFilter() } }
+        .onChange(of: selection) {
+            if selection != .library { libraryFilter = LibraryFilter() }
+            savedScreen = (try? JSONEncoder().encode(selection)) ?? Data()
+        }
+        .onChange(of: selectedGame) { savedGame = Int(selectedGame ?? 0) }
+        .onAppear {
+            if let screen = try? JSONDecoder().decode(Screen?.self, from: savedScreen) { selection = screen }
+            if savedGame != 0 { selectedGame = GameID(savedGame) }
+        }
+        .background(WindowFrameAutosave(name: "main"))
         .modifier(OngoingImportTriggers(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
         .modifier(EmulatorVersionsOnLaunch(services: services))
@@ -145,6 +157,22 @@ struct MainWindow: View {
             pins = (try? services.journal?.pins()) ?? []
             if case .pinned(let pin) = selection, !pins.contains(pin) { selection = .library }
             if case .list(let id, _) = selection, !lists.contains(where: { $0.id == id }) { selection = .library }
+            if case .platform(let id, _) = selection, !platformCounts.contains(where: { $0.id == id }) { selection = .library }
+            if let game = selectedGame, (try? services.journal?.game(game)) == nil { selectedGame = nil }
+        }
+    }
+}
+
+/// Saves the window's frame as it's moved and resized, and opens it there next launch.
+private struct WindowFrameAutosave: NSViewRepresentable {
+    let name: String
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = view.window, window.frameAutosaveName != name else { return }
+            window.setFrameAutosaveName(name)
         }
     }
 }

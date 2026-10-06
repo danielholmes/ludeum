@@ -1,7 +1,7 @@
 import LudeumCore
 
 /// A screen the main window's sidebar can select, shown in the middle column.
-enum Screen: Hashable {
+enum Screen: Hashable, Codable {
     case library
     /// Library shortcuts: the Library scoped to Finished or Childhood, like a Platform.
     case finished

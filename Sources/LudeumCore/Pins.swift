@@ -1,8 +1,8 @@
 import GRDB
 
 /// A franchise, series, theme or company pinned to the sidebar, which opens the Library filtered to it.
-public struct Pin: Sendable, Hashable {
-    public enum Kind: String, Sendable, Hashable {
+public struct Pin: Sendable, Hashable, Codable {
+    public enum Kind: String, Sendable, Hashable, Codable {
         case franchise, series, theme, company
     }
 
