@@ -61,6 +61,18 @@ public final class AppSettings: @unchecked Sendable {
         set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.ps2Folder) }
     }
 
+    /// Where the ROM folders live, one per Platform, each named for its Platform. Normally in Dropbox.
+    public var romFoldersRoot: URL {
+        get { folder(Keys.romFoldersRoot) ?? .homeDirectory.appending(path: "Dropbox/games", directoryHint: .isDirectory) }
+        set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.romFoldersRoot) }
+    }
+
+    /// A Platform's ROM folder: PS2's is its own setting, every other under the root. Nil for a Platform without one.
+    public func romFolder(platform: Int64) -> URL? {
+        if platform == ROMPlatform.ps2 { return ps2Folder }
+        return ROMPlatform.all[platform].map { romFoldersRoot.appending(path: $0.folderName, directoryHint: .isDirectory) }
+    }
+
     /// Every ROM folder an Import reads.
     public var romFolders: [ROMFolder] { [.ps2(ps2Folder)] }
 
@@ -90,5 +102,6 @@ public final class AppSettings: @unchecked Sendable {
         static let openEmuLibrary = "openEmuLibrary"
         static let backupFolder = "backupFolder"
         static let ps2Folder = "ps2Folder"
+        static let romFoldersRoot = "romFoldersRoot"
     }
 }

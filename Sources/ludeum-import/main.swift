@@ -9,6 +9,8 @@ import LudeumCore
 //                                           The first Import into a scratch journal (OpenEmu is only read).
 //   ludeum-import sync <library COPY> <journal folder> [--write]
 //                                           Previews (or writes) a Sync into a copy of the library.
+//   ludeum-import migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--roms <folder>]
+//                                           Moves OpenEmu's ROMs into ROM folders, once (OpenEmu closed).
 //
 // Credentials come from the environment or a .env file in the current directory
 // (see scripts/setup-igdb.sh).
@@ -66,5 +68,10 @@ case "sync" where CommandLine.arguments.count >= 4:
         library: URL(filePath: CommandLine.arguments[2], directoryHint: .isDirectory),
         journalFolder: URL(filePath: CommandLine.arguments[3], directoryHint: .isDirectory),
         write: CommandLine.arguments.contains("--write"), igdb: igdb)
-default: fail("usage: ludeum-import check | match-report <snapshot.sqlite> | first-import <library> <journal folder> [--commit]")
+case "migrate-openemu":
+    try migrateOpenEmuRun(Array(CommandLine.arguments.dropFirst(2)))
+default:
+    fail(
+        "usage: ludeum-import check | match-report <snapshot.sqlite> | first-import <library> <journal folder> [--commit]"
+            + " | migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--roms <folder>]")
 }

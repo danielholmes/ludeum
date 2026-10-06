@@ -61,6 +61,18 @@ import Testing
         #expect(settings().openEmuLibrary.path(percentEncoded: false) == "/tmp/OpenEmu Library/")
         #expect(settings().romFolders == [.ps2(URL(filePath: "/tmp/PS2", directoryHint: .isDirectory))])
     }
+
+    @Test func eachPlatformsROMFolderIsNamedForItUnderOneRoot() {
+        let s = settings()
+        #expect(s.romFolder(platform: 22)?.path(percentEncoded: false).hasSuffix("/Dropbox/games/Game Boy Color/") == true)
+
+        s.romFoldersRoot = URL(filePath: "/tmp/games", directoryHint: .isDirectory)
+        s.ps2Folder = URL(filePath: "/elsewhere/PS2", directoryHint: .isDirectory)
+
+        #expect(settings().romFolder(platform: 58)?.path(percentEncoded: false) == "/tmp/games/Super Famicom/")
+        #expect(settings().romFolder(platform: ROMPlatform.ps2)?.path(percentEncoded: false) == "/elsewhere/PS2/")
+        #expect(settings().romFolder(platform: 6) == nil)
+    }
 }
 
 @Suite struct KeychainTests {
