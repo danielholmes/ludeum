@@ -9,6 +9,7 @@ public enum BackupOperation: String, Sendable, CaseIterable {
     case beforeSync = "before-sync"
     case beforeDelete = "before-delete"
     case beforeRestore = "before-restore"
+    case beforeMigration = "before-migration"
 }
 
 /// One backup file of the journal database.
