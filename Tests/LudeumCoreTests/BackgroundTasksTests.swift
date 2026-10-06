@@ -83,3 +83,54 @@ private actor Gate {
         await untilIdle(tasks)
     }
 }
+
+/// A task ends however its work went, so what it may have left half-changed is looked at again.
+@MainActor @Suite struct BackgroundTaskEndingTests {
+    @Test func aFinishedTaskEndsOnceItHasFinished() async {
+        let tasks = BackgroundTasks()
+        var calls: [String] = []
+        tasks.enqueue(
+            "Archiving Okami", subject: .rom(1), work: { _ in }, finished: { calls.append("finished") }, ended: { calls.append("ended") })
+
+        await untilIdle(tasks)
+
+        #expect(calls == ["finished", "ended"])
+    }
+
+    @Test func aTaskThatFailsHasStillEnded() async {
+        let tasks = BackgroundTasks()
+        var ended = false
+        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in throw ArchiveError.noSevenZip }, ended: { ended = true })
+
+        await untilIdle(tasks)
+
+        #expect(ended)
+    }
+
+    @Test func aTaskStoppedWhileRunningHasStillEnded() async {
+        let tasks = BackgroundTasks()
+        var ended = false
+        tasks.enqueue(
+            "Archiving Okami", subject: .rom(1),
+            work: { _ in
+                while true { try await Task.sleep(for: .milliseconds(1)) }
+            }, ended: { ended = true })
+
+        tasks.cancel(tasks.items[0].id)
+        await untilIdle(tasks)
+
+        #expect(ended)
+    }
+
+    @Test func aTaskTakenOffTheQueueNeverStartedSoNeverEnds() async {
+        let tasks = BackgroundTasks()
+        var ended = false
+        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in try await Task.sleep(for: .milliseconds(20)) })
+        tasks.enqueue("Archiving ICO", subject: .rom(2), work: { _ in }, ended: { ended = true })
+
+        tasks.cancel(tasks.items[1].id)
+        await untilIdle(tasks)
+
+        #expect(!ended)
+    }
+}

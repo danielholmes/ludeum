@@ -116,3 +116,37 @@ extension ROMFolderImportTests {
         #expect(finished)
     }
 }
+
+extension ROMFolderImportTests {
+    @Test(.enabled(if: SevenZip.find() != nil, "needs 7-Zip's 7zz"))
+    func anArchiveThatFailsAfterItsFilesChangedStillShowsTheJournalWhatsThere() async throws {
+        let game = try await okamiInTheJournal()
+        try ps2.remove("Okami (USA).7z")
+        try ps2.add("Okami (USA).iso", String(repeating: "PS2", count: 10_000))
+        try j.journal.checkROMsAgain(game, in: [ps2.folder])
+        let rom = try #require(try j.journal.roms(of: game).first)
+
+        let finished = await Self.archiveButFailToTrash(rom, journal: j.journal, locator: ROMLocator(romFolders: [ps2.folder]))
+
+        // The .7z is in place and its .iso couldn't go to the Trash: the ROM is now in both forms.
+        #expect(try self.rom("Okami (USA)")?["inBothForms"] as Bool? == true)
+        #expect(finished)
+    }
+
+    /// Archives with a Trash that refuses everything, so the task fails once the `.7z` is already in place. Returns
+    /// whether `finished` ran.
+    @MainActor static func archiveButFailToTrash(_ rom: LudeumROM, journal: LudeumStore, locator: ROMLocator) async -> Bool {
+        struct NoTrash: Error {}
+        let tasks = BackgroundTasks()
+        let archiving = ROMArchiving(
+            locator: locator, journal: journal, tasks: tasks,
+            archiver: { ROMArchiver(sevenZip: SevenZip.find()!, freeSpace: { _ in .max }, moveToTrash: { _ in throw NoTrash() }) })
+        var finished = false
+
+        archiving.start(rom) { finished = true }
+        await untilIdle(tasks)
+
+        #expect(tasks.items.count == 1)
+        return finished
+    }
+}

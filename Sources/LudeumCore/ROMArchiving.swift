@@ -43,8 +43,8 @@ import Foundation
         return "\(rom.folderName).\(ext)"
     }
 
-    /// Queues the ROM's Archive, Unarchive or Compact. Once it's done, the ROM is checked again so the journal sees
-    /// the change, then `finished` runs.
+    /// Queues the ROM's Archive, Unarchive or Compact. Once it ends, the ROM is checked again so the journal sees whatever
+    /// changed, then `finished` runs: also after a failure or a Stop, which can come once its files have already moved.
     public func start(_ rom: LudeumROM, finished: @escaping @MainActor () -> Void = {}) {
         guard let action = Self.action(for: rom), let folder = locator.folder(of: rom) else { return }
         let name = rom.folderName
@@ -58,20 +58,20 @@ import Foundation
         case .archive:
             tasks.enqueue("Archiving \(name)", subject: .rom(rom.id)) { progress in
                 try await archiver().archive(name, in: folder, progress: progress)
-            } finished: {
+            } ended: {
                 done()
             }
         case .unarchive:
             let archive = folder.url.appending(path: rom.fileName)
             tasks.enqueue("Unarchiving \(name)", subject: .rom(rom.id)) { progress in
                 try await archiver().unarchive(archive, romName: name, in: folder, progress: progress)
-            } finished: {
+            } ended: {
                 done()
             }
         case .compact:
             tasks.enqueue("Compacting \(name)", subject: .rom(rom.id)) { progress in
                 try await archiver().compact(name, in: folder, progress: progress)
-            } finished: {
+            } ended: {
                 done()
             }
         }

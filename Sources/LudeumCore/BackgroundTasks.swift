@@ -23,6 +23,7 @@ public enum TaskSubject: Hashable, Sendable {
         public internal(set) var progress: Double?
         fileprivate let work: @Sendable (@escaping @Sendable (Double) -> Void) async throws -> Void
         fileprivate let finished: @MainActor () -> Void
+        fileprivate let ended: @MainActor () -> Void
     }
 
     public private(set) var items: [Item] = []
@@ -40,13 +41,14 @@ public enum TaskSubject: Hashable, Sendable {
         items.first { $0.subject == subject && ($0.state == .queued || $0.state == .running) }
     }
 
-    /// Adds work to the queue. `finished` runs on the main actor after it succeeds.
+    /// Adds work to the queue. `finished` runs on the main actor after it succeeds; `ended` once it has run at all,
+    /// whether it succeeded, failed or was stopped, as work that didn't finish can still have changed things.
     public func enqueue(
         _ title: String, subject: TaskSubject? = nil,
         work: @escaping @Sendable (@escaping @Sendable (Double) -> Void) async throws -> Void,
-        finished: @escaping @MainActor () -> Void = {}
+        finished: @escaping @MainActor () -> Void = {}, ended: @escaping @MainActor () -> Void = {}
     ) {
-        items.append(Item(title: title, subject: subject, work: work, finished: finished))
+        items.append(Item(title: title, subject: subject, work: work, finished: finished, ended: ended))
         startNext()
     }
 
@@ -81,6 +83,7 @@ public enum TaskSubject: Hashable, Sendable {
             } catch {
                 if let i = items.firstIndex(where: { $0.id == id }) { items[i].state = .failed(error.localizedDescription) }
             }
+            item.ended()
             running = nil
             startNext()
         }
