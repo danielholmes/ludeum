@@ -27,12 +27,24 @@ struct BackgroundTasksPanel: View {
                 .buttonStyle(.plain)
                 .help(expanded ? "Hide Background tasks" : "Show Background tasks")
                 if expanded {
-                    ForEach(tasks.items) { row($0) }
-                    if let refreshing = work.refreshing { refreshRow(refreshing) }
+                    // As tall as the list up to a cap, then it scrolls, so a long queue never pushes the toggle
+                    // off the window.
+                    ViewThatFits(in: .vertical) {
+                        list
+                        ScrollView { list }
+                    }
+                    .frame(maxHeight: 280)
                 }
             }
             .padding(10)
             .background(.bar)
+        }
+    }
+
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(tasks.items) { row($0) }
+            if let refreshing = work.refreshing { refreshRow(refreshing) }
         }
     }
 
