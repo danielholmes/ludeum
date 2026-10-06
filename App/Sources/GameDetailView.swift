@@ -254,9 +254,10 @@ struct GameDetailView: View {
     /// ▶ Play in the Platform's Emulator, and beside it the Emulator's settings. A Platform with no
     /// Emulator says so instead.
     @ViewBuilder private var playControls: some View {
-        if isArchived {
+        let refusal = playing.availability.refusal
+        if refusal == .archived {
             HStack(spacing: 12) {
-                Label("Archived: unarchive to play", systemImage: "archivebox").foregroundStyle(.orange)
+                Label(Play.Refusal.archived.message, systemImage: "archivebox").foregroundStyle(.orange)
                 if let rom = roms.first(where: { !$0.missing && $0.archived }) { archiveButton(rom) }
             }
         } else if let emulator, let platformId = game?.platformId {
@@ -268,8 +269,8 @@ struct GameDetailView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(services.versions.tooOldMessage(emulator) == nil ? nil : .red)
-                .disabled(isBeingArchived)
-                .help(isBeingArchived ? "Waiting for Archive or Unarchive to finish" : "Play in \(emulator.name)")
+                .disabled(refusal == .busy)
+                .help(refusal?.message ?? "Play in \(emulator.name)")
                 // Dolphin has no per-Game settings: every Game gets the same ones.
                 if !EmulatorSettingRow.rows(for: emulator, platformId: platformId).isEmpty {
                     EmulatorSettingsButton(emulator: emulator, platformId: platformId, settings: emulatorSettings) { settings in
@@ -277,18 +278,16 @@ struct GameDetailView: View {
                     }
                 }
             }
-        } else {
-            Text("No \(platform?.name ?? "") emulator yet").foregroundStyle(.secondary)
+        } else if let refusal {
+            Text(refusal.message).foregroundStyle(.secondary)
         }
     }
 
-    /// One of this Game's ROMs is queued or running in Background tasks: its files are about to change.
-    private var isBeingArchived: Bool { roms.contains { services.tasks.active(.rom($0.id)) != nil } }
-
-    /// Every present ROM is archived, so there's nothing to Play until one is Unarchived.
-    private var isArchived: Bool {
-        let present = roms.filter { !$0.missing }
-        return !present.isEmpty && present.allSatisfy(\.archived)
+    /// This Game's Play, with the ROMs a Background task is working on.
+    private var playing: Play {
+        Play(
+            platformId: game?.platformId ?? 0, platformName: platform?.name ?? "", roms: roms, settings: emulatorSettings,
+            busyROMs: Set(roms.map(\.id).filter { services.tasks.active(.rom($0)) != nil }))
     }
 
     @ViewBuilder private var romRows: some View {
@@ -413,49 +412,32 @@ struct GameDetailView: View {
 
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
 
-    /// The file a Play opens: the playlist of a multi-disc Version, else the first present ROM. Nil
-    /// (with the error shown) when it can't be found.
-    private func playFile() -> URL? {
-        let present = roms.filter { !$0.missing && !$0.archived }
-        guard let rom = present.first(where: { $0.fileName.lowercased().hasSuffix(".m3u") }) ?? present.first else { return nil }
-        do {
-            guard let file = try locator.file(of: rom, ready: true)
-            else {
-                playError = "Couldn't find \(rom.fileName). Run an Import, then try again."
-                return nil
-            }
-            return file
-        } catch {
-            self.playError = "Couldn't look for \(rom.fileName): \(error.localizedDescription)"
-            return nil
-        }
-    }
-
     /// Plays the Game in its Emulator, with every Emulator setting on the command line. A running
     /// Emulator gets the ROM in its open window.
     private func play(in emulator: Emulator) {
         playError = nil
-        if let tooOld = services.versions.tooOldMessage(emulator) {
-            versionAlert = ("Can't Play in \(emulator.name)", tooOld)
-            return
-        }
-        if let warning = services.versions.warningOnce(emulator) { versionAlert = ("Check \(emulator.name)'s version", warning) }
-        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: emulator.bundleIdentifier) else {
-            playError = "\(emulator.name) isn't installed."
-            return
-        }
-        guard let file = playFile() else { return }
-        let configuration = NSWorkspace.OpenConfiguration()
-        do {
-            configuration.arguments = try emulator.arguments(rom: file, platformId: game?.platformId ?? 0, settings: emulatorSettings)
-        } catch {
-            self.playError = "Couldn't write \(emulator.name)'s settings: \(error.localizedDescription)"
-            return
-        }
-        // A second MesenCE hands its arguments to the running one and quits; DuckStation opens another window.
-        configuration.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
-            if let error { Task { @MainActor in self.playError = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
+        let version: Play.VersionStatus =
+            if let tooOld = services.versions.tooOldMessage(emulator) {
+                .tooOld(tooOld)
+            } else if let warning = services.versions.warningOnce(emulator) {
+                .warn(warning)
+            } else {
+                .ok
+            }
+        switch playing.prepare(locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:)) {
+        case .refused(.tooOld(let message)):
+            versionAlert = ("Can't Play in \(emulator.name)", message)
+        case .refused(let refusal):
+            playError = refusal.message
+        case .open(let app, let arguments, let warning):
+            if let warning { versionAlert = ("Check \(emulator.name)'s version", warning) }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.arguments = arguments
+            // A second MesenCE hands its arguments to the running one and quits; DuckStation opens another window.
+            configuration.createsNewApplicationInstance = true
+            NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
+                if let error { Task { @MainActor in self.playError = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
+            }
         }
     }
 

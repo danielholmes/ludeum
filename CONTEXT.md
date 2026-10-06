@@ -121,11 +121,11 @@ An Emulator setting for Game Boy and Game Boy Color Games: the hardware the Emul
 _Avoid_: Forced platform, hardware mode
 
 **Play**:
-Opening a Game's present ROM in its Platform's Emulator. Play never changes journal data.
+Opening a Game's present ROM in its Platform's Emulator. Play never changes journal data. A Game can't be Played while a Background task is working on one of its ROMs.
 _Avoid_: Launch, run
 
 **Background task**:
-Long-running work the app does while I carry on, such as Archiving a ROM or refreshing the cache. Tasks queue and run one at a time, and keep running when I move to another screen.
+Long-running work the app does while I carry on, such as Archiving a ROM or refreshing the cache. Tasks queue and run one at a time, and keep running when I move to another screen. A task may be working on a ROM; while it is queued or running, that ROM's Game can't be Played.
 _Avoid_: Job, operation
 
 ### Working with OpenEmu
