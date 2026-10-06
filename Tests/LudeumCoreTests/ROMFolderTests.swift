@@ -15,6 +15,12 @@ struct FakeROMFolder {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     }
 
+    init(at url: URL, platform: Int64) throws {
+        platformId = platform
+        self.url = url
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+
     var folder: ROMFolder { .platform(platformId, url)! }
 
     @discardableResult

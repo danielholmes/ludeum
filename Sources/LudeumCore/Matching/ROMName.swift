@@ -67,6 +67,15 @@ public struct ROMName: Sendable, Hashable {
         regions = found.isEmpty ? nil : found
     }
 
+    /// The name without its `(Disc N)` and the label after it: the Version's, e.g. "Resident Evil 2 (USA)" for
+    /// "Resident Evil 2 (USA) (Disc 1) (Leon)".
+    public var withoutDisc: String {
+        guard let disc else { return raw }
+        var out = raw.replacingOccurrences(of: #"\s*\(Disc \#(disc)\)"#, with: "", options: .regularExpression)
+        if let discLabel { out = out.replacingOccurrences(of: " (\(discLabel))", with: "") }
+        return out.trimmingCharacters(in: .whitespaces)
+    }
+
     private static let tag = try! NSRegularExpression(pattern: #"\(([^\)]*)\)|\[([^\]]*)\]"#)
     private static let dumpFlag = #"^(!|a\d*|b\d*|f\d*|h.*|o\d*|p\d*|t\d*|C|S|BF|x)$"#
     private static let serial = #"^[A-Z]{4}[-_ ]?\d{3}\.?\d{2}$"#

@@ -7,6 +7,8 @@ import LudeumCore
 //   ludeum-import migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>]
 //                                 [--openemu-support <folder>] [--data <folder>]
 //                                           Moves OpenEmu's ROMs into ROM folders, once (OpenEmu closed).
+//   ludeum-import into-folders [--dry-run] [--journal <folder>] [--data <folder>]
+//                                           Moves loose disc ROMs into a folder each, once (Ludeum closed).
 //
 // Every command first needs the Data folder, and refuses without it in the app's words.
 // Credentials come from the environment or a .env file in the current directory
@@ -63,6 +65,8 @@ switch CommandLine.arguments.dropFirst().first {
 case "check": try await check()
 case "migrate-openemu":
     try await migrateOpenEmuRun(Array(CommandLine.arguments.dropFirst(2)))
+case "into-folders":
+    try await intoFoldersRun(Array(CommandLine.arguments.dropFirst(2)))
 default:
-    fail("usage: ludeum-import check | \(migrateOpenEmuUsage)")
+    fail("usage: ludeum-import check | \(migrateOpenEmuUsage) | \(intoFoldersUsage)")
 }

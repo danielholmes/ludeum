@@ -20,7 +20,7 @@ public enum ROMFiles {
     }
 
     /// A playlist's lines, less blanks and comments.
-    private static func playlistEntries(_ m3u: URL) -> [String] {
+    static func playlistEntries(_ m3u: URL) -> [String] {
         guard let text = try? String(contentsOf: m3u, encoding: .utf8) else { return [] }
         return text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !$0.hasPrefix("#") }

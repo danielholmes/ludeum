@@ -23,7 +23,7 @@ A game file in a ROM folder. A ROM identifies a Version of a Game, and is linked
 _Avoid_: File, image
 
 **ROM folder**:
-The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, or a cue sheet with its tracks, alongside anything else). So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. When both exist, the playable one is used.
+The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. When both exist, the playable one is used.
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
@@ -35,7 +35,7 @@ Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder name
 _Avoid_: Extract, compress, decompress
 
 **Disc**:
-One of several ROMs that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A playlist ROM that loads the Discs belongs to the same Version.
+One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version.
 _Avoid_: Part, volume, CD
 
 **IGDB link**:

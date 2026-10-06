@@ -14,6 +14,11 @@ public enum BackupOperation: String, Sendable, CaseIterable {
     case beforeMigration = "before-migration"
     /// Opening a journal whose schema this build moves on.
     case beforeSchemaMigration = "before-schema-migration"
+    /// `into-folders`'s: never pruned.
+    case beforeIntoFolders = "before-into-folders"
+
+    /// A one-off command's, the one way back from it.
+    var isKeptForever: Bool { self == .beforeMigration || self == .beforeIntoFolders }
 }
 
 /// One backup file of the journal database.
@@ -48,13 +53,13 @@ public enum BackupName {
 }
 
 /// The backups to delete: every backup from the last 7 days is kept, then the newest of each
-/// day up to 30 days old, then the newest of each month forever. The `before-migration` backup is
-/// kept whatever its age, as the one way back from `migrate-openemu`; it neither counts as nor stands in for
-/// the newest of its day or month.
+/// day up to 30 days old, then the newest of each month forever. The `before-migration` and `before-into-folders`
+/// backups are kept whatever their age, as the one way back from `migrate-openemu` and `into-folders`; neither counts
+/// as nor stands in for the newest of its day or month.
 public func backupsToPrune(_ backups: [Backup], now: Date, calendar: Calendar) -> [Backup] {
     var keep = Set<URL>()
     var newestPerPeriod: [String: Backup] = [:]
-    for backup in backups where backup.operation != .beforeMigration {
+    for backup in backups where !backup.operation.isKeptForever {
         let age = now.timeIntervalSince(backup.date)
         if age < 7 * 86_400 {
             keep.insert(backup.url)
@@ -66,7 +71,7 @@ public func backupsToPrune(_ backups: [Backup], now: Date, calendar: Calendar) -
         newestPerPeriod[period] = backup
     }
     keep.formUnion(newestPerPeriod.values.map(\.url))
-    return backups.filter { $0.operation != .beforeMigration && !keep.contains($0.url) }
+    return backups.filter { !$0.operation.isKeptForever && !keep.contains($0.url) }
 }
 
 /// Journal backups, taken with SQLite's backup API into `Backups/` in the Data folder. There's no local fallback: it
