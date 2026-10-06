@@ -19,7 +19,16 @@ struct LudeumApp: App {
                     Color.clear.frame(minWidth: 900, minHeight: 600)
                 }
             }
-            .sheet(isPresented: Binding(get: { launch.dataFolderMissing != nil }, set: { _ in })) {
+            // AppKit won't quit while a sheet is attached, so Quit takes the sheet down first and quits once it's gone.
+            .sheet(
+                isPresented: Binding(get: { launch.dataFolderMissing != nil && !launch.quitting }, set: { _ in }),
+                onDismiss: {
+                    guard launch.quitting else { return }
+                    NSApp.terminate(nil)
+                    // Only reached when quitting was cancelled, so the sheet comes back.
+                    launch.quitting = false
+                }
+            ) {
                 DataFolderSheet(launch: launch)
             }
             // The Data folder can go (Dropbox quit, the link broken) while Ludeum is open.
@@ -32,6 +41,12 @@ struct LudeumApp: App {
         .restorationBehavior(.disabled)
         .commands {
             TrimmedMenus()
+            CommandGroup(replacing: .appTermination) {
+                Button("Quit Ludeum") {
+                    if launch.dataFolderMissing != nil { launch.quitting = true } else { NSApp.terminate(nil) }
+                }
+                .keyboardShortcut("q")
+            }
             CommandGroup(after: .appSettings) {
                 Button("Players…") { launch.running?.services.sheets.players = true }
                     .disabled(launch.running == nil)
@@ -54,6 +69,8 @@ struct LudeumApp: App {
     private(set) var running: Running?
     /// Shown in a sheet that blocks the window while it's set.
     private(set) var dataFolderMissing: DataFolderMissing?
+    /// Set by the sheet's Quit, which takes the sheet down so the app can quit.
+    var quitting = false
 
     struct Running {
         let services: Services
@@ -94,7 +111,7 @@ struct DataFolderSheet: View {
             HStack {
                 if checked { Text("Still not there.").foregroundStyle(.secondary) }
                 Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
+                Button("Quit") { launch.quitting = true }
                 Button("Check again") {
                     launch.checkDataFolder()
                     checked = true
