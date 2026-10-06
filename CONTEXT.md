@@ -23,7 +23,7 @@ A game file in a ROM folder. A ROM identifies a Version of a Game, and is linked
 _Avoid_: File, image
 
 **ROM folder**:
-The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, or a cue sheet with its tracks, alongside anything else). So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. When both exist, the playable one is used.
+The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, or a cue sheet with its tracks, alongside anything else). So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. When both exist, the playable one is used.
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
@@ -127,6 +127,20 @@ _Avoid_: Launch, run
 **Background task**:
 Long-running work the app does while I carry on, such as Archiving a ROM or refreshing the cache. Tasks queue and run one at a time, and keep running when I move to another screen. A task may be working on a ROM; while it is queued or running, that ROM's Game can't be Played.
 _Avoid_: Job, operation
+
+### Where things live
+
+**Ludeum folder**:
+The one place on this Mac where Ludeum keeps everything it owns: the live journal and the Data folder. The cache sits outside it, since it can always be rebuilt.
+_Avoid_: App folder, library
+
+**Data folder**:
+The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Backups, and the battery saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
+_Avoid_: Kept folder, backup-worthy, Library folder
+
+**Backup**:
+A snapshot of the journal, kept in the Data folder. Taken routinely and before anything that changes the journal wholesale, such as a schema change or the move from OpenEmu.
+_Avoid_: Snapshot, backed up (for the Data folder being in Dropbox)
 
 ### Working with ROMs
 
