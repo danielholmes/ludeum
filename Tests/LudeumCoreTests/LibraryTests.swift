@@ -205,6 +205,22 @@ import Testing
         #expect(try search("_") == [])
         #expect(try search("  ").count == 3)
     }
+
+    @Test func everyWordMustMatchInAnyOrderButNotTogether() throws {
+        let j = try LudeumHarness()
+        try j.journal.addPlatform(id: 29, name: "Mega Drive")
+        try j.journal.addGame(platformId: 29, name: "Streets of Rage (World)", igdbGameId: 1, igdbName: "Streets of Rage")
+        try j.journal.addGame(platformId: 29, name: "Rage", igdbGameId: 2, igdbName: "Rage")
+
+        func search(_ text: String) throws -> [String] {
+            try j.journal.library(LibraryFilter(name: text), sort: .name, ascending: true).map(\.name)
+        }
+
+        #expect(try search("streets rage") == ["Streets of Rage"])
+        #expect(try search("rage  streets") == ["Streets of Rage"])
+        #expect(try search("rage") == ["Rage", "Streets of Rage"])
+        #expect(try search("streets doom").isEmpty)
+    }
 }
 
 @Suite struct ScopedFilterTests {

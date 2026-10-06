@@ -163,6 +163,10 @@ import Testing
         #expect(try search("man x") == ["Mega Man X"])
         #expect(try search("soccer") == ["Capcom's Soccer Shootout"])
         #expect(try search("metroidvania") == ["Taz-Mania"])
+        // Each word matches a name or a fact on its own.
+        #expect(try search("capcom x") == ["Mega Man X"])
+        #expect(try search("taz looney") == ["Taz-Mania"])
+        #expect(try search("looney capcom").isEmpty)
         #expect(try search("").count == 3)
     }
 

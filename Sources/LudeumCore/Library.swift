@@ -21,7 +21,7 @@ public struct LibraryFilter: Sendable, Equatable {
     public var series: String?
     /// A company involved in any role.
     public var company: String?
-    /// Games with a name (override, IGDB's or their own) containing this, ignoring ASCII case. Empty is no filter.
+    /// Games with names (override, IGDB's or their own) containing each of its words, ignoring ASCII case. Empty is no filter.
     public var name = ""
 
     public init(
@@ -49,6 +49,10 @@ public struct LibraryFilter: Sendable, Equatable {
 }
 
 extension LibraryFilter {
+    /// The words of the name search. A Game matches when it has every one, in any order and not
+    /// necessarily together: "streets rage" finds Streets of Rage.
+    public var searchWords: [String] { name.split(whereSeparator: \.isWhitespace).map(String.init) }
+
     /// These filters within a screen's fixed scope (a Platform, a List, Finished…): whatever the scope
     /// sets wins, and the rest combine with it.
     public func scoped(by scope: LibraryFilter) -> LibraryFilter {
@@ -211,11 +215,10 @@ extension LudeumStore {
         case .archived: conditions.append("(\(Self.archivedSQL))")
         case nil: break
         }
-        let search = filter.name.trimmingCharacters(in: .whitespaces)
-        if !search.isEmpty {
+        for word in filter.searchWords {
             // Every name the Game goes by, so an override doesn't hide IGDB's or the No-Intro one.
             conditions.append("(g.nameOverride LIKE ? ESCAPE '\\' OR g.igdbName LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\')")
-            let escaped = search.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
+            let escaped = word.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
                 .replacingOccurrences(of: "_", with: "\\_")
             arguments += Array(repeating: "%\(escaped)%", count: 3)
         }

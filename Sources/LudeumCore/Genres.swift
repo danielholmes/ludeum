@@ -74,16 +74,23 @@ extension LudeumStore {
     private func matching(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts]) throws
         -> [LibraryRow]
     {
-        let text = filter.name.trimmingCharacters(in: .whitespaces)
-        guard !text.isEmpty else { return try library(filter, sort: sort, ascending: ascending).having(filter, in: facts) }
+        let words = filter.searchWords
+        guard !words.isEmpty else { return try library(filter, sort: sort, ascending: ascending).having(filter, in: facts) }
         var withoutSearch = filter
         withoutSearch.name = ""
-        let byName = Set(try library(filter, sort: sort, ascending: ascending).map(\.id))
-        try Task.checkCancellation()
+        // Each word on its own, so one can match a name and another a company: "capcom x" finds Mega Man X.
+        let byName = try words.map { word in
+            var byWord = withoutSearch
+            byWord.name = word
+            let ids = Set(try library(byWord, sort: sort, ascending: ascending).map(\.id))
+            try Task.checkCancellation()
+            return ids
+        }
         return try library(withoutSearch, sort: sort, ascending: ascending)
             .filter { row in
                 try Task.checkCancellation()
-                return byName.contains(row.id) || (row.igdbGameId.flatMap { facts[$0] }?.mentions(text) ?? false)
+                let gameFacts = row.igdbGameId.flatMap { facts[$0] }
+                return words.indices.allSatisfy { byName[$0].contains(row.id) || (gameFacts?.mentions(words[$0]) ?? false) }
             }
             .having(filter, in: facts)
     }
