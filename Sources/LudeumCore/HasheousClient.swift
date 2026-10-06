@@ -44,21 +44,34 @@ public final class HasheousClient: Sendable {
         try await lookup(md5: md5, servesStale: true)
     }
 
+    /// Looks up a ROM by CRC32, as an archive's index gives it, the way `lookup(md5:)` does by MD5.
+    public func lookup(crc: String) async throws -> HasheousResult {
+        try await lookup(crc: crc, servesStale: true)
+    }
+
     func lookup(md5: String, servesStale: Bool) async throws -> HasheousResult {
-        let md5 = md5.lowercased()
+        try await lookup("md5", md5, servesStale: servesStale)
+    }
+
+    func lookup(crc: String, servesStale: Bool) async throws -> HasheousResult {
+        try await lookup("crc", crc, servesStale: servesStale)
+    }
+
+    /// `kind` is Hasheous's name for the hash, in its path and the cache key.
+    private func lookup(_ kind: String, _ hash: String, servesStale: Bool) async throws -> HasheousResult {
+        let hash = hash.lowercased()
+        let key = { (hash: String) in "hasheous:\(kind):\(hash)" }
         let payloads = try await cache.resolve(
-            [md5], key: Self.md5Key, maxAge: maxAge, batchSize: 1, servesStale: servesStale
+            [hash], key: key, maxAge: maxAge, batchSize: 1, servesStale: servesStale
         ) { _ in
-            [md5: try await fetch(md5: md5)]
+            [hash: try await fetch(kind, hash)]
         }
-        let record = try JSONValue.decode(payloads[md5]!)
+        let record = try JSONValue.decode(payloads[hash]!)
         return record == .null ? .noMatch : .match(HasheousMatch(record: record))
     }
 
-    static func md5Key(_ md5: String) -> String { "hasheous:md5:\(md5)" }
-
-    private func fetch(md5: String) async throws -> Data {
-        var request = URLRequest(url: URL(string: "https://hasheous.org/api/v1/Lookup/ByHash/md5/\(md5)")!)
+    private func fetch(_ kind: String, _ hash: String) async throws -> Data {
+        var request = URLRequest(url: URL(string: "https://hasheous.org/api/v1/Lookup/ByHash/\(kind)/\(hash)")!)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let apiKey { request.setValue(apiKey, forHTTPHeaderField: "X-Client-API-Key") }
         let (data, response) = try await api.send(request)

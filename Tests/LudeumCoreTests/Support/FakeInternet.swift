@@ -30,7 +30,7 @@ final class FakeInternet: HTTPTransport, Sendable {
         var tokensIssued = 0
         var firstValidToken = 1  // tokens numbered below this are rejected
         // Hasheous
-        var hashes: [String: (game: Int, platform: Int)] = [:]
+        var hashes: [String: (game: Int, platform: Int)] = [:]  // "md5/<hash>" or "crc/<hash>"
         // libretro-thumbnails: repo → file paths ("Named_Boxarts/X (USA).png")
         var libretro: [String: [String]] = [:]
         // Paths ("Sony - PlayStation/Named_Boxarts/X.png") thumbnails.libretro.com hasn't caught up with
@@ -83,7 +83,11 @@ final class FakeInternet: HTTPTransport, Sendable {
     }
 
     func addHash(md5: String, game: Int, platform: Int) {
-        state.withLock { $0.hashes[md5.lowercased()] = (game, platform) }
+        state.withLock { $0.hashes["md5/\(md5.lowercased())"] = (game, platform) }
+    }
+
+    func addHash(crc: String, game: Int, platform: Int) {
+        state.withLock { $0.hashes["crc/\(crc.lowercased())"] = (game, platform) }
     }
 
     /// libretro-thumbnails images: `repo` like "Nintendo_-_Game_Boy", each name in every folder
@@ -284,8 +288,9 @@ final class FakeInternet: HTTPTransport, Sendable {
     }
 
     private static func hasheous(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
-        let md5 = request.url!.lastPathComponent.lowercased()
-        guard request.url!.path().hasPrefix("/api/v1/Lookup/ByHash/md5/"), let hit = s.hashes[md5] else {
+        let prefix = "/api/v1/Lookup/ByHash/"
+        let path = request.url!.path()
+        guard path.hasPrefix(prefix), let hit = s.hashes[String(path.dropFirst(prefix.count)).lowercased()] else {
             return (404, [:], Data("The provided hash was not found in any signature database.".utf8))
         }
         let json: [String: Any] = [

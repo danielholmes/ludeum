@@ -451,6 +451,10 @@ enum LudeumSchema {
         migrator.registerMigration("v18 rom in both forms") { db in
             try db.alter(table: "rom") { t in t.add(column: "inBothForms", .boolean).notNull().defaults(to: false) }
         }
+        // An archived ROM's checksum: the CRC32 its archive's index gives its dump, where a loose one has an MD5.
+        migrator.registerMigration("v19 rom crc") { db in
+            try db.alter(table: "rom") { t in t.add(column: "crc", .text) }
+        }
         return migrator
     }
 }

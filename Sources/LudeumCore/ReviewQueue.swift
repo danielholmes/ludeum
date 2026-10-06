@@ -282,24 +282,35 @@ extension LudeumStore {
                 if romMove != nil {
                     try db.execute(sql: "UPDATE rom SET platformId = ? WHERE id = ?", arguments: [platform.id, item.romId])
                 }
-                let game: GameID
-                if let existing = try GameID.fetchOne(
-                    db, sql: "SELECT id FROM game WHERE igdbGameId = ? AND platformId = ?", arguments: [igdbGameId, platform.id])
-                {
-                    game = existing
-                } else {
-                    try db.execute(
-                        sql: "INSERT INTO game (platformId, name, igdbGameId, igdbName) VALUES (?, ?, ?, ?)",
-                        arguments: [platform.id, cleanName(item.romName), igdbGameId, igdbName])
-                    game = db.lastInsertedRowID
-                }
-                try Self.match(db, rom: item.romId, to: game, kind: kind, day: today(), now: clock.now())
-                return game
+                return try Self.matchToIGDBGame(
+                    db, rom: item.romId, romName: item.romName, igdbGameId: igdbGameId, igdbName: igdbName, platformId: platform.id,
+                    kind: kind, day: today(), now: clock.now())
             }
         } catch {
             romMove?.undo()
             throw error
         }
+    }
+
+    /// Matches the ROM to the Game with that IGDB link on its Platform, creating the Game (named after the ROM) if needed:
+    /// a Review queue answer, or an Import's Automatic Match. The Platform must be in the journal.
+    static func matchToIGDBGame(
+        _ db: Database, rom: Int64, romName: String, igdbGameId: Int64, igdbName: String, platformId: Int64, kind: String,
+        day: String, now: Date
+    ) throws -> GameID {
+        let game: GameID
+        if let existing = try GameID.fetchOne(
+            db, sql: "SELECT id FROM game WHERE igdbGameId = ? AND platformId = ?", arguments: [igdbGameId, platformId])
+        {
+            game = existing
+        } else {
+            try db.execute(
+                sql: "INSERT INTO game (platformId, name, igdbGameId, igdbName) VALUES (?, ?, ?, ?)",
+                arguments: [platformId, cleanName(romName), igdbGameId, igdbName])
+            game = db.lastInsertedRowID
+        }
+        try match(db, rom: rom, to: game, kind: kind, day: day, now: now)
+        return game
     }
 
     /// Plans moving a ROM to a sibling Platform. A missing ROM, or one still OpenEmu's, has no files here to move, so

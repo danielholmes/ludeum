@@ -93,7 +93,7 @@ struct CompactTests {
         let rom = try #require(try gameBoy.folder.scan().first)
         #expect(rom.fileName == "Tetris (World).7z")
         #expect(!rom.archived)
-        #expect(try await SevenZip.find()!.contents(of: rom.ready!) == [SevenZip.Entry(path: "Tetris (World).gb", size: 20_000)])
+        #expect(try await SevenZip.find()!.contents(of: rom.ready!).map { "\($0.path) \($0.size)" } == ["Tetris (World).gb 20000"])
         #expect(try trashed() == ["Tetris (World).gb"])
     }
 
@@ -112,7 +112,7 @@ struct CompactTests {
         let rom = try #require(try megaDrive.folder.scan().first)
         #expect(rom.fileName == "Sonic (USA).zip")
         #expect(!rom.archived)
-        #expect(try await sevenZip.contents(of: rom.ready!) == [SevenZip.Entry(path: "Sonic (USA).md", size: 20_000)])
+        #expect(try await sevenZip.contents(of: rom.ready!).map { "\($0.path) \($0.size)" } == ["Sonic (USA).md 20000"])
         #expect(try trashed() == ["Sonic (USA).7z"])
     }
 

@@ -10,7 +10,9 @@ public struct ImportedROM: Sendable, Equatable {
 
 /// What an Import changed. An Import that changed nothing shows nothing.
 public struct ImportResult: Sendable, Equatable {
-    /// New ROMs, all waiting in the Review queue: with no checksum, none is Matched automatically.
+    /// ROMs Matched automatically, new or from the Review queue, silently: the checksum and the name agree (ADR 0004).
+    public var matched: [ImportedROM] = []
+    /// New ROMs waiting in the Review queue.
     public var sentToReview: [ImportedROM] = []
     /// Missing ROMs that came back and rejoined their old Game, silently.
     public var returned: [ImportedROM] = []
@@ -29,16 +31,24 @@ public enum ImportError: Error, Equatable {
 /// Refused until `migrate-openemu` has run.
 public final class Import: Sendable {
     let matcher: Matcher
+    let igdb: IGDBClient
     let journal: LudeumStore
     let backups: Backups?
     let boxArt: BoxArtImport
+    let sevenZip: SevenZip?
 
-    /// Without `libretro`, no ROM is looked up in libretro-thumbnails.
-    public init(igdb: IGDBClient, hasheous: HasheousClient, journal: LudeumStore, backups: Backups?, libretro: LibretroThumbnails? = nil) {
+    /// Without `libretro`, no ROM is looked up in libretro-thumbnails. Without `sevenZip`, a ROM in an archive has no
+    /// checksum, so it's only ever suggested by name.
+    public init(
+        igdb: IGDBClient, hasheous: HasheousClient, journal: LudeumStore, backups: Backups?, libretro: LibretroThumbnails? = nil,
+        sevenZip: SevenZip? = SevenZip.find()
+    ) {
         boxArt = BoxArtImport(journal: journal, libretro: libretro)
         matcher = Matcher(igdb: igdb, hasheous: hasheous)
+        self.igdb = igdb
         self.journal = journal
         self.backups = backups
+        self.sevenZip = sevenZip
     }
 
     /// Reads the ROM folders and brings the journal up to date. A folder that can't be read is left alone.
@@ -50,6 +60,8 @@ public final class Import: Sendable {
         guard try !journal.needsOpenEmuMigration() else { throw ImportError.openEmuMigrationNeeded }
         var plan = ImportPlan()
         var newROMs: [(platformId: Int64, file: FolderROMFile)] = []
+        // Unmatched ROMs with no checksum yet: one imported before ROMs had them, or online-only until now.
+        var unchecked: [(KnownFolderROM, FolderROMFile)] = []
         let knownInFolders = Dictionary(grouping: try journal.knownFolderROMs(), by: \.platformId)
         for folder in romFolders {
             guard let files = try? folder.scan() else { continue }
@@ -57,6 +69,7 @@ public final class Import: Sendable {
             for file in files {
                 if let row = known[file.name] {
                     plan.seen.append((row, file))
+                    if row.gameId == nil && !row.hasChecksum { unchecked.append((row, file)) }
                 } else {
                     newROMs.append((folder.platformId, file))
                 }
@@ -65,15 +78,47 @@ public final class Import: Sendable {
             plan.gone += known.values.filter { !$0.missing && !names.contains($0.name) }.sorted { $0.id < $1.id }
         }
 
-        // No checksum, so a new ROM is only ever suggested: always the Review queue (ADR 0004).
-        let results = try await matcher.match(
+        var newChecksums: [ROMChecksum?] = []
+        for rom in newROMs { newChecksums.append(await ROMChecksum.of(rom.file, platformId: rom.platformId, sevenZip: sevenZip)) }
+        var rechecks: [(known: KnownFolderROM, checksum: ROMChecksum)] = []
+        for (known, file) in unchecked {
+            if let checksum = await ROMChecksum.of(file, platformId: known.platformId, sevenZip: sevenZip) {
+                rechecks.append((known, checksum))
+            }
+        }
+        try Task.checkCancellation()
+
+        // New ROMs first, then the rechecked ones, keyed by their place in that order.
+        let toMatch =
             newROMs.enumerated().map { i, rom in
-                ROMToMatch(id: i, name: rom.file.name, platforms: [Int(rom.platformId)])
-            })
-        plan.new = newROMs.enumerated().map { i, rom in (rom.platformId, rom.file, results[i] ?? .noSuggestion) }
+                ROMToMatch(
+                    id: i, name: rom.file.name, md5: newChecksums[i]?.md5, crc: newChecksums[i]?.crc, platforms: [Int(rom.platformId)])
+            }
+            + rechecks.enumerated().map { i, rom in
+                ROMToMatch(
+                    id: newROMs.count + i, name: rom.known.name, md5: rom.checksum.md5, crc: rom.checksum.crc,
+                    platforms: [Int(rom.known.platformId)])
+            }
+        let results = try await matcher.match(toMatch)
+        let automatic = results.values.compactMap { if case .automatic(let id) = $0 { id } else { nil } }
+        let games = try await igdb.games(ids: automatic)  // cached by the Matcher
+        func resolved(_ id: Int, _ name: String) -> ResolvedMatch {
+            switch results[id] ?? .noSuggestion {
+            case .automatic(let game): .automatic(igdbGameId: Int64(game), igdbName: games[game]?.name ?? cleanName(name))
+            case .suggestion(let s): .suggestion(s)
+            case .noSuggestion: .noSuggestion
+            }
+        }
+        plan.new = newROMs.enumerated().map { i, rom in
+            NewFolderROM(platformId: rom.platformId, file: rom.file, checksum: newChecksums[i], match: resolved(i, rom.file.name))
+        }
+        plan.rechecked = rechecks.enumerated().map { i, rom in
+            (rom.known, rom.checksum, resolved(newROMs.count + i, rom.known.name))
+        }
 
         let touchesROMs =
-            !plan.new.isEmpty || !plan.gone.isEmpty || plan.seen.contains { $0.0.missing || $0.0.archived != $0.1.archived }
+            !plan.new.isEmpty || !plan.gone.isEmpty || !plan.rechecked.isEmpty
+            || plan.seen.contains { $0.0.missing || $0.0.archived != $0.1.archived }
         try Task.checkCancellation()
         await writing()
         if touchesROMs { try backups?.backUp(journal, operation: .beforeImport) }
@@ -92,6 +137,22 @@ struct KnownFolderROM {
     let missing: Bool
     let archived: Bool
     let gameId: GameID?
+    /// Whether it has an MD5 or a CRC32 to be looked up by.
+    let hasChecksum: Bool
+}
+
+/// A Matcher result with the IGDB name an Automatic Match gives its Game.
+enum ResolvedMatch {
+    case automatic(igdbGameId: Int64, igdbName: String)
+    case suggestion(Suggestion)
+    case noSuggestion
+}
+
+struct NewFolderROM {
+    let platformId: Int64
+    let file: FolderROMFile
+    let checksum: ROMChecksum?
+    let match: ResolvedMatch
 }
 
 struct ImportPlan {
@@ -99,27 +160,34 @@ struct ImportPlan {
     var seen: [(KnownFolderROM, FolderROMFile)] = []
     /// Known, present ROMs whose files are all gone.
     var gone: [KnownFolderROM] = []
-    /// New ROMs, for the Review queue.
-    var new: [(platformId: Int64, file: FolderROMFile, match: MatchResult)] = []
+    /// New ROMs.
+    var new: [NewFolderROM] = []
+    /// Unmatched ROMs that have a checksum at last, matched again with it.
+    var rechecked: [(KnownFolderROM, ROMChecksum, ResolvedMatch)] = []
 }
 
 extension LudeumStore {
     func knownFolderROMs() throws -> [KnownFolderROM] {
         try db.read { db in
             try Row.fetchAll(
-                db, sql: "SELECT id, platformId, folderName, missing, archived, gameId FROM rom WHERE folderName IS NOT NULL ORDER BY id"
+                db,
+                sql: """
+                    SELECT id, platformId, folderName, missing, archived, gameId, md5 IS NOT NULL OR crc IS NOT NULL AS hasChecksum
+                    FROM rom WHERE folderName IS NOT NULL ORDER BY id
+                    """
             )
             .map {
                 KnownFolderROM(
                     id: $0["id"], platformId: $0["platformId"], name: $0["folderName"], missing: $0["missing"], archived: $0["archived"],
-                    gameId: $0["gameId"])
+                    gameId: $0["gameId"], hasChecksum: $0["hasChecksum"])
             }
         }
     }
 
-    /// Writes an Import in one transaction: new ROMs, and returning and missing ones.
+    /// Writes an Import in one transaction: new ROMs, rechecked ones, and returning and missing ones.
     func applyImport(_ plan: ImportPlan) throws -> ImportResult {
         let now = clock.now()
+        let day = today()
         return try db.write { db in
             var result = ImportResult()
             try db.execute(sql: "INSERT INTO import (startedAt, isFirst) VALUES (?, 0)", arguments: [now])
@@ -132,31 +200,62 @@ extension LudeumStore {
                 try Self.setFolderROM(db, known.id, to: nil)
                 result.goneMissing.append(ImportedROM(romName: known.name, game: known.gameId))
             }
-            for (platformId, file, match) in plan.new {
+            for rom in plan.new {
+                let file = rom.file
                 let parsed = ROMName(file.name)
-                try ROMPlatform.ensureKnown(db, platformId)
+                try ROMPlatform.ensureKnown(db, rom.platformId)
                 try db.execute(
                     sql: """
                         INSERT INTO rom
-                            (folderName, archived, fileName, name, platformId, version, discNumber, discLabel, needsPlaylist, inBothForms)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            (folderName, md5, crc, archived, fileName, name, platformId, version, discNumber, discLabel, needsPlaylist,
+                             inBothForms)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                     arguments: [
-                        file.name, file.archived, file.fileName, file.name, platformId,
+                        file.name, rom.checksum?.md5, rom.checksum?.crc, file.archived, file.fileName, file.name, rom.platformId,
                         parsed.version, parsed.disc, parsed.discLabel, file.needsPlaylist, file.inBothForms,
                     ])
-                if case .suggestion(let s) = match {
-                    try db.execute(
-                        sql:
-                            "UPDATE rom SET suggestedIgdbGameId = ?, suggestionKind = ?, checksumIgdbGameId = ?, namesAgree = ? WHERE id = ?",
-                        arguments: [
-                            s.gameID, s.source == .nameSearch ? "name" : "checksum", s.checksumGameID, s.namesAgree, db.lastInsertedRowID,
-                        ])
+                let id = db.lastInsertedRowID
+                if let game = try Self.apply(db, rom.match, to: id, named: file.name, on: rom.platformId, day: day, now: now) {
+                    result.matched.append(ImportedROM(romName: file.name, game: game))
+                } else {
+                    result.sentToReview.append(ImportedROM(romName: file.name, game: nil))
                 }
-                result.sentToReview.append(ImportedROM(romName: file.name, game: nil))
+            }
+            for (known, checksum, match) in plan.rechecked {
+                // Answered in the Review queue while the Import ran: its answer stands.
+                guard try Bool.fetchOne(db, sql: "SELECT gameId IS NULL FROM rom WHERE id = ?", arguments: [known.id]) == true else {
+                    continue
+                }
+                try db.execute(sql: "UPDATE rom SET md5 = ?, crc = ? WHERE id = ?", arguments: [checksum.md5, checksum.crc, known.id])
+                if let game = try Self.apply(db, match, to: known.id, named: known.name, on: known.platformId, day: day, now: now) {
+                    result.matched.append(ImportedROM(romName: known.name, game: game))
+                }
             }
             return result
         }
+    }
+
+    /// Matches an unmatched ROM automatically, returning its Game, or leaves it in the Review queue with its suggestion.
+    private static func apply(
+        _ db: Database, _ match: ResolvedMatch, to rom: Int64, named name: String, on platformId: Int64, day: String, now: Date
+    ) throws -> GameID? {
+        let suggestion: Suggestion?
+        switch match {
+        case .automatic(let igdbGameId, let igdbName):
+            return try matchToIGDBGame(
+                db, rom: rom, romName: name, igdbGameId: igdbGameId, igdbName: igdbName, platformId: platformId, kind: "automatic",
+                day: day, now: now)
+        case .suggestion(let s): suggestion = s
+        case .noSuggestion: suggestion = nil
+        }
+        try db.execute(
+            sql: "UPDATE rom SET suggestedIgdbGameId = ?, suggestionKind = ?, checksumIgdbGameId = ?, namesAgree = ? WHERE id = ?",
+            arguments: [
+                suggestion?.gameID, suggestion.map { $0.source == .nameSearch ? "name" : "checksum" }, suggestion?.checksumGameID,
+                suggestion?.namesAgree, rom,
+            ])
+        return nil
     }
 }
 

@@ -9,6 +9,14 @@ public struct SevenZip: Sendable {
         /// Its path inside the archive.
         public let path: String
         public let size: Int64
+        /// Its CRC32 from the index, in lowercase hex: what Hasheous can look up an archived ROM by without unpacking it.
+        public let crc: String?
+
+        public init(path: String, size: Int64, crc: String? = nil) {
+            self.path = path
+            self.size = size
+            self.crc = crc
+        }
 
         public var fileName: String { (path as NSString).lastPathComponent }
     }
@@ -49,7 +57,8 @@ public struct SevenZip: Sendable {
                 if parts.count == 2 { fields[parts[0]] = parts[1] }
             }
             guard let path = fields["Path"], fields["Folder"] != "+", !(fields["Attributes"] ?? "").hasPrefix("D") else { return nil }
-            return Entry(path: path, size: Int64(fields["Size"] ?? "") ?? 0)
+            let crc = fields["CRC"].flatMap { $0.isEmpty ? nil : $0.lowercased() }
+            return Entry(path: path, size: Int64(fields["Size"] ?? "") ?? 0, crc: crc)
         }
     }
 

@@ -55,6 +55,9 @@ public struct CacheRefresh: Sendable {
             case ("hasheous", "md5") where parts.count == 3:
                 let hasheous = hasheous
                 steps.append((1, key, { _ = try await hasheous.lookup(md5: parts[2], servesStale: false) }))
+            case ("hasheous", "crc") where parts.count == 3:
+                let hasheous = hasheous
+                steps.append((1, key, { _ = try await hasheous.lookup(crc: parts[2], servesStale: false) }))
             default:
                 continue  // e.g. the CLI's Twitch token, which manages its own expiry
             }

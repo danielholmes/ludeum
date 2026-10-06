@@ -1,19 +1,21 @@
 import Foundation
 
-/// A ROM as far as matching it is concerned. A ROM folder's ROM has no checksum yet, so it's only ever
-/// suggested by name (ADR 0004).
+/// A ROM as far as matching it is concerned. Without a checksum it's only ever suggested by name (ADR 0004).
 public struct ROMToMatch: Sendable, Hashable {
     /// Its key in the results.
     public let id: Int
     public let name: String
     public let md5: String?
+    /// Its CRC32, looked up when it has no MD5: an archived ROM's, from the archive's index.
+    public let crc: String?
     /// The IGDB platforms it could be on, most likely first.
     public let platforms: [Int]
 
-    public init(id: Int, name: String, md5: String? = nil, platforms: [Int]) {
+    public init(id: Int, name: String, md5: String? = nil, crc: String? = nil, platforms: [Int]) {
         self.id = id
         self.name = name
         self.md5 = md5
+        self.crc = crc
         self.platforms = platforms
     }
 }
@@ -106,10 +108,11 @@ public final class Matcher: Sendable {
         return out
     }
 
-    /// Hasheous by the ROM's MD5, when it has one.
+    /// Hasheous by the ROM's MD5, else its CRC32, when it has one.
     private func checksumGameID(_ rom: ROMToMatch) async throws -> Int? {
-        guard let md5 = rom.md5, !md5.isEmpty else { return nil }
-        return try await hasheous.lookup(md5: md5).match?.igdbGameID
+        if let md5 = rom.md5, !md5.isEmpty { return try await hasheous.lookup(md5: md5).match?.igdbGameID }
+        if let crc = rom.crc, !crc.isEmpty { return try await hasheous.lookup(crc: crc).match?.igdbGameID }
+        return nil
     }
 
     /// The first non-empty IGDB name search for the ROM's cleaned name, trying each of its platforms.
