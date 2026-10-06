@@ -61,7 +61,7 @@ public struct NoPlaylistItem: Sendable, Equatable, Identifiable {
 }
 
 /// A present ROM kept in both forms at once: a Playable copy beside its Archived `.7z`, or a loose file beside its
-/// Compacted copy. Keeping one sends the other to the Trash.
+/// Compacted copy. Keep the Playable copy (or Keep the Compacted copy) sends the other to the Trash.
 public struct BothFormsROM: Sendable, Equatable, Identifiable {
     public let rom: LudeumROM
     /// Its Game, once it's Matched.
@@ -167,7 +167,9 @@ extension LudeumStore {
 
     /// Present ROMs the last read of their ROM folder found in both forms, Matched or not, by name.
     private func bothForms() throws -> [BothFormsROM] {
-        try presentFolderROMs(where: "inBothForms", neededColumn: "inBothForms").map { BothFormsROM(rom: $0.rom, game: $0.game) }
+        // A journal waiting for `migrate-openemu` is held before `rom.inBothForms`.
+        guard try db.read({ db in try db.columns(in: "rom").contains { $0.name == "inBothForms" } }) else { return [] }
+        return try presentFolderROMs(where: "inBothForms").map { BothFormsROM(rom: $0.rom, game: $0.game) }
     }
 
     /// Present ROM folder ROMs that can be Compacted, Matched or not, by name.
@@ -178,12 +180,10 @@ extension LudeumStore {
         }
     }
 
-    /// Present ROM folder ROMs matching the SQL condition, each with its Game once it's Matched, by name. None when the
-    /// journal has no `neededColumn` yet: one waiting for `migrate-openemu` is held before it.
-    private func presentFolderROMs(where condition: String, neededColumn: String? = nil) throws -> [(rom: LudeumROM, game: GameID?)] {
+    /// Present ROM folder ROMs matching the SQL condition, each with its Game once it's Matched, by name.
+    private func presentFolderROMs(where condition: String) throws -> [(rom: LudeumROM, game: GameID?)] {
         try db.read { db in
-            if let neededColumn, try !db.columns(in: "rom").contains(where: { $0.name == neededColumn }) { return [] }
-            return try Row.fetchAll(
+            try Row.fetchAll(
                 db,
                 sql: """
                     SELECT id, folderName, platformId, archived, fileName, COALESCE(name, fileName) AS displayName, version,
@@ -231,17 +231,16 @@ extension LudeumStore {
         try db.write { db in try Self.setFolderROM(db, item.romId, to: file) }
     }
 
-    /// Keep one: sends every copy of a ROM kept in both forms to the Trash but the one `forms` keeps, then reads the ROM
-    /// again. `forms` is what I was shown: when its ROM folder no longer has it that way it throws, with nothing sent to
-    /// the Trash, and the ROM is read again all the same.
+    /// Keep the Playable copy, or Keep the Compacted copy: sends every copy of a ROM kept in both forms to the Trash but
+    /// the one `forms` keeps, then reads the ROM again. `forms` is what I was shown: when its ROM folder no longer has it
+    /// that way it throws, with nothing sent to the Trash, and the ROM is read again all the same.
     public func keepOneForm(
         _ item: BothFormsROM, as forms: BothForms, romFolders: [ROMFolder],
         moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
     ) throws {
         guard let folder = romFolders.first(where: { $0.platformId == item.rom.platformId }) else { throw ReviewError.noROMFolder }
-        let rom = try folder.scan().first { $0.name == item.rom.folderName }
-        guard rom.flatMap(folder.bothForms) == forms else {
-            try db.write { db in try Self.setFolderROM(db, item.id, to: rom) }
+        guard try folder.bothForms(named: item.rom.folderName) == forms else {
+            try checkROMAgain(item.id, in: folder)
             throw ReviewError.bothFormsChanged
         }
         // Whatever reached the Trash before a failure, the journal sees what's left.
@@ -358,7 +357,7 @@ public enum ReviewError: Error, Equatable {
     case siblingWontReadFile
     /// Make playlist found no Discs without a playlist in the ROM's subfolder: gone, or given one meanwhile.
     case noDiscsWithoutPlaylist
-    /// Keep one found the ROM's copies aren't the ones shown: one gone, or another added meanwhile.
+    /// The ROM's copies aren't the ones shown when I chose which to keep: one gone, or another added meanwhile.
     case bothFormsChanged
 }
 

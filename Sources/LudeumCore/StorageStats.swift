@@ -100,11 +100,12 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
         // A file two ROMs are made of (a loose playlist's Discs, each a ROM too) counts under the first.
         var claimed: Set<String> = []
         for rom in roms {
-            guard let made = try? folder.madeOf(rom) else {
+            guard let made = try? folder.files(of: rom).compactMap({ Sizes.relative($0, to: folder.url) }) else {
                 row.unreadable = true
                 continue
             }
-            let files = made.filter { sizes[$0] != nil && !claimed.contains($0) }
+            // Its files in every form it's kept in, none outside the folder.
+            let files = Set(made).filter { sizes[$0] != nil && !claimed.contains($0) }
             claimed.formUnion(files)
             let bytes = files.reduce(0) { $0 + sizes[$1]! }
             if rom.archived {
@@ -121,13 +122,6 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
             if rom.inBothForms { row.inBothForms += 1 }
         }
         return row
-    }
-}
-
-extension ROMFolder {
-    /// The files a ROM from a scan is made of, in every form it's kept in, by path in the folder (none outside it).
-    func madeOf(_ rom: FolderROMFile) throws -> Set<String> {
-        Set(try (files(of: rom) + rom.otherForms).compactMap { Sizes.relative($0, to: url) })
     }
 }
 

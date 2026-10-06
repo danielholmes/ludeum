@@ -8,14 +8,14 @@ import Testing
 @Suite struct BothFormsScanTests {
     let directory = FileManager.default.temporaryDirectory.appending(path: "both forms \(UUID().uuidString)")
 
-    @Test func aLooseFileBesideItsZipOnAnAresPlatformIsInBothForms() throws {
+    @Test func aLooseFileBesideItsCompactedCopyOnAnAresPlatformIsInBothForms() throws {
         let n64 = try FakeROMFolder(in: directory, platform: 4)
         let zip = try n64.add("Super Mario 64 (USA).zip")
         let z64 = try n64.add("Super Mario 64 (USA).z64")
 
         let rom = try #require(try n64.folder.scan().first)
 
-        #expect(rom == FolderROMFile(name: "Super Mario 64 (USA)", ready: z64, archive: nil, otherForms: [zip]))
+        #expect(rom == FolderROMFile(name: "Super Mario 64 (USA)", ready: z64, archive: nil, compactedBesideReady: zip))
         #expect(rom.inBothForms)
     }
 
@@ -53,6 +53,24 @@ import Testing
 
         #expect(try snes.folder.scan().map(\.inBothForms) == [false, false])
         #expect(try ps1.folder.scan().map(\.inBothForms) == [false, false])
+    }
+
+    /// Only a `.7z` or a Compacted copy is another form: a second loose file may be part of the first.
+    @Test func looseFilesOfOneNameThatArentItsArchiveOrCompactedCopyAreOneForm() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: 7)
+        try ps1.add("Fear Effect (USA).m3u", "Fear Effect (USA).cue\n")
+        try ps1.add("Fear Effect (USA).cue", #"FILE "Fear Effect (USA).bin" BINARY"#)
+        try ps1.add("Fear Effect (USA).bin")
+        try ps1.add("Ridge Racer (USA).cue", "not a cue sheet")
+        try ps1.add("Ridge Racer (USA).bin")
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        try gameBoy.add("Tetris (World).gb")
+        try gameBoy.add("Tetris (World).gbc")
+
+        #expect(try ps1.folder.scan().map(\.inBothForms) == [false, false])
+        #expect(try ps1.folder.bothForms(named: "Fear Effect (USA)") == nil)
+        #expect(try ps1.folder.bothForms(named: "Ridge Racer (USA)") == nil)
+        #expect(try gameBoy.folder.scan().map(\.inBothForms) == [false])
     }
 }
 
@@ -101,17 +119,32 @@ import Testing
             try n64.folder.bothForms(named: "Super Mario 64 (USA)") == BothForms(keep: zip, keepsCompacted: true, trash: [z64, archive]))
     }
 
-    @Test func aLooseCueSheetGoesWithItsTracks() throws {
+    @Test func aCueSheetKeptOverItsArchiveKeepsItsTracks() throws {
         let ps1 = try FakeROMFolder(in: directory, platform: 7)
-        try ps1.add("Ridge Racer (USA)/Ridge Racer (USA).chd")
         let cue = try ps1.add("Ridge Racer (USA).cue", #"FILE "Ridge Racer (USA).bin" BINARY"#)
-        let bin = try ps1.add("Ridge Racer (USA).bin")
+        try ps1.add("Ridge Racer (USA).bin")
+        let archive = try ps1.add("Ridge Racer (USA).7z")
+
+        #expect(try ps1.folder.bothForms(named: "Ridge Racer (USA)") == BothForms(keep: cue, keepsCompacted: false, trash: [archive]))
+    }
+
+    @Test func aCompacted7zIsKeptOverASubfolderWhichGoesWhole() throws {
+        let snes = try FakeROMFolder(in: directory, platform: 19)
+        try snes.add("Zelda (USA)/Zelda (USA).sfc")
+        let archive = try snes.add("Zelda (USA).7z")
 
         #expect(
-            try ps1.folder.bothForms(named: "Ridge Racer (USA)")
+            try snes.folder.bothForms(named: "Zelda (USA)")
                 == BothForms(
-                    keep: ps1.url.appending(path: "Ridge Racer (USA)", directoryHint: .isDirectory), keepsCompacted: false,
-                    trash: [cue, bin]))
+                    keep: archive, keepsCompacted: true, trash: [snes.url.appending(path: "Zelda (USA)", directoryHint: .isDirectory)]))
+    }
+
+    @Test func aZipIsThePlayableCopyKeptOverA7zAresCantOpen() throws {
+        let megaDrive = try FakeROMFolder(in: directory, platform: 29)
+        let zip = try megaDrive.add("Sonic (USA).zip")
+        let archive = try megaDrive.add("Sonic (USA).7z")
+
+        #expect(try megaDrive.folder.bothForms(named: "Sonic (USA)") == BothForms(keep: zip, keepsCompacted: false, trash: [archive]))
     }
 
     @Test func aROMInOneFormHasNothingToKeepOrTrash() throws {

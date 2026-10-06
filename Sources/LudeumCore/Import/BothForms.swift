@@ -1,18 +1,19 @@
 import Foundation
 
-/// A ROM kept in both forms at once, and how that's resolved: one copy is kept and every other goes to the Trash.
+/// How a ROM kept in both forms at once is resolved: one copy is kept and every other goes to the Trash.
 public struct BothForms: Sendable, Equatable {
-    /// The copy that's kept: its file, or its subfolder. The Compacted copy when there is one, since it's smaller and
-    /// still Plays; else the one a Play opens.
+    /// The copy that's kept: its file, or its subfolder.
     public let keep: URL
-    /// Whether the copy kept is the Compacted one, not the Playable copy beside an Archived `.7z`.
+    /// Whether the copy kept is its Compacted one, over the one a Play opens, since it's smaller and still Plays. Else
+    /// it's the Playable copy, over its Archived `.7z`.
     public let keepsCompacted: Bool
-    /// What goes to the Trash, each a file or a subfolder: every other copy, a cue sheet with its tracks.
+    /// What goes to the Trash, each a file or a subfolder: every other copy.
     public let trash: [URL]
 
-    /// The room a copy takes: its file's size, or everything in its subfolder.
+    /// The room a copy takes: everything in its subfolder, or its file with a cue sheet's tracks.
     public static func size(of copy: URL) -> Int64 {
-        (try? copy.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? Sizes.total(in: copy) : Sizes.size(of: copy)
+        (try? copy.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            ? Sizes.total(in: copy) : ROMFiles.files(of: copy).reduce(0) { $0 + Sizes.size(of: $1) }
     }
 }
 
@@ -25,21 +26,11 @@ extension ROMFolder {
     /// As `bothForms(named:)`, for a ROM from a scan.
     func bothForms(of rom: FolderROMFile) -> BothForms? {
         guard rom.inBothForms, let ready = rom.ready else { return nil }
-        // Each copy by its file, with everything it's made of: the one a Play opens first.
-        let subfolder = rom.fileName.hasPrefix(rom.name + "/") ? url.appending(path: rom.name, directoryHint: .isDirectory) : nil
-        var copies = [(file: ready, items: subfolder.map { [$0] } ?? Self.looseItems(ready))]
-        for file in rom.otherForms + (rom.archive.map { [$0] } ?? []) where file != ready {
-            copies.append((file, Self.looseItems(file)))
-        }
-        let compacted = compactExtension.flatMap { ext in copies.firstIndex { $0.file.pathExtension.lowercased() == ext } }
-        let kept = compacted ?? 0
-        return BothForms(
-            keep: kept == 0 ? subfolder ?? ready : copies[kept].file, keepsCompacted: compacted != nil,
-            trash: copies.enumerated().filter { $0.offset != kept }.flatMap(\.element.items))
-    }
-
-    /// A loose file with what belongs to it: a cue sheet's tracks.
-    private static func looseItems(_ file: URL) -> [URL] {
-        file.pathExtension.lowercased() == "cue" ? ROMFiles.files(of: file) : [file]
+        // The copy a Play opens is its subfolder, whole, when it's in one.
+        let played = rom.fileName.hasPrefix(rom.name + "/") ? url.appending(path: rom.name, directoryHint: .isDirectory) : ready
+        let others = [rom.archive, rom.compactedBesideReady].compactMap { $0 }.filter { $0 != ready }
+        let compacted = others.first { $0.pathExtension.lowercased() == compactExtension }
+        let keep = compacted ?? played
+        return BothForms(keep: keep, keepsCompacted: compacted != nil, trash: ([played] + others).filter { $0 != keep })
     }
 }

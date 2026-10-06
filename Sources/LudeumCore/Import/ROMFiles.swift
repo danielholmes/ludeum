@@ -29,7 +29,7 @@ public enum ROMFiles {
 
 extension ROMFolder {
     /// Every file of the ROM `name`: everything in its subfolder, else its loose file (with a cue
-    /// sheet's tracks), and its `.7z` when there is one.
+    /// sheet's tracks), and its `.7z` and the Compacted copy beside its ready file, when there is one.
     public func files(named name: String) throws -> [URL] {
         guard let rom = try scan().first(where: { $0.name == name }) else { return [] }
         return try files(of: rom)
@@ -46,6 +46,6 @@ extension ROMFolder {
         } else if let ready = rom.ready {
             files = ROMFiles.files(of: ready)
         }
-        return files + (rom.archive.flatMap { files.contains($0) ? nil : [$0] } ?? [])
+        return files + [rom.archive, rom.compactedBesideReady].compactMap { $0 }.filter { !files.contains($0) }
     }
 }

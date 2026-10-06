@@ -815,7 +815,8 @@ private struct ROMRow: View {
 }
 
 /// An In both forms item: the copy of the ROM that's kept and what goes to the Trash, as its ROM folder has them now, and
-/// Keep, which sends them there. Once that's done, the item leaves the queue.
+/// Keep the Playable copy (or Keep the Compacted copy), which sends them there. Once that's done, the item leaves the
+/// queue.
 private struct BothFormsDetail: View {
     let services: Services
     let item: BothFormsROM
@@ -865,8 +866,8 @@ private struct BothFormsDetail: View {
         return forms.keepsCompacted
             ? "It's kept in more than one form at once, wasting room. Its Compacted copy is smaller and still Plays, so that's "
                 + "the one to keep: the rest goes to the Trash."
-            : "It's kept in more than one form at once, wasting room. The Playable copy is the one to keep: the rest goes to "
-                + "the Trash."
+            : "It's kept as a Playable copy and as an Archived .7z at once, wasting room. The Playable copy is the one to "
+                + "keep: the .7z goes to the Trash."
     }
 
     /// A copy's file (or subfolder) and the room it takes.
