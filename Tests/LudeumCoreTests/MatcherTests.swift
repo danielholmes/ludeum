@@ -10,11 +10,11 @@ import Testing
     func rom(
         _ name: String, md5: String = "00000000000000000000000000000000", system: String = "openemu.system.snes",
         title: String? = nil, file: URL? = nil
-    ) -> OpenEmuROM {
-        OpenEmuROM(id: 1, name: name, openVGDBTitle: title, system: system, md5: md5, file: file)
+    ) -> ROMToMatch {
+        ROMToMatch(id: 1, name: name, openVGDBTitle: title, system: system, md5: md5, file: file)
     }
 
-    func match(_ h: Harness, _ r: OpenEmuROM) async throws -> MatchResult {
+    func match(_ h: Harness, _ r: ROMToMatch) async throws -> MatchResult {
         try await Matcher(igdb: h.igdb, hasheous: h.hasheous).match([r])[r.id]!
     }
 

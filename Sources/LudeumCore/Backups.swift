@@ -6,6 +6,7 @@ public enum BackupOperation: String, Sendable, CaseIterable {
     case daily
     case manual
     case beforeImport = "before-import"
+    /// Sync to OpenEmu is gone, but its backups are still read.
     case beforeSync = "before-sync"
     case beforeDelete = "before-delete"
     case beforeRestore = "before-restore"
@@ -20,7 +21,7 @@ public struct Backup: Sendable, Hashable {
 }
 
 /// Backup file names: the local date and time to the minute, then the operation,
-/// e.g. `2026-10-02T1430-before-sync.sqlite`. A second backup in the same minute gets `-2`.
+/// e.g. `2026-10-02T1430-before-import.sqlite`. A second backup in the same minute gets `-2`.
 public enum BackupName {
     public static func make(date: Date, operation: BackupOperation, timeZone: TimeZone, copy: Int = 1) -> String {
         "\(formatter(timeZone).string(from: date))-\(operation.rawValue)\(copy > 1 ? "-\(copy)" : "").sqlite"

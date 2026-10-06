@@ -1,18 +1,19 @@
 import CryptoKit
 import Foundation
 
-/// A ROM in OpenEmu's library, as far as matching it is concerned.
-public struct OpenEmuROM: Sendable, Hashable {
-    /// OpenEmu's `ZROM.Z_PK`.
+/// A ROM as far as matching it is concerned. The checksum rules were written against OpenEmu's library, which
+/// gave each ROM an MD5, an OpenVGDB title and a system; a ROM folder's ROM has none of them yet.
+public struct ROMToMatch: Sendable, Hashable {
+    /// Its key in the results.
     public let id: Int
-    /// `ZGAME.ZNAME`.
     public let name: String
-    /// `ZGAME.ZGAMETITLE`, OpenVGDB's title.
+    /// OpenVGDB's title, from OpenEmu.
     public let openVGDBTitle: String?
-    /// `ZSYSTEM.ZSYSTEMIDENTIFIER`, e.g. "openemu.system.snes".
+    /// An OpenEmu system, e.g. "openemu.system.snes", for the NES/SNES header retry; empty for none.
     public let system: String
+    /// Empty for none.
     public let md5: String
-    /// The ROM file, if OpenEmu knows where it is. It may not exist.
+    /// The ROM file, if known. It may not exist.
     public let file: URL?
     /// The IGDB platforms it could be on, most likely first: its system's, unless given (a ROM folder's one).
     public let platforms: [Int]
@@ -72,7 +73,7 @@ public let openEmuSystemPlatforms: [String: [Int]] = [
     "openemu.system.saturn": [32], "openemu.system.gg": [35], "openemu.system.pcecd": [150],
 ]
 
-/// Matches OpenEmu ROMs to IGDB games, from the cache where it can.
+/// Matches ROMs to IGDB games, from the cache where it can.
 public final class Matcher: Sendable {
     let igdb: IGDBClient
     let hasheous: HasheousClient
@@ -83,7 +84,7 @@ public final class Matcher: Sendable {
     }
 
     /// Every ROM's result, keyed by ROM id. `progress` gets (ROMs looked up, total); it can be cancelled.
-    public func match(_ roms: [OpenEmuROM], progress: @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> [Int: MatchResult] {
+    public func match(_ roms: [ROMToMatch], progress: @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> [Int: MatchResult] {
         var checksumGame: [Int: Int] = [:]
         var candidates: [Int: [Int]] = [:]
         for (i, rom) in roms.enumerated() {
@@ -126,8 +127,8 @@ public final class Matcher: Sendable {
         return out
     }
 
-    /// Hasheous by OpenEmu's MD5, then for an NES/SNES dump already on disk, by its MD5 without the header.
-    private func checksumGameID(_ rom: OpenEmuROM) async throws -> Int? {
+    /// Hasheous by the ROM's MD5, then for an NES/SNES dump already on disk, by its MD5 without the header.
+    private func checksumGameID(_ rom: ROMToMatch) async throws -> Int? {
         // A ROM folder's ROM has no checksum, so it's only ever suggested by name (ADR 0004).
         guard !rom.md5.isEmpty else { return nil }
         if let id = try await hasheous.lookup(md5: rom.md5).match?.igdbGameID { return id }
@@ -137,7 +138,7 @@ public final class Matcher: Sendable {
 
     /// The first non-empty IGDB name search, trying each of the system's platforms with the ROM's
     /// cleaned name, then OpenVGDB's title.
-    private func searchCandidates(_ rom: OpenEmuROM) async throws -> [Int] {
+    private func searchCandidates(_ rom: ROMToMatch) async throws -> [Int] {
         var names: [String] = []
         for n in [cleanName(rom.name), rom.openVGDBTitle ?? ""] where !n.isEmpty && !names.contains(n) { names.append(n) }
         for platform in rom.platforms {

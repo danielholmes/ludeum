@@ -7,7 +7,7 @@ public struct CacheRefreshResult: Sendable {
 }
 
 /// The low-priority refresh at launch: re-fetches every expired cache entry, one request (or IGDB
-/// batch) at a time, waiting whenever an Import or Sync holds the rate limiters. An entry that
+/// batch) at a time, waiting whenever an Import holds the rate limiters. An entry that
 /// fails to refresh keeps its expired copy and is tried again next launch.
 public struct CacheRefresh: Sendable {
     let cache: CacheStore
