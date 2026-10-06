@@ -55,7 +55,7 @@ import Testing
     func unmatched(_ name: String, system: String, fileName: String) throws -> Int64 {
         let pk = try openEmu.addROM(name, md5: "md5-\(name)", system: system, fileName: fileName)
         try j.journal.db.write { db in
-            let platform = ROMPlatform.defaultPlatform(system: system)!
+            let platform = Int64(openEmuSystemPlatforms[system]!.first!)
             try ROMPlatform.ensureKnown(db, platform)
             try db.execute(
                 sql: "INSERT INTO rom (openEmuPk, md5, fileName, name, platformId) VALUES (?, ?, ?, ?, ?)",

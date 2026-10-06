@@ -15,7 +15,7 @@ public struct LibretroNames: Sendable, Equatable {
 }
 
 /// libretro-thumbnails: box scans, snaps and title screens named by No-Intro and Redump names.
-/// Each system's file listing comes from GitHub (one request per repo, cached); images come from
+/// Each Platform's file listing comes from GitHub (one request per repo, cached); images come from
 /// `thumbnails.libretro.com`, which follows the repos' per-disc symlinks, else from GitHub when the CDN lags.
 public final class LibretroThumbnails: Sendable {
     let cache: CacheStore
@@ -31,25 +31,12 @@ public final class LibretroThumbnails: Sendable {
         api = Throttle(requestsPerSecond: 1, transport: transport, clock: clock)
     }
 
-    /// The libretro-thumbnails repo each IGDB Platform's ROMs are looked up in. One each: the
-    /// Famicom's ROMs look in NES's, and the Super Famicom's in SNES's.
-    static let repos: [Int64: String] = [
-        33: "Nintendo_-_Game_Boy", 22: "Nintendo_-_Game_Boy_Color", 24: "Nintendo_-_Game_Boy_Advance",
-        21: "Nintendo_-_GameCube", 35: "Sega_-_Game_Gear", 4: "Nintendo_-_Nintendo_64", 20: "Nintendo_-_Nintendo_DS",
-        18: "Nintendo_-_Nintendo_Entertainment_System", 99: "Nintendo_-_Nintendo_Entertainment_System",
-        150: "NEC_-_PC_Engine_CD_-_TurboGrafx-CD", 86: "NEC_-_PC_Engine_-_TurboGrafx_16", 38: "Sony_-_PlayStation_Portable",
-        7: "Sony_-_PlayStation", 32: "Sega_-_Saturn", 78: "Sega_-_Mega-CD_-_Sega_CD", 29: "Sega_-_Mega_Drive_-_Genesis",
-        64: "Sega_-_Master_System_-_Mark_III", 19: "Nintendo_-_Super_Nintendo_Entertainment_System",
-        58: "Nintendo_-_Super_Nintendo_Entertainment_System", 30: "Sega_-_32X", 87: "Nintendo_-_Virtual_Boy",
-        61: "Atari_-_Lynx", 59: "Atari_-_2600", 120: "SNK_-_Neo_Geo_Pocket_Color", 123: "Bandai_-_WonderSwan_Color",
-        8: "Sony_-_PlayStation_2",
-    ]
-
     static let folders = ["Named_Boxarts", "Named_Snaps", "Named_Titles"]
 
-    /// Looks a ROM up in its Platform's listings. Nil for a Platform libretro has no repo for.
+    /// Looks a ROM up in its Platform's listings (`ROMPlatform.libretroRepo`). Nil for a Platform with no ROM folder,
+    /// whose ROMs libretro isn't asked about.
     public func names(platform: Int64, fileName: String, titles: [String]) async throws -> LibretroNames? {
-        guard let repo = Self.repos[platform] else { return nil }
+        guard let repo = ROMPlatform.all[platform]?.libretroRepo else { return nil }
         let folders = try await listing(repo)
         // An exact name beats a title match.
         func find(_ folder: String) -> String? {
