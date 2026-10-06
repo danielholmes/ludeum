@@ -49,20 +49,13 @@ struct TopRatedScreen: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             FilterBar(
                 count: rows.count, filter: $filter, kinds: [.platform, .list, .player, .childhood], platforms: platforms, lists: lists,
-                players: players)
+                players: players
+            ) {
+                ViewModeControls(showCovers: $showCovers, coverWidth: $coverWidth)
+            }
         }
         .navigationTitle("Top-rated")
         .viewShortcuts(showCovers: $showCovers)
-        .toolbar {
-            ToolbarItemGroup {
-                Picker("View", selection: $showCovers) {
-                    Label("Table", systemImage: "list.bullet").tag(false)
-                    Label("Covers", systemImage: "square.grid.2x2").tag(true)
-                }
-                .pickerStyle(.segmented)
-                if showCovers { CoverSizeSlider(width: $coverWidth) }
-            }
-        }
         .task(id: Reload(revision: services.changes.revision, filter: filter)) { load() }
     }
 

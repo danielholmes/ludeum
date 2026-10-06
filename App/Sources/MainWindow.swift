@@ -8,6 +8,9 @@ struct MainWindow: View {
     let syncModel: SyncModel
     @State private var selectedGame: GameID?
     @State private var igdbQuery = ""
+    /// What's typed in the toolbar's Search, until Return opens it in the Library.
+    @State private var searchText = ""
+    @State private var searchFocused = false
     /// The IGDB screen's selected result, shown in the detail column instead of a Game.
     @State private var igdbResult: GameSearchResult?
     @State private var selection: Screen? = .library
@@ -30,6 +33,13 @@ struct MainWindow: View {
         libraryFilter = filter
         libraryRequest += 1
         selection = .library
+    }
+
+    /// A Search: the Library with every filter cleared, and the text as its Text filter.
+    private func search() {
+        showInLibrary(LibraryFilter(name: searchText.trimmed))
+        searchText = ""
+        searchFocused = false
     }
 
     var body: some View {
@@ -124,9 +134,10 @@ struct MainWindow: View {
                         .help("Search IGDB to add a Game")
                 }
             }
-            // Its own group, apart from the screen's search and filters that follow it.
-            if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
         }
+        .searchable(text: $searchText, isPresented: $searchFocused, placement: .toolbar, prompt: "Search the Library")
+        .onSubmit(of: .search, search)
+        .focusedSceneValue(\.focusSearch) { searchFocused = true }
         .task(id: services.changes.revision) {
             lists = (try? services.journal?.lists()) ?? []
             reviewQueueCount = (try? services.journal?.reviewQueue().count) ?? 0

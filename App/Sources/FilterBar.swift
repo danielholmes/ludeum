@@ -25,9 +25,9 @@ enum FilterKind: CaseIterable {
     }
 }
 
-/// The bar above a screen's Games, reading left to right: how many, the screen's fixed scope (no ×),
-/// the filters I've added (each removable), Add filter, and on the right the screen's own control
-/// (the sort, where it has one).
+/// The bar above a screen's Games, reading left to right: the Text filter (where the screen has one), how
+/// many, the screen's fixed scope (no ×), the filters I've added (each removable), Add filter, and on the
+/// right the screen's own controls (the sort, Table or Covers).
 struct FilterBar<Trailing: View>: View {
     /// Nil where the screen doesn't count Games (Year in review, What to play next's sections).
     var count: Int?
@@ -41,10 +41,27 @@ struct FilterBar<Trailing: View>: View {
     var players: [Player] = []
     var genres: [String] = []
     var themes: [String] = []
+    /// The Text filter's typing, where the screen has one; ⌥⌘F focuses it.
+    var text: Binding<String>?
+    var textFocused: FocusState<Bool>.Binding?
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
         HStack(spacing: 6) {
+            if let text, let textFocused {
+                TextField("Filter by text", text: text)
+                    .focused(textFocused)
+                    .help("Narrow this view by names, companies, franchises, series and keywords (⌥⌘F)")
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                    .onExitCommand { textFocused.wrappedValue = false }
+                    .overlay(alignment: .trailing) {
+                        if !text.wrappedValue.isEmpty {
+                            Button("Clear text filter", systemImage: "xmark.circle.fill") { text.wrappedValue = "" }
+                                .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary).padding(.trailing, 5)
+                        }
+                    }
+            }
             if let count { Text("\(count) Game\(count == 1 ? "" : "s")").foregroundStyle(.secondary).fixedSize() }
             if busy { ProgressView().controlSize(.small) }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -265,15 +282,52 @@ struct EmptyResults: View {
 }
 
 extension View {
-    /// ⌘1 for Table and ⌘2 for Covers, and with `search`, ⌘F to focus the search field.
-    func viewShortcuts(showCovers: Binding<Bool>, search: FocusState<Bool>.Binding? = nil) -> some View {
+    /// ⌘1 for Table and ⌘2 for Covers.
+    func viewShortcuts(showCovers: Binding<Bool>) -> some View {
         background {
             ZStack {
                 Button("Show as Table") { showCovers.wrappedValue = false }.keyboardShortcut("1")
                 Button("Show as Covers") { showCovers.wrappedValue = true }.keyboardShortcut("2")
-                if let search { Button("Search") { search.wrappedValue = true }.keyboardShortcut("f") }
             }
             .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+        }
+    }
+}
+
+/// Table or Covers, and with Covers their size: in the FilterBar, as they act on that view's Games.
+struct ViewModeControls: View {
+    @Binding var showCovers: Bool
+    @Binding var coverWidth: Double
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if showCovers { CoverSizeSlider(width: $coverWidth) }
+            Picker("View", selection: $showCovers) {
+                Label("Table", systemImage: "list.bullet").tag(false)
+                Label("Covers", systemImage: "square.grid.2x2").tag(true)
+            }
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+        }
+    }
+}
+
+extension FocusedValues {
+    /// Focuses the window's Search field (⌘F).
+    @Entry var focusSearch: (() -> Void)?
+    /// Focuses the shown screen's Text filter (⌥⌘F).
+    @Entry var focusTextFilter: (() -> Void)?
+}
+
+/// Edit ▸ Search (⌘F) and Filter by Text (⌥⌘F).
+struct SearchCommands: Commands {
+    @FocusedValue(\.focusSearch) private var focusSearch
+    @FocusedValue(\.focusTextFilter) private var focusTextFilter
+
+    var body: some Commands {
+        CommandGroup(after: .textEditing) {
+            Button("Search") { focusSearch?() }.keyboardShortcut("f").disabled(focusSearch == nil)
+            Button("Filter by Text") { focusTextFilter?() }.keyboardShortcut("f", modifiers: [.command, .option]).disabled(
+                focusTextFilter == nil)
         }
     }
 }

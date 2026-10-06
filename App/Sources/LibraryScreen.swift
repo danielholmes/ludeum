@@ -10,9 +10,9 @@ struct LibraryScreen: View {
     var title: String?
     @Binding var selection: GameID?
     @State private var filter: LibraryFilter
-    /// What's typed in the search field; it reaches `filter.name` after a pause in typing.
-    @State private var searchText: String
-    @FocusState private var searchFocused: Bool
+    /// What's typed in the Text filter; it reaches `filter.name` after a pause in typing.
+    @State private var textFilter: String
+    @FocusState private var textFilterFocused: Bool
     // Remembered across screens and launches, shared by the Library and every List.
     @AppStorage("librarySort") private var sort = LibrarySort.name
     @AppStorage("librarySortAscending") private var ascending = true
@@ -32,7 +32,7 @@ struct LibraryScreen: View {
     @State private var loading = false
 
     /// Typing hasn't reached the filter yet, or the Games are being found: shown as spinners.
-    private var busy: Bool { loading || searchText != filter.name }
+    private var busy: Bool { loading || textFilter != filter.name }
 
     /// `initialFilter` is where to start, e.g. Year in review's "no dates" link: removable pills.
     /// `title` replaces "Library", and names the `scope` chip.
@@ -45,7 +45,7 @@ struct LibraryScreen: View {
         self.title = title
         _selection = selection
         _filter = State(initialValue: initialFilter)
-        _searchText = State(initialValue: initialFilter.name)
+        _textFilter = State(initialValue: initialFilter.name)
     }
 
     var body: some View {
@@ -64,7 +64,7 @@ struct LibraryScreen: View {
                             ? nil
                             : {
                                 filter = LibraryFilter()
-                                searchText = ""
+                                textFilter = ""
                             }
                     )
                     .fixedSize(horizontal: false, vertical: true)
@@ -116,19 +116,21 @@ struct LibraryScreen: View {
             FilterBar(
                 count: rows.count, busy: busy, scope: scope == LibraryFilter() ? nil : title, filter: $filter,
                 kinds: FilterKind.library.subtracting(FilterKind.fixed(by: scope)), platforms: platforms, lists: lists, players: players,
-                genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted()
+                genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted(),
+                text: $textFilter, textFocused: $textFilterFocused
             ) {
                 LibrarySortMenu(sort: Binding($sort), ascending: $ascending)
+                ViewModeControls(showCovers: $showCovers, coverWidth: $coverWidth)
             }
         }
         .navigationTitle(title ?? "Library")
-        .viewShortcuts(showCovers: $showCovers, search: $searchFocused)
-        .toolbar { toolbar }
-        .task(id: searchText) {
+        .viewShortcuts(showCovers: $showCovers)
+        .focusedSceneValue(\.focusTextFilter) { textFilterFocused = true }
+        .task(id: textFilter) {
             // Debounced: the Library reloads 300 ms after the last keystroke, not on every one.
-            guard searchText != filter.name else { return }
+            guard textFilter != filter.name else { return }
             try? await Task.sleep(for: .milliseconds(300))
-            if !Task.isCancelled { filter.name = searchText }
+            if !Task.isCancelled { filter.name = textFilter }
         }
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, scope: scope)) {
             await load()
@@ -182,38 +184,6 @@ struct LibraryScreen: View {
         let sort: LibrarySort
         let ascending: Bool
         let scope: LibraryFilter
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        // The search field in a group of its own, so the window's Add button doesn't join it.
-        if #available(macOS 26, *) { ToolbarSpacer(.fixed) }
-        ToolbarItem {
-            TextField("Search", text: $searchText)
-                .focused($searchFocused)
-                .help("Names, companies, franchises, series and keywords (⌘F)")
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 180)
-                .overlay(alignment: .trailing) {
-                    if busy {
-                        ProgressView().controlSize(.mini).padding(.trailing, searchText.isEmpty ? 5 : 22)
-                    }
-                    if !searchText.isEmpty {
-                        Button("Clear search", systemImage: "xmark.circle.fill") {
-                            searchText = ""
-                            filter.name = ""
-                        }
-                        .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary).padding(.trailing, 5)
-                    }
-                }
-        }
-        ToolbarItemGroup {
-            Picker("View", selection: $showCovers) {
-                Label("Table", systemImage: "list.bullet").tag(false)
-                Label("Covers", systemImage: "square.grid.2x2").tag(true)
-            }
-            .pickerStyle(.segmented)
-            if showCovers { CoverSizeSlider(width: $coverWidth) }
-        }
     }
 
     private func load() async {
@@ -327,7 +297,7 @@ struct CoverCell: View {
     }
 }
 
-/// The covers grids' size slider, for the toolbar.
+/// The covers grids' size slider, beside Table or Covers.
 struct CoverSizeSlider: View {
     @Binding var width: Double
 

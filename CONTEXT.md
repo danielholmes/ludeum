@@ -149,3 +149,11 @@ _Avoid_: Inbox, conflicts
 **Duplicate Versions**:
 Two or more present ROMs that belong to one Game but aren't Discs of the same Version. Missing ROMs never count. The only way to resolve it is to remove ROMs until one Version is left.
 _Avoid_: Duplicates, merge
+
+**Search**:
+Finding Games by text across the whole Library, from wherever I am: on Return it opens the Library with every filter cleared and the text as its Text filter. Text matches names, companies, franchises, series and keywords.
+_Avoid_: Find, global search
+
+**Text filter**:
+Narrowing the view I'm already looking at by the same kind of text a Search matches, keeping its scope and other filters.
+_Avoid_: Search (that's the fresh, Library-wide one), name filter

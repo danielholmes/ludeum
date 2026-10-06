@@ -90,6 +90,7 @@ struct TrimmedMenus: Commands {
         CommandGroup(replacing: .printItem) {}
         CommandGroup(replacing: .textFormatting) {}
         CommandGroup(replacing: .textEditing) {}
+        SearchCommands()
         WindowAndHelpMenus()
     }
 }

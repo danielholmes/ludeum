@@ -63,20 +63,11 @@ struct WhatToPlayNextScreen: View {
                 LibrarySortMenu(
                     sort: $sort, ascending: $ascending, sorts: LibrarySort.allCases.filter { $0 != .year && $0 != .players },
                     offersDefault: true)
+                ViewModeControls(showCovers: $showCovers, coverWidth: $coverWidth)
             }
         }
         .navigationTitle("What to play next")
         .viewShortcuts(showCovers: $showCovers)
-        .toolbar {
-            ToolbarItemGroup {
-                Picker("View", selection: $showCovers) {
-                    Label("Table", systemImage: "list.bullet").tag(false)
-                    Label("Covers", systemImage: "square.grid.2x2").tag(true)
-                }
-                .pickerStyle(.segmented)
-                if showCovers { CoverSizeSlider(width: $coverWidth) }
-            }
-        }
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending)) { load() }
     }
 
