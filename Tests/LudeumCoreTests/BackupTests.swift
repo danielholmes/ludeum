@@ -75,19 +75,18 @@ import Testing
 
 @Suite struct BackupsTests {
     let h: LudeumHarness
-    let root: URL
-    let dropbox: URL
-    let fallback: URL
+    /// Stands in for the Data folder.
+    let data: URL
+    let folder: URL
 
     init() throws {
         h = try LudeumHarness()
-        root = h.directory.appending(path: "backups root", directoryHint: .isDirectory)
-        dropbox = root.appending(path: "Dropbox/Ludeum Backups", directoryHint: .isDirectory)
-        fallback = root.appending(path: "Backups", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: dropbox, withIntermediateDirectories: true)
+        data = h.directory.appending(path: "Data", directoryHint: .isDirectory)
+        folder = data.appending(path: "Backups", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     }
 
-    func backups() -> Backups { Backups(folder: dropbox, fallback: fallback, clock: h.clock, timeZone: h.timeZone) }
+    func backups() -> Backups { Backups(folder: folder, clock: h.clock, timeZone: h.timeZone) }
 
     /// The harness clock starts at 2027-01-15 19:00 in Sydney.
     let stamp = "2027-01-15T1900"
@@ -105,7 +104,7 @@ import Testing
 
         let backup = try backups().backUp(h.journal, operation: .beforeSync)
 
-        #expect(try files(dropbox) == ["\(stamp)-before-sync.sqlite"])
+        #expect(try files(folder) == ["\(stamp)-before-sync.sqlite"])
         let copy = try LudeumStore(directory: h.directory.appending(path: "copy"), clock: h.clock, timeZone: h.timeZone)
         try Backups.copy(from: backup.url, into: copy)
         #expect(try names(copy) == ["Super Metroid"])
@@ -115,17 +114,24 @@ import Testing
         _ = try backups().backUp(h.journal, operation: .daily)
         _ = try backups().backUp(h.journal, operation: .daily)
 
-        #expect(try files(dropbox) == ["\(stamp)-daily-2.sqlite", "\(stamp)-daily.sqlite"])
+        #expect(try files(folder) == ["\(stamp)-daily-2.sqlite", "\(stamp)-daily.sqlite"])
         #expect(try backups().all().count == 2)
     }
 
-    @Test func withoutTheFolderBackupsGoToTheFallbackWithAWarning() throws {
-        try FileManager.default.removeItem(at: dropbox)
+    @Test func withoutTheDataFolderABackupFailsAndMakesNothing() throws {
+        try FileManager.default.removeItem(at: data)
+
+        #expect(throws: (any Error).self) { try backups().backUp(h.journal, operation: .manual) }
+
+        #expect(!FileManager.default.fileExists(atPath: data.path(percentEncoded: false)))
+    }
+
+    @Test func aMissingBackupsFolderIsMadeInTheDataFolder() throws {
+        try FileManager.default.removeItem(at: folder)
 
         _ = try backups().backUp(h.journal, operation: .manual)
 
-        #expect(backups().isUsingFallback)
-        #expect(try files(fallback) == ["\(stamp)-manual.sqlite"])
+        #expect(try files(folder) == ["\(stamp)-manual.sqlite"])
     }
 
     @Test func aDailyBackupIsDueOncePerLocalDay() throws {
@@ -150,7 +156,6 @@ import Testing
     @Test func theBeforeMigrationBackupAndWhatsBesideItAreNeverPruned() throws {
         let migration = try backups().backUp(h.journal, operation: .beforeMigration)
         let stem = migration.url.deletingPathExtension()
-        try FileManager.default.createDirectory(at: stem.appendingPathExtension("openemu-battery-saves"), withIntermediateDirectories: true)
         try Data("a\tb\n".utf8).write(to: stem.appendingPathExtension("moves.log"))
         h.clock.advance(seconds: 3_600)
         _ = try backups().backUp(h.journal, operation: .daily)
@@ -160,8 +165,8 @@ import Testing
 
         #expect(try backups().all().map(\.operation).contains(.beforeMigration))
         #expect(
-            try files(dropbox).filter { $0.hasPrefix("\(stamp)-before-migration") } == [
-                "\(stamp)-before-migration.moves.log", "\(stamp)-before-migration.openemu-battery-saves",
+            try files(folder).filter { $0.hasPrefix("\(stamp)-before-migration") } == [
+                "\(stamp)-before-migration.moves.log",
                 "\(stamp)-before-migration.sqlite",
             ])
     }
@@ -190,16 +195,6 @@ import Testing
         #expect(try backups().all().isEmpty)
     }
 
-    @Test func restoreListsBackupsInTheFallbackToo() throws {
-        try FileManager.default.removeItem(at: dropbox)
-        _ = try backups().backUp(h.journal, operation: .manual)
-        try FileManager.default.createDirectory(at: dropbox, withIntermediateDirectories: true)
-        h.clock.advance(seconds: 60)
-        _ = try backups().backUp(h.journal, operation: .manual)
-
-        #expect(try backups().all().count == 2)
-    }
-
     @Test func restoreBacksUpFirstThenReplacesTheJournal() throws {
         _ = try h.addGame("Super Metroid")
         let before = try backups().backUp(h.journal, operation: .manual)
@@ -224,7 +219,7 @@ import Testing
     var backupFolder: URL { directory.appending(path: "Backups", directoryHint: .isDirectory) }
     let clock = TestClock()
 
-    func backups() -> Backups { Backups(folder: backupFolder, fallback: backupFolder, clock: clock) }
+    func backups() -> Backups { Backups(folder: backupFolder, clock: clock) }
 
     func open() throws -> LudeumStore { try LudeumStore(directory: journalFolder, clock: clock, backups: backups()) }
 

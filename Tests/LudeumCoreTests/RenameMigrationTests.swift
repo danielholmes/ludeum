@@ -18,11 +18,9 @@ import Testing
 
     var oldApp: URL { root.appending(path: "GamesJournal", directoryHint: .isDirectory) }
     var newApp: URL { root.appending(path: "Ludeum", directoryHint: .isDirectory) }
-    var oldBackups: URL { root.appending(path: "Games Journal Backups", directoryHint: .isDirectory) }
-
     func migrate() {
         RenameMigration(
-            oldAppFolder: oldApp, newAppFolder: newApp, oldBackupFolder: oldBackups, oldDefaults: oldDefaults,
+            oldAppFolder: oldApp, newAppFolder: newApp, oldDefaults: oldDefaults,
             oldSecrets: oldSecrets, settings: AppSettings(secrets: newSecrets, defaults: newDefaults)
         ).run()
     }
@@ -52,8 +50,6 @@ import Testing
 
     @Test func settingsAndSecretsCarryOverWithoutReplacingNewOnes() throws {
         oldDefaults.set("/old/openemu", forKey: "openEmuLibrary")
-        oldDefaults.set("/old/backups", forKey: "backupFolder")
-        newDefaults.set("/new/backups", forKey: "backupFolder")
         try oldSecrets.setSecret("id", for: "igdb-client-id")
         try oldSecrets.setSecret("secret", for: "igdb-client-secret")
         try oldSecrets.setSecret("old key", for: "hasheous-api-key")
@@ -62,19 +58,9 @@ import Testing
         migrate()
 
         #expect(newDefaults.string(forKey: "openEmuLibrary") == "/old/openemu")
-        #expect(newDefaults.string(forKey: "backupFolder") == "/new/backups")
         #expect(try newSecrets.secret(for: "igdb-client-id") == "id")
         #expect(try newSecrets.secret(for: "igdb-client-secret") == "secret")
         #expect(try newSecrets.secret(for: "hasheous-api-key") == "new key")
     }
 
-    @Test func aCustomBackupFolderIsLeftWhereItIs() throws {
-        try write("backup", to: oldBackups.appending(path: "a.sqlite"))
-        oldDefaults.set(oldBackups.path(percentEncoded: false), forKey: "backupFolder")
-
-        migrate()
-
-        #expect(FileManager.default.fileExists(atPath: oldBackups.appending(path: "a.sqlite").path(percentEncoded: false)))
-        #expect(newDefaults.string(forKey: "backupFolder") == oldBackups.path(percentEncoded: false))
-    }
 }

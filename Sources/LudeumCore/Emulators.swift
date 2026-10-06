@@ -86,7 +86,7 @@ public struct DuckStationSettings: Sendable {
 
     public init(
         base: URL = URL.applicationSupportDirectory.appending(path: "DuckStation/settings.ini"),
-        copy: URL = AppSettings.appFolder.appending(path: "DuckStation settings.ini")
+        copy: URL = LudeumFolder.standard.url.appending(path: "DuckStation settings.ini")
     ) {
         self.base = base
         self.copy = copy
@@ -115,7 +115,7 @@ public struct PPSSPPSettings: Sendable {
 
     public init(
         base: URL = URL.homeDirectory.appending(path: ".config/ppsspp/PSP/SYSTEM/ppsspp.ini"),
-        copy: URL = AppSettings.appFolder.appending(path: "PPSSPP ppsspp.ini")
+        copy: URL = LudeumFolder.standard.url.appending(path: "PPSSPP ppsspp.ini")
     ) {
         self.base = base
         self.copy = copy
@@ -222,7 +222,7 @@ extension LudeumStore {
 public struct PCSX2GameSettings: Sendable {
     let file: URL
 
-    public init(file: URL = AppSettings.appFolder.appending(path: "PCSX2 game settings.ini")) {
+    public init(file: URL = LudeumFolder.standard.url.appending(path: "PCSX2 game settings.ini")) {
         self.file = file
     }
 

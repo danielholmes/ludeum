@@ -69,44 +69,24 @@ public func backupsToPrune(_ backups: [Backup], now: Date, calendar: Calendar) -
     return backups.filter { $0.operation != .beforeMigration && !keep.contains($0.url) }
 }
 
-/// Journal backups, taken with SQLite's backup API into the backup folder (normally in Dropbox),
-/// or into a local fallback folder when that isn't there. The cache is never backed up.
+/// Journal backups, taken with SQLite's backup API into `Backups/` in the Data folder. There's no local fallback: it
+/// would sit at the same missing path (ADR 0010). The cache is never backed up.
 public struct Backups: Sendable {
-    /// Read on each use, so changing it in Settings takes effect straight away.
-    let currentFolder: @Sendable () -> URL
-    public let fallback: URL
-    public var folder: URL { currentFolder() }
+    public let folder: URL
     let clock: TimeSource
     let calendar: Calendar
 
-    public init(folder: URL, fallback: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current) {
-        self.init(folder: { folder }, fallback: fallback, clock: clock, timeZone: timeZone)
-    }
-
-    public init(
-        folder: @escaping @Sendable () -> URL, fallback: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current
-    ) {
-        currentFolder = folder
-        self.fallback = fallback
+    public init(folder: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current) {
+        self.folder = folder
         self.clock = clock
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         self.calendar = calendar
     }
 
-    /// The backup folder isn't there, so backups go to the fallback: the app shows a warning.
-    public var isUsingFallback: Bool {
-        var isDirectory: ObjCBool = false
-        return !FileManager.default.fileExists(atPath: folder.path(percentEncoded: false), isDirectory: &isDirectory)
-            || !isDirectory.boolValue
-    }
-
-    var destination: URL { isUsingFallback ? fallback : folder }
-
-    /// Every backup, in the backup folder and the fallback, newest first. Restore lists them all.
+    /// Every backup, newest first. Restore lists them all.
     public func all() throws -> [Backup] {
-        let folders = Set([folder, fallback].map(\.standardizedFileURL))
-        return try folders.flatMap(backups(in:)).sorted { ($0.date, $0.url.lastPathComponent) > ($1.date, $1.url.lastPathComponent) }
+        try backups(in: folder).sorted { ($0.date, $0.url.lastPathComponent) > ($1.date, $1.url.lastPathComponent) }
     }
 
     private func backups(in dir: URL) throws -> [Backup] {
@@ -119,11 +99,14 @@ public struct Backups: Sendable {
     }
 
     /// Writes a backup under a temporary name, renames it so Dropbox never syncs a half-written
-    /// file, then prunes older backups.
+    /// file, then prunes older backups. Makes the backup folder if it's missing, but never the Data folder it's in:
+    /// without that, the backup fails.
     @discardableResult
     public func backUp(_ journal: LudeumStore, operation: BackupOperation) throws -> Backup {
-        let dir = destination
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dir = folder
+        if !FileManager.default.fileExists(atPath: dir.path(percentEncoded: false)) {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: false)
+        }
         let now = clock.now()
         var copy = 1
         var url: URL

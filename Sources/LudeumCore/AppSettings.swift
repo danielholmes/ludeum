@@ -1,14 +1,20 @@
 import Foundation
 
-/// The app's settings: secrets in a `SecretStore` (the Keychain), folder locations in user defaults.
+/// The app's settings: secrets in a `SecretStore` (the Keychain), OpenEmu's library in user defaults. Where Ludeum
+/// keeps its own things is fixed, not a setting: the Ludeum folder (ADR 0010).
 /// Sendable because `UserDefaults` and every `SecretStore` are thread-safe.
 public final class AppSettings: @unchecked Sendable {
     public let secrets: any SecretStore
     let defaults: UserDefaults
+    /// `.standard` but in tests.
+    public let folder: LudeumFolder
 
-    public init(secrets: any SecretStore = KeychainSecretStore(), defaults: UserDefaults = .standard) {
+    public init(
+        secrets: any SecretStore = KeychainSecretStore(), defaults: UserDefaults = .standard, folder: LudeumFolder = .standard
+    ) {
         self.secrets = secrets
         self.defaults = defaults
+        self.folder = folder
     }
 
     // MARK: - Secrets
@@ -43,55 +49,18 @@ public final class AppSettings: @unchecked Sendable {
 
     /// Defaults to wherever OpenEmu itself keeps its library.
     public var openEmuLibrary: URL {
-        get { folder(Keys.openEmuLibrary) ?? Self.openEmuDefaultLibrary }
+        get {
+            defaults.string(forKey: Keys.openEmuLibrary).map { URL(filePath: $0, directoryHint: .isDirectory) }
+                ?? Self.openEmuDefaultLibrary
+        }
         set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.openEmuLibrary) }
     }
 
-    /// Normally in Dropbox. When it isn't there, backups go to `Backups/` in the app's folder instead.
-    public var backupFolder: URL {
-        get {
-            folder(Keys.backupFolder) ?? .homeDirectory.appending(path: "Dropbox/Ludeum Backups", directoryHint: .isDirectory)
-        }
-        set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.backupFolder) }
-    }
+    /// Every ROM folder an Import reads, in the Data folder.
+    public var romFolders: [ROMFolder] { folder.romFolders }
 
-    /// The PS2 ROM folder, normally in Dropbox.
-    public var ps2Folder: URL {
-        get { folder(Keys.ps2Folder) ?? .homeDirectory.appending(path: "Dropbox/games/PS2", directoryHint: .isDirectory) }
-        set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.ps2Folder) }
-    }
-
-    /// Where the ROM folders live, one per Platform, each named for its Platform. Normally in Dropbox.
-    public var romFoldersRoot: URL {
-        get { folder(Keys.romFoldersRoot) ?? .homeDirectory.appending(path: "Dropbox/games", directoryHint: .isDirectory) }
-        set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.romFoldersRoot) }
-    }
-
-    /// A Platform's ROM folder: PS2's is its own setting, every other under the root. Nil for a Platform without one.
-    public func romFolder(platform: Int64) -> URL? { romFolder(platform: platform, root: romFoldersRoot) }
-
-    /// A Platform's ROM folder under `root` in place of the root setting, which is left alone. PS2's is still its own.
-    public func romFolder(platform: Int64, root: URL) -> URL? {
-        if platform == ROMPlatform.ps2 { return ps2Folder }
-        return ROMPlatform.all[platform].map { root.appending(path: $0.folderName, directoryHint: .isDirectory) }
-    }
-
-    /// Every ROM folder an Import reads: one per Platform that has one, by IGDB platform id.
-    public var romFolders: [ROMFolder] {
-        ROMPlatform.all.keys.sorted().compactMap { id in romFolder(platform: id).flatMap { ROMFolder.platform(id, $0) } }
-    }
-
-    /// `~/Library/Application Support/Ludeum/`: the journal database, the cache and the fallback `Backups/`.
-    public static let appFolder = URL.applicationSupportDirectory.appending(path: "Ludeum", directoryHint: .isDirectory)
-
-    /// Backups into the current backup folder, falling back to `Backups/` in the app's folder.
-    public func backups() -> Backups {
-        Backups(folder: { [self] in backupFolder }, fallback: Self.appFolder.appending(path: "Backups", directoryHint: .isDirectory))
-    }
-
-    private func folder(_ key: String) -> URL? {
-        defaults.string(forKey: key).map { URL(filePath: $0, directoryHint: .isDirectory) }
-    }
+    /// Backups into `Backups/` in the Data folder.
+    public func backups() -> Backups { Backups(folder: folder.backups) }
 
     static var openEmuDefaultLibrary: URL {
         let path =
@@ -105,8 +74,5 @@ public final class AppSettings: @unchecked Sendable {
         static let igdbClientSecret = "igdb-client-secret"
         static let hasheousKey = "hasheous-api-key"
         static let openEmuLibrary = "openEmuLibrary"
-        static let backupFolder = "backupFolder"
-        static let ps2Folder = "ps2Folder"
-        static let romFoldersRoot = "romFoldersRoot"
     }
 }

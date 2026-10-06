@@ -47,52 +47,26 @@ import Testing
         #expect(settings().hasheousKey == nil)
     }
 
-    @Test func foldersHaveDefaultsAndCanBeChanged() {
+    @Test func openEmusLibraryHasADefaultAndCanBeChanged() {
         let s = settings()
-        #expect(s.backupFolder.path(percentEncoded: false).hasSuffix("/Dropbox/Ludeum Backups/"))
         #expect(s.openEmuLibrary == AppSettings.openEmuDefaultLibrary)
-        #expect(s.ps2Folder.path(percentEncoded: false).hasSuffix("/Dropbox/games/PS2/"))
 
-        s.backupFolder = URL(filePath: "/tmp/journal backups", directoryHint: .isDirectory)
         s.openEmuLibrary = URL(filePath: "/tmp/OpenEmu Library", directoryHint: .isDirectory)
-        s.ps2Folder = URL(filePath: "/tmp/PS2", directoryHint: .isDirectory)
 
-        #expect(settings().backupFolder.path(percentEncoded: false) == "/tmp/journal backups/")
         #expect(settings().openEmuLibrary.path(percentEncoded: false) == "/tmp/OpenEmu Library/")
-        #expect(settings().ps2Folder.path(percentEncoded: false) == "/tmp/PS2/")
     }
 
-    @Test func anImportReadsEveryPlatformsROMFolder() {
-        let s = settings()
-        s.romFoldersRoot = URL(filePath: "/tmp/games", directoryHint: .isDirectory)
-        s.ps2Folder = URL(filePath: "/elsewhere/PS2", directoryHint: .isDirectory)
+    @Test func theROMFoldersAndBackupsAreInTheDataFolderWhateverOldSettingsSay() {
+        defaults.set("/old/games", forKey: "romFoldersRoot")
+        defaults.set("/old/PS2", forKey: "ps2Folder")
+        defaults.set("/old/backups", forKey: "backupFolder")
+        let folder = LudeumFolder(url: URL(filePath: "/tmp/Ludeum", directoryHint: .isDirectory))
 
-        let folders = settings().romFolders
+        let s = AppSettings(secrets: secrets, defaults: defaults, folder: folder)
 
-        #expect(folders.count == 19)
-        #expect(folders.first { $0.platformId == 22 }?.url.path(percentEncoded: false) == "/tmp/games/Game Boy Color/")
-        #expect(folders.first { $0.platformId == 99 }?.url.path(percentEncoded: false) == "/tmp/games/Famicom/")
-        #expect(folders.first { $0.platformId == ROMPlatform.ps2 } == .ps2(URL(filePath: "/elsewhere/PS2", directoryHint: .isDirectory)))
-    }
-
-    @Test func eachPlatformsROMFolderIsNamedForItUnderOneRoot() {
-        let s = settings()
-        #expect(s.romFolder(platform: 22)?.path(percentEncoded: false).hasSuffix("/Dropbox/games/Game Boy Color/") == true)
-
-        s.romFoldersRoot = URL(filePath: "/tmp/games", directoryHint: .isDirectory)
-        s.ps2Folder = URL(filePath: "/elsewhere/PS2", directoryHint: .isDirectory)
-
-        #expect(settings().romFolder(platform: 58)?.path(percentEncoded: false) == "/tmp/games/Super Famicom/")
-        #expect(settings().romFolder(platform: ROMPlatform.ps2)?.path(percentEncoded: false) == "/elsewhere/PS2/")
-        #expect(settings().romFolder(platform: 6) == nil)
-    }
-
-    @Test func aRootGivenForOneRunLeavesTheSettingAlone() {
-        let s = settings()
-        let root = URL(filePath: "/tmp/other games", directoryHint: .isDirectory)
-
-        #expect(s.romFolder(platform: 22, root: root)?.path(percentEncoded: false) == "/tmp/other games/Game Boy Color/")
-        #expect(settings().romFoldersRoot.path(percentEncoded: false).hasSuffix("/Dropbox/games/"))
+        #expect(s.romFolders.first { $0.platformId == ROMPlatform.ps2 }?.url.path(percentEncoded: false) == "/tmp/Ludeum/Data/ROMs/PS2/")
+        #expect(s.romFolders.first { $0.platformId == 19 }?.url.path(percentEncoded: false) == "/tmp/Ludeum/Data/ROMs/SNES/")
+        #expect(s.backups().folder.path(percentEncoded: false) == "/tmp/Ludeum/Data/Backups/")
     }
 }
 
