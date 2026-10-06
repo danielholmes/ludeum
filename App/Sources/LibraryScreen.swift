@@ -316,12 +316,12 @@ struct CoverTile: View {
             .frame(width: width, height: width * 4 / 3)
             .overlay(alignment: .bottomLeading) {
                 if let rating = row.rating {
-                    // Grows with the Cover: about a ninth of its width, never under 13 pt.
+                    // Grows with the Cover: about an eighth of its width, never under 15 pt.
                     Text(ratingText(rating))
-                        .font(.system(size: max(13, width / 9), weight: .bold, design: .rounded))
+                        .font(.system(size: max(15, width / 7.8), weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(ratingColor(rating))
-                        .padding(.horizontal, max(6, width / 24)).padding(.vertical, 2)
+                        .padding(.horizontal, max(7, width / 21)).padding(.vertical, 2.3)
                         // A dark pill, so the Rating's colour reads the same over any cover, light or dark.
                         .background(.black.opacity(0.75), in: .capsule)
                         .padding(5)
@@ -330,8 +330,8 @@ struct CoverTile: View {
             }
             .overlay(alignment: .topTrailing) {
                 if let status = CoverStatus(row) {
-                    Image(systemName: status.symbol).font(.system(size: 20, weight: .bold)).foregroundStyle(status.color)
-                        .padding(8)
+                    Image(systemName: status.symbol).font(.system(size: 17, weight: .bold)).foregroundStyle(status.color)
+                        .padding(7)
                         .background(.regularMaterial, in: .circle)
                         .padding(5)
                         .help(status.help)
