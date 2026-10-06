@@ -1,9 +1,10 @@
 import LudeumCore
 import SwiftUI
 
-/// A Rating's colour: red at 0, through yellow at 5, to green at 10.
+/// A Rating's colour: red at 2 and under, through yellow at 6, to green at 10.
 func ratingColor(_ rating: Rating) -> Color {
-    Color(hue: Double(rating.tenths) / 100 / 3, saturation: 0.85, brightness: 0.9)
+    let fraction = Double(max(rating.tenths, 20) - 20) / 80
+    return Color(hue: fraction / 3, saturation: 0.85, brightness: 0.9)
 }
 
 /// The current Rating, big, or "Unrated".
