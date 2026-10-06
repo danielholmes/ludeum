@@ -127,8 +127,10 @@ extension LudeumStore {
             default: items.nameSuggestions.append(item)
             }
         }
+        // Only a Game with two present ROMs or more can have Duplicate Versions, so the rest aren't read one by one.
         let games = try db.read { db in
-            try GameID.fetchAll(db, sql: "SELECT DISTINCT gameId FROM rom WHERE gameId IS NOT NULL AND NOT missing")
+            try GameID.fetchAll(
+                db, sql: "SELECT gameId FROM rom WHERE gameId IS NOT NULL AND NOT missing GROUP BY gameId HAVING COUNT(*) > 1")
         }
         for game in games {
             let roms = try roms(of: game)
