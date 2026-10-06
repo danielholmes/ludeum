@@ -87,6 +87,8 @@ struct IGDBSearchView: View {
     @State private var results: [GameSearchResult] = []
     @State private var error: String?
     @State private var searching = false
+    /// The last search had text or filters to search by, so no results means IGDB found nothing.
+    @State private var searched = false
     @State private var choosingPlatformFor: GameSearchResult?
     /// Bumped by each search, so only the latest one's answer is shown.
     @State private var generation = 0
@@ -174,6 +176,11 @@ struct IGDBSearchView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .overlay {
+                if searched && results.isEmpty && !searching && error == nil {
+                    ContentUnavailableView.search
+                }
+            }
         }
         .sheet(item: $choosingPlatformFor) { result in
             PlatformPickerSheet(platforms: platforms, used: usedPlatforms) { choice in
@@ -213,6 +220,7 @@ struct IGDBSearchView: View {
                 let found = try await search.search(query, platform: platform, filters: filters)
                 guard mine == generation else { return }
                 results = found
+                searched = !query.trimmed.isEmpty || !filters.isEmpty
                 error = nil
             } catch {
                 guard mine == generation else { return }
