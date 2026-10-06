@@ -19,6 +19,7 @@ struct ReviewQueueScreen: View {
         case noPlaylist = "No playlist"
         case missingROMs = "Missing ROMs"
         case oldMissingROMs = "Old missing ROMs"
+        case bothForms = "In both forms"
         case notCompacted = "Not compacted"
         var id: Self { self }
     }
@@ -56,6 +57,14 @@ struct ReviewQueueScreen: View {
                                 }
                                 Spacer()
                                 if let task = services.tasks.active(.rom(item.id)) { BackgroundTaskProgress(task: task) }
+                            }
+                            .tag(item.id)
+                        }
+                    } else if kind == .bothForms {
+                        ForEach(items.bothForms) { item in
+                            VStack(alignment: .leading) {
+                                Text(item.rom.name)
+                                Text(item.rom.fileName).font(.caption).foregroundStyle(.secondary)
                             }
                             .tag(item.id)
                         }
@@ -120,6 +129,9 @@ struct ReviewQueueScreen: View {
                         services: services, item: m, checkAgain: checkAgain, showGame: { shownGame = m.id }, failed: { error = $0 })
                 } else if kind == .noPlaylist, let item = items.noPlaylist.first(where: { $0.id == selection }) {
                     NoPlaylistDetail(services: services, item: item, failed: { error = $0 })
+                } else if kind == .bothForms, let item = items.bothForms.first(where: { $0.id == selection }) {
+                    BothFormsDetail(
+                        services: services, item: item, checkAgain: checkAgain, showGame: { shownGame = $0 }, failed: { error = $0 })
                 } else if kind == .notCompacted, let item = items.notCompacted.first(where: { $0.id == selection }) {
                     NotCompactedDetail(services: services, item: item, showGame: { shownGame = $0 })
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
@@ -164,7 +176,7 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions
         case .name: items.nameSuggestions
         case .noSuggestion: items.noSuggestion
-        case .duplicateVersions, .noPlaylist, .missingROMs, .oldMissingROMs, .notCompacted, nil: []
+        case .duplicateVersions, .noPlaylist, .missingROMs, .oldMissingROMs, .bothForms, .notCompacted, nil: []
         }
     }
 
@@ -178,6 +190,7 @@ struct ReviewQueueScreen: View {
         case .noPlaylist: items.noPlaylist.count
         case .missingROMs: items.missingROMs.count
         case .oldMissingROMs: items.oldMissingROMs.count
+        case .bothForms: items.bothForms.count
         case .notCompacted: items.notCompacted.count
         }
     }
@@ -189,6 +202,7 @@ struct ReviewQueueScreen: View {
         case .noPlaylist: items.noPlaylist.map(\.id)
         case .missingROMs: items.missingROMs.map(\.id)
         case .oldMissingROMs: items.oldMissingROMs.map(\.id)
+        case .bothForms: items.bothForms.map(\.id)
         case .notCompacted: items.notCompacted.map(\.id)
         default: romItems.map(\.romId)
         }
@@ -797,6 +811,80 @@ private struct ROMRow: View {
             Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
             Text(rom.fileName).font(.caption).textSelection(.enabled)
         }
+    }
+}
+
+/// An In both forms item: the copy of the ROM that's kept and what goes to the Trash, as its ROM folder has them now, and
+/// Keep, which sends them there. Once that's done, the item leaves the queue.
+private struct BothFormsDetail: View {
+    let services: Services
+    let item: BothFormsROM
+    let checkAgain: () -> Void
+    let showGame: (GameID) -> Void
+    let failed: (String?) -> Void
+    /// Nil until it's read, and when its ROM folder no longer has it in both forms.
+    @State private var forms: BothForms?
+    @State private var sizes: [URL: Int64] = [:]
+
+    private struct Key: Equatable {
+        let item: BothFormsROM
+        let revision: Int
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Text(item.rom.name).font(.title2).bold()
+                Text(explanation).foregroundStyle(.secondary)
+            }
+            if let forms {
+                Section("Keep") { copy(forms.keep) }
+                Section("To the Trash") { ForEach(forms.trash, id: \.self) { copy($0) } }
+            }
+            HStack {
+                if let forms {
+                    Button(forms.keepsCompacted ? "Keep the Compacted copy" : "Keep the Playable copy") { keep(forms) }
+                        .disabled(services.tasks.active(.rom(item.id)) != nil)
+                        .help("Sends the rest to the Trash")
+                }
+                if let game = item.game { Button("Show Game") { showGame(game) } }
+                Button("Check again", action: checkAgain)
+            }
+        }
+        .formStyle(.grouped)
+        .task(id: Key(item: item, revision: services.changes.revision)) {
+            forms = try? romFolder?.bothForms(named: item.rom.folderName)
+            sizes = ((forms.map { [$0.keep] + $0.trash }) ?? []).reduce(into: [:]) { $0[$1] = BothForms.size(of: $1) }
+        }
+    }
+
+    private var romFolder: ROMFolder? { services.settings.romFolders.first { $0.platformId == item.rom.platformId } }
+
+    private var explanation: String {
+        guard let forms else { return "Its ROM folder doesn't have it in both forms now. Check again." }
+        return forms.keepsCompacted
+            ? "It's kept in more than one form at once, wasting room. Its Compacted copy is smaller and still Plays, so that's "
+                + "the one to keep: the rest goes to the Trash."
+            : "It's kept in more than one form at once, wasting room. The Playable copy is the one to keep: the rest goes to "
+                + "the Trash."
+    }
+
+    /// A copy's file (or subfolder) and the room it takes.
+    private func copy(_ url: URL) -> some View {
+        LabeledContent(url.hasDirectoryPath ? url.lastPathComponent + "/" : url.lastPathComponent) {
+            if let size = sizes[url] { Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) }
+        }
+    }
+
+    private func keep(_ forms: BothForms) {
+        guard let journal = services.journal else { return }
+        do {
+            try journal.keepOneForm(item, as: forms, romFolders: services.settings.romFolders)
+            failed(nil)
+        } catch {
+            failed(journalErrorText(error))
+        }
+        services.changes.changed()
     }
 }
 

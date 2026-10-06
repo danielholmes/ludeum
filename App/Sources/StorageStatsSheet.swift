@@ -97,7 +97,9 @@ struct StorageStatsSheet: View {
             }
             if row.inBothForms > 0 {
                 Image(systemName: "doc.on.doc.fill").foregroundStyle(.orange)
-                    .help("\(row.inBothForms) ROM\(row.inBothForms == 1 ? " is" : "s are") kept in both forms, wasting room")
+                    .help(
+                        "\(row.inBothForms) ROM\(row.inBothForms == 1 ? " is" : "s are") kept in both forms, wasting room: see the Review queue"
+                    )
             }
         }
     }

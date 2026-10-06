@@ -448,6 +448,9 @@ enum LudeumSchema {
         migrator.registerMigration("v17 rom needs playlist") { db in
             try db.alter(table: "rom") { t in t.add(column: "needsPlaylist", .boolean).notNull().defaults(to: false) }
         }
+        migrator.registerMigration("v18 rom in both forms") { db in
+            try db.alter(table: "rom") { t in t.add(column: "inBothForms", .boolean).notNull().defaults(to: false) }
+        }
         return migrator
     }
 }

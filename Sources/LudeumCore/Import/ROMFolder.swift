@@ -50,19 +50,18 @@ public struct ROMFolder: Sendable, Equatable {
         var ready: [String: URL] = [:]
         var archives: [String: URL] = [:]
         var discs: [String: [URL]] = [:]
+        // Every loose file the Emulator opens, by name, most preferred first.
+        var loose: [String: [(rank: Int, file: URL)]] = [:]
         for file in files where !tracks.contains(file.lastPathComponent.lowercased()) {
             let name = file.deletingPathExtension().lastPathComponent
             let ext = file.pathExtension.lowercased()
             // A `.7z` is the ROM's archive whether or not its Emulator opens it too.
             if ext == "7z" { archives[name] = file }
-            if let rank = readyExtensions.firstIndex(of: ext) {
-                if let current = ready[name], let currentRank = readyExtensions.firstIndex(of: current.pathExtension.lowercased()),
-                    currentRank <= rank
-                {
-                    continue
-                }
-                ready[name] = file
-            }
+            if let rank = readyExtensions.firstIndex(of: ext) { loose[name, default: []].append((rank, file)) }
+        }
+        for (name, found) in loose {
+            loose[name] = found.sorted { $0.rank < $1.rank }
+            ready[name] = loose[name]?.first?.file
         }
         // A subfolder holding the game wins over a loose file of the same name.
         for folder in folders {
@@ -71,7 +70,12 @@ public struct ROMFolder: Sendable, Equatable {
             discs[folder.lastPathComponent] = game.discsWithoutPlaylist
         }
         return Set(ready.keys).union(archives.keys).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            .map { FolderROMFile(name: $0, ready: ready[$0], archive: archives[$0], in: url, discsWithoutPlaylist: discs[$0] ?? []) }
+            .map { name in
+                FolderROMFile(
+                    name: name, ready: ready[name], archive: archives[name],
+                    otherForms: (loose[name] ?? []).map(\.file).filter { $0 != ready[name] && $0 != archives[name] },
+                    in: url, discsWithoutPlaylist: discs[name] ?? [])
+            }
     }
 
     /// The game in a subfolder, as `game(among:)` finds it.
@@ -131,16 +135,22 @@ public struct FolderROMFile: Sendable, Equatable {
     public let name: String
     public let ready: URL?
     public let archive: URL?
+    /// Loose files of its name its Emulator opens that lost to the ready file, most preferred first: a Compacted `.zip`
+    /// beside the loose file, or a loose file beside the subfolder.
+    public let otherForms: [URL]
     /// A subfolder's Discs, in Disc order, when it has no playlist for them: its ready file is then Disc 1.
     public let discsWithoutPlaylist: [URL]
     /// The file the journal shows for it, as a path in the ROM folder: the ready one (inside its
     /// subfolder, if it's in one), else the archive.
     let fileName: String
 
-    public init(name: String, ready: URL?, archive: URL?, in root: URL? = nil, discsWithoutPlaylist: [URL] = []) {
+    public init(
+        name: String, ready: URL?, archive: URL?, otherForms: [URL] = [], in root: URL? = nil, discsWithoutPlaylist: [URL] = []
+    ) {
         self.name = name
         self.ready = ready
         self.archive = archive
+        self.otherForms = otherForms
         self.discsWithoutPlaylist = discsWithoutPlaylist
         let file = ready ?? archive
         let rootPath = root?.standardizedFileURL.path(percentEncoded: false)
@@ -153,9 +163,14 @@ public struct FolderROMFile: Sendable, Equatable {
 
     public var archived: Bool { ready == nil }
     public var needsPlaylist: Bool { !discsWithoutPlaylist.isEmpty }
+    /// How many forms it's kept in: its ready file, its `.7z` when that isn't the ready file too, and each other form.
+    var forms: Int { (ready == nil ? 0 : 1) + (archive == nil || archive == ready ? 0 : 1) + otherForms.count }
+    /// Kept in more than one form at once, which a ROM never should be: it waits in the Review queue.
+    public var inBothForms: Bool { forms > 1 }
 
     public static func == (a: Self, b: Self) -> Bool {
-        a.name == b.name && a.ready == b.ready && a.archive == b.archive && a.discsWithoutPlaylist == b.discsWithoutPlaylist
+        a.name == b.name && a.ready == b.ready && a.archive == b.archive && a.otherForms == b.otherForms
+            && a.discsWithoutPlaylist == b.discsWithoutPlaylist
     }
 }
 

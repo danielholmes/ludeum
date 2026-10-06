@@ -137,12 +137,13 @@ extension LudeumStore {
                 try ROMPlatform.ensureKnown(db, platformId)
                 try db.execute(
                     sql: """
-                        INSERT INTO rom (folderName, archived, fileName, name, platformId, version, discNumber, discLabel, needsPlaylist)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO rom
+                            (folderName, archived, fileName, name, platformId, version, discNumber, discLabel, needsPlaylist, inBothForms)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                     arguments: [
                         file.name, file.archived, file.fileName, file.name, platformId,
-                        parsed.version, parsed.disc, parsed.discLabel, file.needsPlaylist,
+                        parsed.version, parsed.disc, parsed.discLabel, file.needsPlaylist, file.inBothForms,
                     ])
                 if case .suggestion(let s) = match {
                     try db.execute(
@@ -197,8 +198,8 @@ extension LudeumStore {
     static func setFolderROM(_ db: Database, _ id: Int64, to file: FolderROMFile?) throws {
         if let file {
             try db.execute(
-                sql: "UPDATE rom SET missing = 0, archived = ?, fileName = ?, needsPlaylist = ? WHERE id = ?",
-                arguments: [file.archived, file.fileName, file.needsPlaylist, id])
+                sql: "UPDATE rom SET missing = 0, archived = ?, fileName = ?, needsPlaylist = ?, inBothForms = ? WHERE id = ?",
+                arguments: [file.archived, file.fileName, file.needsPlaylist, file.inBothForms, id])
         } else {
             try db.execute(sql: "UPDATE rom SET missing = 1 WHERE id = ?", arguments: [id])
         }

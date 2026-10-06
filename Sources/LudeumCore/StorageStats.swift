@@ -96,16 +96,15 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
             return row
         }
         guard !sizes.isEmpty else { return nil }
-        let loose = sizes.keys.filter { !$0.contains("/") }
         row.total = sizes.values.reduce(0, +)
         // A file two ROMs are made of (a loose playlist's Discs, each a ROM too) counts under the first.
         var claimed: Set<String> = []
         for rom in roms {
-            guard let made = try? folder.madeOf(rom, loose: loose) else {
+            guard let made = try? folder.madeOf(rom) else {
                 row.unreadable = true
                 continue
             }
-            let files = made.files.filter { sizes[$0] != nil && !claimed.contains($0) }
+            let files = made.filter { sizes[$0] != nil && !claimed.contains($0) }
             claimed.formUnion(files)
             let bytes = files.reduce(0) { $0 + sizes[$1]! }
             if rom.archived {
@@ -119,21 +118,16 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
             {
                 row.notCompacted += 1
             }
-            if made.forms > 1 { row.inBothForms += 1 }
+            if rom.inBothForms { row.inBothForms += 1 }
         }
         return row
     }
 }
 
 extension ROMFolder {
-    /// The files a ROM from a scan is made of, by path in the folder (none outside it), and how many forms it's kept in:
-    /// its ready file, its `.7z` when that isn't the ready file too, and any other loose file of its name the folder
-    /// reads, such as a Compacted copy beside a loose file.
-    func madeOf(_ rom: FolderROMFile, loose: [String]) throws -> (files: Set<String>, forms: Int) {
-        let files = Set(try files(of: rom).compactMap { Sizes.relative($0, to: url) })
-        let others = loose.filter { !files.contains($0) && ($0 as NSString).deletingPathExtension == rom.name && reads(fileName: $0) }
-        let forms = (rom.ready == nil ? 0 : 1) + (rom.archive == nil || rom.archive == rom.ready ? 0 : 1) + others.count
-        return (files.union(others), forms)
+    /// The files a ROM from a scan is made of, in every form it's kept in, by path in the folder (none outside it).
+    func madeOf(_ rom: FolderROMFile) throws -> Set<String> {
+        Set(try (files(of: rom) + rom.otherForms).compactMap { Sizes.relative($0, to: url) })
     }
 }
 

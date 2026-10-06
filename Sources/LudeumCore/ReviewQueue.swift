@@ -60,6 +60,15 @@ public struct NoPlaylistItem: Sendable, Equatable, Identifiable {
     public var id: Int64 { romId }
 }
 
+/// A present ROM kept in both forms at once: a Playable copy beside its Archived `.7z`, or a loose file beside its
+/// Compacted copy. Keeping one sends the other to the Trash.
+public struct BothFormsROM: Sendable, Equatable, Identifiable {
+    public let rom: LudeumROM
+    /// Its Game, once it's Matched.
+    public let game: GameID?
+    public var id: Int64 { rom.id }
+}
+
 /// A present ROM on a Platform whose Emulator opens an archive, not yet Compacted into it: a loose file, or a `.7z` ares
 /// can't open.
 public struct NotCompactedROM: Sendable, Equatable, Identifiable {
@@ -82,6 +91,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var missingROMs: [MissingROMsGame] = []
     public var oldMissingROMs: [OldMissingROMsGame] = []
     public var noPlaylist: [NoPlaylistItem] = []
+    public var bothForms: [BothFormsROM] = []
     /// Bulk-compactable.
     public var notCompacted: [NotCompactedROM] = []
 
@@ -90,7 +100,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     /// The sidebar badge.
     public var count: Int {
         namesAgree.count + checksumSuggestions.count + nameSuggestions.count + noSuggestion.count + duplicateVersions.count
-            + noPlaylist.count + missingROMs.count + oldMissingROMs.count + notCompacted.count
+            + noPlaylist.count + missingROMs.count + oldMissingROMs.count + bothForms.count + notCompacted.count
     }
 }
 
@@ -150,32 +160,48 @@ extension LudeumStore {
             )
             .map { NoPlaylistItem(romId: $0["id"], romName: $0["folderName"], platformId: $0["platformId"]) }
         }
+        items.bothForms = try bothForms()
         items.notCompacted = try notCompacted()
         return items
+    }
+
+    /// Present ROMs the last read of their ROM folder found in both forms, Matched or not, by name.
+    private func bothForms() throws -> [BothFormsROM] {
+        try presentFolderROMs(where: "inBothForms", neededColumn: "inBothForms").map { BothFormsROM(rom: $0.rom, game: $0.game) }
     }
 
     /// Present ROM folder ROMs that can be Compacted, Matched or not, by name.
     private func notCompacted() throws -> [NotCompactedROM] {
         let platforms = ROMPlatform.all.filter { $0.value.compactExtension != nil }.keys.map(String.init).joined(separator: ", ")
-        return try db.read { db in
-            try Row.fetchAll(
+        return try presentFolderROMs(where: "platformId IN (\(platforms))").compactMap { rom, game in
+            ROMArchiving.compactFileName(for: rom).map { NotCompactedROM(rom: rom, compactFileName: $0, game: game) }
+        }
+    }
+
+    /// Present ROM folder ROMs matching the SQL condition, each with its Game once it's Matched, by name. None when the
+    /// journal has no `neededColumn` yet: one waiting for `migrate-openemu` is held before it.
+    private func presentFolderROMs(where condition: String, neededColumn: String? = nil) throws -> [(rom: LudeumROM, game: GameID?)] {
+        try db.read { db in
+            if let neededColumn, try !db.columns(in: "rom").contains(where: { $0.name == neededColumn }) { return [] }
+            return try Row.fetchAll(
                 db,
                 sql: """
                     SELECT id, folderName, platformId, archived, fileName, COALESCE(name, fileName) AS displayName, version,
                         discNumber, gameId
                     FROM rom
-                    WHERE folderName IS NOT NULL AND NOT missing AND platformId IN (\(platforms))
+                    WHERE folderName IS NOT NULL AND NOT missing AND \(condition)
                     ORDER BY displayName COLLATE NOCASE, id
-                    """)
-        }
-        .compactMap { row in
-            let fileName: String = row["fileName"]
-            let parsed = ROMName((fileName as NSString).deletingPathExtension)
-            let rom = LudeumROM(
-                id: row["id"], folderName: row["folderName"], platformId: row["platformId"], fileName: fileName,
-                name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
-                missing: false, archived: row["archived"])
-            return ROMArchiving.compactFileName(for: rom).map { NotCompactedROM(rom: rom, compactFileName: $0, game: row["gameId"]) }
+                    """
+            )
+            .map { row in
+                let fileName: String = row["fileName"]
+                let parsed = ROMName((fileName as NSString).deletingPathExtension)
+                let rom = LudeumROM(
+                    id: row["id"], folderName: row["folderName"], platformId: row["platformId"], fileName: fileName,
+                    name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
+                    missing: false, archived: row["archived"])
+                return (rom, row["gameId"])
+            }
         }
     }
 
@@ -203,6 +229,24 @@ extension LudeumStore {
         try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: playlist, options: .withoutOverwriting)
         let file = try folder.scan().first { $0.name == item.romName }
         try db.write { db in try Self.setFolderROM(db, item.romId, to: file) }
+    }
+
+    /// Keep one: sends every copy of a ROM kept in both forms to the Trash but the one `forms` keeps, then reads the ROM
+    /// again. `forms` is what I was shown: when its ROM folder no longer has it that way it throws, with nothing sent to
+    /// the Trash, and the ROM is read again all the same.
+    public func keepOneForm(
+        _ item: BothFormsROM, as forms: BothForms, romFolders: [ROMFolder],
+        moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+    ) throws {
+        guard let folder = romFolders.first(where: { $0.platformId == item.rom.platformId }) else { throw ReviewError.noROMFolder }
+        let rom = try folder.scan().first { $0.name == item.rom.folderName }
+        guard rom.flatMap(folder.bothForms) == forms else {
+            try db.write { db in try Self.setFolderROM(db, item.id, to: rom) }
+            throw ReviewError.bothFormsChanged
+        }
+        // Whatever reached the Trash before a failure, the journal sees what's left.
+        defer { try? checkROMAgain(item.id, in: folder) }
+        for copy in forms.trash { try moveToTrash(copy) }
     }
 
     /// Assign to Game…: Matches the ROM to an existing Game by hand.
@@ -314,6 +358,8 @@ public enum ReviewError: Error, Equatable {
     case siblingWontReadFile
     /// Make playlist found no Discs without a playlist in the ROM's subfolder: gone, or given one meanwhile.
     case noDiscsWithoutPlaylist
+    /// Keep one found the ROM's copies aren't the ones shown: one gone, or another added meanwhile.
+    case bothFormsChanged
 }
 
 private func gameROM(_ rom: LudeumROM) -> GameROM {
