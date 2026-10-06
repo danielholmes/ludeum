@@ -14,14 +14,17 @@ public struct OpenEmuROM: Sendable, Hashable {
     public let md5: String
     /// The ROM file, if OpenEmu knows where it is. It may not exist.
     public let file: URL?
+    /// The IGDB platforms it could be on, most likely first: its system's, unless given (a ROM folder's one).
+    public let platforms: [Int]
 
-    public init(id: Int, name: String, openVGDBTitle: String?, system: String, md5: String, file: URL?) {
+    public init(id: Int, name: String, openVGDBTitle: String?, system: String, md5: String, file: URL?, platforms: [Int]? = nil) {
         self.id = id
         self.name = name
         self.openVGDBTitle = openVGDBTitle
         self.system = system
         self.md5 = md5
         self.file = file
+        self.platforms = platforms ?? openEmuSystemPlatforms[system] ?? []
     }
 }
 
@@ -67,7 +70,6 @@ public let openEmuSystemPlatforms: [String: [Int]] = [
     "openemu.system.nds": [20], "openemu.system.psp": [38], "openemu.system.n64": [4],
     "openemu.system.gc": [21], "openemu.system.sms": [64], "openemu.system.scd": [78],
     "openemu.system.saturn": [32], "openemu.system.gg": [35], "openemu.system.pcecd": [150],
-    ROMFolder.ps2SystemId: [8],
 ]
 
 /// Matches OpenEmu ROMs to IGDB games, from the cache where it can.
@@ -138,7 +140,7 @@ public final class Matcher: Sendable {
     private func searchCandidates(_ rom: OpenEmuROM) async throws -> [Int] {
         var names: [String] = []
         for n in [cleanName(rom.name), rom.openVGDBTitle ?? ""] where !n.isEmpty && !names.contains(n) { names.append(n) }
-        for platform in openEmuSystemPlatforms[rom.system] ?? [] {
+        for platform in rom.platforms {
             for name in names {
                 let search = IGDBSearch(name: name, platformID: platform)
                 if let ids = try await igdb.search([search])[search], !ids.isEmpty { return ids }

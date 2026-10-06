@@ -50,7 +50,7 @@ struct BoxArtImport {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT rom.id, rom.openEmuPk, rom.fileName, rom.name, rom.systemId, game.igdbName FROM rom
+                    SELECT rom.id, rom.openEmuPk, rom.fileName, rom.name, rom.platformId, game.igdbName FROM rom
                     LEFT JOIN game ON game.id = rom.gameId WHERE NOT rom.libretroLookedUp ORDER BY rom.id
                     """)
         }
@@ -59,7 +59,7 @@ struct BoxArtImport {
             let titles = [row["name"], (row["openEmuPk"] as Int64?).flatMap { openVGDBTitles[$0] } ?? nil, row["igdbName"]].compactMap {
                 $0 as String?
             }
-            let names = try await libretro.names(system: row["systemId"], fileName: row["fileName"], titles: titles) ?? LibretroNames()
+            let names = try await libretro.names(platform: row["platformId"], fileName: row["fileName"], titles: titles) ?? LibretroNames()
             try await journal.db.write { db in
                 try db.execute(
                     sql: "UPDATE rom SET libretroLookedUp = 1, libretroBoxart = ?, libretroSnap = ?, libretroTitle = ? WHERE id = ?",

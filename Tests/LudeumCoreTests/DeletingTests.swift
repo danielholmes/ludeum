@@ -14,7 +14,7 @@ import Testing
     private func recordROM(missing: Bool) throws {
         try h.journal.recordROM(
             game: game, openEmuPk: 42, md5: "d41d8cd98f00b204e9800998ecf8427e",
-            fileName: "Super Metroid (Japan, USA).sfc", systemId: "openemu.system.snes", missing: missing)
+            fileName: "Super Metroid (Japan, USA).sfc", missing: missing)
     }
 
     @Test func refusesWhileTheGameHasAPresentROM() throws {
@@ -41,6 +41,6 @@ import Testing
         let again = try h.addGame("Super Metroid again")
         try h.journal.recordROM(
             game: again, openEmuPk: 42, md5: "d41d8cd98f00b204e9800998ecf8427e",
-            fileName: "Super Metroid (Japan, USA).sfc", systemId: "openemu.system.snes", missing: false)
+            fileName: "Super Metroid (Japan, USA).sfc", missing: false)
     }
 }

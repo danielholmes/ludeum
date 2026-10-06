@@ -165,7 +165,7 @@ import Testing
         let journal = try LudeumStore(directory: h.directory, clock: h.clock, timeZone: h.timeZone, backups: backups())
         try journal.addPlatform(id: 19, name: "SNES")
         let game = try journal.addGame(platformId: 19, name: "Super Metroid")
-        try journal.recordROM(game: game, openEmuPk: 1, md5: "aa", fileName: "sm.sfc", systemId: "openemu.system.snes", missing: false)
+        try journal.recordROM(game: game, openEmuPk: 1, md5: "aa", fileName: "sm.sfc", missing: false)
 
         #expect(throws: LudeumError.gameHasPresentROMs) { try journal.deleteGame(game) }
         #expect(try backups().all().isEmpty)

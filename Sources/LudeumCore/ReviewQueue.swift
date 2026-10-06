@@ -6,8 +6,8 @@ public struct ReviewItem: Sendable, Equatable, Identifiable {
     public let romId: Int64
     /// OpenEmu's name for the ROM.
     public let romName: String
-    /// e.g. "openemu.system.snes", for its Platform.
-    public let systemId: String
+    /// The IGDB platform it's on: its ROM folder's (an unmatched OpenEmu ROM's is its system's most likely one).
+    public let platformId: Int64
     public let missing: Bool
     public let suggestedIgdbGameId: Int64?
     /// Where the suggestion came from: the checksum (or a related record of it), or a name search.
@@ -59,7 +59,7 @@ extension LudeumStore {
         }
         for row in rows {
             let item = ReviewItem(
-                romId: row["id"], romName: row["displayName"], systemId: row["systemId"], missing: row["missing"],
+                romId: row["id"], romName: row["displayName"], platformId: row["platformId"], missing: row["missing"],
                 suggestedIgdbGameId: row["suggestedIgdbGameId"],
                 suggestionKind: (row["suggestionKind"] as String?).flatMap(ReviewItem.SuggestionKind.init(rawValue:)),
                 checksumIgdbGameId: row["checksumIgdbGameId"], namesAgree: row["namesAgree"] ?? false)
@@ -145,6 +145,10 @@ extension LudeumStore {
                 WHERE id = ? AND gameId IS NULL
                 """, arguments: [game, kind, now, rom])
         guard db.changesCount == 1 else { throw ReviewError.alreadyMatched }
+        // An OpenEmu ROM takes its Game's Platform, whose ROM folder it moves to when it's migrated.
+        try db.execute(
+            sql: "UPDATE rom SET platformId = (SELECT platformId FROM game WHERE id = ?) WHERE id = ? AND openEmuPk IS NOT NULL",
+            arguments: [game, rom])
         if let held = try Row.fetchOne(db, sql: "SELECT * FROM heldOpenEmuData WHERE romId = ?", arguments: [rom]) {
             let collections = (try? JSONDecoder().decode([String].self, from: Data((held["collections"] as String).utf8))) ?? []
             try applyOpenEmuData(
@@ -178,21 +182,19 @@ public struct ReviewQueue: Sendable {
         self.igdb = igdb
     }
 
-    /// Confirm: Matches the ROM to its suggestion, on the Platform its system maps to.
+    /// Confirm: Matches the ROM to its suggestion, on the ROM's Platform.
     @discardableResult
     public func confirm(_ item: ReviewItem) async throws -> GameID {
         guard let suggested = item.suggestedIgdbGameId else { throw ReviewError.suggestionGone }
         guard let record = try await igdb.games(ids: [Int(suggested)])[Int(suggested)] else { throw ReviewError.suggestionGone }
-        let platformId = gamePlatform(system: item.systemId, game: record)
-        let platform = try await platform(platformId)
+        let platform = try await platform(item.platformId)
         return try journal.match(
             item, igdbGameId: suggested, igdbName: record.name ?? cleanName(item.romName), platform: platform, kind: "confirmed")
     }
 
     /// Whether confirming would give an existing Game Duplicate Versions. It warns, never blocks.
     public func confirmWouldGiveDuplicateVersions(_ item: ReviewItem) async throws -> Bool {
-        guard let suggested = item.suggestedIgdbGameId, let record = try await igdb.games(ids: [Int(suggested)])[Int(suggested)],
-            let game = try journal.gameID(igdbGameId: suggested, platformId: gamePlatform(system: item.systemId, game: record))
+        guard let suggested = item.suggestedIgdbGameId, let game = try journal.gameID(igdbGameId: suggested, platformId: item.platformId)
         else { return false }
         return try journal.wouldHaveDuplicateVersions(game, adding: item.romId)
     }

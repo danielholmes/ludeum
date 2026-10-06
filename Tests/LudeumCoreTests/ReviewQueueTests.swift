@@ -27,11 +27,12 @@ import Testing
         collections: [String] = [], start: String? = nil, missing: Bool = false
     ) throws -> Int64 {
         try j.journal.db.write { db in
+            try ROMPlatform.ensureKnown(db, 19)
             try db.execute(
                 sql: """
-                    INSERT INTO rom (openEmuPk, md5, fileName, systemId, missing, version, suggestedIgdbGameId, suggestionKind,
+                    INSERT INTO rom (openEmuPk, md5, fileName, platformId, missing, version, suggestedIgdbGameId, suggestionKind,
                         checksumIgdbGameId, namesAgree)
-                    VALUES (?, ?, ?, 'openemu.system.snes', ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, 19, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [pk, "md5-\(pk)", name, missing, ROMName(name).version, suggestion, kind, checksumGame, namesAgree])
             let id = db.lastInsertedRowID

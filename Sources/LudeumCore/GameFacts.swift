@@ -199,9 +199,10 @@ extension IGDBGame {
         9: "Korea", 10: "Brazil",
     ]
 
-    /// Its releases on the IGDB platforms an OpenEmu system maps to, earliest first, one per region.
-    public func releases(onSystem system: String) -> [GameRelease] {
-        let platforms = Set(openEmuSystemPlatforms[system] ?? [])
+    /// Its releases on a ROM's Platform (and the Platforms shown with it, so SNES includes Super Famicom),
+    /// earliest first, one per region.
+    public func releases(onPlatform platform: Int64) -> [GameRelease] {
+        let platforms = Set(PlatformGroups.ids(shownAs: PlatformGroups.shownID(platform)).map(Int.init))
         var seen = Set<String>()
         return (record["release_dates"]?.array ?? [])
             .filter { ($0["platform"]?.int).map(platforms.contains) ?? false }

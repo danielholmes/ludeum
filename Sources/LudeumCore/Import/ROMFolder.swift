@@ -1,21 +1,22 @@
 import Foundation
 
-/// A ROM folder: a Platform's ROMs read straight from a folder, for Platforms OpenEmu doesn't have.
-/// A ROM there is known by its name: a file's without the extension, or a subfolder's. So Unarchiving
+/// A ROM folder: one IGDB Platform's ROMs, read straight from a folder. The folder alone gives a ROM
+/// its Platform. A ROM there is known by its name: a file's without the extension, or a subfolder's. So Unarchiving
 /// `Okami (USA).7z` into `Okami (USA)/` is the same ROM changing from archived to ready. A subfolder
 /// is a ROM when it holds the game: one cue sheet, or one image, at any depth. Hidden folders are ignored.
 public struct ROMFolder: Sendable, Equatable {
-    /// Stands in for an OpenEmu system identifier on the folder's ROMs.
-    public let systemId: String
+    /// The IGDB platform its ROMs are on.
+    public let platformId: Int64
     public let url: URL
     /// What its Emulator opens, most preferred first. Anything else but a `.7z` is ignored.
     let readyExtensions: [String]
 
-    public static let ps2SystemId = "ludeum.folder.ps2"
-
     /// PS2, played in PCSX2.
-    public static func ps2(_ url: URL) -> ROMFolder {
-        ROMFolder(systemId: ps2SystemId, url: url, readyExtensions: ["iso", "chd", "cso", "zso", "gz", "cue", "bin", "mdf"])
+    public static func ps2(_ url: URL) -> ROMFolder { platform(ROMPlatform.ps2, url)! }
+
+    /// The ROM folder of a Platform that has one.
+    public static func platform(_ id: Int64, _ url: URL) -> ROMFolder? {
+        ROMPlatform.all[id].map { ROMFolder(platformId: id, url: url, readyExtensions: $0.readyExtensions) }
     }
 
     /// Every ROM in the folder, by name. Throws when the folder can't be read (Dropbox not there,

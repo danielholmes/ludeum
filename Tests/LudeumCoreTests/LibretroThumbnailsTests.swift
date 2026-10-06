@@ -13,7 +13,7 @@ import Testing
         h.internet.addLibretro(
             "Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (Europe) (En,Fr,De)"], folders: ["Named_Snaps"])
 
-        let names = try await h.libretro.names(system: "openemu.system.snes", fileName: "Super Metroid (E).sfc", titles: [])
+        let names = try await h.libretro.names(platform: 19, fileName: "Super Metroid (E).sfc", titles: [])
 
         let repo = "Nintendo - Super Nintendo Entertainment System"
         #expect(names?.boxart == "\(repo)/Named_Boxarts/Super Metroid (Japan, USA) (En).png")
@@ -21,42 +21,34 @@ import Testing
         #expect(names?.title == "\(repo)/Named_Titles/Super Metroid (Japan, USA) (En).png")
     }
 
-    @Test func gameBoyROMsAlsoLookInGameBoyColor() async throws {
-        h.internet.addLibretro("Nintendo_-_Game_Boy", ["Tetris (World) (Rev 1)"])
-        h.internet.addLibretro("Nintendo_-_Game_Boy_Color", ["Tetris DX (World)"])
-
-        let dx = try await h.libretro.names(system: "openemu.system.gb", fileName: "Tetris DX (World).gbc", titles: [])
-        let tetris = try await h.libretro.names(system: "openemu.system.gb", fileName: "Tetris (W) (V1.1) [!].gb", titles: [])
-
-        #expect(dx?.boxart == "Nintendo - Game Boy Color/Named_Boxarts/Tetris DX (World).png")
-        #expect(tetris?.boxart == "Nintendo - Game Boy/Named_Boxarts/Tetris (World) (Rev 1).png")
-    }
-
-    @Test func aColourROMPrefersGameBoyColourOverAGameBoyGameOfTheSameName() async throws {
+    @Test func eachPlatformLooksInItsOwnLibretroFolder() async throws {
         h.internet.addLibretro("Nintendo_-_Game_Boy", ["Looney Tunes (USA, Europe)"])
         h.internet.addLibretro("Nintendo_-_Game_Boy_Color", ["Looney Tunes (USA) (GB Compatible)"])
+        h.internet.addLibretro("Nintendo_-_Nintendo_Entertainment_System", ["Zelda no Densetsu (Japan)"])
 
-        let colour = try await h.libretro.names(system: "openemu.system.gb", fileName: "Looney Tunes (U) [C][!].7z", titles: [])
-        let mono = try await h.libretro.names(system: "openemu.system.gb", fileName: "Looney Tunes (U) [!].7z", titles: [])
+        let colour = try await h.libretro.names(platform: 22, fileName: "Looney Tunes (U) [C][!].7z", titles: [])
+        let mono = try await h.libretro.names(platform: 33, fileName: "Looney Tunes (U) [!].7z", titles: [])
+        let famicom = try await h.libretro.names(platform: 99, fileName: "Zelda no Densetsu (Japan).nes", titles: [])
 
         #expect(colour?.boxart == "Nintendo - Game Boy Color/Named_Boxarts/Looney Tunes (USA) (GB Compatible).png")
         #expect(mono?.boxart == "Nintendo - Game Boy/Named_Boxarts/Looney Tunes (USA, Europe).png")
+        #expect(famicom?.boxart == "Nintendo - Nintendo Entertainment System/Named_Boxarts/Zelda no Densetsu (Japan).png")
     }
 
-    @Test func eachSystemsListingIsFetchedOnceNotPerROM() async throws {
+    @Test func eachPlatformsListingIsFetchedOnceNotPerROM() async throws {
         h.internet.addLibretro("Nintendo_-_Nintendo_Entertainment_System", ["Metroid (USA)", "Kid Icarus (USA, Europe)"])
 
         for file in ["Metroid (USA).nes", "Kid Icarus (UE).nes", "Zelda.nes"] {
-            _ = try await h.libretro.names(system: "openemu.system.nes", fileName: file, titles: [])
+            _ = try await h.libretro.names(platform: 18, fileName: file, titles: [])
         }
         try h.reopen()
-        _ = try await h.libretro.names(system: "openemu.system.nes", fileName: "Metroid (USA).nes", titles: [])
+        _ = try await h.libretro.names(platform: 18, fileName: "Metroid (USA).nes", titles: [])
 
         #expect(h.internet.sent(to: FakeInternet.Hosts.github).count == 1)
     }
 
-    @Test func aSystemWithoutARepoHasNoNames() async throws {
-        #expect(try await h.libretro.names(system: "openemu.system.unknown", fileName: "x.bin", titles: []) == nil)
+    @Test func aPlatformWithoutARepoHasNoNames() async throws {
+        #expect(try await h.libretro.names(platform: 9999, fileName: "x.bin", titles: []) == nil)
         #expect(h.internet.sent.isEmpty)
     }
 

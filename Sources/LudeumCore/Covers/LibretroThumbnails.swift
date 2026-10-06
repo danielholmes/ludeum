@@ -31,64 +31,34 @@ public final class LibretroThumbnails: Sendable {
         api = Throttle(requestsPerSecond: 1, transport: transport, clock: clock)
     }
 
-    /// The repos an OpenEmu system's ROMs are looked up in, in order. OpenEmu files Game Boy
-    /// and Game Boy Color together.
-    static let repos: [String: [String]] = [
-        "openemu.system.gb": ["Nintendo_-_Game_Boy", "Nintendo_-_Game_Boy_Color"],
-        "openemu.system.gba": ["Nintendo_-_Game_Boy_Advance"],
-        "openemu.system.gc": ["Nintendo_-_GameCube"],
-        "openemu.system.gg": ["Sega_-_Game_Gear"],
-        "openemu.system.n64": ["Nintendo_-_Nintendo_64"],
-        "openemu.system.nds": ["Nintendo_-_Nintendo_DS"],
-        "openemu.system.nes": ["Nintendo_-_Nintendo_Entertainment_System"],
-        "openemu.system.pcecd": ["NEC_-_PC_Engine_CD_-_TurboGrafx-CD"],
-        "openemu.system.pce": ["NEC_-_PC_Engine_-_TurboGrafx_16"],
-        "openemu.system.psp": ["Sony_-_PlayStation_Portable"],
-        "openemu.system.psx": ["Sony_-_PlayStation"],
-        "openemu.system.saturn": ["Sega_-_Saturn"],
-        "openemu.system.scd": ["Sega_-_Mega-CD_-_Sega_CD"],
-        "openemu.system.sg": ["Sega_-_Mega_Drive_-_Genesis"],
-        "openemu.system.sms": ["Sega_-_Master_System_-_Mark_III"],
-        "openemu.system.snes": ["Nintendo_-_Super_Nintendo_Entertainment_System"],
-        "openemu.system.32x": ["Sega_-_32X"],
-        "openemu.system.vb": ["Nintendo_-_Virtual_Boy"],
-        "openemu.system.lynx": ["Atari_-_Lynx"],
-        "openemu.system.2600": ["Atari_-_2600"],
-        "openemu.system.ngp": ["SNK_-_Neo_Geo_Pocket_Color"],
-        "openemu.system.ws": ["Bandai_-_WonderSwan_Color"],
-        ROMFolder.ps2SystemId: ["Sony_-_PlayStation_2"],
+    /// The libretro-thumbnails repo each IGDB Platform's ROMs are looked up in. One each: the
+    /// Famicom's ROMs look in NES's, and the Super Famicom's in SNES's.
+    static let repos: [Int64: String] = [
+        33: "Nintendo_-_Game_Boy", 22: "Nintendo_-_Game_Boy_Color", 24: "Nintendo_-_Game_Boy_Advance",
+        21: "Nintendo_-_GameCube", 35: "Sega_-_Game_Gear", 4: "Nintendo_-_Nintendo_64", 20: "Nintendo_-_Nintendo_DS",
+        18: "Nintendo_-_Nintendo_Entertainment_System", 99: "Nintendo_-_Nintendo_Entertainment_System",
+        150: "NEC_-_PC_Engine_CD_-_TurboGrafx-CD", 86: "NEC_-_PC_Engine_-_TurboGrafx_16", 38: "Sony_-_PlayStation_Portable",
+        7: "Sony_-_PlayStation", 32: "Sega_-_Saturn", 78: "Sega_-_Mega-CD_-_Sega_CD", 29: "Sega_-_Mega_Drive_-_Genesis",
+        64: "Sega_-_Master_System_-_Mark_III", 19: "Nintendo_-_Super_Nintendo_Entertainment_System",
+        58: "Nintendo_-_Super_Nintendo_Entertainment_System", 30: "Sega_-_32X", 87: "Nintendo_-_Virtual_Boy",
+        61: "Atari_-_Lynx", 59: "Atari_-_2600", 120: "SNK_-_Neo_Geo_Pocket_Color", 123: "Bandai_-_WonderSwan_Color",
+        8: "Sony_-_PlayStation_2",
     ]
 
     static let folders = ["Named_Boxarts", "Named_Snaps", "Named_Titles"]
 
-    /// A `.gbc` file, or GoodTools' `[C]` (Color) flag.
-    static func isColor(_ fileName: String) -> Bool {
-        fileName.lowercased().hasSuffix(".gbc") || fileName.contains("[C]")
-    }
-
-    /// Looks a ROM up in its system's listings. Nil for a system libretro has no repo for.
-    public func names(system: String, fileName: String, titles: [String]) async throws -> LibretroNames? {
-        guard var repos = Self.repos[system] else { return nil }
-        // A Game Boy Color ROM filed under Game Boy looks in Game Boy Color first, so a Color game
-        // doesn't take the box of a Game Boy game with the same name.
-        if system == "openemu.system.gb", Self.isColor(fileName) { repos.reverse() }
-        var listings: [(repo: String, folders: [String: Set<String>])] = []
-        for repo in repos { listings.append((repo, try await listing(repo))) }
-        // An exact name in any repo beats a title match; within each step, the first repo wins (Game Boy
-        // before Game Boy Color, unless the ROM is a Color one).
+    /// Looks a ROM up in its Platform's listings. Nil for a Platform libretro has no repo for.
+    public func names(platform: Int64, fileName: String, titles: [String]) async throws -> LibretroNames? {
+        guard let repo = Self.repos[platform] else { return nil }
+        let folders = try await listing(repo)
+        // An exact name beats a title match.
         func find(_ folder: String) -> String? {
-            let steps: [(Set<String>) -> String?] = [
-                { LibretroLookup.exact(fileName: fileName, in: $0) },
-                { LibretroLookup.fuzzy(fileName: fileName, titles: titles, in: $0) },
-            ]
-            for step in steps {
-                for (repo, folders) in listings {
-                    if let name = step(folders[folder] ?? []) {
-                        return "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png"
-                    }
-                }
-            }
-            return nil
+            let names = folders[folder] ?? []
+            guard
+                let name = LibretroLookup.exact(fileName: fileName, in: names)
+                    ?? LibretroLookup.fuzzy(fileName: fileName, titles: titles, in: names)
+            else { return nil }
+            return "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png"
         }
         return LibretroNames(boxart: find("Named_Boxarts"), snap: find("Named_Snaps"), title: find("Named_Titles"))
     }

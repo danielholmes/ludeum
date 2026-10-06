@@ -166,7 +166,7 @@ struct FakeROMFolder {
         #expect(result.sentToReview.map(\.romName) == ["Okami (USA)"])
         let item = try #require(try j.journal.reviewQueue().namesAgree.first)
         #expect(item.suggestedIgdbGameId == 1234)
-        #expect(item.systemId == ROMFolder.ps2SystemId)
+        #expect(item.platformId == ROMPlatform.ps2)
         #expect(try rom("Okami (USA)")?["archived"] as Bool? == true)
         #expect(try rom("Okami (USA)")?["missing"] as Bool? == false)
     }

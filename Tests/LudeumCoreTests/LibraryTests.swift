@@ -71,9 +71,9 @@ import Testing
     }
 
     @Test func aGameWhoseROMsAreAllMissingIsMarked() throws {
-        try h.journal.recordROM(game: doom, openEmuPk: 1, md5: "a", fileName: "doom.zip", systemId: "x", missing: true)
-        try h.journal.recordROM(game: zelda, openEmuPk: 2, md5: "b", fileName: "z.sfc", systemId: "x", missing: true)
-        try h.journal.recordROM(game: zelda, openEmuPk: 3, md5: "c", fileName: "z2.sfc", systemId: "x", missing: false)
+        try h.journal.recordROM(game: doom, openEmuPk: 1, md5: "a", fileName: "doom.zip", missing: true)
+        try h.journal.recordROM(game: zelda, openEmuPk: 2, md5: "b", fileName: "z.sfc", missing: true)
+        try h.journal.recordROM(game: zelda, openEmuPk: 3, md5: "c", fileName: "z2.sfc", missing: false)
 
         let marked = try h.journal.library(LibraryFilter(), sort: .name, ascending: true).filter(\.noROMInOpenEmu).map(\.name)
 
@@ -114,7 +114,7 @@ import Testing
 
     func rom(_ pk: Int64, _ fileName: String, missing: Bool = false) throws {
         try h.journal.recordROM(
-            game: game, openEmuPk: pk, md5: "\(pk)", fileName: fileName, systemId: "openemu.system.psx", missing: missing)
+            game: game, openEmuPk: pk, md5: "\(pk)", fileName: fileName, missing: missing)
     }
 
     @Test func romsShowTheirVersion() throws {

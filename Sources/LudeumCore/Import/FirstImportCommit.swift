@@ -42,14 +42,19 @@ extension LudeumStore {
 
             func insertROM(_ rom: OpenEmuROMRecord, game: GameID?) throws -> Int64 {
                 let parsed = ROMName(rom.name)
+                // Its Game's Platform, else its system's most likely one.
+                let platformId =
+                    try game.flatMap { try Int64.fetchOne(db, sql: "SELECT platformId FROM game WHERE id = ?", arguments: [$0]) }
+                    ?? ROMPlatform.defaultPlatform(system: rom.system) ?? 0
+                try ROMPlatform.ensureKnown(db, platformId)
                 try db.execute(
                     sql: """
-                        INSERT INTO rom (openEmuPk, md5, fileName, name, systemId, missing, version, discNumber, discLabel,
+                        INSERT INTO rom (openEmuPk, md5, fileName, name, platformId, missing, version, discNumber, discLabel,
                             gameId, matchKind, matchedAt)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                     arguments: [
-                        rom.pk, rom.md5, rom.file?.lastPathComponent ?? rom.name, rom.name, rom.system, !rom.isPresent, parsed.version,
+                        rom.pk, rom.md5, rom.file?.lastPathComponent ?? rom.name, rom.name, platformId, !rom.isPresent, parsed.version,
                         parsed.disc, parsed.discLabel, game, game == nil ? nil : "automatic", game == nil ? nil : now,
                     ])
                 return db.lastInsertedRowID

@@ -69,7 +69,7 @@ import Testing
         let playlist = try openEmu.addROM("Game", md5: "b", fileName: "Game.m3u")
         func rom(_ pk: Int64, _ fileName: String) -> LudeumROM {
             LudeumROM(
-                id: pk, openEmuPk: pk, folderName: nil, systemId: "openemu.system.nes", fileName: fileName, name: fileName,
+                id: pk, openEmuPk: pk, folderName: nil, platformId: 18, fileName: fileName, name: fileName,
                 version: "", disc: nil, missing: false, archived: false)
         }
 

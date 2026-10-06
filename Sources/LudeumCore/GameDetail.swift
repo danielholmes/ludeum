@@ -8,7 +8,7 @@ public struct LudeumROM: Sendable, Equatable, Identifiable {
     public let openEmuPk: Int64?
     /// A ROM folder ROM's name (its file name without the extension); nil for an OpenEmu ROM.
     public let folderName: String?
-    public let systemId: String
+    public let platformId: Int64
     public let fileName: String
     /// OpenEmu's name for it, or the file name when unknown.
     public let name: String
@@ -51,7 +51,7 @@ extension LudeumStore {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.id, r.openEmuPk, r.folderName, r.systemId, r.archived, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing
+                    SELECT r.id, r.openEmuPk, r.folderName, r.platformId, r.archived, r.fileName, COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing
                     FROM rom r
                     WHERE r.gameId = ?
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
@@ -60,7 +60,7 @@ extension LudeumStore {
                 let fileName: String = row["fileName"]
                 let parsed = ROMName((fileName as NSString).deletingPathExtension)
                 return LudeumROM(
-                    id: row["id"], openEmuPk: row["openEmuPk"], folderName: row["folderName"], systemId: row["systemId"],
+                    id: row["id"], openEmuPk: row["openEmuPk"], folderName: row["folderName"], platformId: row["platformId"],
                     fileName: fileName,
                     name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
                     missing: row["missing"], archived: row["archived"])

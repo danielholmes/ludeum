@@ -6,7 +6,7 @@ import Testing
 /// A ROM as Game detail has it.
 func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, missing: Bool = false, id: Int64 = 1) -> LudeumROM {
     LudeumROM(
-        id: id, openEmuPk: nil, folderName: name, systemId: ROMFolder.ps2SystemId, fileName: fileName ?? "\(name).iso", name: name,
+        id: id, openEmuPk: nil, folderName: name, platformId: ROMPlatform.ps2, fileName: fileName ?? "\(name).iso", name: name,
         version: "", disc: nil, missing: missing, archived: archived)
 }
 
@@ -48,7 +48,7 @@ func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, 
         let pk = try openEmu.addROM("Zelda", md5: "abc", fileName: "zelda.sfc")
         let locator = ROMLocator(openEmuLibrary: openEmu.folder, romFolders: [])
         let rom = LudeumROM(
-            id: 1, openEmuPk: pk, folderName: nil, systemId: "openemu.system.snes", fileName: "zelda.sfc", name: "Zelda",
+            id: 1, openEmuPk: pk, folderName: nil, platformId: 19, fileName: "zelda.sfc", name: "Zelda",
             version: "", disc: nil, missing: false, archived: false)
 
         #expect(try locator.file(of: rom, ready: true)?.lastPathComponent == "\(pk)-zelda.sfc")

@@ -128,7 +128,7 @@ import Testing
     func rom(_ game: GameID) throws -> Int64 {
         let romCount = try h.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM rom")! } + 1
         try h.journal.recordROM(
-            game: game, openEmuPk: Int64(romCount), md5: "\(romCount)", fileName: "rom \(romCount).sfc", systemId: "openemu.system.snes",
+            game: game, openEmuPk: Int64(romCount), md5: "\(romCount)", fileName: "rom \(romCount).sfc",
             missing: false)
         return try h.journal.db.read { try Int64.fetchOne($0, sql: "SELECT id FROM rom WHERE openEmuPk = ?", arguments: [romCount])! }
     }

@@ -132,7 +132,7 @@ import Testing
         let game = try #require(try await h.igdb.games(ids: [1070])[1070])
 
         #expect(
-            game.releases(onSystem: "openemu.system.snes") == [
+            game.releases(onPlatform: 19) == [
                 GameRelease(region: "Japan", year: 1990), GameRelease(region: "North America", year: 1991),
                 GameRelease(region: "Europe", year: 1992),
             ])

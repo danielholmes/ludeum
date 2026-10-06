@@ -24,7 +24,7 @@ import Foundation
 
     /// What can be done to the ROM: nil for a missing ROM, an OpenEmu ROM or another Platform's.
     public nonisolated static func action(for rom: LudeumROM) -> Action? {
-        guard !rom.missing, rom.folderName != nil, rom.systemId == ROMFolder.ps2SystemId else { return nil }
+        guard !rom.missing, rom.folderName != nil, rom.platformId == ROMPlatform.ps2 else { return nil }
         return rom.archived ? .unarchive : .archive
     }
 

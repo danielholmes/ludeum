@@ -18,7 +18,7 @@ import Testing
 
     @Test func anOpenEmuROMCantBeEither() {
         let rom = LudeumROM(
-            id: 1, openEmuPk: 7, folderName: nil, systemId: "openemu.system.snes", fileName: "zelda.sfc", name: "Zelda",
+            id: 1, openEmuPk: 7, folderName: nil, platformId: 19, fileName: "zelda.sfc", name: "Zelda",
             version: "", disc: nil, missing: false, archived: false)
 
         #expect(ROMArchiving.action(for: rom) == nil)

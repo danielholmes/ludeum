@@ -173,7 +173,7 @@ private struct ReviewItemDetail: View {
             guard let id = p["id"]?.int, let name = p["name"]?.string else { return nil }
             return (Int64(id), name)
         }
-        let releases = suggestion?.releases(onSystem: item.systemId) ?? []
+        let releases = suggestion?.releases(onPlatform: item.platformId) ?? []
         Grid(alignment: .topLeading, horizontalSpacing: 12, verticalSpacing: 8) {
             GridRow {
                 Text("")
@@ -364,10 +364,10 @@ private struct ReviewItemDetail: View {
         picked = nil
         suggestion = nil
         checksumGame = nil
-        let ids = openEmuSystemPlatforms[item.systemId] ?? []
+        let ids = [item.platformId]
         let all = (try? await services.igdb?.platforms()) ?? []
         allPlatforms = all
-        platforms = ids.compactMap { id in all.first { $0.id == Int64(id) } }
+        platforms = ids.compactMap { id in all.first { $0.id == id } }
         guard let igdb = services.igdb else { return }
         let wanted = [item.suggestedIgdbGameId, item.checksumIgdbGameId].compactMap { $0.map(Int.init) }
         let games = (try? await igdb.games(ids: wanted)) ?? [:]

@@ -288,7 +288,7 @@ import Testing
         try j.journal.db.write { db in
             try db.execute(
                 sql:
-                    "INSERT INTO rom (openEmuPk, md5, fileName, systemId, gameId, matchKind, matchedAt) VALUES (1, 'a', 'doom.zip', 'x', ?, 'manual', 0)",
+                    "INSERT INTO rom (openEmuPk, md5, fileName, platformId, gameId, matchKind, matchedAt) VALUES (1, 'a', 'doom.zip', 13, ?, 'manual', 0)",
                 arguments: [pc])
         }
         #expect(throws: LudeumError.gameHasROMs) {

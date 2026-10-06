@@ -13,7 +13,7 @@ public struct ROMLocator: Sendable {
     /// The ROM folder a ROM lives in; nil for an OpenEmu ROM, or when its folder isn't set.
     public func folder(of rom: LudeumROM) -> ROMFolder? {
         guard rom.folderName != nil else { return nil }
-        return romFolders.first { $0.systemId == rom.systemId }
+        return romFolders.first { $0.platformId == rom.platformId }
     }
 
     /// The ROM's file. `ready` asks for the file a Play opens, so an archived ROM has none.

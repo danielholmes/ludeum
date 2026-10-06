@@ -291,6 +291,80 @@ enum LudeumSchema {
                 t.primaryKey(["playthroughId", "playerId"])
             }
         }
+        // ROMs are keyed by Platform (ADR 0009): one ROM folder per IGDB Platform, a ROM known by its name in it.
+        // `systemId` goes; each ROM takes its Game's Platform, else its OpenEmu system's most likely one.
+        // md5 stays, optional on any ROM. An OpenEmu ROM keeps `openEmuPk` (and no folder name) until
+        // `migrate-openemu` moves its file into its Platform's ROM folder.
+        migrator.registerMigration("v14 roms keyed by platform") { db in
+            // Frozen here, so later changes to the app's tables can't change what this migration did.
+            let systemDefaults: [String: Int] = [
+                "openemu.system.gb": 33, "openemu.system.snes": 19, "openemu.system.nes": 18, "openemu.system.psx": 7,
+                "openemu.system.sg": 29, "openemu.system.gba": 24, "openemu.system.nds": 20, "openemu.system.psp": 38,
+                "openemu.system.n64": 4, "openemu.system.gc": 21, "openemu.system.sms": 64, "openemu.system.scd": 78,
+                "openemu.system.saturn": 32, "openemu.system.gg": 35, "openemu.system.pcecd": 150, "ludeum.folder.ps2": 8,
+            ]
+            let names: [Int: String] = [
+                33: "Game Boy", 19: "Super Nintendo Entertainment System", 18: "Nintendo Entertainment System", 7: "PlayStation",
+                29: "Sega Mega Drive/Genesis", 24: "Game Boy Advance", 20: "Nintendo DS", 38: "PlayStation Portable",
+                4: "Nintendo 64", 21: "Nintendo GameCube", 64: "Sega Master System/Mark III", 78: "Sega CD", 32: "Sega Saturn",
+                35: "Sega Game Gear", 150: "Turbografx-16/PC Engine CD", 8: "PlayStation 2",
+            ]
+            // An unmatched ROM's Platform, recorded if the journal doesn't know it yet.
+            for (system, id) in systemDefaults {
+                try db.execute(
+                    sql: """
+                        INSERT OR IGNORE INTO platform (id, name)
+                        SELECT ?, ? WHERE EXISTS (SELECT 1 FROM rom WHERE systemId = ? AND gameId IS NULL)
+                        """, arguments: [id, names[id], system])
+            }
+            try db.create(table: "newRom") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("platformId", .integer).notNull().references("platform")
+                t.column("folderName", .text)
+                t.column("openEmuPk", .integer).unique()
+                t.column("md5", .text)
+                t.column("archived", .boolean).notNull().defaults(to: false)
+                t.column("fileName", .text).notNull()
+                t.column("name", .text)
+                t.column("missing", .boolean).notNull().defaults(to: false)
+                t.column("version", .text)
+                t.column("discNumber", .integer)
+                t.column("discLabel", .text)
+                t.column("gameId", .integer).references("game", onDelete: .cascade)
+                t.column("matchKind", .text).check { ["automatic", "confirmed", "manual"].contains($0) }
+                t.column("matchedAt", .datetime)
+                t.column("suggestedIgdbGameId", .integer)
+                t.column("suggestionKind", .text).check { ["checksum", "name"].contains($0) }
+                t.column("checksumIgdbGameId", .integer)
+                t.column("namesAgree", .boolean)
+                t.column("libretroLookedUp", .boolean).notNull().defaults(to: false)
+                t.column("libretroBoxart", .text)
+                t.column("libretroSnap", .text)
+                t.column("libretroTitle", .text)
+                t.column("openEmuBoxArt", .text)
+                t.uniqueKey(["platformId", "folderName"])
+                t.check(sql: "(gameId IS NULL) = (matchKind IS NULL) AND (gameId IS NULL) = (matchedAt IS NULL)")
+                t.check(sql: "(openEmuPk IS NULL) <> (folderName IS NULL)")
+                t.check(sql: "NOT archived OR folderName IS NOT NULL")
+            }
+            let systemDefault =
+                "CASE r.systemId "
+                + systemDefaults.map { "WHEN '\($0.key)' THEN \($0.value)" }.joined(separator: " ") + " END"
+            let columns = [
+                "id", "folderName", "openEmuPk", "md5", "archived", "fileName", "name", "missing", "version", "discNumber",
+                "discLabel", "gameId", "matchKind", "matchedAt", "suggestedIgdbGameId", "suggestionKind", "checksumIgdbGameId",
+                "namesAgree", "libretroLookedUp", "libretroBoxart", "libretroSnap", "libretroTitle", "openEmuBoxArt",
+            ]
+            try db.execute(
+                sql: """
+                    INSERT INTO newRom (platformId, \(columns.joined(separator: ", ")))
+                    SELECT COALESCE(g.platformId, \(systemDefault)), \(columns.map { "r.\($0)" }.joined(separator: ", "))
+                    FROM rom r LEFT JOIN game g ON g.id = r.gameId;
+                    DROP TABLE rom;
+                    ALTER TABLE newRom RENAME TO rom;
+                    CREATE INDEX rom_on_gameId ON rom(gameId);
+                    """)
+        }
         return migrator
     }
 }
