@@ -43,7 +43,7 @@ Packing a ROM into the archive its Platform's Emulator opens directly, so it tak
 _Avoid_: Compress, zip, Archive (that leaves it unplayable)
 
 **Disc**:
-One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version.
+One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" are Discs too. On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version.
 _Avoid_: Part, volume, CD
 
 **IGDB link**:

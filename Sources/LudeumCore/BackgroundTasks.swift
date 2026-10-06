@@ -22,7 +22,6 @@ public enum TaskSubject: Hashable, Sendable {
         /// 0–1 while running, when the work reports it.
         public internal(set) var progress: Double?
         fileprivate let work: @Sendable (@escaping @Sendable (Double) -> Void) async throws -> Void
-        fileprivate let finished: @MainActor () -> Void
         fileprivate let ended: @MainActor () -> Void
     }
 
@@ -41,14 +40,14 @@ public enum TaskSubject: Hashable, Sendable {
         items.first { $0.subject == subject && ($0.state == .queued || $0.state == .running) }
     }
 
-    /// Adds work to the queue. `finished` runs on the main actor after it succeeds; `ended` once it has run at all,
-    /// whether it succeeded, failed or was stopped, as work that didn't finish can still have changed things.
+    /// Adds work to the queue. `ended` runs on the main actor once the work has run, whether it succeeded, failed or was
+    /// cancelled: work that didn't finish can still have changed things.
     public func enqueue(
         _ title: String, subject: TaskSubject? = nil,
         work: @escaping @Sendable (@escaping @Sendable (Double) -> Void) async throws -> Void,
-        finished: @escaping @MainActor () -> Void = {}, ended: @escaping @MainActor () -> Void = {}
+        ended: @escaping @MainActor () -> Void = {}
     ) {
-        items.append(Item(title: title, subject: subject, work: work, finished: finished, ended: ended))
+        items.append(Item(title: title, subject: subject, work: work, ended: ended))
         startNext()
     }
 
@@ -74,11 +73,9 @@ public enum TaskSubject: Hashable, Sendable {
             do {
                 // Nonisolated, so it runs off the main actor; cancelling this task cancels it.
                 try await item.work { fraction in Task { @MainActor in self.setProgress(id, fraction) } }
-                // A cancel that came in during the work leaves it cancelled, not failed.
-                try Task.checkCancellation()
                 items.removeAll { $0.id == id }
-                item.finished()
             } catch is CancellationError {
+                // Cancelled, not failed.
                 items.removeAll { $0.id == id }
             } catch {
                 if let i = items.firstIndex(where: { $0.id == id }) { items[i].state = .failed(error.localizedDescription) }

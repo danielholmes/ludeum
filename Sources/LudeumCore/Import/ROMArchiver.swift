@@ -205,10 +205,8 @@ public struct ROMArchiver: Sendable {
             if folder.archiving == .singleFile {
                 // Unarchive gives back one loose file, so only the game goes in: Finder's hidden files are left out,
                 // and anything else beside it is refused rather than lost.
-                let files = try FileManager.default.subpathsOfDirectory(atPath: romFolder.path(percentEncoded: false))
-                    .filter { !Self.isHidden($0) }.map { romFolder.appending(path: $0, directoryHint: .notDirectory) }
-                    .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
-                guard files.count == 1 else { throw ArchiveError.notOneFile(files.map(\.lastPathComponent).sorted()) }
+                let files = try Sizes.files(in: romFolder).keys.map { ($0 as NSString).lastPathComponent }
+                guard files.count == 1 else { throw ArchiveError.notOneFile(files.sorted()) }
                 packing = (ready.deletingLastPathComponent(), [ready.lastPathComponent], [romFolder])
             } else {
                 let items = try FileManager.default.contentsOfDirectory(atPath: romFolder.path(percentEncoded: false))

@@ -137,12 +137,12 @@ struct KnownFolderROM {
     let gameId: GameID?
     /// Whether it has an MD5 or a CRC32 to be looked up by.
     let hasChecksum: Bool
-    /// What the journal last read from its files.
-    let files: Files
-    var missing: Bool { files.missing }
-    var archived: Bool { files.archived }
+    /// What the journal last read of its files.
+    let fileState: FileState
+    var missing: Bool { fileState.missing }
+    var archived: Bool { fileState.archived }
 
-    struct Files: Equatable {
+    struct FileState: Equatable {
         let missing: Bool
         let archived: Bool
         let fileName: String
@@ -193,7 +193,7 @@ extension LudeumStore {
         .map {
             KnownFolderROM(
                 id: $0["id"], platformId: $0["platformId"], name: $0["folderName"], gameId: $0["gameId"], hasChecksum: $0["hasChecksum"],
-                files: KnownFolderROM.Files(
+                fileState: KnownFolderROM.FileState(
                     missing: $0["missing"], archived: $0["archived"], fileName: $0["fileName"], needsPlaylist: $0["needsPlaylist"],
                     inBothForms: $0["inBothForms"]))
         }
@@ -208,13 +208,13 @@ extension LudeumStore {
             try db.execute(sql: "INSERT INTO import (startedAt, isFirst) VALUES (?, 0)", arguments: [now])
             // A ROM whose files were read again while the Import ran (its Archive finished, say) stays as it was read
             // then: the Import's own reading of it is the older one.
-            let filesNow = Dictionary(uniqueKeysWithValues: try Self.knownFolderROMs(db).map { ($0.id, $0.files) })
+            let fileStateNow = Dictionary(uniqueKeysWithValues: try Self.knownFolderROMs(db).map { ($0.id, $0.fileState) })
             // Extracting or archiving is silent; coming back or going missing is in the summary.
-            for (known, file) in plan.seen where filesNow[known.id] == known.files {
+            for (known, file) in plan.seen where fileStateNow[known.id] == known.fileState {
                 if known.missing { result.returned.append(ImportedROM(romName: known.name, game: known.gameId)) }
                 try Self.setFolderROM(db, known.id, to: file)
             }
-            for known in plan.gone where filesNow[known.id] == known.files {
+            for known in plan.gone where fileStateNow[known.id] == known.fileState {
                 try Self.setFolderROM(db, known.id, to: nil)
                 result.goneMissing.append(ImportedROM(romName: known.name, game: known.gameId))
             }

@@ -28,9 +28,9 @@ private actor Gate {
     @Test func tasksRunOneAtATimeInTheOrderAskedFor() async {
         let tasks = BackgroundTasks()
         let gate = Gate()
-        var finished: [String] = []
-        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in await gate.wait() }, finished: { finished.append("Okami") })
-        tasks.enqueue("Archiving ICO", subject: .rom(2), work: { _ in }, finished: { finished.append("ICO") })
+        var ended: [String] = []
+        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in await gate.wait() }, ended: { ended.append("Okami") })
+        tasks.enqueue("Archiving ICO", subject: .rom(2), work: { _ in }, ended: { ended.append("ICO") })
 
         #expect(tasks.active(.rom(1))?.state == .running)
         #expect(tasks.active(.rom(2))?.state == .queued)
@@ -38,36 +38,32 @@ private actor Gate {
         await gate.release()
         await untilIdle(tasks)
 
-        #expect(finished == ["Okami", "ICO"])
+        #expect(ended == ["Okami", "ICO"])
         #expect(tasks.items.isEmpty)
     }
 
-    @Test func aFailureStaysListedSayingWhyAndIsntFinished() async {
+    @Test func aFailureStaysListedSayingWhy() async {
         let tasks = BackgroundTasks()
-        var finished = false
-        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in throw ArchiveError.noSevenZip }, finished: { finished = true })
+        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in throw ArchiveError.noSevenZip })
 
         await untilIdle(tasks)
 
         #expect(tasks.items.map(\.state) == [.failed("7-Zip isn't installed. Run `brew install sevenzip`, then try again.")])
         #expect(tasks.active(.rom(1)) == nil)
-        #expect(!finished)
     }
 
     @Test func cancellingWhileRunningLeavesNoFailure() async {
         let tasks = BackgroundTasks()
-        var finished = false
         tasks.enqueue(
             "Archiving Okami", subject: .rom(1),
             work: { _ in
                 while true { try await Task.sleep(for: .milliseconds(1)) }
-            }, finished: { finished = true })
+            })
 
         tasks.cancel(tasks.items[0].id)
         await untilIdle(tasks)
 
         #expect(tasks.items.isEmpty)
-        #expect(!finished)
     }
 
     @Test func cancellingAQueuedTaskTakesItOffTheQueue() async {
@@ -86,17 +82,6 @@ private actor Gate {
 
 /// A task ends however its work went, so what it may have left half-changed is looked at again.
 @MainActor @Suite struct BackgroundTaskEndingTests {
-    @Test func aFinishedTaskEndsOnceItHasFinished() async {
-        let tasks = BackgroundTasks()
-        var calls: [String] = []
-        tasks.enqueue(
-            "Archiving Okami", subject: .rom(1), work: { _ in }, finished: { calls.append("finished") }, ended: { calls.append("ended") })
-
-        await untilIdle(tasks)
-
-        #expect(calls == ["finished", "ended"])
-    }
-
     @Test func aTaskThatFailsHasStillEnded() async {
         let tasks = BackgroundTasks()
         var ended = false
@@ -107,7 +92,7 @@ private actor Gate {
         #expect(ended)
     }
 
-    @Test func aTaskStoppedWhileRunningHasStillEnded() async {
+    @Test func aTaskCancelledWhileRunningHasStillEnded() async {
         let tasks = BackgroundTasks()
         var ended = false
         tasks.enqueue(

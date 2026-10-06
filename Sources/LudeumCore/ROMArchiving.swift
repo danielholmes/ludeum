@@ -44,15 +44,15 @@ import Foundation
     }
 
     /// Queues the ROM's Archive, Unarchive or Compact. Once it ends, the ROM is checked again so the journal sees whatever
-    /// changed, then `finished` runs: also after a failure or a Stop, which can come once its files have already moved.
-    public func start(_ rom: LudeumROM, finished: @escaping @MainActor () -> Void = {}) {
+    /// changed, then `ended` runs: also after a failure or a Cancel, which can come once its files have already moved.
+    public func start(_ rom: LudeumROM, ended: @escaping @MainActor () -> Void = {}) {
         guard let action = Self.action(for: rom), let folder = locator.folder(of: rom) else { return }
         let name = rom.folderName
         let archiver = archiver
         let journal = journal
         let done: @MainActor () -> Void = {
             try? journal?.checkROMAgain(rom.id, in: folder)
-            finished()
+            ended()
         }
         switch action {
         case .archive:

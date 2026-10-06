@@ -105,7 +105,7 @@ struct LudeumApp: App {
         do {
             journal = try LudeumStore(directory: settings.folder.url, backups: settings.backups())
         } catch {
-            journalError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+            journalError = error.localizedDescription
             return
         }
         let services = Services(settings: settings, journal: journal)
@@ -153,7 +153,7 @@ struct JournalSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Ludeum can't open its journal", systemImage: "exclamationmark.triangle").font(.headline)
             Text(
-                "The journal is journal.sqlite in \(launch.settings.folder.url.path(percentEncoded: false)), and its backups are in \(launch.settings.folder.backups.path(percentEncoded: false))."
+                "The journal is journal.sqlite in \(launch.settings.folder.url.path(percentEncoded: false)), and its Backups are in \(launch.settings.folder.backups.path(percentEncoded: false))."
             )
             .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             Text(launch.journalError ?? "").textSelection(.enabled).foregroundStyle(.secondary)
