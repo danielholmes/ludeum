@@ -171,8 +171,6 @@ extension LudeumStore {
     /// Game `g` has present ROMs, and every one is Archived.
     static let archivedSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AND NOT \(playableSQL)"
 
-    /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent)
-    /// sort last either way; ties go by name.
     /// The condition, on `game g`, that a Game goes by `word` under any of its names, so an override doesn't hide
     /// IGDB's or the No-Intro one.
     private static func goesBy(_ word: String) -> (sql: String, arguments: [String]) {
@@ -184,7 +182,7 @@ extension LudeumStore {
         )
     }
 
-    /// Every Game that goes by `word`, as the Library's name search matches it, whatever else is filtered on.
+    /// Every Game that goes by `word`, as the Text filter matches a name, whatever else is filtered on.
     func games(goingBy word: String) throws -> Set<GameID> {
         let goesBy = Self.goesBy(word)
         return try db.read { db in
@@ -194,6 +192,8 @@ extension LudeumStore {
         }
     }
 
+    /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent)
+    /// sort last either way; ties go by name.
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool) throws -> [LibraryRow] {
         var conditions: [String] = []
         var arguments: [any DatabaseValueConvertible] = []

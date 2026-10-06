@@ -69,7 +69,7 @@ struct BackgroundTasksPanel: View {
         let waiting = tasks.items.filter { $0.state == .queued }.count
         var parts: [String] = []
         if let running = tasks.items.first(where: { $0.state == .running }) {
-            parts.append(running.title + (running.progress.map { " · \(Int($0 * 100))%" } ?? ""))
+            parts.append(running.title + (running.progress.map { " · \(Int(($0 * 100).rounded()))%" } ?? ""))
         } else if work.refreshing != nil {
             parts.append(!work.importing ? "Refreshing the cache" : "Cache refresh paused")
         }
@@ -134,7 +134,7 @@ struct BackgroundTaskProgress: View {
         if task.state == .running {
             HStack(spacing: 6) {
                 ProgressView(value: task.progress ?? 0).controlSize(.small).frame(width: 80)
-                Text(task.progress.map { "\(Int($0 * 100))%" } ?? "").font(.caption).monospacedDigit()
+                Text(task.progress.map { "\(Int(($0 * 100).rounded()))%" } ?? "").font(.caption).monospacedDigit()
                     .foregroundStyle(.secondary)
             }
             .help(task.title)

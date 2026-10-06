@@ -8,12 +8,13 @@ struct BoxArtImport {
     let libretro: LibretroThumbnails?
 
     /// Never fails the Import: a ROM whose lookup couldn't run (libretro or GitHub unreachable) is
-    /// looked up at the next one. Returns whether any ROM's Box art changed, so its Game's Cover may have.
+    /// looked up at the next one. Returns whether any ROM's Box art changed, so its Game's Cover may have: also when the
+    /// step failed part-way, as some may have before it did.
     @discardableResult
     func run() async -> Bool {
         guard let ids = try? await journal.db.read({ try Int64.fetchAll($0, sql: "SELECT id FROM rom WHERE NOT libretroLookedUp") })
         else { return false }
-        return (try? await boxArtChanges(lookingUp: ids)) ?? false
+        return (try? await boxArtChanges(lookingUp: ids)) ?? true
     }
 
     /// Looks up each ROM by its file name, then its name, then its Game's IGDB name. Found names replace the

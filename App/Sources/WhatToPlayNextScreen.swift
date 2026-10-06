@@ -17,7 +17,7 @@ struct WhatToPlayNextScreen: View {
     @State private var error: String?
     // Shared with the Library: one choice of view and Cover size everywhere.
     @AppStorage("libraryShowsCovers") private var showCovers = false
-    @AppStorage("libraryCoverWidth") private var coverWidth = 120.0
+    @AppStorage(CoverTileSize.widthKey) private var coverWidth = CoverTileSize.defaultWidth
 
     var body: some View {
         Group {

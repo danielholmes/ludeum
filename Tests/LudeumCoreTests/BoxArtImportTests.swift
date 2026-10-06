@@ -74,6 +74,10 @@ import Testing
         #expect(try await run.run(romFolders: [snes.folder]).coversChanged)
         // Nothing new, so every Cover is as it was.
         #expect(try await run.run(romFolders: [snes.folder]).coversChanged == false)
+        // Its file changed, and which of a Game's ROMs its Box art comes from can follow.
+        try snes.remove("Super Metroid (USA).sfc")
+        try snes.add("Super Metroid (USA).7z")
+        #expect(try await run.run(romFolders: [snes.folder]).coversChanged)
     }
 
     @Test func whenLibretroIsUnreachableTheImportStillCommitsAndTheNextOneLooksItUp() async throws {

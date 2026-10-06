@@ -106,9 +106,12 @@ struct MainWindow: View {
                     IGDBGameDetailView(services: services, result: igdbResult, browse: showInLibrary, open: openGame)
                         .id(igdbResult.id)
                 } else if let selectedGame {
-                    GameDetailView(services: services, id: selectedGame, browse: showInLibrary) { self.selectedGame = nil }
-                        .id(selectedGame)
-                        .disabled(services.work.journalLocked)
+                    // A delete finishes off the main thread, and by then another Game may be the one selected.
+                    GameDetailView(services: services, id: selectedGame, browse: showInLibrary) {
+                        if self.selectedGame == selectedGame { self.selectedGame = nil }
+                    }
+                    .id(selectedGame)
+                    .disabled(services.work.journalLocked)
                 } else {
                     GameDetailPlaceholder()
                 }

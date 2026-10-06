@@ -41,6 +41,20 @@ import Testing
         #expect(h.internet.sent.isEmpty)
     }
 
+    @Test func theGamesFetchedSinceLastAskedAreToldOnce() async throws {
+        _ = try await h.igdb.games(ids: [1103, 6])
+        #expect(h.igdb.takeGamesFetched() == [1103, 6])
+        #expect(h.igdb.takeGamesFetched().isEmpty)
+
+        // From the cache, so nothing new.
+        _ = try await h.igdb.cachedGames(ids: [1103])
+        #expect(h.igdb.takeGamesFetched().isEmpty)
+
+        h.clock.advance(days: 61)
+        _ = try await h.igdb.games(ids: [1103])
+        #expect(h.igdb.takeGamesFetched() == [1103])
+    }
+
     @Test func theLinkedGamesAreTheOnesWithFactsToRead() throws {
         try j.journal.addPlatform(id: 19, name: "SNES")
         _ = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")

@@ -39,8 +39,9 @@ import SwiftUI
                 }
                 if result.changedSomething { summary = result }
                 error = nil
-                // Only an Import that may have changed a Cover has every Cover read again.
-                if result.coversChanged { services.changes.coverChanged() } else { services.changes.changed() }
+                // The launch Import has every Cover read again only when one may have changed. Check again always
+                // does: it's also how a Cover left stale by something else (a Match by hand) is put right.
+                if byHand || result.coversChanged { services.changes.coverChanged() } else { services.changes.changed() }
             } catch ImportError.openEmuMigrationNeeded {
                 if byHand { error = OpenEmuMigrationBanner.message }
             } catch {

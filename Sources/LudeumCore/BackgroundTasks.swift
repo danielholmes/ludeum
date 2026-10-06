@@ -91,10 +91,10 @@ public enum TaskSubject: Hashable, Sendable {
         }
     }
 
-    /// In whole percents, so the screens showing it aren't redrawn for every chunk the work gets through.
+    /// To the nearest whole percent, so the screens showing it aren't redrawn for every chunk the work gets through.
     private func setProgress(_ id: UUID, _ fraction: Double) {
         guard let i = items.firstIndex(where: { $0.id == id }), items[i].state == .running else { return }
-        let percent = (fraction * 100).rounded(.down) / 100
+        let percent = (fraction * 100).rounded() / 100
         if items[i].progress != percent { items[i].progress = percent }
     }
 

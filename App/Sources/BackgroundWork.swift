@@ -55,7 +55,6 @@ import os
         for error in result.errors { Self.log.error("Cache refresh: \(error, privacy: .public)") }
         if result.refreshed > 0 {
             Self.log.info("Cache refresh: \(result.refreshed) entries refreshed")
-            services.memory.factsChanged()
             services.changes.coverChanged()
         }
     }

@@ -128,7 +128,10 @@ public final class Import: Sendable {
         var result = try journal.applyImport(plan)
         await wrote()
         let boxArtChanged = await boxArt.run()
-        result.coversChanged = boxArtChanged || !(result.matched.isEmpty && result.returned.isEmpty && result.goneMissing.isEmpty)
+        // A ROM's file changing counts: which of a Game's ROMs its Box art comes from can follow (a playlist comes first).
+        result.coversChanged =
+            boxArtChanged || !(result.matched.isEmpty && result.returned.isEmpty && result.goneMissing.isEmpty)
+            || plan.seen.contains { known, file in known.fileState.fileName != file.fileName }
         return result
     }
 }

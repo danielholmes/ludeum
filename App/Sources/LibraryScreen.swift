@@ -16,7 +16,7 @@ struct LibraryScreen: View {
     @AppStorage("librarySortAscending") private var ascending = true
     @AppStorage("libraryShowsCovers") private var showCovers = false
     /// Cover width in the Covers view, in points.
-    @AppStorage("libraryCoverWidth") private var coverWidth = 120.0
+    @AppStorage(CoverTileSize.widthKey) private var coverWidth = CoverTileSize.defaultWidth
     @State private var rows: [LibraryRow] = []
     @State private var platforms: [IGDBPlatform] = []
     @State private var lists: [GameList] = []

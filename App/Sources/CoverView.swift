@@ -34,8 +34,9 @@ struct CoverView: View {
                 tile
             }
         }
-        .task(id: CoverKey(game: game, revision: services.changes.coverRevision)) {
-            image = await loadCover(services, game)
+        // Again when the Library's tiles grow past the size it was decoded for.
+        .task(id: CoverKey(game: game, revision: services.changes.coverRevision, pixels: CoverTileSize.pixels)) {
+            image = await loadCover(services, game, pixels: CoverTileSize.pixels)
         }
     }
 
@@ -57,6 +58,7 @@ struct CoverView: View {
     private struct CoverKey: Equatable {
         let game: GameID
         let revision: Int
+        let pixels: Int
     }
 }
 
@@ -82,13 +84,26 @@ private struct EnlargedCover: View {
     }
 }
 
-/// The largest a Cover tile gets, in pixels on a Retina display: the Library's biggest, 300 by 400 points.
-private let coverTilePixels = 800
+/// The Library's Cover tiles: as wide as its slider says, a third taller than wide.
+enum CoverTileSize {
+    static let widthKey = "libraryCoverWidth"
+    static let defaultWidth = 120.0
 
-/// The Cover's image at tile size, or nil for the placeholder (including when it couldn't be fetched).
-@MainActor func loadCover(_ services: Services, _ game: GameID) async -> NSImage? {
+    /// How large a Cover is decoded, on its long edge: the tile's height in pixels on a Retina display, rounded up to
+    /// one of a few sizes so moving the slider doesn't decode every Cover again at each step. The smallest is what
+    /// Game detail's Cover needs.
+    static var pixels: Int {
+        let width = UserDefaults.standard.double(forKey: widthKey)
+        let height = (width > 0 ? width : defaultWidth) * 4 / 3
+        return [400, 600, 800].first { Double($0) >= height * 2 } ?? 800
+    }
+}
+
+/// The Cover's image at tile size (`CoverTileSize.pixels`), or nil for the placeholder (including when it couldn't be
+/// fetched).
+@MainActor func loadCover(_ services: Services, _ game: GameID, pixels: Int) async -> NSImage? {
     let revision = services.changes.coverRevision
-    if let cached = services.memory.cover(game, revision: revision) { return cached }
+    if let cached = services.memory.cover(game, revision: revision, pixels: pixels) { return cached }
     guard let source = try? await services.covers?.cover(for: game) else { return nil }  // a failed download: try again later
     // Decoded off the main thread, there and then rather than at first draw, and no larger than a tile shows it.
     let image = await Task.detached(priority: .userInitiated) { () -> NSImage? in
@@ -97,12 +112,12 @@ private let coverTilePixels = 800
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: coverTilePixels,
+            kCGImageSourceThumbnailMaxPixelSize: pixels,
         ]
         guard let tile = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else { return nil }
         return NSImage(cgImage: tile, size: NSSize(width: tile.width, height: tile.height))
     }.value
-    services.memory.store(cover: image, for: game, revision: revision)
+    services.memory.store(cover: image, for: game, revision: revision, pixels: pixels)
     return image
 }
 

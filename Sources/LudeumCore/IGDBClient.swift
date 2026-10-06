@@ -92,6 +92,8 @@ public final class IGDBClient: Sendable {
     let tokenStore: (any SecretStore)?
     /// Each game's Cover art image id (nil for none) as its cached record last gave it.
     private let coverImageIDs = Mutex<[Int: String?]>([:])
+    /// The games fetched since `takeGamesFetched` was last asked.
+    private let gamesFetched = Mutex<Set<Int>>([])
 
     /// With a `tokenStore` (the app's Keychain), the Twitch token is kept there; otherwise in the cache.
     public init(
@@ -121,15 +123,32 @@ public final class IGDBClient: Sendable {
     }
 
     func games(ids: [Int], servesStale: Bool, usesExpired: Bool = false) async throws -> [Int: IGDBGame] {
+        var fetched: [Int] = []
+        // Once their new records are in the cache, even if a later batch fails: what was kept from the old ones is out
+        // of date.
+        defer {
+            if !fetched.isEmpty {
+                coverImageIDs.withLock { known in for id in fetched { known[id] = nil } }
+                gamesFetched.withLock { $0.formUnion(fetched) }
+            }
+        }
         let payloads = try await cache.resolve(
             ids, key: Self.gameKey, maxAge: maxAge, batchSize: Self.maxBatch, servesStale: servesStale, usesExpired: usesExpired
         ) { batch in
-            let fetched = try await fetchGames(ids: batch).mapValues { try $0.record.encoded() }
-            // Their Cover art may have changed.
-            coverImageIDs.withLock { known in for id in batch { known[id] = nil } }
-            return fetched
+            let records = try await fetchGames(ids: batch).mapValues { try $0.record.encoded() }
+            fetched += batch
+            return records
         }
         return try payloads.reduce(into: [:]) { $0[$1.key] = IGDBGame(id: $1.key, record: try JSONValue.decode($1.value)) }
+    }
+
+    /// The games whose records have been fetched since this was last asked, each told once: whatever is kept from a
+    /// game's record (the Library's facts) is read from it again.
+    public func takeGamesFetched() -> Set<Int> {
+        gamesFetched.withLock { fetched in
+            defer { fetched = [] }
+            return fetched
+        }
     }
 
     /// The image id of a game's Cover art, from its cached record, however old. It's remembered until the record is

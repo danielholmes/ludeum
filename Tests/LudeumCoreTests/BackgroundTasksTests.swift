@@ -148,14 +148,15 @@ private actor Gate {
             "Archiving Okami", subject: .rom(1),
             work: { progress in
                 progress(0.421)
-                progress(0.4269)
+                progress(0.58)
                 await gate.wait()
             })
 
         while tasks.items.first?.progress == nil { await Task.yield() }
         for _ in 1...20 { await Task.yield() }
 
-        #expect(tasks.active(.rom(1))?.progress == 0.42)
+        // 7-Zip's 58% is 58%, not the 57 a fraction just under 0.58 would be cut down to.
+        #expect(tasks.active(.rom(1))?.progress == 0.58)
         await gate.release()
         await untilIdle(tasks)
     }
