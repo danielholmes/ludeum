@@ -2,7 +2,7 @@ import LudeumCore
 import SwiftUI
 
 /// The ⌘, Settings window: IGDB credentials with "Test connection", the optional Hasheous key,
-/// the OpenEmu library, and backups.
+/// the OpenEmu library, Players, and backups.
 struct SettingsView: View {
     let settings: AppSettings
     /// Nil if the journal couldn't be opened, so there's nothing to back up or restore into.
@@ -74,6 +74,8 @@ struct SettingsView: View {
             } footer: {
                 Text("For Platforms OpenEmu doesn't have. A .7z there is Archived: extract it to play.").foregroundStyle(.secondary)
             }
+
+            PlayersSection(journal: journal)
 
             BackupsSection(journal: journal, backups: settings.backups()) { choosingFolder = .backups }
                 .id(backupFolder)

@@ -8,6 +8,7 @@ public struct LibraryFilter: Sendable, Equatable {
     /// `.some(nil)` is "no Intent"; `nil` is any.
     public var intent: Intent??
     public var listId: Int64?
+    public var player: PlayerFilter?
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
     /// An IGDB genre. Not applied by `library(_:sort:ascending:)`: genres live in the cache, so
@@ -24,7 +25,7 @@ public struct LibraryFilter: Sendable, Equatable {
 
     public init(
         platformId: Int64? = nil, rating: RatingFilter? = nil, intent: Intent?? = nil, listId: Int64? = nil,
-        outcome: OutcomeFilter? = nil, childhood: Bool? = nil, genre: String? = nil,
+        player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         name: String = ""
     ) {
@@ -38,6 +39,7 @@ public struct LibraryFilter: Sendable, Equatable {
         self.rating = rating
         self.intent = intent
         self.listId = listId
+        self.player = player
         self.outcome = outcome
         self.childhood = childhood
     }
@@ -52,6 +54,7 @@ extension LibraryFilter {
         if let v = scope.rating { f.rating = v }
         if let v = scope.intent { f.intent = v }
         if let v = scope.listId { f.listId = v }
+        if let v = scope.player { f.player = v }
         if let v = scope.outcome { f.outcome = v }
         if let v = scope.childhood { f.childhood = v }
         if let v = scope.genre { f.genre = v }
@@ -67,6 +70,12 @@ extension LibraryFilter {
 public enum RatingFilter: Sendable, Hashable {
     case unrated
     case atLeast(Rating)
+}
+
+/// Games with a Playthrough that includes a Player, or a Solo one.
+public enum PlayerFilter: Sendable, Hashable {
+    case player(Int64)
+    case solo
 }
 
 public enum OutcomeFilter: String, Sendable, CaseIterable {
@@ -153,6 +162,18 @@ extension LudeumStore {
         if let listId = filter.listId {
             conditions.append("EXISTS (SELECT 1 FROM listGame l WHERE l.gameId = g.id AND l.listId = ?)")
             arguments.append(listId)
+        }
+        switch filter.player {
+        case .player(let id):
+            conditions.append(
+                "EXISTS (SELECT 1 FROM playthrough p JOIN playthroughPlayer pp ON pp.playthroughId = p.id WHERE p.gameId = g.id AND pp.playerId = ?)"
+            )
+            arguments.append(id)
+        case .solo:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND NOT EXISTS (SELECT 1 FROM playthroughPlayer WHERE playthroughId = p.id))"
+            )
+        case nil: break
         }
         switch filter.outcome {
         case .playing: conditions.append("EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL)")

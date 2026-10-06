@@ -277,6 +277,20 @@ enum LudeumSchema {
                     CREATE INDEX rom_on_gameId ON rom(gameId);
                     """)
         }
+        migrator.registerMigration("v13 players") { db in
+            try db.create(table: "player") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("firstName", .text).notNull()
+                t.column("lastName", .text).notNull()
+                t.column("colour", .text).notNull()
+            }
+            try db.execute(sql: "CREATE UNIQUE INDEX player_on_name ON player(firstName COLLATE NOCASE, lastName COLLATE NOCASE)")
+            try db.create(table: "playthroughPlayer") { t in
+                t.column("playthroughId", .integer).notNull().references("playthrough", onDelete: .cascade)
+                t.column("playerId", .integer).notNull().indexed().references("player", onDelete: .cascade)
+                t.primaryKey(["playthroughId", "playerId"])
+            }
+        }
         return migrator
     }
 }

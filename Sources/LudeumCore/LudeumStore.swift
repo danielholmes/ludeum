@@ -7,6 +7,7 @@ public enum LudeumError: Error, Equatable {
     case igdbLinkTaken
     case endBeforeStart
     case listNameTaken
+    case playerNameTaken
     case gameHasPresentROMs
     case gameNotFound
     case nameRequired

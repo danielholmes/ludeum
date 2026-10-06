@@ -14,6 +14,7 @@ struct YearInReviewScreen: View {
     @State private var review: YearInReview?
     @State private var platforms: [IGDBPlatform] = []
     @State private var lists: [GameList] = []
+    @State private var players: [Player] = []
     @State private var error: String?
 
     var body: some View {
@@ -30,7 +31,9 @@ struct YearInReviewScreen: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            FilterBar(filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms, lists: lists)
+            FilterBar(
+                filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms, lists: lists,
+                players: players)
         }
         .navigationTitle("Year in review")
         .task(id: Reload(revision: services.changes.revision, filter: filter, year: year)) { load() }
@@ -53,7 +56,7 @@ struct YearInReviewScreen: View {
             finished = try Dictionary(uniqueKeysWithValues: years.map { ($0, try journal.yearInReview($0, filter).summary.finished) })
             if year == nil || !years.contains(year!) { year = years.first }
             review = try year.map { try journal.yearInReview($0, filter) }
-            (platforms, lists) = try filterChoices(journal)
+            (platforms, lists, players) = try filterChoices(journal)
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -101,6 +104,30 @@ struct YearInReviewScreen: View {
                     }
                 }
                 .font(.callout).monospacedDigit()
+            }
+            // Who I played with; left out of an all-Solo year.
+            if !s.players.isEmpty {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+                    GridRow {
+                        Text("Solo")
+                        Text("\(s.solo) Playthrough\(s.solo == 1 ? "" : "s")").foregroundStyle(.secondary)
+                    }
+                    GridRow {
+                        Text("With others")
+                        Text("\(s.withOthers) Playthrough\(s.withOthers == 1 ? "" : "s")").foregroundStyle(.secondary)
+                    }
+                    ForEach(s.players, id: \.player.id) { p in
+                        GridRow {
+                            HStack(spacing: 6) {
+                                PlayerBadge(player: p.player.draft, size: 18)
+                                Text(p.player.draft.fullName)
+                            }
+                            Text("\(p.playthroughs) Playthrough\(p.playthroughs == 1 ? "" : "s")").foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .font(.callout).monospacedDigit()
+                .padding(.top, 8)
             }
         }
     }

@@ -15,6 +15,7 @@ struct GameDetailView: View {
     @State private var platform: IGDBPlatform?
     @State private var history: [RatingEntry] = []
     @State private var playthroughs: [Playthrough] = []
+    @State private var players: [Player] = []
     @State private var roms: [LudeumROM] = []
     @State private var emulatorSettings = EmulatorSettings()
     @State private var showingHistory = false
@@ -100,6 +101,7 @@ struct GameDetailView: View {
                                 }
                             }
                             Spacer()
+                            PlayerBadges(ids: p.draft.players, players: players)
                             Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                         }
                         .contentShape(.rect)
@@ -213,6 +215,7 @@ struct GameDetailView: View {
             platform = try journal.platform(game.platformId)
             history = try journal.ratingHistory(id)
             playthroughs = try journal.playthroughs(id)
+            players = try journal.players()
             roms = try journal.roms(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
         } catch LudeumError.gameNotFound {
@@ -427,6 +430,7 @@ func journalErrorText(_ error: Error) -> String {
     switch error as? LudeumError {
     case .endBeforeStart: "The end date can't come before the start date."
     case .listNameTaken: "There's already a List with that name."
+    case .playerNameTaken: "There's already a Player with that name."
     case .gameHasPresentROMs: "This Game has ROMs in OpenEmu. Remove them in OpenEmu first."
     case .igdbLinkTaken: "Another Game already has that IGDB link."
     case .alreadyLinked: "This Game already has an IGDB link. Use Change IGDB link… to replace it."
@@ -463,6 +467,8 @@ struct PlaythroughSheet: View {
     @State private var playedVia = ""
     @State private var versions: [String] = []
     @State private var vias: [String] = []
+    @State private var players: [Player] = []
+    @State private var selectedPlayers: Set<Int64> = []
     @State private var error: String?
     @State private var confirmingDelete = false
 
@@ -475,6 +481,7 @@ struct PlaythroughSheet: View {
                 Text("Finished").tag(Outcome?.some(.finished))
                 Text("Dropped").tag(Outcome?.some(.dropped))
             }
+            PlayerPicker(players: players, selected: $selectedPlayers)
             suggestedField("Version", text: $version, suggestions: versions)
             suggestedField("Played via", text: $playedVia, suggestions: vias)
             TextField("Notes", text: $notes, axis: .vertical).lineLimit(3...8)
@@ -501,9 +508,11 @@ struct PlaythroughSheet: View {
                 notes = d.notes ?? ""
                 version = d.version ?? ""
                 playedVia = d.playedVia ?? ""
+                selectedPlayers = Set(d.players)
             }
             versions = (try? services.journal?.versionSuggestions(for: game)) ?? []
             vias = (try? services.journal?.playedViaSuggestions(for: game)) ?? []
+            players = (try? services.journal?.players()) ?? []
         }
     }
 
@@ -531,7 +540,8 @@ struct PlaythroughSheet: View {
         do {
             let draft = PlaythroughDraft(
                 start: try date(start, "start")!, end: try date(end, "end"), outcome: outcome, notes: notes.trimmed.nilIfEmpty,
-                version: version.trimmed.nilIfEmpty, playedVia: playedVia.trimmed.nilIfEmpty)
+                version: version.trimmed.nilIfEmpty, playedVia: playedVia.trimmed.nilIfEmpty,
+                players: selectedPlayers.sorted())
             if let id = edit.id { try journal.updatePlaythrough(id, draft) } else { try journal.addPlaythrough(game, draft) }
             done()
         } catch let e as DateError {

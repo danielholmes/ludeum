@@ -99,6 +99,30 @@ import Testing
         #expect(r.summary.platforms.map(\.playthroughs) == [2, 1])
     }
 
+    @Test func summaryCountsPlaythroughsPerPlayerAndSolo() throws {
+        let zoe = try h.journal.addPlayer(PlayerDraft(firstName: "Zoe", lastName: "Adams", colour: .teal))
+        let alex = try h.journal.addPlayer(PlayerDraft(firstName: "Alex", lastName: "Smith", colour: .red))
+        let game = try h.addGame("Super Mario Kart")
+        try h.journal.addPlaythrough(
+            game, PlaythroughDraft(start: date("2024-01"), end: date("2024-02"), outcome: .finished, players: [zoe]))
+        try h.journal.addPlaythrough(
+            game, PlaythroughDraft(start: date("2024-03"), end: date("2024-04"), outcome: .finished, players: [zoe, alex]))
+        try h.journal.addPlaythrough(
+            game, PlaythroughDraft(start: date("2024-05"), end: date("2024-06"), outcome: .finished, players: [alex]))
+        try h.journal.addPlaythrough(
+            game, PlaythroughDraft(start: date("2024-07"), end: date("2024-08"), outcome: .dropped, players: [zoe]))
+        try play(game, start: "2024-09", end: "2024-10", .finished)
+        try h.journal.addPlaythrough(
+            game, PlaythroughDraft(start: date("2023-01"), end: date("2023-02"), outcome: .finished, players: [alex]))
+
+        let s = try review(2024).summary
+        // Most Playthroughs first, then by name.
+        #expect(s.players.map(\.player.draft.firstName) == ["Zoe", "Alex"])
+        #expect(s.players.map(\.playthroughs) == [3, 2])
+        #expect(s.solo == 1)
+        #expect(s.withOthers == 4)
+    }
+
     // MARK: Play time
 
     func rom(_ game: GameID) throws -> Int64 {

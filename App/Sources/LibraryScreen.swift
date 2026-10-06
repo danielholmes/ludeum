@@ -22,6 +22,7 @@ struct LibraryScreen: View {
     @State private var rows: [LibraryRow] = []
     @State private var platforms: [IGDBPlatform] = []
     @State private var lists: [GameList] = []
+    @State private var players: [Player] = []
     @State private var error: String?
     /// IGDB facts by IGDB game id, for genre, theme and company filters and searches.
     @State private var facts: [Int64: GameFacts] = [:]
@@ -111,7 +112,7 @@ struct LibraryScreen: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             FilterBar(
                 count: rows.count, busy: busy, scope: scope == LibraryFilter() ? nil : title, filter: $filter,
-                kinds: FilterKind.library.subtracting(FilterKind.fixed(by: scope)), platforms: platforms, lists: lists,
+                kinds: FilterKind.library.subtracting(FilterKind.fixed(by: scope)), platforms: platforms, lists: lists, players: players,
                 genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted()
             ) {
                 LibrarySortMenu(sort: Binding($sort), ascending: $ascending)
@@ -244,7 +245,7 @@ struct LibraryScreen: View {
                 rows = found
                 loaded = true
             }
-            (platforms, lists) = try filterChoices(journal)
+            (platforms, lists, players) = try filterChoices(journal)
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -252,9 +253,9 @@ struct LibraryScreen: View {
     }
 }
 
-/// The Platforms and Lists the filter menu offers.
-func filterChoices(_ journal: LudeumStore) throws -> ([IGDBPlatform], [GameList]) {
-    (try journal.shownPlatforms(), try journal.lists())
+/// The Platforms, Lists and Players the filter menu offers.
+func filterChoices(_ journal: LudeumStore) throws -> ([IGDBPlatform], [GameList], [Player]) {
+    (try journal.shownPlatforms(), try journal.lists(), try journal.players())
 }
 
 func sortText(_ sort: LibrarySort) -> String {

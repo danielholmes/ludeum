@@ -87,6 +87,14 @@ import Testing
         #expect(try names(LibraryFilter(listId: list)) == ["Doom"])
     }
 
+    @Test func filtersByPlayerOrSolo() throws {
+        let alex = try h.journal.addPlayer(PlayerDraft(firstName: "Alex", lastName: "Smith", colour: .red))
+        try h.journal.addPlaythrough(zelda, PlaythroughDraft(start: PartialDate("2020")!, players: [alex]))
+
+        #expect(try names(LibraryFilter(player: .player(alex))) == ["A Link to the Past"])
+        #expect(try names(LibraryFilter(player: .solo)) == ["Doom", "Super Metroid"])
+    }
+
     @Test func sortsWithUnsetValuesLast() throws {
         #expect(try names(sort: .rating, ascending: false) == ["Super Metroid", "A Link to the Past", "Doom"])
         #expect(try names(sort: .rating, ascending: true) == ["A Link to the Past", "Super Metroid", "Doom"])

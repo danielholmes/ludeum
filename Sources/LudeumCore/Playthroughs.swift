@@ -14,10 +14,13 @@ public struct PlaythroughDraft: Sendable, Equatable {
     public var notes: String?
     public var version: String?
     public var playedVia: String?
+    /// The ids of who besides me took part; read back in name order. None is Solo.
+    public var players: [Int64]
 
     public init(
         start: PartialDate, end: PartialDate? = nil, outcome: Outcome? = nil,
-        notes: String? = nil, version: String? = nil, playedVia: String? = nil
+        notes: String? = nil, version: String? = nil, playedVia: String? = nil,
+        players: [Int64] = []
     ) {
         self.start = start
         self.end = end
@@ -25,6 +28,7 @@ public struct PlaythroughDraft: Sendable, Equatable {
         self.notes = notes
         self.version = version
         self.playedVia = playedVia
+        self.players = players
     }
 
     /// The end can't come before the start, though a less precise date that contains the
@@ -55,7 +59,9 @@ extension LudeumStore {
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [game] + Self.arguments(draft))
-            return db.lastInsertedRowID
+            let id = db.lastInsertedRowID
+            try Self.setPlayers(db, id, draft.players)
+            return id
         }
     }
 
@@ -68,6 +74,7 @@ extension LudeumStore {
                     WHERE id = ?
                     """,
                 arguments: Self.arguments(draft) + [id])
+            try Self.setPlayers(db, id, draft.players)
         }
     }
 
@@ -81,17 +88,46 @@ extension LudeumStore {
     /// A Game's Playthroughs, by start date, then as added.
     public func playthroughs(_ game: GameID) throws -> [Playthrough] {
         try db.read { db in
-            try Row.fetchAll(
-                db, sql: "SELECT * FROM playthrough WHERE gameId = ? ORDER BY start, id", arguments: [game]
-            ).map { row in
+            try Self.playthroughs(db, where: "gameId = ?", [game]).map(\.1)
+        }
+    }
+
+    /// Playthroughs with their Games, by start date, then as added.
+    static func playthroughs(
+        _ db: Database, where condition: String = "1", _ arguments: StatementArguments = []
+    ) throws -> [(GameID, Playthrough)] {
+        let rows = try Row.fetchAll(db, sql: "SELECT * FROM playthrough WHERE \(condition) ORDER BY start, id", arguments: arguments)
+        var players: [Int64: [Int64]] = [:]
+        for row in try Row.fetchAll(
+            db,
+            sql: """
+                SELECT playthroughId, playerId FROM playthroughPlayer JOIN player ON player.id = playerId
+                WHERE playthroughId IN (SELECT id FROM playthrough WHERE \(condition))
+                ORDER BY firstName COLLATE NOCASE, lastName COLLATE NOCASE
+                """, arguments: arguments)
+        {
+            players[row["playthroughId"], default: []].append(row["playerId"])
+        }
+        return rows.map { row in
+            (
+                row["gameId"],
                 Playthrough(
                     id: row["id"],
                     PlaythroughDraft(
                         start: PartialDate(row["start"])!,
                         end: (row["end"] as String?).flatMap(PartialDate.init),
                         outcome: (row["outcome"] as String?).flatMap(Outcome.init(rawValue:)),
-                        notes: row["notes"], version: row["version"], playedVia: row["playedVia"]))
-            }
+                        notes: row["notes"], version: row["version"], playedVia: row["playedVia"],
+                        players: players[row["id"]] ?? []))
+            )
+        }
+    }
+
+    private static func setPlayers(_ db: Database, _ playthrough: Int64, _ players: [Int64]) throws {
+        try db.execute(sql: "DELETE FROM playthroughPlayer WHERE playthroughId = ?", arguments: [playthrough])
+        for player in Set(players) {
+            try db.execute(
+                sql: "INSERT INTO playthroughPlayer (playthroughId, playerId) VALUES (?, ?)", arguments: [playthrough, player])
         }
     }
 

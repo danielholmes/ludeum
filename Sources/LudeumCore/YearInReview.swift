@@ -16,6 +16,12 @@ public struct PlatformYear: Sendable, Equatable {
     public let playthroughs: Int
 }
 
+public struct PlayerYear: Sendable, Equatable {
+    public let player: Player
+    /// Playthroughs under Finished, Dropped or Also played that include them.
+    public let playthroughs: Int
+}
+
 public struct YearSummary: Sendable, Equatable {
     public let finished: Int
     public let dropped: Int
@@ -23,6 +29,11 @@ public struct YearSummary: Sendable, Equatable {
     public let started: Int
     /// Most Playthroughs first, then by name.
     public let platforms: [PlatformYear]
+    /// Most Playthroughs first, then by name.
+    public let players: [PlayerYear]
+    /// Playthroughs with no Players, and with at least one.
+    public let solo: Int
+    public let withOthers: Int
 }
 
 /// One year: Finished, Dropped, Also played and summary numbers.
@@ -77,10 +88,16 @@ extension LudeumStore {
         let sections = [finished, dropped, alsoPlayed].map { $0.sorted(by: byEnd) }
         var platforms: [String: Int] = [:]
         for entry in sections.joined() { platforms[entry.game.platformName, default: 0] += 1 }
+        var perPlayer: [Int64: Int] = [:]
+        for entry in sections.joined() { for id in entry.playthrough.draft.players { perPlayer[id, default: 0] += 1 } }
+        let solo = sections.joined().count { $0.playthrough.draft.players.isEmpty }
         let summary = YearSummary(
             finished: finished.count, dropped: dropped.count, started: started,
             platforms: platforms.map { PlatformYear(name: $0.key, playthroughs: $0.value) }
-                .sorted { ($0.playthroughs, $1.name) > ($1.playthroughs, $0.name) })
+                .sorted { ($0.playthroughs, $1.name) > ($1.playthroughs, $0.name) },
+            players: try players().compactMap { p in perPlayer[p.id].map { PlayerYear(player: p, playthroughs: $0) } }
+                .enumerated().sorted { ($0.element.playthroughs, $1.offset) > ($1.element.playthroughs, $0.offset) }.map(\.element),
+            solo: solo, withOthers: sections.joined().count - solo)
         return YearInReview(
             year: year, isCurrentYear: year == current, finished: sections[0], dropped: sections[1], alsoPlayed: sections[2],
             summary: summary)
@@ -100,18 +117,7 @@ extension LudeumStore {
 
     private func allPlaythroughs() throws -> [(GameID, Playthrough)] {
         try db.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM playthrough ORDER BY id").map { row in
-                (
-                    row["gameId"],
-                    Playthrough(
-                        id: row["id"],
-                        PlaythroughDraft(
-                            start: PartialDate(row["start"])!,
-                            end: (row["end"] as String?).flatMap(PartialDate.init),
-                            outcome: (row["outcome"] as String?).flatMap(Outcome.init(rawValue:)),
-                            notes: row["notes"], version: row["version"], playedVia: row["playedVia"]))
-                )
-            }
+            try Self.playthroughs(db).sorted { $0.1.id < $1.1.id }
         }
     }
 }

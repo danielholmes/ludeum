@@ -60,6 +60,13 @@ _Avoid_: Completion, run, session
 How a Playthrough ended: Finished or Dropped. A Playthrough with no Outcome is still in progress.
 _Avoid_: Status, result
 
+**Player**:
+Someone besides me who took part in a Playthrough, whether playing or watching. I'm never a Player: I'm in every Playthrough, so one with no Players is Solo. A Playthrough can have any number of Players. Deleting a Player removes them from their Playthroughs. Each has a first and last name (both required, and no two Players share both) and a colour, and is shown as a badge of their initials in that colour.
+_Avoid_: Person, companion, friend
+
+**Solo**:
+A Playthrough with no Players.
+
 **Partial date**:
 A date known only to the day, month or year, e.g. "2024-03-17", "2024-03" or "1996". Best guesses are recorded the same way. A less precise date sorts before the more precise dates within it: "2024" before "2024-01" before "2024-01-05".
 _Avoid_: Approximate date, fuzzy date
