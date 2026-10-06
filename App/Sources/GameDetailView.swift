@@ -22,6 +22,8 @@ struct GameDetailView: View {
     /// Each present ROM file's created and modified dates, by ROM id, read from disk.
     /// Each present ROM's files on disk, read off the main thread.
     @State private var romFiles: [Int64: [ROMFileInfo]] = [:]
+    /// ROMs whose files are shown.
+    @State private var expandedROMs: Set<Int64> = []
     @State private var facts = GameFacts.none
     @State private var editing: PlaythroughEdit?
     @State private var linking = false
@@ -293,7 +295,7 @@ struct GameDetailView: View {
                                 ]
                                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                             )
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.callout).foregroundStyle(.secondary)
                             if let main = romFiles[rom.id]?.first {
                                 Text(
                                     [
@@ -301,7 +303,7 @@ struct GameDetailView: View {
                                         main.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
                                     ].compactMap { $0 }.joined(separator: " · ")
                                 )
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.callout).foregroundStyle(.secondary)
                             }
                         }
                         Spacer()
@@ -311,31 +313,48 @@ struct GameDetailView: View {
                                 .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
                         }
                     }
-                    if let files = romFiles[rom.id], !files.isEmpty { fileList(files) }
+                    if let files = romFiles[rom.id], !files.isEmpty { fileList(rom, files) }
                 }
             }
         }
     }
 
     /// The ROM's files, folded away: "3 files · 702 MB", opening to each file and its size.
-    private func fileList(_ files: [ROMFileInfo]) -> some View {
+    /// The whole line is the button, not just the chevron.
+    private func fileList(_ rom: LudeumROM, _ files: [ROMFileInfo]) -> some View {
         let total = files.compactMap(\.size).reduce(0, +)
-        return DisclosureGroup {
-            ForEach(files, id: \.url) { file in
-                HStack {
-                    Text(file.name).font(.caption).lineLimit(1).truncationMode(.middle)
+        let expanded = expandedROMs.contains(rom.id)
+        return VStack(alignment: .leading, spacing: 4) {
+            Button {
+                if expanded { expandedROMs.remove(rom.id) } else { expandedROMs.insert(rom.id) }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right").rotationEffect(.degrees(expanded ? 90 : 0)).frame(width: 12)
+                    Text(
+                        "\(files.count) file\(files.count == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"
+                    )
                     Spacer()
-                    if let size = file.size {
-                        Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)).font(.caption).foregroundStyle(.secondary)
-                            .monospacedDigit()
+                }
+                .font(.callout).foregroundStyle(.secondary)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(expanded ? "Hide its files" : "Show its files")
+            if expanded {
+                ForEach(files, id: \.url) { file in
+                    HStack {
+                        Text(file.name).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        if let size = file.size {
+                            Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)).foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
                     }
+                    .font(.callout)
+                    .padding(.leading, 18)
                 }
             }
-        } label: {
-            Text(
-                "\(files.count) file\(files.count == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"
-            )
-            .font(.caption).foregroundStyle(.secondary)
         }
     }
 
