@@ -23,7 +23,7 @@ public struct ROMPlatform: Sendable, Equatable {
     enum Archiving: Sendable, Equatable {
         /// Everything in the archive, into a folder named after the ROM (PS2 and the disc Platforms).
         case intoFolder
-        /// Its one file, named after the ROM, loose in the ROM folder (PSP and GameCube).
+        /// Its one file, named after the ROM, loose in the ROM folder (PSP, GameCube and Wii).
         case singleFile
     }
 
@@ -85,6 +85,11 @@ public struct ROMPlatform: Sendable, Equatable {
         21: .init(
             name: "Nintendo GameCube", folderName: "GameCube", readyExtensions: ["rvz", "iso", "gcm", "ciso", "gcz", "wbfs"],
             libretroRepo: "Nintendo_-_GameCube",
+            archiving: .singleFile),
+        // Not `.nfs`: a Wii U eShop Wii game is a folder with a key file.
+        5: .init(
+            name: "Wii", folderName: "Wii", readyExtensions: ["wad", "rvz", "wbfs", "iso", "wia", "gcz", "ciso"],
+            libretroRepo: "Nintendo_-_Wii",
             archiving: .singleFile),
         7: .init(
             name: "PlayStation", folderName: "PS1", readyExtensions: ["m3u", "chd", "cue", "pbp", "iso", "bin", "img"],

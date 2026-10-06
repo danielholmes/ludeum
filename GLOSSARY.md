@@ -35,7 +35,7 @@ A present ROM that isn't Archived. Every present ROM is either Playable or Archi
 _Avoid_: Active, unarchived, ordinary ROM
 
 **Archive / Unarchive**:
-Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played (a PSP or GameCube ROM, always one file, unpacks to that file, named after the ROM). Either way only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2, PSP, GameCube and the Disc Platforms' (PS1, Sega CD, Saturn, PC Engine CD) ROMs can be Archived or Unarchived so far.
+Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played (a PSP, GameCube or Wii ROM, always one file, unpacks to that file, named after the ROM). Either way only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2, PSP, GameCube, Wii and the Disc Platforms' (PS1, Sega CD, Saturn, PC Engine CD) ROMs can be Archived or Unarchived so far.
 _Avoid_: Extract, compress, decompress
 
 **Compact**:

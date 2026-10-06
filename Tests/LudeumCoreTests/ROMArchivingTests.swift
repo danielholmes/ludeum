@@ -17,15 +17,16 @@ import Testing
     }
 
     @Test func aPlatformWithoutAROMFolderCantDoAnything() {
-        let wii: Int64 = 5
-        #expect(ROMArchiving.action(for: rom("Wii Sports (USA)", on: wii, "Wii Sports (USA).rvz")) == nil)
+        let atari2600: Int64 = 59
+        #expect(ROMArchiving.action(for: rom("Pitfall! (USA)", on: atari2600, "Pitfall! (USA).a26")) == nil)
     }
 
     @Test(arguments: [
         (Int64(7), "Vagrant Story (USA)/Vagrant Story (USA).cue"), (32, "Nights (USA)/Nights (USA).cue"), (150, "Ys (USA)/Ys (USA).cue"),
         (78, "Sonic CD (USA)/Sonic CD (USA).cue"), (21, "Metroid Prime (USA).rvz"),
+        (5, "World of Goo (USA) (WiiWare).wad"),
     ])
-    func aDiscOrGameCubeROMCanBeArchivedAndUnarchived(platform: Int64, fileName: String) {
+    func aDiscGameCubeOrWiiROMCanBeArchivedAndUnarchived(platform: Int64, fileName: String) {
         #expect(ROMArchiving.action(for: rom("Game", on: platform, fileName)) == .archive)
         #expect(ROMArchiving.action(for: rom("Game", on: platform, "Game.7z", archived: true)) == .unarchive)
     }
@@ -40,9 +41,11 @@ import Testing
         #expect(ROMPlatform.all[platform]?.archiving == .intoFolder)
     }
 
-    @Test func pspAndGameCubeROMsUnarchiveToOneFileAndDiscROMsIntoAFolder() {
+    @Test func pspGameCubeAndWiiROMsUnarchiveToOneFileAndDiscROMsIntoAFolder() {
         #expect(ROMArchiving.unarchivesToOneFile(rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).7z", archived: true)))
         #expect(ROMArchiving.unarchivesToOneFile(rom("Metroid Prime (USA)", on: 21, "Metroid Prime (USA).7z", archived: true)))
+        #expect(
+            ROMArchiving.unarchivesToOneFile(rom("World of Goo (USA) (WiiWare)", on: 5, "World of Goo (USA) (WiiWare).7z", archived: true)))
         #expect(!ROMArchiving.unarchivesToOneFile(rom("Vagrant Story (USA)", on: 7, "Vagrant Story (USA).7z", archived: true)))
         #expect(!ROMArchiving.unarchivesToOneFile(rom("ICO", on: ROMPlatform.ps2, "ICO.7z", archived: true)))
     }

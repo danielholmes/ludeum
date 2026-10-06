@@ -179,6 +179,18 @@ struct ROMArchiverTests {
         #expect(try gameCube.folder.scan().map(\.fileName) == ["Metroid Prime (USA).rvz"])
     }
 
+    @Test func aWiiWareWADUnarchivesToItsOneFile() async throws {
+        let wii = try FakeROMFolder(in: directory, platform: 5)
+        try wii.add("World of Goo (USA) (WiiWare).wad", String(repeating: "WAD", count: 10_000))
+
+        try await archiver().archive("World of Goo (USA) (WiiWare)", in: wii.folder)
+        #expect(try wii.folder.scan().map(\.fileName) == ["World of Goo (USA) (WiiWare).7z"])
+        try await archiver().unarchive(
+            wii.url.appending(path: "World of Goo (USA) (WiiWare).7z"), romName: "World of Goo (USA) (WiiWare)", in: wii.folder)
+
+        #expect(try wii.folder.scan().map(\.fileName) == ["World of Goo (USA) (WiiWare).wad"])
+    }
+
     @Test func leftoversFromAnInterruptedTaskAreCleanedUp() throws {
         let leftover = ps2.url.appending(path: ROMArchiver.workFolderName, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: leftover, withIntermediateDirectories: true)

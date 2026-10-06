@@ -35,6 +35,14 @@ import Testing
         #expect(famicom?.boxart == "Nintendo - Nintendo Entertainment System/Named_Boxarts/Zelda no Densetsu (Japan).png")
     }
 
+    @Test func aWiiWareWADLooksInWiisLibretroFolder() async throws {
+        h.internet.addLibretro("Nintendo_-_Wii", ["World of Goo (USA) (WiiWare)"])
+
+        let names = try await h.libretro.names(platform: 5, fileName: "World of Goo (USA) (WiiWare).wad", titles: [])
+
+        #expect(names?.boxart == "Nintendo - Wii/Named_Boxarts/World of Goo (USA) (WiiWare).png")
+    }
+
     @Test func eachPlatformsListingIsFetchedOnceNotPerROM() async throws {
         h.internet.addLibretro("Nintendo_-_Nintendo_Entertainment_System", ["Metroid (USA)", "Kid Icarus (USA, Europe)"])
 

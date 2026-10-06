@@ -120,6 +120,20 @@ struct FakeROMFolder {
         #expect(try ps2.folder.scan().isEmpty)
     }
 
+    @Test func wiisWiiWareWADsAndDiscImagesAreReadyForDolphin() throws {
+        let wii = try FakeROMFolder(in: directory, platform: 5)
+        let wad = try wii.add("World of Goo (USA) (WiiWare).wad")
+        let disc = try wii.add("Wii Sports (USA).rvz")
+
+        #expect(
+            try wii.folder.scan() == [
+                FolderROMFile(name: "Wii Sports (USA)", ready: disc, archive: nil),
+                FolderROMFile(name: "World of Goo (USA) (WiiWare)", ready: wad, archive: nil),
+            ])
+        #expect(ROMPlatform.all[5]?.folderName == "Wii")
+        #expect(Emulator.of(platformId: 5) == .dolphin)
+    }
+
     @Test func aFolderThatIsntThereCantBeScanned() {
         let missing = ROMFolder.ps2(directory.appending(path: "nowhere", directoryHint: .isDirectory))
 

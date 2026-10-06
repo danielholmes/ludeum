@@ -99,6 +99,12 @@ import Testing
             ])
 }
 
+@Test func aWiiWareWADPlaysInDolphinLikeADisc() throws {
+    let rom = URL(filePath: "/Games/Wii/World of Goo (USA) (WiiWare).wad")
+
+    #expect(try Emulator.dolphin.arguments(rom: rom, platformId: 5, settings: EmulatorSettings()).suffix(2) == ["-e", rom.path])
+}
+
 @Test func aresPlaysNintendo64GamesAsNintendo64() throws {
     #expect(
         try Emulator.ares.arguments(
