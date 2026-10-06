@@ -305,6 +305,35 @@ extension LudeumStore {
         }
     }
 
+    /// Delete ROM: sends an unmatched ROM's files to the Trash and forgets it. A missing one is just forgotten. Refused,
+    /// with nothing sent to the Trash, once it's Matched, or when it's present but its files aren't in its ROM folder.
+    public func deleteROM(
+        _ item: ReviewItem, romFolders: [ROMFolder],
+        moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+    ) throws {
+        guard
+            let row = try db.read({ db in
+                try Row.fetchOne(db, sql: "SELECT folderName, missing, gameId FROM rom WHERE id = ?", arguments: [item.romId])
+            })
+        else { return }
+        guard row["gameId"] as GameID? == nil else { throw ReviewError.alreadyMatched }
+        let forget = {
+            try self.db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ? AND gameId IS NULL", arguments: [item.romId]) }
+        }
+        if row["missing"] { return try forget() }
+        guard let folder = romFolders.first(where: { $0.platformId == item.platformId }) else { throw ReviewError.noROMFolder }
+        guard let file = try folder.rom(named: row["folderName"]) else { throw ReviewError.romFilesNotFound }
+        do {
+            for trashed in try folder.trashItems(of: file) { try moveToTrash(trashed) }
+        } catch {
+            // Whatever reached the Trash before the failure, the journal sees what's left; all of it there, it's forgotten.
+            try? checkROMAgain(item.romId, in: folder)
+            try? db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ? AND missing", arguments: [item.romId]) }
+            throw error
+        }
+        try forget()
+    }
+
     /// Throws unless the Game's present ROMs are still the ones shown, and `version` is one of their Versions.
     private func checkVersionsUnchanged(_ version: [LudeumROM], of item: DuplicateVersionsGame) throws {
         let present = try roms(of: item.game.id).filter { !$0.missing }.map(\.id)

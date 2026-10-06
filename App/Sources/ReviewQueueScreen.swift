@@ -281,6 +281,7 @@ private struct ReviewItemDetail: View {
     @State private var searching = false
     @State private var assigning = false
     @State private var makingByHand = false
+    @State private var deleting = false
     @State private var duplicateWarning: (() -> Void)?
 
     /// This ROM beside the suggestion, row by row: name, platform (shared ones highlighted), region and year.
@@ -439,6 +440,11 @@ private struct ReviewItemDetail: View {
                 Button("Search IGDB…") { searching = true }.disabled(services.gameSearch == nil)
                 Button("Assign to Game…") { assigning = true }
                 Button("Make by hand…") { makingByHand = true }
+                if item.suggestedIgdbGameId == nil {
+                    Button("Delete ROM…", role: .destructive) { deleting = true }
+                        .disabled(services.tasks.isActive(.rom(item.romId)))
+                        .help(item.missing ? "Forget it: its file is gone already" : "Send its files to the Trash, and forget it")
+                }
             }
         }
         .formStyle(.grouped)
@@ -479,6 +485,11 @@ private struct ReviewItemDetail: View {
             Button("Match anyway") { duplicateWarning?() }
         } message: {
             Text("It's still Matched, but the Game shows under Duplicate Versions until it's left with one Version.")
+        }
+        .confirmationDialog(item.missing ? "Forget \(item.romName)?" : "Send \(item.romName) to the Trash?", isPresented: $deleting) {
+            Button(item.missing ? "Forget it" : "Delete ROM", role: .destructive, action: delete)
+        } message: {
+            Text(item.missing ? "It leaves the Review queue." : "Its files go to the Trash and it leaves the Review queue.")
         }
     }
 
@@ -541,6 +552,16 @@ private struct ReviewItemDetail: View {
                 act { try await queue.confirm(item, on: platform) }
             }
         }
+    }
+
+    private func delete() {
+        do {
+            try services.journal?.deleteROM(item, romFolders: services.settings.romFolders)
+            failed(nil)
+        } catch {
+            failed(journalErrorText(error))
+        }
+        services.changes.changed()
     }
 
     /// Runs an answer, then shows the Game the ROM went to.
