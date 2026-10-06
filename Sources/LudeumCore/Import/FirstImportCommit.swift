@@ -33,7 +33,6 @@ extension LudeumStore {
     /// unmatched ROMs with their suggestions and held data.
     func commitFirstImport(_ plan: FirstImportPlan) throws {
         let now = clock.now()
-        let day = today()
         try db.write { db in
             try db.execute(sql: "INSERT INTO import (startedAt, isFirst) VALUES (?, 1)", arguments: [now])
             try db.execute(
