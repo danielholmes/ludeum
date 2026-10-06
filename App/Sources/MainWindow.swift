@@ -128,6 +128,7 @@ struct MainWindow: View {
         .modifier(ImportOnLaunch(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
         .modifier(EmulatorVersionsOnLaunch(services: services))
+        .modifier(SystemToolsOnLaunch())
         .sheet(isPresented: Bindable(services.sheets).emulators) { EmulatorsSheet(services: services) }
         .sheet(isPresented: Bindable(services.sheets).players) { PlayersSheet(services: services) }
         .sheet(isPresented: Bindable(services.sheets).storageStats) { StorageStatsSheet(services: services) }

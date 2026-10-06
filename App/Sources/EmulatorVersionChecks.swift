@@ -69,6 +69,29 @@ struct EmulatorVersionsOnLaunch: ViewModifier {
     }
 }
 
+/// Warns once per launch about each system tool that isn't installed. It's only a warning: what
+/// needs the tool says so again when it's tried.
+struct SystemToolsOnLaunch: ViewModifier {
+    @MainActor private static var started = false
+    @State private var warning: (title: String, message: String)?
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                guard !Self.started else { return }
+                Self.started = true
+                warning = SystemTool.warning(missing: SystemTool.missing())
+            }
+            .alert(
+                warning?.title ?? "", isPresented: Binding(get: { warning != nil }, set: { if !$0 { warning = nil } })
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(warning?.message ?? "")
+            }
+    }
+}
+
 /// Every Emulator Ludeum plays Games in, with what the launch check found: whether it's installed,
 /// the version Ludeum needs against the one installed, and the Platforms it plays.
 struct EmulatorsSheet: View {
