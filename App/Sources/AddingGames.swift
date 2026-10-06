@@ -103,6 +103,8 @@ struct IGDBSearchView: View {
     var browse: ((GameSearchResult?) -> Void)? = nil
     /// The journal's change count: browsing re-reads which results are in the Library when it changes.
     var revision = 0
+    /// Bumped to put the cursor in the search field (and on appearing, once bumped).
+    var focusRequest = 0
     /// A chip was chosen: the result and the platform (a listed one, or one from "Different platform…").
     let choose: (GameSearchResult, IGDBPlatform) -> Void
 
@@ -123,12 +125,15 @@ struct IGDBSearchView: View {
     @State private var genres: [IGDBNamed] = []
     @State private var themes: [IGDBNamed] = []
     @State private var choosingCompany = false
+    @FocusState private var queryFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 TextField("Search IGDB", text: $query, prompt: Text("Search IGDB, then press Return")).textFieldStyle(.roundedBorder)
+                    .focused($queryFocused)
                     .onSubmit { if !searching { run() } }
+                    .task(id: focusRequest) { if focusRequest > 0 { queryFocused = true } }
                 Button("Search", action: run).disabled(searching || (query.trimmed.isEmpty && filters.isEmpty))
                 if searching { ProgressView().controlSize(.small) }
                 if linking {

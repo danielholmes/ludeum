@@ -9,6 +9,8 @@ struct IGDBScreen: View {
     @Binding var query: String
     /// The result shown in the detail column.
     @Binding var shown: GameSearchResult?
+    /// Bumped to put the cursor in the search field.
+    var focusRequest = 0
     /// A Game added by hand, to open.
     let open: (GameID) -> Void
     @State private var platforms: [IGDBPlatform] = []
@@ -21,7 +23,7 @@ struct IGDBScreen: View {
             if let search = services.gameSearch {
                 IGDBSearchView(
                     search: search, platforms: platforms, usedPlatforms: used, query: $query, browse: { shown = $0 },
-                    revision: services.changes.revision, choose: { _, _ in })
+                    revision: services.changes.revision, focusRequest: focusRequest, choose: { _, _ in })
             } else {
                 ContentUnavailableView(
                     "IGDB isn't set up", systemImage: "key", description: Text("Add IGDB credentials in Settings to search."))

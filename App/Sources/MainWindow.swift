@@ -10,6 +10,8 @@ struct MainWindow: View {
     @AppStorage("mainSelectedScreen") private var savedScreen = Data()
     @AppStorage("mainSelectedGame") private var savedGame = 0
     @State private var igdbQuery = ""
+    /// Bumped by Add Game, so the IGDB screen's search field takes focus.
+    @State private var igdbFocusRequest = 0
     /// What's typed in the toolbar's Search, until Return opens it in the Library.
     @State private var searchText = ""
     @State private var searchFocused = false
@@ -90,7 +92,8 @@ struct MainWindow: View {
                 case .yearInReview:
                     YearInReviewScreen(services: services, selection: $selectedGame)
                 case .igdb:
-                    IGDBScreen(services: services, query: $igdbQuery, shown: $igdbResult, open: openGame)
+                    IGDBScreen(
+                        services: services, query: $igdbQuery, shown: $igdbResult, focusRequest: igdbFocusRequest, open: openGame)
                 case .reviewQueue:
                     ReviewQueueScreen(services: services, checkAgain: { importModel.importNow() }, shownGame: $selectedGame)
                         .disabled(services.work.journalLocked)
@@ -144,8 +147,11 @@ struct MainWindow: View {
                     if services.work.journalLocked {
                         Text("Can't edit while the Import writes").font(.caption).foregroundStyle(.secondary)
                     }
-                    Button("Add Game", systemImage: "plus") { selection = .igdb }
-                        .help("Search IGDB to add a Game")
+                    Button("Add Game", systemImage: "plus") {
+                        selection = .igdb
+                        igdbFocusRequest += 1
+                    }
+                    .help("Search IGDB to add a Game")
                 }
             }
         }
