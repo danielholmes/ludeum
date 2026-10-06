@@ -128,6 +128,7 @@ struct MainWindow: View {
         .modifier(EmulatorVersionsOnLaunch(services: services))
         .sheet(isPresented: Bindable(services.sheets).emulators) { EmulatorsSheet(services: services) }
         .sheet(isPresented: Bindable(services.sheets).players) { PlayersSheet(services: services) }
+        .sheet(isPresented: Bindable(services.sheets).storageStats) { StorageStatsSheet(services: services) }
         .toolbar {
             ToolbarItem {
                 HStack(spacing: 6) {

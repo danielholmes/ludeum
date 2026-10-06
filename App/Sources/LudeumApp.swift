@@ -52,6 +52,8 @@ struct LudeumApp: App {
                     .disabled(launch.running == nil)
                 Button("Emulators…") { launch.running?.services.sheets.emulators = true }
                     .disabled(launch.running == nil)
+                Button("Storage Stats…") { launch.running?.services.sheets.storageStats = true }
+                    .disabled(launch.running == nil)
             }
         }
 

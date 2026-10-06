@@ -32,8 +32,13 @@ extension ROMFolder {
     /// sheet's tracks), and its `.7z` when there is one.
     public func files(named name: String) throws -> [URL] {
         guard let rom = try scan().first(where: { $0.name == name }) else { return [] }
+        return try files(of: rom)
+    }
+
+    /// Every file of a ROM from a scan, as `files(named:)`.
+    func files(of rom: FolderROMFile) throws -> [URL] {
         var files: [URL] = []
-        let subfolder = url.appending(path: name, directoryHint: .isDirectory)
+        let subfolder = url.appending(path: rom.name, directoryHint: .isDirectory)
         if (try? subfolder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
             files = try FileManager.default.subpathsOfDirectory(atPath: subfolder.path(percentEncoded: false)).sorted()
                 .map { subfolder.appending(path: $0, directoryHint: .notDirectory) }

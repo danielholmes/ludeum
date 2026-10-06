@@ -1,3 +1,4 @@
+import Foundation
 import GRDB
 
 /// A Platform that has a ROM folder: what its folder is called, what its Emulator opens, whether its ROMs can be Compacted
@@ -36,6 +37,11 @@ public struct ROMPlatform: Sendable, Equatable {
         self.libretroRepo = libretroRepo
         self.compactExtension = compactExtension
         self.archiving = archiving
+    }
+
+    /// Whether a ROM whose file is `fileName` can still be Compacted: its Emulator opens an archive the file isn't yet.
+    func canCompact(fileName: String) -> Bool {
+        compactExtension.map { (fileName as NSString).pathExtension.lowercased() != $0 } ?? false
     }
 
     public static let ps2: Int64 = 8

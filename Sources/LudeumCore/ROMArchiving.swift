@@ -27,9 +27,7 @@ import Foundation
     /// Unarchive on PS2 and PSP, and nil for a missing ROM or any other.
     public nonisolated static func action(for rom: LudeumROM) -> Action? {
         guard !rom.missing, let platform = ROMPlatform.all[rom.platformId] else { return nil }
-        if let compact = platform.compactExtension {
-            return (rom.fileName as NSString).pathExtension.lowercased() == compact ? nil : .compact
-        }
+        if platform.compactExtension != nil { return platform.canCompact(fileName: rom.fileName) ? .compact : nil }
         guard platform.archiving != nil else { return nil }
         return rom.archived ? .unarchive : .archive
     }

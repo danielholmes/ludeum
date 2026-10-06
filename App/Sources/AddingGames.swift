@@ -17,6 +17,7 @@ import SwiftUI
 @Observable @MainActor final class AppSheets {
     var emulators = false
     var players = false
+    var storageStats = false
 }
 
 /// What the app's screens work with: the journal, and IGDB when credentials are set.

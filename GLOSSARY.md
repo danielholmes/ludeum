@@ -27,7 +27,7 @@ The folder of one Platform's ROMs, which the journal reads directly. Every Platf
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
-A ROM that is still in its library but packed in a form its Platform's Emulator can't open, so it can't be Played until I Unarchive it (or, on N64 and Mega Drive, Compact it). It is present, not missing. Whether a ROM is archived depends on the Emulator: a `.7z` that one Emulator opens directly is an ordinary ROM there.
+A ROM that is still in its library but packed in a form its Platform's Emulator can't open, so it can't be Played until I Unarchive it (or, on N64 and Mega Drive, Compact it). It is present, not missing. Whether a ROM is archived depends on the Emulator: a `.7z` that one Emulator opens directly is a Playable ROM there.
 _Avoid_: Compressed, needs extraction (that's the fix, not the state)
 
 **Playable ROM**:
