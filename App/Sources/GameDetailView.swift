@@ -28,6 +28,8 @@ struct GameDetailView: View {
     @State private var deletion: DeletionSummary?
     @State private var deletingPlaythrough: Playthrough?
     @State private var error: String?
+    /// Why the last Play didn't open, shown under Play.
+    @State private var playError: String?
 
     var body: some View {
         if let game {
@@ -60,7 +62,10 @@ struct GameDetailView: View {
                             Text([platform.name, facts.releaseYear.map(String.init)].compactMap { $0 }.joined(separator: " · "))
                                 .foregroundStyle(.secondary)
                         }
-                        if !roms.isEmpty, !roms.allSatisfy(\.missing) { playControls }
+                        if !roms.isEmpty, !roms.allSatisfy(\.missing) {
+                            playControls
+                            if let playError { Text(playError).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
+                        }
                     }
                 }
             }
@@ -135,6 +140,7 @@ struct GameDetailView: View {
         }
         .formStyle(.grouped)
         .task(id: services.changes.revision) { load() }
+        .onChange(of: id) { playError = nil }
         .task(id: roms.map(\.id)) {
             // Off the main thread: it reads OpenEmu's library and the files' attributes.
             let library = services.settings.openEmuLibrary
@@ -366,12 +372,12 @@ struct GameDetailView: View {
         do {
             guard let file = try romFile(rom, library: services.settings.openEmuLibrary, folders: services.settings.romFolders, ready: true)
             else {
-                error = "Couldn't find \(rom.fileName). Run an Import, or Check again, then try again."
+                playError = "Couldn't find \(rom.fileName). Run an Import, then try again."
                 return nil
             }
             return file
         } catch {
-            self.error = "Couldn't look for \(rom.fileName): \(error.localizedDescription)"
+            self.playError = "Couldn't look for \(rom.fileName): \(error.localizedDescription)"
             return nil
         }
     }
@@ -379,8 +385,9 @@ struct GameDetailView: View {
     /// Plays the Game in its Emulator, with every Emulator setting on the command line. A running
     /// Emulator gets the ROM in its open window.
     private func play(in emulator: Emulator) {
+        playError = nil
         guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: emulator.bundleIdentifier) else {
-            error = "\(emulator.name) isn't installed."
+            playError = "\(emulator.name) isn't installed."
             return
         }
         guard let file = playFile() else { return }
@@ -388,13 +395,13 @@ struct GameDetailView: View {
         do {
             configuration.arguments = try emulator.arguments(rom: file, platformId: game?.platformId ?? 0, settings: emulatorSettings)
         } catch {
-            self.error = "Couldn't write \(emulator.name)'s settings: \(error.localizedDescription)"
+            self.playError = "Couldn't write \(emulator.name)'s settings: \(error.localizedDescription)"
             return
         }
         // A second MesenCE hands its arguments to the running one and quits; DuckStation opens another window.
         configuration.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
-            if let error { Task { @MainActor in self.error = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
+            if let error { Task { @MainActor in self.playError = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
         }
     }
 
