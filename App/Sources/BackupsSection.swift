@@ -2,12 +2,11 @@ import AppKit
 import LudeumCore
 import SwiftUI
 
-/// Settings' backup controls: where backups go (with a warning when it's the local fallback),
+/// Settings' backup controls: where backups go (`Backups/` in the Data folder, not a setting),
 /// "Back up now" and "Restore from backup…".
 struct BackupsSection: View {
     let journal: LudeumStore?
     let backups: Backups
-    let chooseFolder: () -> Void
 
     @State private var message: String?
     @State private var restoring = false
@@ -15,17 +14,7 @@ struct BackupsSection: View {
     var body: some View {
         Section {
             LabeledContent("Folder") {
-                HStack {
-                    Text(backups.folder.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                    Button("Choose…", action: chooseFolder)
-                }
-            }
-            if backups.isUsingFallback {
-                Label(
-                    "That folder isn't there, so backups go to \(backups.fallback.path(percentEncoded: false)), which isn't synced anywhere.",
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .foregroundStyle(.orange)
+                Text(backups.folder.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
             }
             HStack {
                 Button("Back up now", action: backUpNow)

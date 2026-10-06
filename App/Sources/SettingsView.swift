@@ -1,8 +1,10 @@
+import AppKit
 import LudeumCore
 import SwiftUI
 
 /// The ⌘, Settings window: IGDB credentials with "Test connection", the optional Hasheous key,
-/// the ROM folders, and backups. Players and Emulators have sheets of their own.
+/// where the Data folder is (its locations are fixed, not settings), and backups. Players and Emulators have sheets
+/// of their own.
 struct SettingsView: View {
     let settings: AppSettings
     /// Nil if the journal couldn't be opened, so there's nothing to back up or restore into.
@@ -11,25 +13,16 @@ struct SettingsView: View {
     @State private var clientID = ""
     @State private var clientSecret = ""
     @State private var hasheousKey = ""
-    @State private var backupFolder: URL?
-    @State private var ps2Folder: URL?
-    @State private var romFoldersRoot: URL?
     @State private var needsCredentials = false
     @State private var check: CheckState = .idle
     /// Bumped by every edit, so a test that finishes after one doesn't report on values no longer shown.
     @State private var checkGeneration = 0
     @State private var saveError: String?
-    @State private var choosingFolder: Folder?
 
     enum CheckState: Equatable {
         case idle, running
         case passed(String)
         case failed(String)
-    }
-
-    enum Folder: Identifiable {
-        case backups, ps2, romFoldersRoot
-        var id: Self { self }
     }
 
     var body: some View {
@@ -64,19 +57,23 @@ struct SettingsView: View {
             }
 
             Section {
-                folderRow("PS2", ps2Folder, .ps2)
-                folderRow("Every other Platform", romFoldersRoot, .romFoldersRoot)
+                LabeledContent("Data folder") {
+                    HStack {
+                        Text(settings.folder.data.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle)
+                            .foregroundStyle(.secondary)
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([settings.folder.data]) }
+                    }
+                }
             } header: {
                 Text("ROM folders")
             } footer: {
                 Text(
-                    "Every other Platform's ROM folder is in there, named for the Platform (SNES, Game Boy Color…). A .7z in a ROM folder is Archived: Unarchive it in Game detail to play."
+                    "Each Platform's ROM folder is in ROMs in the Data folder, named for the Platform (SNES, PS2, Game Boy Color…). Link the Data folder into Dropbox to keep it safe. A .7z in a ROM folder is Archived: Unarchive it in Game detail to play."
                 )
                 .foregroundStyle(.secondary)
             }
 
-            BackupsSection(journal: journal, backups: settings.backups()) { choosingFolder = .backups }
-                .id(backupFolder)
+            BackupsSection(journal: journal, backups: settings.backups())
 
             if let saveError {
                 Text(saveError).foregroundStyle(.red)
@@ -90,18 +87,6 @@ struct SettingsView: View {
         .onChange(of: clientID) { edited() }
         .onChange(of: clientSecret) { edited() }
         .onChange(of: hasheousKey) { edited() }
-        .fileImporter(
-            isPresented: Binding(get: { choosingFolder != nil }, set: { if !$0 { choosingFolder = nil } }),
-            allowedContentTypes: [.folder]
-        ) { result in
-            guard case .success(let url) = result, let folder = choosingFolder else { return }
-            switch folder {
-            case .backups: settings.backupFolder = url
-            case .ps2: settings.ps2Folder = url
-            case .romFoldersRoot: settings.romFoldersRoot = url
-            }
-            load()
-        }
     }
 
     @ViewBuilder private var checkStatus: some View {
@@ -113,22 +98,10 @@ struct SettingsView: View {
         }
     }
 
-    private func folderRow(_ title: String, _ url: URL?, _ folder: Folder) -> some View {
-        LabeledContent(title) {
-            HStack {
-                Text(url?.path(percentEncoded: false) ?? "").lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                Button("Choose…") { choosingFolder = folder }
-            }
-        }
-    }
-
     private func load() {
         clientID = settings.igdbCredentials?.clientID ?? clientID
         clientSecret = settings.igdbCredentials?.clientSecret ?? clientSecret
         hasheousKey = settings.hasheousKey ?? hasheousKey
-        backupFolder = settings.backupFolder
-        ps2Folder = settings.ps2Folder
-        romFoldersRoot = settings.romFoldersRoot
         needsCredentials = settings.needsCredentials
     }
 

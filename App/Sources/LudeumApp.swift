@@ -5,28 +5,27 @@ import SwiftUI
 @main
 struct LudeumApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
-    private let settings: AppSettings
-    private let journal: LudeumStore?
-    private let services: Services
-    private let importModel: ImportModel
-
-    init() {
-        let settings = AppSettings()
-        RenameMigration(settings: settings).run()
-        // What an interrupted Archive or Unarchive left behind.
-        for folder in settings.romFolders { ROMArchiver.cleanUp(folder) }
-        self.settings = settings
-        journal = try? LudeumStore(directory: AppSettings.appFolder, backups: settings.backups())
-        services = Services(settings: settings, journal: journal)
-        importModel = ImportModel(services: services)
-    }
+    @State private var launch = AppLaunch()
 
     var body: some Scene {
         // One window: no New Window, and closing it hides it until the Dock icon is clicked.
         Window("Ludeum", id: "main") {
-            MainWindow(services: services, importModel: importModel)
-                .modifier(OpenSettingsWithoutCredentials(settings: settings))
-                .modifier(DailyBackupOnLaunch(journal: journal, backups: settings.backups()))
+            Group {
+                if let running = launch.running {
+                    MainWindow(services: running.services, importModel: running.importModel)
+                        .modifier(OpenSettingsWithoutCredentials(settings: launch.settings))
+                        .modifier(DailyBackupOnLaunch(journal: running.services.journal, backups: launch.settings.backups()))
+                } else {
+                    Color.clear.frame(minWidth: 900, minHeight: 600)
+                }
+            }
+            .sheet(isPresented: Binding(get: { launch.dataFolderMissing != nil }, set: { _ in })) {
+                DataFolderSheet(launch: launch)
+            }
+            // The Data folder can go (Dropbox quit, the link broken) while Ludeum is open.
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                launch.checkDataFolder()
+            }
         }
         .defaultSize(width: 1700, height: 900)
         // MainWindow saves its own frame, columns and selection, so system restoration can't fight it.
@@ -34,14 +33,78 @@ struct LudeumApp: App {
         .commands {
             TrimmedMenus()
             CommandGroup(after: .appSettings) {
-                Button("Players…") { services.sheets.players = true }
-                Button("Emulators…") { services.sheets.emulators = true }
+                Button("Players…") { launch.running?.services.sheets.players = true }
+                    .disabled(launch.running == nil)
+                Button("Emulators…") { launch.running?.services.sheets.emulators = true }
+                    .disabled(launch.running == nil)
             }
         }
 
         Settings {
-            SettingsView(settings: settings, journal: journal)
+            SettingsView(settings: launch.settings, journal: launch.running?.services.journal)
         }
+    }
+}
+
+/// Nothing works until the Data folder is found (ADR 0010): the journal isn't opened, and no Import or backup runs,
+/// until it is. Once it's running, losing the Data folder blocks the window again until it's back.
+@Observable @MainActor final class AppLaunch {
+    let settings = AppSettings()
+    /// Nil until the Data folder has been found.
+    private(set) var running: Running?
+    /// Shown in a sheet that blocks the window while it's set.
+    private(set) var dataFolderMissing: DataFolderMissing?
+
+    struct Running {
+        let services: Services
+        let importModel: ImportModel
+    }
+
+    init() {
+        RenameMigration(settings: settings).run()
+        checkDataFolder()
+    }
+
+    func checkDataFolder() {
+        do {
+            try settings.folder.checkData()
+            dataFolderMissing = nil
+        } catch {
+            dataFolderMissing = error
+            return
+        }
+        guard running == nil else { return }
+        // What an interrupted Archive or Unarchive left behind.
+        for folder in settings.romFolders { ROMArchiver.cleanUp(folder) }
+        let journal = try? LudeumStore(directory: settings.folder.url, backups: settings.backups())
+        let services = Services(settings: settings, journal: journal)
+        running = Running(services: services, importModel: ImportModel(services: services))
+    }
+}
+
+/// The Data folder can't be found: says how to fix it, and checks again. It can't be dismissed any other way.
+struct DataFolderSheet: View {
+    let launch: AppLaunch
+    @State private var checked = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Ludeum can't find its Data folder", systemImage: "externaldrive.badge.exclamationmark").font(.headline)
+            Text(launch.dataFolderMissing?.remedy ?? "").textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                if checked { Text("Still not there.").foregroundStyle(.secondary) }
+                Spacer()
+                Button("Quit") { NSApp.terminate(nil) }
+                Button("Check again") {
+                    launch.checkDataFolder()
+                    checked = true
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding()
+        .frame(width: 520)
+        .interactiveDismissDisabled()
     }
 }
 
