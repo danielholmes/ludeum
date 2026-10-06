@@ -88,8 +88,8 @@ public struct ROMArchiver: Sendable {
 
     static func unarchivePlan(listing: [SevenZip.Entry], archive: URL, romName: String, folder: ROMFolder) throws -> UnarchivePlan {
         if folder.archiving == .singleFile {
-            // Finder's hidden files (a `.DS_Store` packed with the game's subfolder) aren't the game, and stay behind.
-            let files = listing.filter { !Self.isHidden($0.path) }
+            // Hidden files beside the game (a `.DS_Store` packed with its subfolder) stay behind.
+            let files = listing.filter { !Self.isHiddenExtra($0.path, in: folder) }
             guard let image = files.first else { throw ArchiveError.noImage }
             guard files.count == 1 else { throw ArchiveError.notOneFile(files.map(\.fileName)) }
             let ext = (image.path as NSString).pathExtension.lowercased()
@@ -203,10 +203,12 @@ public struct ROMArchiver: Sendable {
         let packing: (root: URL, items: [String], trash: [URL])
         if let romFolder = folder.subfolder(of: name, holding: ready) {
             if folder.archiving == .singleFile {
-                // Unarchive gives back one loose file, so only the game goes in: Finder's hidden files are left out,
-                // and anything else beside it is refused rather than lost.
-                let files = try Sizes.files(in: romFolder).keys.map { ($0 as NSString).lastPathComponent }
-                guard files.count == 1 else { throw ArchiveError.notOneFile(files.sorted()) }
+                // Unarchive gives back one loose file, so only the game goes in: hidden files beside it are left out,
+                // and anything else is refused rather than lost.
+                let files = try FileManager.default.subpathsOfDirectory(atPath: romFolder.path(percentEncoded: false))
+                    .filter { !Self.isHiddenExtra($0, in: folder) }.map { romFolder.appending(path: $0, directoryHint: .notDirectory) }
+                    .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+                guard files.count == 1 else { throw ArchiveError.notOneFile(files.map(\.lastPathComponent).sorted()) }
                 packing = (ready.deletingLastPathComponent(), [ready.lastPathComponent], [romFolder])
             } else {
                 let items = try FileManager.default.contentsOfDirectory(atPath: romFolder.path(percentEncoded: false))
@@ -254,9 +256,13 @@ public struct ROMArchiver: Sendable {
 
     // MARK: -
 
-    /// Whether a path, in a folder or an archive, is a hidden file or inside a hidden folder.
-    private static func isHidden(_ path: String) -> Bool {
-        (path as NSString).pathComponents.contains { $0.hasPrefix(".") }
+    /// Whether a path, in a subfolder or an archive, is a hidden file that isn't the game: Finder's `.DS_Store` and `._`
+    /// companions, and any other hidden file the Emulator can't open. A game's own name can start with a dot
+    /// (`.hack--Link (Japan).iso`).
+    private static func isHiddenExtra(_ path: String, in folder: ROMFolder) -> Bool {
+        guard (path as NSString).pathComponents.contains(where: { $0.hasPrefix(".") }) else { return false }
+        let name = (path as NSString).lastPathComponent
+        return name.hasPrefix("._") || !folder.readyExtensions.contains((name as NSString).pathExtension.lowercased())
     }
 
     private func checkSpace(_ needed: Int64, in folder: ROMFolder) throws {

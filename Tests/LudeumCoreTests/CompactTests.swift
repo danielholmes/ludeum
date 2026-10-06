@@ -63,6 +63,12 @@ import Testing
         #expect(p.destination == URL(filePath: "/Games/PSP/Lumines (USA).iso"))
     }
 
+    @Test func anImageWhoseOwnNameStartsWithADotIsStillTheGame() throws {
+        let p = try plan([".DS_Store", "._.hack--Link (Japan).iso", ".hack--Link (Japan).iso"])
+
+        #expect(p.entries.map(\.path) == [".hack--Link (Japan).iso"])
+    }
+
     @Test func anythingBesideTheImageIsRefused() {
         #expect(throws: ArchiveError.notOneFile(["lumines.iso", "readme.txt"])) { try plan(["lumines.iso", "readme.txt"]) }
     }
@@ -140,6 +146,17 @@ struct CompactTests {
         try await archiver.unarchive(psp.url.appending(path: "Lumines (USA).7z"), romName: "Lumines (USA)", in: psp.folder)
 
         #expect(try psp.folder.scan().map(\.fileName) == ["Lumines (USA).iso"])
+    }
+
+    @Test func aPSPROMInASubfolderWhoseImagesNameStartsWithADotArchivesAndUnarchives() async throws {
+        let psp = try FakeROMFolder(in: directory, platform: ROMPlatform.psp)
+        try psp.add("hack Link (Japan)/.hack--Link (Japan).iso", String(repeating: "PSP", count: 10_000))
+        try psp.add("hack Link (Japan)/.DS_Store", "finder")
+
+        try await archiver.archive("hack Link (Japan)", in: psp.folder)
+        try await archiver.unarchive(psp.url.appending(path: "hack Link (Japan).7z"), romName: "hack Link (Japan)", in: psp.folder)
+
+        #expect(try psp.folder.scan().map(\.fileName) == ["hack Link (Japan).iso"])
     }
 
     @Test func aPSPROMsSubfolderHoldingMoreThanTheGameIsntArchived() async throws {

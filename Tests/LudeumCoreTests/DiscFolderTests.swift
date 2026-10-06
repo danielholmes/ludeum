@@ -64,6 +64,8 @@ import Testing
         let disk1 = try msx2.add("Snatcher (Japan)/Snatcher (Japan) (Disk 1).dsk")
 
         #expect(try msx2.folder.scan().map(\.ready) == [disk1])
+        // Nothing would read a playlist there, so it isn't waiting for one.
+        #expect(try msx2.folder.scan().map(\.needsPlaylist) == [false])
     }
 
     @Test func aPlatformThatDoesntReadPlaylistsIgnoresThem() throws {

@@ -92,7 +92,7 @@ public struct ROMFolder: Sendable, Equatable {
 
     /// The game among a subfolder's files: its one playlist, else its one cue sheet, else its one image. Several cue
     /// sheets (or, with none, several images) that are each a different Disc are a game too, opening at Disc 1 until it
-    /// has a playlist. Nil when there's nothing, or several that aren't Discs.
+    /// has a playlist, where the Platform reads playlists at all. Nil when there's nothing, or several that aren't Discs.
     func game(among files: [URL]) -> (file: URL, discsWithoutPlaylist: [URL])? {
         let images = files.filter { readyExtensions.contains($0.pathExtension.lowercased()) }
         let playlists = images.filter { $0.pathExtension.lowercased() == "m3u" }
@@ -102,7 +102,8 @@ public struct ROMFolder: Sendable, Equatable {
         let candidates = cues.isEmpty ? images : cues
         if candidates.count == 1 { return (candidates[0], []) }
         let discs = Self.discs(candidates)
-        return discs.first.map { ($0, discs) }
+        // A playlist is only missing where the Emulator would read one.
+        return discs.first.map { ($0, readyExtensions.contains("m3u") ? discs : []) }
     }
 
     /// The files in Disc order, when there are two or more and each is a different Disc; else none.
