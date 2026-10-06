@@ -20,7 +20,7 @@ private actor Gate {
     }
 }
 
-@MainActor private func untilIdle(_ tasks: BackgroundTasks) async {
+@MainActor func untilIdle(_ tasks: BackgroundTasks) async {
     while tasks.items.contains(where: { $0.state == .queued || $0.state == .running }) { await Task.yield() }
 }
 

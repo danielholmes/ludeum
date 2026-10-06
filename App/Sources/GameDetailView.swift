@@ -323,7 +323,7 @@ struct GameDetailView: View {
                             }
                         }
                         Spacer()
-                        if !rom.missing, rom.systemId == ROMFolder.ps2SystemId { archiveButton(rom) }
+                        if ROMArchiving.action(for: rom) != nil { archiveButton(rom) }
                         if !rom.missing {
                             Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
                                 .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
@@ -391,10 +391,10 @@ struct GameDetailView: View {
                 Text("Queued").font(.caption).foregroundStyle(.secondary).help("Waiting in Background tasks")
             }
         } else if rom.archived {
-            Button("Unarchive", systemImage: "archivebox") { unarchive(rom) }
+            Button("Unarchive", systemImage: "archivebox") { startArchiving(rom) }
                 .help("Unpack it into a folder named after it, so it can be Played. The .7z goes to the Trash.")
         } else {
-            Button("Archive", systemImage: "archivebox") { archive(rom) }
+            Button("Archive", systemImage: "archivebox") { startArchiving(rom) }
                 .help("Pack it into a .7z at maximum compression. The image goes to the Trash.")
         }
     }
@@ -403,29 +403,12 @@ struct GameDetailView: View {
         ROMLocator(openEmuLibrary: services.settings.openEmuLibrary, romFolders: services.settings.romFolders)
     }
 
-    private func unarchive(_ rom: LudeumROM) {
-        guard let folder = locator.folder(of: rom), let name = rom.folderName else { return }
-        let archive = folder.url.appending(path: rom.fileName)
-        services.tasks.enqueue("Unarchiving \(name)", subject: .rom(rom.id)) { progress in
-            try await ROMArchiver.installed().unarchive(archive, romName: name, in: folder, progress: progress)
-        } finished: {
-            checkROMsAgain()
+    /// Archive or Unarchive, whichever it needs. Once done, whichever screen is showing sees the change.
+    private func startArchiving(_ rom: LudeumROM) {
+        ROMArchiving(locator: locator, journal: services.journal, tasks: services.tasks).start(rom, of: id) {
+            [changes = services.changes] in
+            changes.changed()
         }
-    }
-
-    private func archive(_ rom: LudeumROM) {
-        guard let folder = locator.folder(of: rom), let name = rom.folderName else { return }
-        services.tasks.enqueue("Archiving \(name)", subject: .rom(rom.id)) { progress in
-            try await ROMArchiver.installed().archive(name, in: folder, progress: progress)
-        } finished: {
-            checkROMsAgain()
-        }
-    }
-
-    /// After a Background task: this Game's ROMs as they are now, whichever screen is showing.
-    private func checkROMsAgain() {
-        try? services.journal?.checkROMsAgain(id, in: services.settings.romFolders)
-        services.changes.changed()
     }
 
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
