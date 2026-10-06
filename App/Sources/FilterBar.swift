@@ -303,8 +303,8 @@ struct ViewModeControls: View {
         HStack(spacing: 6) {
             if showCovers { CoverSizeSlider(width: $coverWidth) }
             Picker("View", selection: $showCovers) {
-                Label("Table", systemImage: "list.bullet").tag(false)
-                Label("Covers", systemImage: "square.grid.2x2").tag(true)
+                Label("Table", systemImage: "list.bullet").labelStyle(.iconOnly).help("Table (⌘1)").tag(false)
+                Label("Covers", systemImage: "square.grid.2x2").labelStyle(.iconOnly).help("Covers (⌘2)").tag(true)
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
         }

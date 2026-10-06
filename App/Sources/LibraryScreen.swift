@@ -297,7 +297,7 @@ struct CoverSizeSlider: View {
         } maximumValueLabel: {
             Image(systemName: "photo").imageScale(.large)
         }
-        .frame(width: 140)
+        .frame(width: 220)
         .padding(.horizontal, 8)
         .help("Cover size")
     }
