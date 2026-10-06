@@ -79,8 +79,10 @@ struct BackgroundTasksPanel: View {
 }
 
 /// A queued or running task working on one thing, in place of the button that started it: its progress, or Queued.
+/// Given `tasks`, a queued one can be taken off the queue there.
 struct BackgroundTaskProgress: View {
     let task: BackgroundTasks.Item
+    var tasks: BackgroundTasks? = nil
 
     var body: some View {
         if task.state == .running {
@@ -91,7 +93,13 @@ struct BackgroundTaskProgress: View {
             }
             .help(task.title)
         } else {
-            Text("Queued").font(.caption).foregroundStyle(.secondary).help("Waiting in Background tasks")
+            HStack(spacing: 4) {
+                Text("Queued").font(.caption).foregroundStyle(.secondary).help("Waiting in Background tasks")
+                if let tasks {
+                    Button("Cancel", systemImage: "xmark.circle") { tasks.cancel(task.id) }.labelStyle(.iconOnly).buttonStyle(.plain)
+                        .help("Take it off the queue")
+                }
+            }
         }
     }
 }

@@ -419,7 +419,7 @@ struct GameDetailView: View {
     /// Archive, Unarchive or Compact, as a Background task; while it's queued or running, its progress.
     @ViewBuilder private func archiveButton(_ rom: LudeumROM) -> some View {
         if let task = services.tasks.active(.rom(rom.id)) {
-            BackgroundTaskProgress(task: task)
+            BackgroundTaskProgress(task: task, tasks: services.tasks)
         } else {
             switch ROMArchiving.action(for: rom) {
             case .unarchive:
