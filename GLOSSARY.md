@@ -1,6 +1,6 @@
 # Ludeum
 
-A personal record of the games I play across every platform (retro via OpenEmu, PC, Xbox, and others): what I thought of them, when I played them, and what I want to play next. The journal, not any emulator library, is the source of truth for this data.
+A personal record of the games I play across every platform (retro via per-Platform emulators, PC, Xbox, and others): what I thought of them, when I played them, and what I want to play next. The journal, not any emulator library, is the source of truth for this data.
 
 ## Language
 
@@ -19,11 +19,11 @@ One specific edition of a Game, e.g. a region, a revision, or a fan translation 
 _Avoid_: Release, revision, dump
 
 **ROM**:
-A game file in an emulator library: OpenEmu's, or a ROM folder. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten. It is forgotten only when its Game is deleted, and a Game can't be deleted while it has a present ROM.
+A game file in a ROM folder. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten. It is forgotten only when its Game is deleted, and a Game can't be deleted while it has a present ROM.
 _Avoid_: File, image
 
 **ROM folder**:
-A folder of a Platform's ROMs that the journal reads directly, for Platforms OpenEmu doesn't have (e.g. PS2). A ROM there is known by its name: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, or a cue sheet with its tracks, alongside anything else). So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. When both exist, the playable one is used.
+The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, or a cue sheet with its tracks, alongside anything else). So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. When both exist, the playable one is used.
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
@@ -89,14 +89,14 @@ _Avoid_: Childhood Played
 
 **List**:
 A named, unordered group of Games that I curate, e.g. "Castlevania" or "Light Gun Games". A Game can be in many Lists.
-_Avoid_: Collection, tag
+_Avoid_: Tag
 
 **Cover**:
-The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else its OpenEmu Box art, else IGDB's Cover art. A Game can have no Cover at all.
+The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else IGDB's Cover art. A Game can have no Cover at all.
 _Avoid_: Artwork, box image, thumbnail
 
 **Box art**:
-A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe). It comes from libretro-thumbnails or from OpenEmu, and only exists for emulated platforms.
+A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe). It comes from libretro-thumbnails, and only exists for emulated platforms.
 _Avoid_: Cover (that's what's shown, whatever its source)
 
 **Cover art**:
@@ -128,19 +128,25 @@ _Avoid_: Launch, run
 Long-running work the app does while I carry on, such as Archiving a ROM or refreshing the cache. Tasks queue and run one at a time, and keep running when I move to another screen. A task may be working on a ROM; while it is queued or running, that ROM's Game can't be Played.
 _Avoid_: Job, operation
 
-### Working with OpenEmu
+### Where things live
+
+**Ludeum folder**:
+The one place on this Mac where Ludeum keeps everything it owns: the live journal and the Data folder. The cache sits outside it, since it can always be rebuilt.
+_Avoid_: App folder, library
+
+**Data folder**:
+The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Backups, and the battery saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
+_Avoid_: Kept folder, backup-worthy, Library folder
+
+**Backup**:
+A snapshot of the journal, kept in the Data folder. Taken routinely and before anything that changes the journal wholesale, such as a schema change or the move from OpenEmu.
+_Avoid_: Snapshot, backed up (for the Data folder being in Dropbox)
+
+### Working with ROMs
 
 **Import**:
-Reading ROMs from OpenEmu and the ROM folders into the journal. Import never changes them.
+Reading the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
-
-**Import draft**:
-The first Import before I commit it: OpenEmu's snapshot plus my answers so far, none of it journal data yet. It can't be committed while any Game has Duplicate Versions or a `_Current` Game lacks a start date, and it can be discarded.
-_Avoid_: Pending import, staging
-
-**Sync**:
-Writing the journal's data into OpenEmu: Ratings as stars, Lists plus Intent and Playthrough state as collections, and Covers for games that have no box art in OpenEmu. The journal owns the stars and the regular collections, and replaces whatever OpenEmu had.
-_Avoid_: Push, export
 
 **Review queue**:
 Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), and Duplicate Versions.

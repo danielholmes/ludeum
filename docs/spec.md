@@ -2,7 +2,7 @@
 
 A native macOS app for keeping a personal journal of the games I play on every Platform: ratings, Playthroughs, what to play next. It reads my ROMs from a folder per Platform and opens them in each Platform's Emulator.
 
-This file holds the decisions made so far and the open questions (fog). Vocabulary is defined in [`CONTEXT.md`](../CONTEXT.md). The reasons behind hard-to-reverse choices are in [`docs/adr/`](adr/). Where this file and those disagree, the glossary and the ADRs win, and this file needs fixing.
+This file holds the decisions made so far and the open questions (fog). Vocabulary is defined in [`GLOSSARY.md`](../GLOSSARY.md). The reasons behind hard-to-reverse choices are in [`docs/adr/`](adr/). Where this file and those disagree, the glossary and the ADRs win, and this file needs fixing.
 
 ## Goals
 
