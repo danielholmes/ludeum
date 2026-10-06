@@ -51,6 +51,22 @@ public enum JSONValue: Sendable, Hashable, Codable {
     public var int: Int? { number.map { Int($0) } }
     public var array: [JSONValue]? { if case .array(let a) = self { return a } else { return nil } }
 
-    static func decode(_ data: Data) throws -> JSONValue { try JSONDecoder().decode(JSONValue.self, from: data) }
+    /// Reads a record. Through `JSONSerialization`, not `init(from:)`: a record is tens of kilobytes, and trying each
+    /// kind of value in turn throws and discards an error or four for every value in it.
+    static func decode(_ data: Data) throws -> JSONValue {
+        try JSONValue(read: try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed))
+    }
+
+    private init(read value: Any) throws {
+        switch value {
+        case is NSNull: self = .null
+        // A JSON `true` or `false` comes back as the one number that's a `CFBoolean`.
+        case let n as NSNumber: self = CFGetTypeID(n) == CFBooleanGetTypeID() ? .bool(n.boolValue) : .number(n.doubleValue)
+        case let s as String: self = .string(s)
+        case let a as [Any]: self = .array(try a.map(JSONValue.init(read:)))
+        case let o as [String: Any]: self = .object(try o.mapValues(JSONValue.init(read:)))
+        default: throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Not a JSON value: \(type(of: value))"))
+        }
+    }
     func encoded() throws -> Data { try JSONEncoder().encode(self) }
 }

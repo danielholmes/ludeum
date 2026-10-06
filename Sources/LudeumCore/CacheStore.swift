@@ -32,6 +32,10 @@ public final class CacheStore: Sendable {
                 t.column("fetched_at", .double).notNull()
             }
         }
+        // The refresh finds expired entries without reading past every payload to its `fetched_at`.
+        migrator.registerMigration("v2") { db in
+            try db.create(index: "entry_on_fetched_at", on: "entry", columns: ["fetched_at", "key"])
+        }
         try migrator.migrate(db)
     }
 
