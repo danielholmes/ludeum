@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import LudeumCore
@@ -124,5 +125,71 @@ import Testing
         h.internet.setDown(FakeInternet.Hosts.twitch, true)
 
         await #expect(throws: (any Error).self) { try await ConnectionCheck.run(igdb: h.igdb, hasheous: h.hasheous) }
+    }
+}
+
+/// A secret store that counts its reads, and can be made to fail them.
+private final class CountedSecretStore: SecretStore {
+    struct Unreadable: Error {}
+    private let secrets = InMemorySecretStore()
+    private let state = Mutex((reads: 0, unreadable: false))
+
+    var reads: Int { state.withLock { $0.reads } }
+    func setUnreadable(_ unreadable: Bool) { state.withLock { $0.unreadable = unreadable } }
+
+    func secret(for key: String) throws -> String? {
+        let unreadable = state.withLock { s in
+            s.reads += 1
+            return s.unreadable
+        }
+        if unreadable { throw Unreadable() }
+        return try secrets.secret(for: key)
+    }
+
+    func setSecret(_ value: String?, for key: String) throws { try secrets.setSecret(value, for: key) }
+}
+
+/// Screens ask for the credentials constantly, and each read of the Keychain is a trip out of the app.
+@Suite struct SecretsReadOnceTests {
+    private let secrets = CountedSecretStore()
+    let defaults = UserDefaults(suiteName: "ludeum-tests-\(UUID().uuidString)")!
+
+    func settings() -> AppSettings { AppSettings(secrets: secrets, defaults: defaults) }
+
+    @Test func eachSecretIsReadFromTheStoreOnceHoweverOftenItsAskedFor() throws {
+        try settings().setIGDBCredentials(IGDBCredentials(clientID: "id", clientSecret: "secret"))
+        let relaunched = settings()
+
+        for _ in 1...5 {
+            #expect(relaunched.igdbCredentials == IGDBCredentials(clientID: "id", clientSecret: "secret"))
+            #expect(relaunched.hasheousKey == nil)
+        }
+
+        #expect(secrets.reads == 3)
+    }
+
+    @Test func aSecretJustSetIsWhatsReadNext() throws {
+        let s = settings()
+        try s.setIGDBCredentials(IGDBCredentials(clientID: "id", clientSecret: "secret"))
+        #expect(s.igdbCredentials?.clientID == "id")
+
+        try s.setIGDBCredentials(IGDBCredentials(clientID: "new id", clientSecret: "new secret"))
+        try s.setHasheousKey("key")
+
+        #expect(s.igdbCredentials == IGDBCredentials(clientID: "new id", clientSecret: "new secret"))
+        #expect(s.hasheousKey == "key")
+        try s.setIGDBCredentials(IGDBCredentials(clientID: "", clientSecret: ""))
+        #expect(s.igdbCredentials == nil)
+    }
+
+    @Test func aReadThatFailedIsTriedAgain() throws {
+        try settings().setIGDBCredentials(IGDBCredentials(clientID: "id", clientSecret: "secret"))
+        let relaunched = settings()
+        secrets.setUnreadable(true)
+        #expect(relaunched.igdbCredentials == nil)
+
+        secrets.setUnreadable(false)
+
+        #expect(relaunched.igdbCredentials?.clientID == "id")
     }
 }
