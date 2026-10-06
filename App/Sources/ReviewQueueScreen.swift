@@ -33,12 +33,19 @@ struct ReviewQueueScreen: View {
     /// Suggested IGDB games' names, for the middle column.
     @State private var suggestionNames: [Int64: String] = [:]
 
+    /// The narrowest each column goes. The kinds and items columns stay near it; the item's detail takes the rest.
+    private static let kindsMinWidth: CGFloat = 170
+    private static let itemsMinWidth: CGFloat = 220
+    private static let detailMinWidth: CGFloat = 320
+    /// The narrowest the screen goes: each column at its narrowest, and the two dividers.
+    static let minWidth = kindsMinWidth + itemsMinWidth + detailMinWidth + 2
+
     var body: some View {
         HSplitView {
             List(Kind.allCases, selection: $kind) { kind in
                 Text(kind.rawValue).badge(count(kind)).tag(kind)
             }
-            .frame(minWidth: 170, idealWidth: 190, maxWidth: 240)
+            .frame(minWidth: Self.kindsMinWidth, idealWidth: 190, maxWidth: 200)
 
             VStack(alignment: .leading, spacing: 0) {
                 if kind == .namesAgree, !items.namesAgree.isEmpty {
@@ -117,7 +124,7 @@ struct ReviewQueueScreen: View {
                     }
                 }
             }
-            .frame(minWidth: 240, idealWidth: 300)
+            .frame(minWidth: Self.itemsMinWidth, idealWidth: 260, maxWidth: 300)
 
             Group {
                 if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
@@ -140,8 +147,11 @@ struct ReviewQueueScreen: View {
                     ContentUnavailableView(items.count == 0 ? "Nothing to review" : "Choose an item", systemImage: "tray")
                 }
             }
-            .frame(minWidth: 646, idealWidth: 823, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: Self.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Given less than `minWidth` (the window's columns not yet laid out again), it's cut off at the right rather than
+        // drawn over the sidebar.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).clipped()
         .navigationTitle("Review queue")
         .overlay(alignment: .bottom) {
             if let error { Text(error).foregroundStyle(.white).padding(8).background(.red, in: .rect(cornerRadius: 6)).padding() }
@@ -342,6 +352,18 @@ private struct ReviewItemDetail: View {
         }
     }
 
+    /// The comparison, then the suggestion's developers and its IGDB game type.
+    private var suggestionFacts: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            comparison
+            let developers = suggestion?.facts.credits.filter { $0.roles.contains(.developer) }.map(\.name) ?? []
+            if !developers.isEmpty {
+                Text("Developer: " + developers.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+            }
+            if let type = suggestion?.record["game_type"]?.int, type != 0 { Text("game_type \(type)").font(.caption) }
+        }
+    }
+
     private func label(_ text: String) -> some View {
         Text(text).font(.caption).foregroundStyle(.secondary).gridColumnAlignment(.leading)
     }
@@ -375,18 +397,18 @@ private struct ReviewItemDetail: View {
             if item.suggestedIgdbGameId != nil || picked != nil {
                 Section(picked == nil ? "Suggestion" : "Picked from search") {
                     if picked == nil, let checksumGame { Text(checksumGame.name ?? "").strikethrough().foregroundStyle(.secondary) }
-                    HStack(alignment: .top, spacing: 16) {
-                        SuggestionCover(services: services, game: suggestion).frame(width: 180, height: 240)
+                    // The cover art beside the comparison while that leaves it room, else smaller and above it.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 16) {
+                            SuggestionCover(services: services, game: suggestion).frame(width: 180, height: 240)
+                            suggestionFacts.frame(minWidth: 280, idealWidth: 280, maxWidth: .infinity, alignment: .leading)
+                        }
                         VStack(alignment: .leading, spacing: 10) {
-                            comparison
-                            let developers = suggestion?.facts.credits.filter { $0.roles.contains(.developer) }.map(\.name) ?? []
-                            if !developers.isEmpty {
-                                Text("Developer: " + developers.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
-                            }
-                            if let type = suggestion?.record["game_type"]?.int, type != 0 { Text("game_type \(type)").font(.caption) }
+                            SuggestionCover(services: services, game: suggestion).frame(width: 120, height: 160)
+                            suggestionFacts
                         }
                     }
-                    HStack {
+                    FlowLayout(spacing: 8) {
                         Button("Confirm", action: confirm).buttonStyle(.borderedProminent)
                         if picked == nil, item.platformChoices.count > 1 {
                             Picker("on", selection: $confirmPlatform) {
@@ -739,7 +761,7 @@ private struct MissingROMsDetail: View {
                     .foregroundStyle(.secondary)
             }
             Section("Missing ROMs") { ForEach(item.roms) { ROMRow(rom: $0) } }
-            HStack {
+            FlowLayout(spacing: 8) {
                 Button("Show Game", action: showGame)
                 Button("Check again", action: checkAgain)
             }
@@ -778,7 +800,7 @@ private struct OldMissingROMsDetail: View {
                     }
                 }
             }
-            HStack {
+            FlowLayout(spacing: 8) {
                 Button(item.missing.count == 1 ? "Forget it" : "Forget all \(item.missing.count)") {
                     forget { try $0.forgetMissingROMs(of: item.game.id) }
                 }
@@ -842,7 +864,7 @@ private struct BothFormsDetail: View {
                 Section("Keep") { copy(forms.keep) }
                 Section("To the Trash") { ForEach(forms.trash, id: \.self) { copy($0) } }
             }
-            HStack {
+            FlowLayout(spacing: 8) {
                 if let forms {
                     Button(forms.keepsCompacted ? "Keep the Compacted copy" : "Keep the Playable copy") { keep(forms) }
                         .disabled(services.tasks.active(.rom(item.id)) != nil)
@@ -906,7 +928,7 @@ private struct NotCompactedDetail: View {
                 LabeledContent("Now", value: item.rom.fileName)
                 LabeledContent("Compacted", value: item.compactFileName)
             }
-            HStack {
+            FlowLayout(spacing: 8) {
                 if let task = services.tasks.active(.rom(item.id)) {
                     BackgroundTaskProgress(task: task)
                 } else {

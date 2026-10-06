@@ -57,7 +57,8 @@ struct MainWindow: View {
             }
             // The sidebar is always shown: no toggle to hide it.
             .toolbar(removing: .sidebarToggle)
-            .navigationSplitViewColumnWidth(min: 220, ideal: 300, max: 400)
+            // Never narrower than this: it's what I go by most.
+            .navigationSplitViewColumnWidth(min: 300, ideal: 300, max: 400)
         } content: {
             Group {
                 switch selection {
@@ -97,8 +98,8 @@ struct MainWindow: View {
                     ContentUnavailableView("Nothing selected", systemImage: "sidebar.left")
                 }
             }
-            // The rest of the window, after the sidebar and the Game.
-            .navigationSplitViewColumnWidth(min: 400, ideal: 800)
+            // The rest of the window, after the sidebar and the Game. The Review queue's three columns need more.
+            .navigationSplitViewColumnWidth(min: selection == .reviewQueue ? ReviewQueueScreen.minWidth : 400, ideal: 800)
         } detail: {
             Group {
                 if selection == .igdb, let igdbResult {
