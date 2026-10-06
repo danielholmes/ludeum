@@ -2,6 +2,7 @@
 .env
 .build/
 .swiftpm/
+build/
 prototype-output/
 *.xcodeproj/
 App/Config/Local.xcconfig
