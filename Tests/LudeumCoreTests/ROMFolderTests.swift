@@ -225,7 +225,7 @@ struct FakeROMFolder {
     @Test func theLibraryMarksAGameWhoseROMsAreAllArchived() async throws {
         let game = try await okamiInTheJournal()
         func archived() throws -> Bool? {
-            try j.journal.library(LibraryFilter(), sort: .name, ascending: true).first { $0.id == game }?.archived
+            try j.journal.library(LibraryFilter(), sort: .name, ascending: true).first { $0.id == game }.map { $0.roms == .archived }
         }
         #expect(try archived() == true)
 

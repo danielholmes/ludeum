@@ -142,14 +142,27 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let playingSince: PartialDate?
     /// The Outcomes of its finished and dropped Playthroughs, without repeats.
     public let outcomes: Set<Outcome>
-    /// It has ROMs, and every one is missing.
-    public let noPresentROM: Bool
-    /// It has present ROMs, and every one is Archived: nothing to Play until one is Unarchived.
-    public var archived = false
+    public let roms: LibraryROMState
     /// IGDB's first release year, when the rows came with IGDB's facts (`withIGDBFacts(_:)`).
     public var releaseYear: Int? = nil
     /// IGDB players' average rating, with the same proviso.
     public var playerScore: CommunityScore? = nil
+}
+
+/// What a Library row says about its Game's ROMs.
+public enum LibraryROMState: Sendable, Equatable {
+    /// A present ROM to Play, and none missing.
+    case playable
+    /// Present ROMs, every one Archived, and none missing: nothing to Play until one is Unarchived.
+    case archived
+    /// At least one ROM is missing, whether or not another is present.
+    case missing
+    /// No ROMs at all: the Game is only in the journal.
+    case journalOnly
+
+    init(hasROM: Bool, hasMissingROM: Bool, archived: Bool) {
+        self = !hasROM ? .journalOnly : hasMissingROM ? .missing : archived ? .archived : .playable
+    }
 }
 
 extension LudeumStore {
@@ -243,8 +256,8 @@ extension LudeumStore {
                 EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playing,
                 (SELECT MAX(start) FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playingSince,
                 (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
-                EXISTS (SELECT 1 FROM rom WHERE gameId = g.id)
-                    AND NOT EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AS noROM,
+                EXISTS (SELECT 1 FROM rom WHERE gameId = g.id) AS hasROM,
+                EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND missing) AS hasMissingROM,
                 \(Self.archivedSQL) AS archived
             FROM game g
             JOIN platform pl ON pl.id = g.platformId
@@ -261,7 +274,7 @@ extension LudeumStore {
                     childhood: row["childhood"], isPlaying: row["playing"],
                     playingSince: (row["playingSince"] as String?).flatMap(PartialDate.init),
                     outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }),
-                    noPresentROM: row["noROM"], archived: row["archived"])
+                    roms: LibraryROMState(hasROM: row["hasROM"], hasMissingROM: row["hasMissingROM"], archived: row["archived"]))
             }
         }
     }

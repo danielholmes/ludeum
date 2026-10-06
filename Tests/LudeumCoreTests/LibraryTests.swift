@@ -41,7 +41,7 @@ import Testing
         #expect(doomRow.intent == .backlog)
         #expect(doomRow.isPlaying)
         #expect(rows[2].outcomes == [.finished])
-        #expect(rows.allSatisfy { !$0.noPresentROM })
+        #expect(rows.allSatisfy { $0.roms == .journalOnly })
     }
 
     @Test func sortsByPlayedAndChildhood() throws {
@@ -82,14 +82,25 @@ import Testing
         #expect(try names(LibraryFilter(roms: .archived)) == ["A Link to the Past"])
     }
 
-    @Test func aGameWhoseROMsAreAllMissingIsMarked() throws {
+    @Test func eachRowSaysWhetherItsROMsArePlayableArchivedMissingOrNone() throws {
         try h.journal.recordROM(game: doom, fileName: "doom.zip", missing: true)
         try h.journal.recordROM(game: zelda, fileName: "z.sfc", missing: true)
-        try h.journal.recordROM(game: zelda, fileName: "z2.sfc", missing: false)
+        try h.journal.recordROM(game: zelda, fileName: "z2.7z", missing: false)
+        try h.journal.recordROM(game: metroid, fileName: "m.7z", missing: false)
+        try h.journal.db.write { try $0.execute(sql: "UPDATE rom SET archived = 1 WHERE fileName LIKE '%.7z'") }
 
-        let marked = try h.journal.library(LibraryFilter(), sort: .name, ascending: true).filter(\.noPresentROM).map(\.name)
+        func states() throws -> [String: LibraryROMState] {
+            Dictionary(
+                uniqueKeysWithValues: try h.journal.library(LibraryFilter(), sort: .name, ascending: true).map { ($0.name, $0.roms) })
+        }
+        // A missing ROM wins over an Archived one beside it.
+        #expect(try states() == ["Doom": .missing, "A Link to the Past": .missing, "Super Metroid": .archived])
 
-        #expect(marked == ["Doom"])
+        try h.journal.db.write { try $0.execute(sql: "UPDATE rom SET archived = 0") }
+        #expect(try states()["Super Metroid"] == .playable)
+
+        try h.journal.db.write { try $0.execute(sql: "DELETE FROM rom WHERE gameId = ?", arguments: [metroid]) }
+        #expect(try states()["Super Metroid"] == .journalOnly)
     }
 
     @Test func filtersByList() throws {

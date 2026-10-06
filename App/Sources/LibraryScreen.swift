@@ -74,11 +74,8 @@ struct LibraryScreen: View {
                     TableColumn("Name", sortUsing: KeyPathComparator(\LibraryRow.name)) { row in
                         HStack(spacing: 4) {
                             Text(row.name)
-                            if row.noPresentROM {
-                                Image(systemName: "externaldrive.badge.xmark").foregroundStyle(.secondary).help("No ROM in its ROM folder")
-                            }
-                            if row.archived {
-                                Image(systemName: "archivebox").foregroundStyle(.secondary).help("Archived: unarchive to play")
+                            if let badge = ROMBadge(row.roms) {
+                                Image(systemName: badge.symbol).foregroundStyle(badge.color).help(badge.help)
                             }
                         }
                     }
@@ -342,20 +339,51 @@ struct CoverTile: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 // The table's Name column shows the same symbol.
-                if row.noPresentROM {
-                    Image(systemName: "externaldrive.badge.xmark").font(.system(size: max(12, width / 10))).foregroundStyle(.secondary)
+                if let badge = ROMBadge(row.roms) {
+                    Image(systemName: badge.symbol).font(.system(size: max(12, width / 10))).foregroundStyle(badge.color)
                         .padding(6)
                         .background(.regularMaterial, in: .circle)
                         .padding(5)
-                        .help("No ROM in its ROM folder")
-                } else if row.archived {
-                    Image(systemName: "archivebox").font(.system(size: max(12, width / 10))).foregroundStyle(.secondary)
-                        .padding(6)
-                        .background(.regularMaterial, in: .circle)
-                        .padding(5)
-                        .help("Archived: unarchive to play")
+                        .help(badge.help)
                 }
             }
+    }
+}
+
+/// A Library row's ROM badge: Archived, a missing ROM, or no ROMs at all; none for a Playable Game.
+private enum ROMBadge {
+    case archived, missing, journalOnly
+
+    init?(_ state: LibraryROMState) {
+        switch state {
+        case .playable: return nil
+        case .archived: self = .archived
+        case .missing: self = .missing
+        case .journalOnly: self = .journalOnly
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .archived: "archivebox"
+        case .missing: "exclamationmark.triangle.fill"
+        case .journalOnly: "book.closed"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .archived, .journalOnly: .secondary
+        case .missing: .orange
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .archived: "Archived: unarchive to play"
+        case .missing: "A ROM is missing from its ROM folder"
+        case .journalOnly: "Journal only: no ROM"
+        }
     }
 }
 
