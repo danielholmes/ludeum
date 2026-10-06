@@ -46,7 +46,9 @@ struct LibraryScreen: View {
     }
 
     var body: some View {
-        Group {
+        // One container, not a Group: a Group would give each branch its own FilterBar, and the Text filter
+        // would lose focus as the Games come and go.
+        ZStack {
             if let error {
                 ContentUnavailableView("Couldn't read the journal", systemImage: "exclamationmark.triangle", description: Text(error))
             } else if !loaded {
@@ -106,6 +108,7 @@ struct LibraryScreen: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .top, spacing: 0) {
             FilterBar(
                 count: rows.count, busy: busy, scope: scope == LibraryFilter() ? nil : title, filter: $filter,
