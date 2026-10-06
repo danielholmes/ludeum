@@ -51,6 +51,33 @@ import Testing
         #expect(try h.journal.yearsInReview(LibraryFilter()) == [now, now - 1])
     }
 
+    @Test func theYearsTheirFinishedCountsAndOneYearInFullComeTogether() throws {
+        let chrono = try h.addGame("Chrono Trigger")
+        let metroid = try h.addGame("Super Metroid")
+        try play(chrono, start: "2023-01", end: "2023-03", .finished)
+        try play(metroid, start: "2023-05", end: "2023-06", .finished)
+        try play(metroid, start: "2023-12", end: "2024-02", .finished)
+        try play(chrono, start: "2024-04", end: "2024-05", .dropped)
+
+        let reviewed = try h.journal.yearsInReview(LibraryFilter(), showing: 2023)
+
+        #expect(reviewed.years == [2024, 2023])
+        #expect(reviewed.finished == [2024: 1, 2023: 2])
+        #expect(reviewed.shown?.year == 2023)
+        #expect(reviewed.shown?.finished.map(\.game.id) == [chrono, metroid])
+        #expect(reviewed.shown?.alsoPlayed.map(\.game.id) == [metroid])
+    }
+
+    @Test func aYearWithNothingInItShowsTheNewestInstead() throws {
+        let game = try h.addGame()
+        try play(game, start: "2022", end: "2022-05", .finished)
+        try play(game, start: "2024", end: "2024-05", .dropped)
+
+        #expect(try h.journal.yearsInReview(LibraryFilter(), showing: 1999).shown?.year == 2024)
+        #expect(try h.journal.yearsInReview(LibraryFilter(), showing: nil).shown?.year == 2024)
+        #expect(try h.journal.yearsInReview(LibraryFilter(childhood: true), showing: 2024).shown == nil)
+    }
+
     @Test func droppedIsItsOwnSection() throws {
         let game = try h.addGame()
         try play(game, start: "2024", end: "2024-05", .dropped)

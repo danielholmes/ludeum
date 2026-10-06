@@ -10,6 +10,7 @@ struct YearInReviewScreen: View {
     @State private var years: [Int] = []
     /// Finished Playthroughs per year (with the filter), for the year menu.
     @State private var finished: [Int: Int] = [:]
+    /// The year picked from the menu. Until one is, or when it has nothing in it, the newest year shows.
     @State private var year: Int?
     @State private var review: YearInReview?
     @State private var platforms: [IGDBPlatform] = []
@@ -36,7 +37,7 @@ struct YearInReviewScreen: View {
                 players: players)
         }
         .navigationTitle("Year in review")
-        .task(id: Reload(revision: services.changes.revision, filter: filter, year: year)) { load() }
+        .task(id: Reload(revision: services.changes.revision, filter: filter, year: year)) { await load() }
     }
 
     private struct Reload: Equatable {
@@ -49,15 +50,22 @@ struct YearInReviewScreen: View {
         y == Calendar.current.component(.year, from: Date()) ? "\(String(y)) so far" : String(y)
     }
 
-    private func load() {
+    /// One read of the Library and its Playthroughs for every year's count and the year shown, off the main thread.
+    private func load() async {
         guard let journal = services.journal else { return }
         do {
-            years = try journal.yearsInReview(filter)
-            finished = try Dictionary(uniqueKeysWithValues: years.map { ($0, try journal.yearInReview($0, filter).summary.finished) })
-            if year == nil || !years.contains(year!) { year = years.first }
-            review = try year.map { try journal.yearInReview($0, filter) }
-            (platforms, lists, players) = try filterChoices(journal)
+            let (filter, year) = (filter, year)
+            let (reviewed, choices) = try await offMain {
+                (try journal.yearsInReview(filter, showing: year), try filterChoices(journal))
+            }
+            // A newer reload has started: its years win.
+            guard !Task.isCancelled else { return }
+            years = reviewed.years
+            finished = reviewed.finished
+            review = reviewed.shown
+            (platforms, lists, players) = choices
             error = nil
+        } catch is CancellationError {
         } catch {
             self.error = error.localizedDescription
         }
@@ -67,7 +75,7 @@ struct YearInReviewScreen: View {
         VStack(alignment: .leading, spacing: 24) {
             // The heading is the year picker: a menu of the years with something in them.
             Menu {
-                Picker("Year", selection: $year) {
+                Picker("Year", selection: Binding(get: { Int?.some(r.year) }, set: { year = $0 })) {
                     ForEach(years, id: \.self) { y in Text("\(yearTitle(y)) (\(finished[y] ?? 0))").tag(Int?.some(y)) }
                 }
                 .pickerStyle(.inline).labelsHidden()
