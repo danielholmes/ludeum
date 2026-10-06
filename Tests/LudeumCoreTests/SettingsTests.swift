@@ -59,7 +59,20 @@ import Testing
 
         #expect(settings().backupFolder.path(percentEncoded: false) == "/tmp/journal backups/")
         #expect(settings().openEmuLibrary.path(percentEncoded: false) == "/tmp/OpenEmu Library/")
-        #expect(settings().romFolders == [.ps2(URL(filePath: "/tmp/PS2", directoryHint: .isDirectory))])
+        #expect(settings().ps2Folder.path(percentEncoded: false) == "/tmp/PS2/")
+    }
+
+    @Test func anImportReadsEveryPlatformsROMFolder() {
+        let s = settings()
+        s.romFoldersRoot = URL(filePath: "/tmp/games", directoryHint: .isDirectory)
+        s.ps2Folder = URL(filePath: "/elsewhere/PS2", directoryHint: .isDirectory)
+
+        let folders = settings().romFolders
+
+        #expect(folders.count == 19)
+        #expect(folders.first { $0.platformId == 22 }?.url.path(percentEncoded: false) == "/tmp/games/Game Boy Color/")
+        #expect(folders.first { $0.platformId == 99 }?.url.path(percentEncoded: false) == "/tmp/games/Famicom/")
+        #expect(folders.first { $0.platformId == ROMPlatform.ps2 } == .ps2(URL(filePath: "/elsewhere/PS2", directoryHint: .isDirectory)))
     }
 
     @Test func eachPlatformsROMFolderIsNamedForItUnderOneRoot() {

@@ -73,8 +73,10 @@ public final class AppSettings: @unchecked Sendable {
         return ROMPlatform.all[platform].map { romFoldersRoot.appending(path: $0.folderName, directoryHint: .isDirectory) }
     }
 
-    /// Every ROM folder an Import reads.
-    public var romFolders: [ROMFolder] { [.ps2(ps2Folder)] }
+    /// Every ROM folder an Import reads: one per Platform that has one, by IGDB platform id.
+    public var romFolders: [ROMFolder] {
+        ROMPlatform.all.keys.sorted().compactMap { id in romFolder(platform: id).flatMap { ROMFolder.platform(id, $0) } }
+    }
 
     /// `~/Library/Application Support/Ludeum/`: the journal database, the cache and the fallback `Backups/`.
     public static let appFolder = URL.applicationSupportDirectory.appending(path: "Ludeum", directoryHint: .isDirectory)

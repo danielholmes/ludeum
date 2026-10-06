@@ -2,7 +2,7 @@ import LudeumCore
 import SwiftUI
 
 /// The ⌘, Settings window: IGDB credentials with "Test connection", the optional Hasheous key,
-/// the OpenEmu library, the ROM folders, and backups. Players and Emulators have sheets of their own.
+/// the ROM folders, and backups. Players and Emulators have sheets of their own.
 struct SettingsView: View {
     let settings: AppSettings
     /// Nil if the journal couldn't be opened, so there's nothing to back up or restore into.
@@ -11,9 +11,9 @@ struct SettingsView: View {
     @State private var clientID = ""
     @State private var clientSecret = ""
     @State private var hasheousKey = ""
-    @State private var openEmuLibrary: URL?
     @State private var backupFolder: URL?
     @State private var ps2Folder: URL?
+    @State private var romFoldersRoot: URL?
     @State private var needsCredentials = false
     @State private var check: CheckState = .idle
     /// Bumped by every edit, so a test that finishes after one doesn't report on values no longer shown.
@@ -28,7 +28,7 @@ struct SettingsView: View {
     }
 
     enum Folder: Identifiable {
-        case openEmuLibrary, backups, ps2
+        case backups, ps2, romFoldersRoot
         var id: Self { self }
     }
 
@@ -63,17 +63,16 @@ struct SettingsView: View {
                 Text("Hash lookups don't need a key. Set one only if anonymous lookups get throttled.").foregroundStyle(.secondary)
             }
 
-            Section("OpenEmu") {
-                folderRow("Library", openEmuLibrary, .openEmuLibrary)
-            }
-
             Section {
                 folderRow("PS2", ps2Folder, .ps2)
+                folderRow("Every other Platform", romFoldersRoot, .romFoldersRoot)
             } header: {
                 Text("ROM folders")
             } footer: {
-                Text("For Platforms OpenEmu doesn't have. A .7z there is Archived: Unarchive it in Game detail to play.").foregroundStyle(
-                    .secondary)
+                Text(
+                    "Every other Platform's ROM folder is in there, named for the Platform (SNES, Game Boy Color…). A .7z in a ROM folder is Archived: Unarchive it in Game detail to play."
+                )
+                .foregroundStyle(.secondary)
             }
 
             BackupsSection(journal: journal, backups: settings.backups()) { choosingFolder = .backups }
@@ -97,9 +96,9 @@ struct SettingsView: View {
         ) { result in
             guard case .success(let url) = result, let folder = choosingFolder else { return }
             switch folder {
-            case .openEmuLibrary: settings.openEmuLibrary = url
             case .backups: settings.backupFolder = url
             case .ps2: settings.ps2Folder = url
+            case .romFoldersRoot: settings.romFoldersRoot = url
             }
             load()
         }
@@ -127,9 +126,9 @@ struct SettingsView: View {
         clientID = settings.igdbCredentials?.clientID ?? clientID
         clientSecret = settings.igdbCredentials?.clientSecret ?? clientSecret
         hasheousKey = settings.hasheousKey ?? hasheousKey
-        openEmuLibrary = settings.openEmuLibrary
         backupFolder = settings.backupFolder
         ps2Folder = settings.ps2Folder
+        romFoldersRoot = settings.romFoldersRoot
         needsCredentials = settings.needsCredentials
     }
 
