@@ -106,8 +106,8 @@ struct IGDBSearchView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 TextField("Search IGDB", text: $query, prompt: Text("Search IGDB, then press Return")).textFieldStyle(.roundedBorder)
-                    .onSubmit(run)
-                Button("Search", action: run).disabled(query.trimmed.isEmpty && filters.isEmpty)
+                    .onSubmit { if !searching { run() } }
+                Button("Search", action: run).disabled(searching || (query.trimmed.isEmpty && filters.isEmpty))
                 if searching { ProgressView().controlSize(.small) }
                 if linking {
                     Text(platformFilter?.name ?? "").foregroundStyle(.secondary)
