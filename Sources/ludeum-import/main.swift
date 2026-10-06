@@ -4,9 +4,6 @@ import LudeumCore
 // ludeum-import: command-line tools on top of LudeumCore.
 //
 //   ludeum-import check                    Live check of IGDB and Hasheous through the real cache.
-//   ludeum-import match-report <snapshot>  Match a snapshot of OpenEmu's database and print the counts.
-//   ludeum-import first-import <library> <journal folder> [--commit]
-//                                           The first Import into a scratch journal (OpenEmu is only read).
 //   ludeum-import migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--roms <folder>]
 //                                           Moves OpenEmu's ROMs into ROM folders, once (OpenEmu closed).
 //
@@ -51,19 +48,10 @@ func check() async throws {
 
 switch CommandLine.arguments.dropFirst().first {
 case "check": try await check()
-case "match-report" where CommandLine.arguments.count == 3:
-    let (igdb, hasheous) = try clients()
-    try await matchReport(snapshot: URL(filePath: CommandLine.arguments[2]), igdb: igdb, hasheous: hasheous)
-case "first-import" where CommandLine.arguments.count >= 4:
-    let (igdb, hasheous) = try clients()
-    try await firstImportRun(
-        library: URL(filePath: CommandLine.arguments[2], directoryHint: .isDirectory),
-        journalFolder: URL(filePath: CommandLine.arguments[3], directoryHint: .isDirectory),
-        commit: CommandLine.arguments.contains("--commit"), igdb: igdb, hasheous: hasheous)
 case "migrate-openemu":
     try await migrateOpenEmuRun(Array(CommandLine.arguments.dropFirst(2)))
 default:
     fail(
-        "usage: ludeum-import check | match-report <snapshot.sqlite> | first-import <library> <journal folder> [--commit]"
+        "usage: ludeum-import check"
             + " | migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--roms <folder>]")
 }

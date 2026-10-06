@@ -128,16 +128,6 @@ public enum OpenEmuLibrary {
     }
 }
 
-/// OpenEmu's special collections, which become journal data rather than Lists.
-enum SpecialCollection {
-    static let backlog = "_TODO"
-    static let upNext = "_TODO Next"
-    static let current = "_Current"
-    static let completed = "_Completed"
-    static let childhood = "_Childhood Played"
-    static let all: Set<String> = [backlog, upNext, current, completed, childhood]
-}
-
 extension OpenEmuLibrary {
     /// The file of one ROM, read fresh from OpenEmu's library (read-only; safe while OpenEmu runs).
     /// Nil when the ROM is gone or its file isn't there.

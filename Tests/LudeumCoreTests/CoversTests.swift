@@ -74,34 +74,30 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
 @Suite struct CoverOrderTests {
     let h: Harness
     let j: LudeumHarness
-    let oe: FakeOpenEmu
     static let snes = "Nintendo_-_Super_Nintendo_Entertainment_System"
 
     init() throws {
         h = try Harness()
         j = try LudeumHarness()
-        oe = try FakeOpenEmu(in: h.directory)
         let snes: [String: Any] = ["id": 19, "name": "SNES"]
         h.internet.addPlatform(19, "SNES")
         h.internet.addGame(1103, "Super Metroid", fields: ["platforms": [snes], "cover": ["image_id": "co1"]])
-        for md5 in ["aa", "a2", "a3"] { h.internet.addHash(md5: md5, game: 1103, platform: 19) }
         try j.journal.addPlatform(id: 19, name: "SNES")
     }
 
     var covers: Covers { h.covers(j.journal) }
 
-    func firstImport() async throws -> GameID {
-        let run = FirstImport(
-            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, draftFolder: h.directory.appending(path: "draft"),
-            libretro: h.libretro)
-        try await run.commit(try await run.start(library: oe.folder) { _, _ in })
-        return try #require(try j.journal.library(LibraryFilter(), sort: .name, ascending: true).first?.id)
+    /// Super Metroid, linked to IGDB, with these ROM files (present unless `missing`) looked up in libretro.
+    func superMetroid(_ roms: [String], missing: Set<String> = []) async throws -> GameID {
+        let game = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
+        for file in roms { try j.journal.recordROM(game: game, fileName: file, missing: missing.contains(file)) }
+        await BoxArtImport(journal: j.journal, libretro: h.libretro).run()
+        return game
     }
 
     @Test func libretroBoxArtComesFirst() async throws {
         h.internet.addLibretro(Self.snes, ["Super Metroid (Japan, USA) (En)"])
-        try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: testImage(width: 20, height: 28))
-        let game = try await firstImport()
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
 
         let cover = try await covers.cover(for: game)
 
@@ -113,21 +109,8 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
     }
 
-    @Test func withoutLibretroOpenEmusBoxArtIsSkippedForIGDBsCoverArt() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: testImage(width: 20, height: 28))
-        let game = try await firstImport()
-
-        let cover = try await covers.cover(for: game)
-
-        guard case .igdb(_, "co1") = cover else {
-            Issue.record("expected IGDB's Cover art, got \(cover)")
-            return
-        }
-    }
-
     @Test func withNoBoxArtIGDBsCoverArtShows() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa")
-        let game = try await firstImport()
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
 
         guard case .igdb(let file, "co1") = try await covers.cover(for: game) else {
             Issue.record("expected IGDB's Cover art")
@@ -149,8 +132,7 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
 
     @Test func anUploadWinsOnAnyGameAndRemovingItFallsBack() async throws {
         h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        try oe.addROM("Super Metroid (USA)", md5: "aa")
-        let game = try await firstImport()
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
 
         try covers.upload(testImage(width: 600, height: 800), for: game)
         guard case .upload(let upload) = try await covers.cover(for: game) else {
@@ -168,9 +150,8 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
 
     @Test func thePresentVersionsBoxArtWinsOverAMissingOnes() async throws {
         h.internet.addLibretro(Self.snes, ["Super Metroid (Japan)", "Super Metroid (Europe)"])
-        try oe.addROM("Super Metroid (Japan)", md5: "aa", fileName: nil)
-        try oe.addROM("Super Metroid (Europe)", md5: "a2")
-        let game = try await firstImport()
+        let game = try await superMetroid(
+            ["Super Metroid (Japan).sfc", "Super Metroid (Europe).sfc"], missing: ["Super Metroid (Japan).sfc"])
 
         guard case .libretro(_, let path) = try await covers.cover(for: game) else {
             Issue.record("expected libretro's Box art")
@@ -181,9 +162,8 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
 
     @Test func withNothingPresentTheMostRecentlyAddedMissingROMsBoxArtShows() async throws {
         h.internet.addLibretro(Self.snes, ["Super Metroid (Japan)", "Super Metroid (Europe)"])
-        try oe.addROM("Super Metroid (Japan)", md5: "aa", fileName: nil)
-        try oe.addROM("Super Metroid (Europe)", md5: "a2", fileName: nil)
-        let game = try await firstImport()
+        let roms = ["Super Metroid (Japan).sfc", "Super Metroid (Europe).sfc"]
+        let game = try await superMetroid(roms, missing: Set(roms))
 
         guard case .libretro(_, let path) = try await covers.cover(for: game) else {
             Issue.record("expected libretro's Box art")
@@ -194,9 +174,7 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
 
     @Test func aMultiDiscGameShowsItsDisclessBoxArt() async throws {
         h.internet.addLibretro(Self.snes, ["Super Metroid (USA)", "Super Metroid (USA) (Disc 2)"])
-        try oe.addROM("Super Metroid (USA) (Disc 2)", md5: "a2", fileName: "Super Metroid (USA) (Disc 2).cue")
-        try oe.addROM("Super Metroid (USA) (Disc 1)", md5: "aa", fileName: "Super Metroid (USA) (Disc 1).cue")
-        let game = try await firstImport()
+        let game = try await superMetroid(["Super Metroid (USA) (Disc 2).cue", "Super Metroid (USA) (Disc 1).cue"])
 
         guard case .libretro(_, let path) = try await covers.cover(for: game) else {
             Issue.record("expected libretro's Box art")
@@ -207,8 +185,7 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
 
     @Test func aFailedDownloadThrowsRatherThanFallingBack() async throws {
         h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        try oe.addROM("Super Metroid (USA)", md5: "aa")
-        let game = try await firstImport()
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
         h.internet.setDown(FakeInternet.Hosts.libretro, true)
 
         await #expect(throws: (any Error).self) { try await covers.cover(for: game) }

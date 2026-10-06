@@ -35,7 +35,7 @@ extension ROMFolderImportTests {
         let rom = try #require(try j.journal.roms(of: game).first)
 
         try await Self.archive(
-            rom, of: game, journal: j.journal, locator: ROMLocator(openEmuLibrary: oe.folder, romFolders: [ps2.folder]),
+            rom, of: game, journal: j.journal, locator: ROMLocator(openEmuLibrary: h.directory, romFolders: [ps2.folder]),
             trash: h.directory.appending(path: "Trash", directoryHint: .isDirectory))
 
         #expect(try j.journal.roms(of: game).map(\.archived) == [true])

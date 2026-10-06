@@ -16,7 +16,6 @@ enum Screen: Hashable, Codable {
     /// A pinned franchise or series: the Library filtered to it.
     case pinned(Pin)
     case reviewQueue
-    case importPage
 
     var title: String {
         switch self {
@@ -31,7 +30,6 @@ enum Screen: Hashable, Codable {
         case .platform(_, let name): name
         case .pinned(let pin): pin.name
         case .reviewQueue: "Review queue"
-        case .importPage: "Import"
         }
     }
 
@@ -54,7 +52,6 @@ enum Screen: Hashable, Codable {
             case .company: "building.2"
             }
         case .reviewQueue: "tray"
-        case .importPage: "square.and.arrow.down"
         }
     }
 

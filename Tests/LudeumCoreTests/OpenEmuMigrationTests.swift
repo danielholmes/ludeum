@@ -40,8 +40,13 @@ import Testing
     @discardableResult
     func matched(_ name: String, system: String, fileName: String?, to game: GameID) throws -> Int64 {
         let pk = try openEmu.addROM(name, md5: "md5-\(name)", system: system, fileName: fileName)
-        try j.journal.recordROM(
-            game: game, openEmuPk: pk, md5: "md5-\(name)", fileName: "\(pk)-\(fileName ?? "missing.sfc")", missing: fileName == nil)
+        try j.journal.db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO rom (openEmuPk, md5, fileName, platformId, missing, gameId, matchKind, matchedAt)
+                    SELECT ?, ?, ?, platformId, ?, id, 'manual', 0 FROM game WHERE id = ?
+                    """, arguments: [pk, "md5-\(name)", "\(pk)-\(fileName ?? "missing.sfc")", fileName == nil, game])
+        }
         return pk
     }
 

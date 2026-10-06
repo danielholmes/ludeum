@@ -2,17 +2,17 @@ import Foundation
 import GRDB
 
 extension LudeumStore {
-    /// Records an OpenEmu ROM Matched by hand to `game`. Real ROM ingest arrives with Import.
-    public func recordROM(
-        game: GameID, openEmuPk: Int64, md5: String, fileName: String, missing: Bool
-    ) throws {
+    /// Records a ROM in its Game's Platform's ROM folder, Matched by hand to `game`. It's known by its file
+    /// name without the extension. New ROMs otherwise arrive with an Import.
+    public func recordROM(game: GameID, fileName: String, missing: Bool) throws {
         let now = clock.now()
+        let name = (fileName as NSString).deletingPathExtension
         try db.write { db in
             try db.execute(
                 sql: """
-                    INSERT INTO rom (openEmuPk, md5, fileName, platformId, missing, gameId, matchKind, matchedAt)
+                    INSERT INTO rom (folderName, fileName, name, platformId, missing, gameId, matchKind, matchedAt)
                     SELECT ?, ?, ?, platformId, ?, id, 'manual', ? FROM game WHERE id = ?
-                    """, arguments: [openEmuPk, md5, fileName, missing, now, game])
+                    """, arguments: [name, fileName, name, missing, now, game])
         }
     }
 

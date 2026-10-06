@@ -71,9 +71,9 @@ import Testing
     }
 
     @Test func aGameWhoseROMsAreAllMissingIsMarked() throws {
-        try h.journal.recordROM(game: doom, openEmuPk: 1, md5: "a", fileName: "doom.zip", missing: true)
-        try h.journal.recordROM(game: zelda, openEmuPk: 2, md5: "b", fileName: "z.sfc", missing: true)
-        try h.journal.recordROM(game: zelda, openEmuPk: 3, md5: "c", fileName: "z2.sfc", missing: false)
+        try h.journal.recordROM(game: doom, fileName: "doom.zip", missing: true)
+        try h.journal.recordROM(game: zelda, fileName: "z.sfc", missing: true)
+        try h.journal.recordROM(game: zelda, fileName: "z2.sfc", missing: false)
 
         let marked = try h.journal.library(LibraryFilter(), sort: .name, ascending: true).filter(\.noROMInOpenEmu).map(\.name)
 
@@ -112,14 +112,13 @@ import Testing
         game = try h.addGame("Resident Evil 2")
     }
 
-    func rom(_ pk: Int64, _ fileName: String, missing: Bool = false) throws {
-        try h.journal.recordROM(
-            game: game, openEmuPk: pk, md5: "\(pk)", fileName: fileName, missing: missing)
+    func rom(_ fileName: String, missing: Bool = false) throws {
+        try h.journal.recordROM(game: game, fileName: fileName, missing: missing)
     }
 
     @Test func romsShowTheirVersion() throws {
-        try rom(1, "Resident Evil 2 (USA) (Disc 1) (Leon).chd")
-        try rom(2, "Resident Evil 2 (Japan).chd", missing: true)
+        try rom("Resident Evil 2 (USA) (Disc 1) (Leon).chd")
+        try rom("Resident Evil 2 (Japan).chd", missing: true)
         let roms = try h.journal.roms(of: game)
 
         #expect(roms.map(\.fileName) == ["Resident Evil 2 (USA) (Disc 1) (Leon).chd", "Resident Evil 2 (Japan).chd"])
@@ -129,9 +128,9 @@ import Testing
     }
 
     @Test func versionSuggestionsComeFromTheGamesROMNames() throws {
-        try rom(1, "Resident Evil 2 (USA) (Disc 1) (Leon).chd")
-        try rom(2, "Resident Evil 2 (USA) (Disc 2) (Claire).chd")
-        try rom(3, "Resident Evil 2 (Japan).chd")
+        try rom("Resident Evil 2 (USA) (Disc 1) (Leon).chd")
+        try rom("Resident Evil 2 (USA) (Disc 2) (Claire).chd")
+        try rom("Resident Evil 2 (Japan).chd")
 
         #expect(try h.journal.versionSuggestions(for: game) == ["Japan", "USA"])
     }
@@ -148,12 +147,12 @@ import Testing
         try h.journal.addPlaythrough(other, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished, playedVia: "Switch Online"))
 
         #expect(try h.journal.playedViaSuggestions(for: other) == ["Steam Deck", "Switch Online"])
-        try rom(1, "Resident Evil 2 (USA).chd")
+        try rom("Resident Evil 2 (USA).chd")
         #expect(try h.journal.playedViaSuggestions(for: game) == ["OpenEmu", "Steam Deck", "Switch Online"])
     }
 
     @Test func aDeletionSaysWhatGoesWithIt() throws {
-        try rom(2, "Resident Evil 2 (Japan).chd", missing: true)
+        try rom("Resident Evil 2 (Japan).chd", missing: true)
         try h.journal.setRating(game, Rating(tenths: 90))
         try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
         try h.journal.addToList(try h.journal.createList("Horror"), game)
@@ -162,7 +161,7 @@ import Testing
 
         #expect(summary == DeletionSummary(ratingEntries: 1, playthroughs: 1, lists: 1, missingROMs: 1, presentROMs: 0))
         #expect(summary.canDelete)
-        try rom(3, "Resident Evil 2 (USA).chd")
+        try rom("Resident Evil 2 (USA).chd")
         #expect(try !h.journal.deletionSummary(game).canDelete)
     }
 }

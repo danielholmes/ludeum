@@ -5,7 +5,7 @@ import SwiftUI
 /// The Review queue, Mail-style: item kinds with counts, that kind's items, and the selected item.
 struct ReviewQueueScreen: View {
     let services: Services
-    /// Re-reads OpenEmu (an ongoing Import).
+    /// Re-reads the ROM folders (an Import).
     let checkAgain: () -> Void
     /// The Game shown in the detail column: set to the Game an answer gave the ROM.
     @Binding var shownGame: GameID?

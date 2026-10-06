@@ -12,9 +12,7 @@ import Testing
     }
 
     private func recordROM(missing: Bool) throws {
-        try h.journal.recordROM(
-            game: game, openEmuPk: 42, md5: "d41d8cd98f00b204e9800998ecf8427e",
-            fileName: "Super Metroid (Japan, USA).sfc", missing: missing)
+        try h.journal.recordROM(game: game, fileName: "Super Metroid (Japan, USA).sfc", missing: missing)
     }
 
     @Test func refusesWhileTheGameHasAPresentROM() throws {
@@ -39,8 +37,6 @@ import Testing
         #expect(try h.journal.games(in: list).isEmpty)
         // The ROM went too, so it can be recorded afresh if it reappears.
         let again = try h.addGame("Super Metroid again")
-        try h.journal.recordROM(
-            game: again, openEmuPk: 42, md5: "d41d8cd98f00b204e9800998ecf8427e",
-            fileName: "Super Metroid (Japan, USA).sfc", missing: false)
+        try h.journal.recordROM(game: again, fileName: "Super Metroid (Japan, USA).sfc", missing: false)
     }
 }

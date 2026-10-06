@@ -4,16 +4,18 @@ import Testing
 
 @testable import LudeumCore
 
-/// A PS2 ROM folder in a temporary directory.
+/// A Platform's ROM folder in a temporary directory: PS2's unless another is given.
 struct FakeROMFolder {
     let url: URL
+    let platformId: Int64
 
-    init(in directory: URL) throws {
-        url = directory.appending(path: "PS2 \(UUID().uuidString)", directoryHint: .isDirectory)
+    init(in directory: URL, platform: Int64 = ROMPlatform.ps2) throws {
+        platformId = platform
+        url = directory.appending(path: "Platform \(platform) \(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     }
 
-    var folder: ROMFolder { .ps2(url) }
+    var folder: ROMFolder { .platform(platformId, url)! }
 
     @discardableResult
     func add(_ fileName: String, _ contents: String = "") throws -> URL {
@@ -113,33 +115,19 @@ struct FakeROMFolder {
 @Suite struct ROMFolderImportTests {
     let h: Harness
     let j: LudeumHarness
-    let oe: FakeOpenEmu
     let ps2: FakeROMFolder
 
     init() throws {
         h = try Harness()
         j = try LudeumHarness()
-        oe = try FakeOpenEmu(in: h.directory)
         ps2 = try FakeROMFolder(in: h.directory)
         h.internet.addPlatform(8, "PlayStation 2")
         h.internet.addGame(1234, "Okami", fields: ["platforms": [["id": 8, "name": "PlayStation 2"]]])
         h.internet.addSearch("Okami", platform: 8, results: [1234])
     }
 
-    var ongoing: OngoingImport {
-        OngoingImport(
-            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil,
-            snapshotFile: h.directory.appending(path: "ongoing.sqlite"))
-    }
-
-    func importNow() async throws -> OngoingImportResult {
-        try await ongoing.run(library: oe.folder, romFolders: [ps2.folder])
-    }
-
-    func firstImport() async throws {
-        let run = FirstImport(
-            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, draftFolder: h.directory.appending(path: "draft"))
-        try await run.commit(try await run.start(library: oe.folder) { _, _ in })
+    func importNow() async throws -> ImportResult {
+        try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [ps2.folder])
     }
 
     func rom(_ name: String) throws -> Row? {
@@ -148,7 +136,6 @@ struct FakeROMFolder {
 
     /// Imports Okami's archive and confirms its suggestion, returning its Game.
     func okamiInTheJournal() async throws -> GameID {
-        try await firstImport()
         try ps2.add("Okami (USA).7z")
         _ = try await importNow()
         let item = try #require(try j.journal.reviewQueue().namesAgree.first)
@@ -157,7 +144,6 @@ struct FakeROMFolder {
     }
 
     @Test func aNewFolderROMGoesToTheReviewQueueEvenWhenItsNameMatches() async throws {
-        try await firstImport()
         try ps2.add("Okami (USA).7z")
 
         let result = try await importNow()
@@ -210,6 +196,25 @@ struct FakeROMFolder {
 
         #expect(result.goneMissing.map(\.romName) == ["Okami (USA)"])
         #expect(try j.journal.roms(of: game).map(\.missing) == [true])
+    }
+
+    @Test func aMissingROMWhoseFileComesBackRejoinsItsGameSilently() async throws {
+        let game = try await okamiInTheJournal()
+        try ps2.remove("Okami (USA).7z")
+        _ = try await importNow()
+        try ps2.add("Okami (USA).iso")
+
+        let result = try await importNow()
+
+        #expect(!result.changedSomething)
+        #expect(result.returned == [ImportedROM(romName: "Okami (USA)", game: game)])
+        #expect(try j.journal.roms(of: game).map(\.missing) == [false])
+    }
+
+    @Test func nothingNewSaysNothing() async throws {
+        _ = try await okamiInTheJournal()
+
+        #expect(try await importNow() == ImportResult())
     }
 
     @Test func theLibraryMarksAGameWhoseROMsAreAllArchived() async throws {

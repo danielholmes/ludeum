@@ -8,90 +8,62 @@ import Testing
 @Suite struct BoxArtImportTests {
     let h: Harness
     let j: LudeumHarness
-    let oe: FakeOpenEmu
+    let snes: FakeROMFolder
 
     init() throws {
         h = try Harness()
         j = try LudeumHarness()
-        oe = try FakeOpenEmu(in: h.directory)
-        let snes: [String: Any] = ["id": 19, "name": "SNES"]
+        snes = try FakeROMFolder(in: h.directory, platform: 19)
         h.internet.addPlatform(19, "SNES")
-        h.internet.addGame(1103, "Super Metroid", fields: ["platforms": [snes]])
-        h.internet.addHash(md5: "aa", game: 1103, platform: 19)
         h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (USA)", "Super Mario World (USA)"])
     }
 
-    func firstImport() async throws {
-        let run = FirstImport(
-            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, draftFolder: h.directory.appending(path: "draft"),
-            libretro: h.libretro)
-        try await run.commit(try await run.start(library: oe.folder) { _, _ in })
-    }
-
-    func ongoingImport() async throws {
-        _ = try await OngoingImport(
-            igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, snapshotFile: h.directory.appending(path: "s.sqlite"),
-            libretro: h.libretro
-        ).run(library: oe.folder)
+    func importNow() async throws {
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
+            .run(romFolders: [snes.folder])
     }
 
     func roms() throws -> [Row] {
         try j.journal.db.read { try Row.fetchAll($0, sql: "SELECT * FROM rom ORDER BY id") }
     }
 
-    @Test func everyROMKeepsItsLibretroNamesUnmatchedOnesToo() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa")
-        try oe.addROM("Super Mario World (USA)", md5: "zz")  // to the Review queue
-        try await firstImport()
+    @Test func everyROMKeepsItsLibretroNames() async throws {
+        try snes.add("Super Metroid (USA).sfc")
+        try snes.add("Super Mario World (USA).sfc")
+        try await importNow()
 
         let rows = try roms()
         let folder = "Nintendo - Super Nintendo Entertainment System"
         #expect(
             rows.map { $0["libretroBoxart"] as String? } == [
-                "\(folder)/Named_Boxarts/Super Metroid (USA).png", "\(folder)/Named_Boxarts/Super Mario World (USA).png",
+                "\(folder)/Named_Boxarts/Super Mario World (USA).png", "\(folder)/Named_Boxarts/Super Metroid (USA).png",
             ])
-        #expect(rows[0]["libretroSnap"] as String? == "\(folder)/Named_Snaps/Super Metroid (USA).png")
-        #expect(rows[0]["libretroTitle"] as String? == "\(folder)/Named_Titles/Super Metroid (USA).png")
+        #expect(rows[1]["libretroSnap"] as String? == "\(folder)/Named_Snaps/Super Metroid (USA).png")
+        #expect(rows[1]["libretroTitle"] as String? == "\(folder)/Named_Titles/Super Metroid (USA).png")
     }
 
     @Test func aROMIsLookedUpOnceAndNewROMsAtLaterImports() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa")
-        try await firstImport()
-        try oe.addROM("Super Mario World (USA)", md5: "zz")
+        try snes.add("Super Metroid (USA).sfc")
+        try await importNow()
+        try snes.add("Super Mario World (USA).sfc")
         h.internet.resetSent()
 
-        try await ongoingImport()
+        try await importNow()
 
         #expect(try roms()[1]["libretroBoxart"] as String? != nil)
         #expect(h.internet.sent(to: FakeInternet.Hosts.github).isEmpty)  // the listing is cached
     }
 
     @Test func whenLibretroIsUnreachableTheImportStillCommitsAndTheNextOneLooksItUp() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa")
+        try snes.add("Super Metroid (USA).sfc")
         h.internet.setDown(FakeInternet.Hosts.github, true)
-        try await firstImport()
+        try await importNow()
         #expect(try roms()[0]["libretroLookedUp"] as Bool == false)
 
         h.internet.setDown(FakeInternet.Hosts.github, false)
-        try await ongoingImport()
+        try await importNow()
 
         #expect(try roms()[0]["libretroBoxart"] as String? != nil)
-    }
-
-    @Test func openVGDBsTitleIsntLookedUp() async throws {
-        try oe.addROM("SMW", md5: "zz", fileName: "smw.sfc", title: "Super Mario World")
-        try await firstImport()
-
-        #expect(try roms()[0]["libretroBoxart"] as String? == nil)
-    }
-
-    @Test func openEmusBoxArtIsntCopiedIntoTheCache() async throws {
-        let pk = try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: testImage(width: 30, height: 40))
-
-        try await firstImport()
-        try await ongoingImport()
-
-        #expect(h.cache.cachedImage(at: "openemu/ART-\(pk)") == nil)
     }
 }
 

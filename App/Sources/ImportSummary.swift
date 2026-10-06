@@ -1,11 +1,10 @@
-import AppKit
 import LudeumCore
 import SwiftUI
 
 /// After an Import that changed something: what was added, matched, sent to review and gone
 /// missing, linking to their Games. Dismissible; an Import that changed nothing shows nothing.
 struct ImportSummaryBanner: View {
-    let summary: OngoingImportResult
+    let summary: ImportResult
     let open: (GameID) -> Void
     let dismiss: () -> Void
     @State private var expanded = false
@@ -62,22 +61,19 @@ struct ImportSummaryBanner: View {
     }
 }
 
-/// Runs an ongoing Import at launch, and each time OpenEmu quits while the journal is open.
-/// The journal never watches OpenEmu's database files.
-struct OngoingImportTriggers: ViewModifier {
-    let model: ImportModel
-    @MainActor private static var launched = false
+/// Why the last Import failed. Dismissible.
+struct ImportErrorBanner: View {
+    let message: String
+    let dismiss: () -> Void
 
-    func body(content: Content) -> some View {
-        content
-            .task {
-                guard !Self.launched else { return }
-                Self.launched = true
-                model.importNow()
-            }
-            .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didTerminateApplicationNotification)) { note in
-                let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-                if app?.bundleIdentifier == "org.openemu.OpenEmu" { model.importNow() }
-            }
+    var body: some View {
+        HStack(alignment: .top) {
+            Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+            Spacer()
+            Button("Dismiss", systemImage: "xmark", action: dismiss).labelStyle(.iconOnly).buttonStyle(.hover)
+        }
+        .padding(10)
+        .background(.regularMaterial, in: .rect(cornerRadius: 8))
+        .padding(8)
     }
 }

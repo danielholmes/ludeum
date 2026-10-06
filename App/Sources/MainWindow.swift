@@ -87,8 +87,6 @@ struct MainWindow: View {
                 case .reviewQueue:
                     ReviewQueueScreen(services: services, checkAgain: importModel.importNow, shownGame: $selectedGame)
                         .disabled(services.work.journalLocked)
-                case .importPage:
-                    ImportPage(model: importModel)
                 case let screen?:
                     PlaceholderScreen(screen: screen)
                 case nil:
@@ -113,9 +111,14 @@ struct MainWindow: View {
             .navigationSplitViewColumnWidth(min: 360, ideal: 600, max: 900)
         }
         .overlay(alignment: .bottom) {
-            if let summary = importModel.summary {
-                ImportSummaryBanner(summary: summary, open: { selectedGame = $0 }, dismiss: { importModel.summary = nil })
-                    .frame(maxWidth: 520)
+            VStack(spacing: 0) {
+                if let error = importModel.error {
+                    ImportErrorBanner(message: error) { importModel.error = nil }.frame(maxWidth: 520)
+                }
+                if let summary = importModel.summary {
+                    ImportSummaryBanner(summary: summary, open: { selectedGame = $0 }, dismiss: { importModel.summary = nil })
+                        .frame(maxWidth: 520)
+                }
             }
         }
         .onChange(of: selection) {
@@ -128,7 +131,7 @@ struct MainWindow: View {
             if savedGame != 0 { selectedGame = GameID(savedGame) }
         }
         .background(WindowFrameAutosave(name: "main"))
-        .modifier(OngoingImportTriggers(model: importModel))
+        .modifier(ImportOnLaunch(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
         .modifier(EmulatorVersionsOnLaunch(services: services))
         .sheet(isPresented: Bindable(services.sheets).emulators) { EmulatorsSheet(services: services) }
@@ -190,10 +193,8 @@ struct Sidebar: View {
         List(selection: $selection) {
             Section("Journal") {
                 ForEach(Screen.journal, id: \.self) { row($0) }
-            }
-            Section("OpenEmu") {
-                row(.reviewQueue, badge: reviewQueueCount)
-                row(.importPage, running: services.work.exclusive == .importing)
+                // Its Check again runs an Import, so it shows while one runs.
+                row(.reviewQueue, badge: reviewQueueCount, running: services.work.exclusive == .importing)
             }
             if !platforms.isEmpty {
                 Section("Platforms") {
@@ -238,7 +239,7 @@ struct Sidebar: View {
         }
     }
 
-    /// `running` animates the icon while that screen's work (an Import) runs.
+    /// `running` animates the icon while an Import runs.
     private func row(_ screen: Screen, badge: Int = 0, running: Bool = false) -> some View {
         // The badge goes inside the tag: a badge outside it hides the tag, and the row can't be selected.
         Label {
@@ -251,7 +252,7 @@ struct Sidebar: View {
                     .symbolEffect(.rotate, isActive: running)
             }
         }
-        .help(running ? "\(screen.title) running" : "")
+        .help(running ? "Import running" : "")
         .badge(badge).tag(screen)
     }
 
