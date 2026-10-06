@@ -17,7 +17,6 @@ struct FaceOffScreen: View {
     @State private var battlesToday = 0
     @State private var disagreements: [Disagreement] = []
     @State private var error: String?
-    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,6 +35,8 @@ struct FaceOffScreen: View {
                 DisagreementsList(services: services, disagreements: disagreements, selection: $selection, save: save)
             }
         }
+        // Game detail would show a Rating beside the pair.
+        .onChange(of: tab, initial: true) { if tab == .battles { selection = nil } }
         .navigationTitle("Face-off")
         .disabled(services.work.journalLocked)
         .task(id: services.changes.revision) { load() }
@@ -102,7 +103,7 @@ struct FaceOffScreen: View {
         do {
             lastPick = (try make(), shown)
             pair = nil
-            load()
+            services.changes.changed()
         } catch {
             self.error = journalErrorText(error)
         }
@@ -115,7 +116,7 @@ struct FaceOffScreen: View {
             try journal.undo(last.pick)
             lastPick = nil
             pair = last.pair
-            load()
+            services.changes.changed()
         } catch {
             self.error = journalErrorText(error)
         }
@@ -165,8 +166,8 @@ private struct DisagreementsList: View {
     var body: some View {
         if disagreements.isEmpty {
             ContentUnavailableView(
-                "No Disagreements", systemImage: "checkmark.seal",
-                description: Text("Every Rating fits its Battles so far, or there isn't enough evidence yet."))
+                "No Disagreements yet", systemImage: "rectangle.on.rectangle",
+                description: Text("They show here once Battles consistently place a Game away from its Rating."))
         } else {
             List(disagreements, selection: $selection) { disagreement in
                 DisagreementRow(services: services, disagreement: disagreement, save: save).tag(disagreement.game.id)
@@ -196,7 +197,7 @@ private struct DisagreementRow: View {
                 DisclosureGroup("\(disagreement.evidence.count) Battle\(disagreement.evidence.count == 1 ? "" : "s")") {
                     ForEach(Array(disagreement.evidence.enumerated()), id: \.offset) { _, evidence in
                         HStack {
-                            Text(outcomeText(evidence.outcome)).foregroundStyle(outcomeColour(evidence.outcome)).frame(
+                            Text(verdictText(evidence.verdict)).foregroundStyle(verdictColour(evidence.verdict)).frame(
                                 width: 90, alignment: .leading)
                             Text(evidence.opponent.name)
                             Text(ratingText(evidence.opponent.rating)).monospacedDigit().foregroundStyle(.secondary)
@@ -249,16 +250,16 @@ private struct DisagreementRow: View {
         save { try $0.setRating(game.id, rating) }
     }
 
-    private func outcomeText(_ outcome: Disagreement.Evidence.Outcome) -> String {
-        switch outcome {
+    private func verdictText(_ verdict: Disagreement.Evidence.Verdict) -> String {
+        switch verdict {
         case .won: "Beat"
         case .lost: "Lost to"
         case .same: "Same as"
         }
     }
 
-    private func outcomeColour(_ outcome: Disagreement.Evidence.Outcome) -> Color {
-        switch outcome {
+    private func verdictColour(_ verdict: Disagreement.Evidence.Verdict) -> Color {
+        switch verdict {
         case .won: .green
         case .lost: .red
         case .same: .secondary

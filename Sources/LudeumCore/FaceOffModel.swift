@@ -72,9 +72,10 @@ public struct Disagreement: Sendable, Equatable, Identifiable {
     /// One of its Battles: who against, how it went for this Game, and how much it still counts (1 today, 0.5 a
     /// week on).
     public struct Evidence: Sendable, Equatable {
-        public enum Outcome: String, Sendable { case won, lost, same }
+        /// How the Battle went for this Game: it won, lost, or they were About the same.
+        public enum Verdict: String, Sendable { case won, lost, same }
         public let opponent: FaceOffGame
-        public let outcome: Outcome
+        public let verdict: Verdict
         public let counts: Double
     }
 
@@ -127,18 +128,11 @@ public enum FaceOffModel {
     /// Every Game's place, in the order of `games`. A Battle with a Game that isn't in `games` sits out.
     static func places(games: [FaceOffGame], battles: [FaceOffBattle], today: Int) -> [Place] {
         let index = Dictionary(uniqueKeysWithValues: games.enumerated().map { ($1.id, $0) })
-        struct Edge {
-            let a: Int
-            let b: Int
-            let result: BattleResult
-            let weight: Double
-        }
-        var edges = Array(repeating: [Edge](), count: games.count)
+        var fought = Array(repeating: [(battle: FaceOffBattle, opponent: Int)](), count: games.count)
         for battle in battles {
             guard let a = index[battle.a], let b = index[battle.b] else { continue }
-            let edge = Edge(a: a, b: b, result: battle.result, weight: weight(day: battle.day, today: today))
-            edges[a].append(edge)
-            edges[b].append(edge)
+            fought[a].append((battle, b))
+            fought[b].append((battle, a))
         }
         var mu = games.map(\.rating.points)
         var precision = Array(repeating: 1 / (priorSD * priorSD), count: games.count)
@@ -148,18 +142,12 @@ public enum FaceOffModel {
             for k in games.indices {
                 var gradient = -(mu[k] - games[k].rating.points) / (priorSD * priorSD)
                 var hessian = 1 / (priorSD * priorSD)
-                for edge in edges[k] {
-                    let other = edge.a == k ? edge.b : edge.a
-                    let gap = mu[k] - mu[other]
-                    if edge.result == .same {
-                        gradient -= edge.weight * gap / (sameSD * sameSD)
-                        hessian += edge.weight / (sameSD * sameSD)
-                    } else {
-                        let won = (edge.result == .a) == (edge.a == k) ? 1.0 : 0.0
-                        let p = sigmoid(gap / tau)
-                        gradient += edge.weight * (won - p) / tau
-                        hessian += edge.weight * p * (1 - p) / (tau * tau)
-                    }
+                for (battle, opponent) in fought[k] {
+                    let pull = pull(
+                        verdict(of: battle, for: games[k].id), gap: mu[k] - mu[opponent],
+                        weight: weight(day: battle.day, today: today))
+                    gradient += pull.gradient
+                    hessian += pull.hessian
                 }
                 let step = max(-1, min(1, gradient / hessian))
                 mu[k] += step
@@ -171,33 +159,60 @@ public enum FaceOffModel {
         return games.indices.map { Place(game: games[$0], mu: mu[$0], sd: 1 / precision[$0].squareRoot()) }
     }
 
-    /// The Disagreements, biggest gap first. `kept` holds each Kept Game's latest Battle when I Kept its Rating:
-    /// it's set aside until it fights another.
+    /// How one Battle pulls on a Game's place, `gap` above its opponent's: the slope and curvature of how likely
+    /// the Battle's verdict is.
+    static func pull(_ verdict: Disagreement.Evidence.Verdict, gap: Double, weight: Double) -> (gradient: Double, hessian: Double) {
+        switch verdict {
+        case .same:
+            return (-weight * gap / (sameSD * sameSD), weight / (sameSD * sameSD))
+        case .won, .lost:
+            let p = sigmoid(gap / tau)
+            return (weight * ((verdict == .won ? 1 : 0) - p) / tau, weight * p * (1 - p) / (tau * tau))
+        }
+    }
+
+    /// How a Battle went for one of its Games.
+    static func verdict(of battle: FaceOffBattle, for game: GameID) -> Disagreement.Evidence.Verdict {
+        battle.result == .same ? .same : (battle.result == .a) == (battle.a == game) ? .won : .lost
+    }
+
+    /// Fairly sure its place is on the other side of its Rating, and far enough to round to another Rating.
+    static func isDisagreement(_ place: Place) -> Bool { abs(place.z) >= flagZ && rounded(place.mu) != place.game.rating }
+
+    static func direction(_ place: Place) -> Disagreement.Direction { place.z < 0 ? .tooHigh : .tooLow }
+
+    /// Whether a Game has a Battle on the far side of where it's going: a win or About the same for one rated too
+    /// high, a loss or About the same for one rated too low. Without one its place has no bound that way.
+    static func hasFarSide(_ fought: [Fought], _ direction: Disagreement.Direction) -> Bool {
+        fought.contains { $0.verdict != (direction == .tooHigh ? .lost : .won) }
+    }
+
+    /// The Disagreements, biggest gap first, then the surest. `kept` holds each Kept Game's latest Battle when I Kept
+    /// its Rating: it's set aside until it fights another.
     public static func disagreements(games: [FaceOffGame], battles: [FaceOffBattle], today: Int, kept: [GameID: Int64])
         -> [Disagreement]
     {
         let byId = Dictionary(uniqueKeysWithValues: games.map { ($0.id, $0) })
+        func gap(_ place: Place) -> Double { abs(place.mu - place.game.rating.points) }
         return places(games: games, battles: battles, today: today)
-            .filter { abs($0.z) >= flagZ && rounded($0.mu) != $0.game.rating }
+            .filter(isDisagreement)
             .filter { place in
                 guard let keptAt = kept[place.game.id] else { return true }
                 return battles.contains { $0.id > keptAt && ($0.a == place.game.id || $0.b == place.game.id) }
             }
-            .sorted { abs($0.mu - $0.game.rating.points) > abs($1.mu - $1.game.rating.points) }
+            .sorted { (gap($0), abs($0.z)) > (gap($1), abs($1.z)) }
             .map { place in
-                let direction: Disagreement.Direction = place.z < 0 ? .tooHigh : .tooLow
-                let fought = battles.compactMap { battle in Fought(battle, for: place.game.id, among: byId, today: today) }
+                let fought = battles.compactMap { Fought($0, for: place.game.id, among: byId, today: today) }
                 return Disagreement(
-                    game: place.game, direction: direction, placement: placement(direction, place.game, fought),
-                    evidence: fought.reversed().map { .init(opponent: $0.opponent, outcome: $0.outcome, counts: $0.weight) })
+                    game: place.game, direction: direction(place), placement: placement(direction(place), place.game, fought),
+                    evidence: fought.reversed().map { .init(opponent: $0.opponent, verdict: $0.verdict, counts: $0.weight) })
             }
     }
 
-    /// One of a Game's Battles from its side: the opponent's Rating, and whether it won, lost or was About the same.
+    /// One of a Game's Battles from its side: who against, how it went, and how much it still counts.
     struct Fought {
-        typealias Outcome = Disagreement.Evidence.Outcome
         let opponent: FaceOffGame
-        let outcome: Outcome
+        let verdict: Disagreement.Evidence.Verdict
         let weight: Double
 
         init?(_ battle: FaceOffBattle, for game: GameID, among games: [GameID: FaceOffGame], today: Int) {
@@ -205,22 +220,21 @@ public enum FaceOffModel {
                 let opponent = games[battle.a == game ? battle.b : battle.a], games[game] != nil
             else { return nil }
             self.opponent = opponent
-            outcome = battle.result == .same ? .same : (battle.result == .a) == (battle.a == game) ? .won : .lost
+            verdict = FaceOffModel.verdict(of: battle, for: game)
             weight = FaceOffModel.weight(day: battle.day, today: today)
         }
     }
 
     /// Where a Game's Battles place it among its opponents' Ratings, from those Battles alone (no pull back to its
-    /// own Rating). Without a Battle on the far side its place has no bound that way, so only the direction is told:
-    /// below the lowest Rating it lost to, or above the highest it beat.
+    /// own Rating), and always on the side of its Rating they point to. Without a Battle on the far side only the
+    /// direction is told: below the lowest Rating it lost to, or above the highest it beat.
     static func placement(_ direction: Disagreement.Direction, _ game: FaceOffGame, _ fought: [Fought]) -> Disagreement.Placement {
-        let bounded = fought.contains { direction == .tooHigh ? $0.outcome != .lost : $0.outcome != .won }
-        guard bounded else {
+        guard hasFarSide(fought, direction) else {
             switch direction {
             case .tooHigh:
-                return .below(min(game.rating, fought.filter { $0.outcome == .lost }.map(\.opponent.rating).min() ?? game.rating))
+                return .below(min(game.rating, fought.filter { $0.verdict == .lost }.map(\.opponent.rating).min() ?? game.rating))
             case .tooLow:
-                return .above(max(game.rating, fought.filter { $0.outcome == .won }.map(\.opponent.rating).max() ?? game.rating))
+                return .above(max(game.rating, fought.filter { $0.verdict == .won }.map(\.opponent.rating).max() ?? game.rating))
             }
         }
         var place = game.rating.points
@@ -229,23 +243,25 @@ public enum FaceOffModel {
             var gradient = 0.0
             hessian = 1e-6
             for f in fought {
-                let gap = place - f.opponent.rating.points
-                switch f.outcome {
-                case .same:
-                    gradient -= f.weight * gap / (sameSD * sameSD)
-                    hessian += f.weight / (sameSD * sameSD)
-                case .won, .lost:
-                    let p = sigmoid(gap / tau)
-                    gradient += f.weight * ((f.outcome == .won ? 1 : 0) - p) / tau
-                    hessian += f.weight * p * (1 - p) / (tau * tau)
-                }
+                let pull = pull(f.verdict, gap: place - f.opponent.rating.points, weight: f.weight)
+                gradient += pull.gradient
+                hessian += pull.hessian
             }
             let step = max(-1, min(1, gradient / hessian))
             place = max(0, min(10, place + step))
             if abs(step) < 1e-4 { break }
         }
         let sd = 1 / hessian.squareRoot()
-        return .around(rounded(place - sd), rounded(place + sd))
+        var (from, to) = (rounded(place - sd).tenths, rounded(place + sd).tenths)
+        switch direction {
+        case .tooHigh:
+            to = min(to, game.rating.tenths - 1)
+            from = min(from, to)
+        case .tooLow:
+            from = max(from, game.rating.tenths + 1)
+            to = max(to, from)
+        }
+        return .around(Rating(tenths: from)!, Rating(tenths: to)!)
     }
 
     /// The next pair to show, or nil when every pair is kept away today. It chases the most doubtful suspect (a Game
@@ -274,10 +290,13 @@ public enum FaceOffModel {
         for skip in skips { for id in [skip.a, skip.b] { skipped[id, default: 0] += weight(day: skip.day, today: today) } }
         let todays = battles.filter { $0.day == today }.count
 
+        /// A Disagreement whose placement is bounded both ways: nothing left to chase.
         func settled(_ place: Place) -> Bool {
-            guard abs(place.z) >= flagZ, rounded(place.mu) != place.game.rating else { return false }
-            let fought = battles.compactMap { Fought($0, for: place.game.id, among: byId, today: today) }
-            return fought.contains { place.z < 0 ? $0.outcome != .lost : $0.outcome != .won }
+            isDisagreement(place)
+                && hasFarSide(battles.compactMap { Fought($0, for: place.game.id, among: byId, today: today) }, direction(place))
+        }
+        func offeredLess(_ x: Place, _ y: Place) -> Double {
+            pow(0.5, skipped[x.game.id, default: 0] + skipped[y.game.id, default: 0])
         }
         let suspect =
             places
@@ -306,12 +325,11 @@ public enum FaceOffModel {
                         score = spread * Double.random(in: 0..<1, using: &rng)
                     case .chase(let suspect):
                         guard x.game.id == suspect.game.id || y.game.id == suspect.game.id else { continue }
-                        score = information * jitter
+                        score = information * offeredLess(x, y) * jitter
                     case .cover:
                         guard uncovered(x) || uncovered(y) else { continue }
                         score =
-                            information * (uncovered(x) && uncovered(y) ? 1.5 : 1)
-                            * pow(0.5, skipped[x.game.id, default: 0] + skipped[y.game.id, default: 0]) * jitter
+                            information * (uncovered(x) && uncovered(y) ? 1.5 : 1) * offeredLess(x, y) * jitter
                     }
                     if score > (best?.score ?? -1) { best = (score, x, y) }
                 }

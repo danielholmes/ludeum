@@ -160,7 +160,7 @@ import Testing
         battle(x, beat: game("Win", 60), day: 7)
         for (day, name) in [(7, "A"), (7, "B"), (14, "C"), (14, "D")] { battle(game(name, 75), beat: x, day: day) }
 
-        let evidence = disagreements(today: 14).first?.evidence.map { "\($0.opponent.name) \($0.outcome) \($0.counts)" }
+        let evidence = disagreements(today: 14).first?.evidence.map { "\($0.opponent.name) \($0.verdict) \($0.counts)" }
 
         #expect(evidence == ["D lost 1.0", "C lost 1.0", "B lost 0.5", "A lost 0.5", "Win won 0.5", "Old win won 0.25"])
     }
