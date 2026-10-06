@@ -26,8 +26,8 @@ final class Throttle: Sendable {
         }
     }
 
-    /// Hands out send times at least `interval` apart. The slot is reserved before
-    /// sleeping, so concurrent callers queue up rather than bunching together.
+    /// Hands out send times at least `interval` apart. A caller waits until the next one is free and only then takes
+    /// it, so concurrent callers queue up rather than bunching together, and one cancelled while it waits takes none.
     private actor Slots {
         let interval: TimeInterval
         let clock: TimeSource
@@ -39,10 +39,9 @@ final class Throttle: Sendable {
         }
 
         func wait() async throws {
-            let now = clock.now()
-            let slot = max(now, next ?? now)
-            next = slot.addingTimeInterval(interval)
-            try await clock.sleep(seconds: slot.timeIntervalSince(now))
+            // Another caller can take the time waited for, so look again after every sleep.
+            while let next, next > clock.now() { try await clock.sleep(seconds: next.timeIntervalSince(clock.now())) }
+            next = clock.now().addingTimeInterval(interval)
         }
     }
 }

@@ -14,6 +14,7 @@ final class TestClock: TimeSource, Sendable {
     func now() -> Date { current.withLock { $0 } }
 
     func sleep(seconds: Double) async throws {
+        try Task.checkCancellation()
         advance(seconds: seconds)
     }
 
