@@ -10,8 +10,6 @@ struct LibraryScreen: View {
     var title: String?
     @Binding var selection: GameID?
     @State private var filter: LibraryFilter
-    /// What's typed in the Text filter; it reaches `filter.name` after a pause in typing.
-    @State private var textFilter: String
     @FocusState private var textFilterFocused: Bool
     // Remembered across screens and launches, shared by the Library and every List.
     @AppStorage("librarySort") private var sort = LibrarySort.name
@@ -31,8 +29,8 @@ struct LibraryScreen: View {
     /// A reload is running.
     @State private var loading = false
 
-    /// Typing hasn't reached the filter yet, or the Games are being found: shown as spinners.
-    private var busy: Bool { loading || textFilter != filter.name }
+    /// The Games are being found: shown as a spinner.
+    private var busy: Bool { loading }
 
     /// `initialFilter` is where to start, e.g. Year in review's "no dates" link: removable pills.
     /// `title` replaces "Library", and names the `scope` chip.
@@ -45,7 +43,6 @@ struct LibraryScreen: View {
         self.title = title
         _selection = selection
         _filter = State(initialValue: initialFilter)
-        _textFilter = State(initialValue: initialFilter.name)
     }
 
     var body: some View {
@@ -62,10 +59,7 @@ struct LibraryScreen: View {
                         description: filter == LibraryFilter() ? "Add one with +." : "Try fewer filters or another search.",
                         clearFilters: filter == LibraryFilter()
                             ? nil
-                            : {
-                                filter = LibraryFilter()
-                                textFilter = ""
-                            }
+                            : { filter = LibraryFilter() }
                     )
                     .fixedSize(horizontal: false, vertical: true)
                     Spacer()
@@ -117,7 +111,7 @@ struct LibraryScreen: View {
                 count: rows.count, busy: busy, scope: scope == LibraryFilter() ? nil : title, filter: $filter,
                 kinds: FilterKind.library.subtracting(FilterKind.fixed(by: scope)), platforms: platforms, lists: lists, players: players,
                 genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted(),
-                text: $textFilter, textFocused: $textFilterFocused
+                text: $filter.name, textFocused: $textFilterFocused
             ) {
                 LibrarySortMenu(sort: Binding($sort), ascending: $ascending)
                 ViewModeControls(showCovers: $showCovers, coverWidth: $coverWidth)
@@ -126,12 +120,6 @@ struct LibraryScreen: View {
         .navigationTitle(title ?? "Library")
         .viewShortcuts(showCovers: $showCovers)
         .focusedSceneValue(\.focusTextFilter) { textFilterFocused = true }
-        .task(id: textFilter) {
-            // Debounced: the Library reloads 300 ms after the last keystroke, not on every one.
-            guard textFilter != filter.name else { return }
-            try? await Task.sleep(for: .milliseconds(300))
-            if !Task.isCancelled { filter.name = textFilter }
-        }
         .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending, scope: scope)) {
             await load()
         }
