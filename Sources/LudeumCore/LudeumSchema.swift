@@ -11,6 +11,14 @@ enum LudeumSchema {
     /// A migration that drops OpenEmu was asked to run while ROMs are still OpenEmu's.
     struct OpenEmuROMsRemain: Error {}
 
+    /// ROMs keyed by Platform: an unmatched ROM's OpenEmu system has no Platform this build knows, so nothing was changed.
+    public struct UnknownOpenEmuSystems: Error, Equatable, CustomStringConvertible {
+        public let systems: [String]
+        public var description: String {
+            "Unmatched ROMs of OpenEmu systems Ludeum has no Platform for: \(systems.joined(separator: ", ")). Match them first."
+        }
+    }
+
     /// A Partial date column holds `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, or nothing.
     private static func partialDateCheck(_ column: String) -> String {
         let year = "[0-9][0-9][0-9][0-9]"
@@ -301,7 +309,8 @@ enum LudeumSchema {
             }
         }
         // ROMs are keyed by Platform (ADR 0009): one ROM folder per IGDB Platform, a ROM known by its name in it.
-        // `systemId` goes; each ROM takes its Game's Platform, else its OpenEmu system's most likely one.
+        // `systemId` goes; a ROM folder's ROM (PS2's) keeps its folder's Platform, and an OpenEmu ROM takes its Game's
+        // Platform, else its OpenEmu system's most likely one.
         // md5 stays, optional on any ROM. An OpenEmu ROM keeps `openEmuPk` (and no folder name) until
         // `migrate-openemu` moves its file into its Platform's ROM folder.
         migrator.registerMigration("v14 roms keyed by platform") { db in
@@ -318,12 +327,20 @@ enum LudeumSchema {
                 4: "Nintendo 64", 21: "Nintendo GameCube", 64: "Sega Master System/Mark III", 78: "Sega CD", 32: "Sega Saturn",
                 35: "Sega Game Gear", 150: "Turbografx-16/PC Engine CD", 8: "PlayStation 2",
             ]
-            // An unmatched ROM's Platform, recorded if the journal doesn't know it yet.
+            // An unmatched ROM needs its system's Platform: one this table doesn't know stops the migration by name.
+            let unknown = try String.fetchAll(
+                db,
+                sql: """
+                    SELECT DISTINCT systemId FROM rom WHERE gameId IS NULL
+                    AND systemId NOT IN (\(databaseQuestionMarks(count: systemDefaults.count))) ORDER BY systemId
+                    """, arguments: StatementArguments(Array(systemDefaults.keys)))
+            if !unknown.isEmpty { throw UnknownOpenEmuSystems(systems: unknown) }
+            // An unmatched ROM's Platform, and a ROM folder's, recorded if the journal doesn't know it yet.
             for (system, id) in systemDefaults {
                 try db.execute(
                     sql: """
                         INSERT OR IGNORE INTO platform (id, name)
-                        SELECT ?, ? WHERE EXISTS (SELECT 1 FROM rom WHERE systemId = ? AND gameId IS NULL)
+                        SELECT ?, ? WHERE EXISTS (SELECT 1 FROM rom WHERE systemId = ? AND (gameId IS NULL OR folderName IS NOT NULL))
                         """, arguments: [id, names[id], system])
             }
             try db.create(table: "newRom") { t in
@@ -367,7 +384,8 @@ enum LudeumSchema {
             try db.execute(
                 sql: """
                     INSERT INTO newRom (platformId, \(columns.joined(separator: ", ")))
-                    SELECT COALESCE(g.platformId, \(systemDefault)), \(columns.map { "r.\($0)" }.joined(separator: ", "))
+                    SELECT COALESCE(CASE WHEN r.folderName IS NOT NULL THEN \(systemDefault) END, g.platformId, \(systemDefault)),
+                        \(columns.map { "r.\($0)" }.joined(separator: ", "))
                     FROM rom r LEFT JOIN game g ON g.id = r.gameId;
                     DROP TABLE rom;
                     ALTER TABLE newRom RENAME TO rom;

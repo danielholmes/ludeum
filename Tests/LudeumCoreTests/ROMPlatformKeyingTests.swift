@@ -42,6 +42,30 @@ import Testing
         #expect(try journal.db.read { try String.fetchOne($0, sql: "SELECT md5 FROM rom WHERE openEmuPk = 11") } == "bb")
     }
 
+    @Test func aROMFolderROMKeepsItsFoldersPlatformWhateverItsGames() throws {
+        let journal = try oldJournal { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform VALUES (7, 'PlayStation');
+                    INSERT INTO game (id, platformId, name) VALUES (1, 7, 'Okami');
+                    INSERT INTO rom (folderName, fileName, systemId, gameId, matchKind, matchedAt)
+                        VALUES ('Okami (USA)', 'Okami (USA).iso', 'ludeum.folder.ps2', 1, 'manual', 0);
+                    """)
+        }
+
+        #expect(try journal.roms(of: 1).map(\.platformId) == [8])
+        #expect(try journal.platform(8)?.name == "PlayStation 2")
+    }
+
+    @Test func anUnmatchedROMOfAnOpenEmuSystemItDoesntKnowIsRefusedByName() throws {
+        #expect(throws: LudeumSchema.UnknownOpenEmuSystems(systems: ["openemu.system.32x"])) {
+            try oldJournal { db in
+                try db.execute(
+                    sql: "INSERT INTO rom (openEmuPk, md5, fileName, systemId) VALUES (10, 'aa', 'Knuckles.32x', 'openemu.system.32x')")
+            }
+        }
+    }
+
     @Test func twoROMsOfOnePlatformCantShareAName() throws {
         let journal = try oldJournal { _ in }
         try journal.addPlatform(id: 8, name: "PlayStation 2")
