@@ -120,11 +120,15 @@ public enum EmulatorVersions {
         let done = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in done.signal() }
         do { try process.run() } catch { return nil }
-        // Read on its own queue while it runs, so a chatty one can't fill the pipe and stall, and a
-        // hung one can't hold this up past the timeout.
-        let read = DispatchGroup()
+        // Read on its own thread while it runs, so a chatty one can't fill the pipe and stall, and a
+        // hung one can't hold this up past the timeout. Not the shared pool: a busy machine can leave
+        // the read queued there until the timeout.
+        let read = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var output = Data()
-        DispatchQueue.global(qos: .utility).async(group: read) { output = pipe.fileHandleForReading.readDataToEndOfFile() }
+        Thread {
+            output = pipe.fileHandleForReading.readDataToEndOfFile()
+            read.signal()
+        }.start()
         if done.wait(timeout: .now() + 10) == .timedOut {
             process.terminate()
             return nil
