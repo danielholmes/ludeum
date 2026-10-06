@@ -317,7 +317,7 @@ struct GameDetailView: View {
     private var playing: Play {
         Play(
             platformId: game?.platformId ?? 0, platformName: platform?.name ?? "", roms: roms, settings: emulatorSettings,
-            busyROMs: Set(roms.map(\.id).filter { services.tasks.active(.rom($0)) != nil }))
+            busyROMs: Set(roms.map(\.id).filter { services.tasks.isActive(.rom($0)) }))
     }
 
     @ViewBuilder private var romRows: some View {

@@ -10,6 +10,8 @@ struct BackgroundTasksPanel: View {
     let journal: LudeumStore?
     let open: (GameID) -> Void
     @State private var expanded = false
+    /// The Game of each ROM a task works on, read when the tasks change rather than every time progress redraws them.
+    @State private var games: [Int64: GameID] = [:]
 
     var body: some View {
         if !tasks.items.isEmpty || work.refreshing != nil {
@@ -38,6 +40,10 @@ struct BackgroundTasksPanel: View {
             }
             .padding(10)
             .background(.bar)
+            // Again when it's opened, as a ROM can be Matched while its task waits.
+            .task(id: Shown(roms: roms, expanded: expanded)) {
+                games = roms.reduce(into: [:]) { games, rom in games[rom] = (try? journal?.game(ofROM: rom)) ?? nil }
+            }
         }
     }
 
@@ -46,6 +52,16 @@ struct BackgroundTasksPanel: View {
             ForEach(tasks.items) { row($0) }
             if let refreshing = work.refreshing { refreshRow(refreshing) }
         }
+    }
+
+    private struct Shown: Equatable {
+        let roms: [Int64]
+        let expanded: Bool
+    }
+
+    /// The ROMs the tasks work on.
+    private var roms: [Int64] {
+        tasks.items.compactMap { if case .rom(let rom) = $0.subject { rom } else { nil } }
     }
 
     private var summary: String {
@@ -85,7 +101,7 @@ struct BackgroundTasksPanel: View {
 
     /// The title, as a link to its Game when the task works on one of the Game's ROMs.
     @ViewBuilder private func title(_ item: BackgroundTasks.Item) -> some View {
-        if case .rom(let rom) = item.subject, let game = try? journal?.game(ofROM: rom) {
+        if case .rom(let rom) = item.subject, let game = games[rom] {
             Button {
                 open(game)
             } label: {

@@ -26,6 +26,8 @@ public enum TaskSubject: Hashable, Sendable {
     }
 
     public private(set) var items: [Item] = []
+    /// Where each queued or running task is in `items`, by what it works on: a list of ROMs asks about every row.
+    private var activeItems: [TaskSubject: Int] = [:]
     private var running: Task<Void, Never>?
 
     /// Whether anything is queued or running, for the quit check.
@@ -36,9 +38,11 @@ public enum TaskSubject: Hashable, Sendable {
     public var isBusy: Bool { items.contains { $0.state == .queued || $0.state == .running } }
 
     /// The queued or running task working on `subject`, if any.
-    public func active(_ subject: TaskSubject) -> Item? {
-        items.first { $0.subject == subject && ($0.state == .queued || $0.state == .running) }
-    }
+    public func active(_ subject: TaskSubject) -> Item? { activeItems[subject].map { items[$0] } }
+
+    /// Whether a task working on `subject` is queued or running. Unlike `active`, a view asking this isn't redrawn as
+    /// the task's progress moves.
+    public func isActive(_ subject: TaskSubject) -> Bool { activeItems[subject] != nil }
 
     /// Adds work to the queue. `ended` runs on the main actor once the work has run, whether it succeeded, failed or was
     /// cancelled: work that didn't finish can still have changed things.
@@ -80,15 +84,27 @@ public enum TaskSubject: Hashable, Sendable {
             } catch {
                 if let i = items.firstIndex(where: { $0.id == id }) { items[i].state = .failed(error.localizedDescription) }
             }
+            update()
             item.ended()
             running = nil
             startNext()
         }
     }
 
+    /// In whole percents, so the screens showing it aren't redrawn for every chunk the work gets through.
     private func setProgress(_ id: UUID, _ fraction: Double) {
-        if let i = items.firstIndex(where: { $0.id == id }), items[i].state == .running { items[i].progress = fraction }
+        guard let i = items.firstIndex(where: { $0.id == id }), items[i].state == .running else { return }
+        let percent = (fraction * 100).rounded(.down) / 100
+        if items[i].progress != percent { items[i].progress = percent }
     }
 
-    private func update() { Self.isBusy = isBusy }
+    /// After every change to which tasks there are or what state they're in.
+    private func update() {
+        Self.isBusy = isBusy
+        var active: [TaskSubject: Int] = [:]
+        for (i, item) in items.enumerated() where item.state == .queued || item.state == .running {
+            if let subject = item.subject, active[subject] == nil { active[subject] = i }
+        }
+        if activeItems != active { activeItems = active }
+    }
 }

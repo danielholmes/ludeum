@@ -119,3 +119,44 @@ private actor Gate {
         #expect(!ended)
     }
 }
+
+/// What the screens showing a task read, often and for many rows at once.
+@MainActor @Suite struct BackgroundTaskLookupTests {
+    @Test func aTaskIsActiveWhileItsQueuedOrRunningAndNotOnceItFailedOrEnded() async {
+        let tasks = BackgroundTasks()
+        let gate = Gate()
+        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in await gate.wait() })
+        tasks.enqueue("Archiving ICO", subject: .rom(2), work: { _ in throw ArchiveError.noSevenZip })
+        tasks.enqueue("Archiving Bully", subject: .rom(3), work: { _ in })
+
+        #expect([1, 2, 3, 4].map { tasks.isActive(.rom($0)) } == [true, true, true, false])
+        #expect(tasks.active(.rom(2))?.title == "Archiving ICO")
+
+        tasks.cancel(tasks.items[2].id)
+        #expect(!tasks.isActive(.rom(3)))
+        await gate.release()
+        await untilIdle(tasks)
+
+        #expect([1, 2, 3].map { tasks.isActive(.rom($0)) } == [false, false, false])
+        #expect(tasks.active(.rom(2)) == nil)
+    }
+
+    @Test func progressMovesInWholePercents() async {
+        let tasks = BackgroundTasks()
+        let gate = Gate()
+        tasks.enqueue(
+            "Archiving Okami", subject: .rom(1),
+            work: { progress in
+                progress(0.421)
+                progress(0.4269)
+                await gate.wait()
+            })
+
+        while tasks.items.first?.progress == nil { await Task.yield() }
+        for _ in 1...20 { await Task.yield() }
+
+        #expect(tasks.active(.rom(1))?.progress == 0.42)
+        await gate.release()
+        await untilIdle(tasks)
+    }
+}
