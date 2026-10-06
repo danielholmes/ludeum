@@ -2,10 +2,13 @@ import LudeumCore
 import SwiftUI
 
 /// Pinned to the foot of the sidebar: nothing when idle, one line while busy, and the full list
-/// (with Cancel, and failures to dismiss) when opened. The cache refresh shows here too.
+/// (with Cancel, and failures to dismiss) when opened. The cache refresh shows here too. A task working on a ROM
+/// opens its Game when its title is clicked.
 struct BackgroundTasksPanel: View {
     let tasks: BackgroundTasks
     let work: BackgroundWork
+    let journal: LudeumStore?
+    let open: (GameID) -> Void
     @State private var expanded = false
 
     var body: some View {
@@ -50,7 +53,7 @@ struct BackgroundTasksPanel: View {
     private func row(_ item: BackgroundTasks.Item) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(item.title).font(.caption).lineLimit(1)
+                title(item)
                 Spacer(minLength: 4)
                 if case .failed = item.state {
                     Button("Dismiss", systemImage: "xmark") { tasks.dismiss(item.id) }.labelStyle(.iconOnly).buttonStyle(.plain)
@@ -65,6 +68,21 @@ struct BackgroundTasksPanel: View {
             case .running: ProgressView(value: item.progress ?? 0).controlSize(.small)
             case .failed(let message): Text(message).font(.caption2).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// The title, as a link to its Game when the task works on one of the Game's ROMs.
+    @ViewBuilder private func title(_ item: BackgroundTasks.Item) -> some View {
+        if case .rom(let rom) = item.subject, let game = try? journal?.game(ofROM: rom) {
+            Button {
+                open(game)
+            } label: {
+                Text(item.title).font(.caption).lineLimit(1).underline()
+            }
+            .buttonStyle(.plain)
+            .help("Show its Game")
+        } else {
+            Text(item.title).font(.caption).lineLimit(1)
         }
     }
 

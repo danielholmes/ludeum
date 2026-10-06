@@ -52,7 +52,9 @@ struct MainWindow: View {
                 services: services, selection: $selection, lists: lists, platforms: platformCounts, pins: pins,
                 reviewQueueCount: reviewQueueCount
             )
-            .safeAreaInset(edge: .bottom, spacing: 0) { BackgroundTasksPanel(tasks: services.tasks, work: services.work) }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                BackgroundTasksPanel(tasks: services.tasks, work: services.work, journal: services.journal, open: openGame)
+            }
             // The sidebar is always shown: no toggle to hide it.
             .toolbar(removing: .sidebarToggle)
             .navigationSplitViewColumnWidth(min: 220, ideal: 300, max: 400)

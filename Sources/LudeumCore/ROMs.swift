@@ -16,6 +16,11 @@ extension LudeumStore {
         }
     }
 
+    /// The Game the ROM is Matched to; nil once it's gone from the journal.
+    public func game(ofROM rom: Int64) throws -> GameID? {
+        try db.read { db in try GameID.fetchOne(db, sql: "SELECT gameId FROM rom WHERE id = ?", arguments: [rom]) }
+    }
+
     /// Hard-deletes a Game with all its journal data and its missing ROMs.
     /// Refused while it has a present ROM: those are moved out of their ROM folder first.
     public func deleteGame(_ game: GameID) throws {

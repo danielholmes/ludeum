@@ -71,3 +71,15 @@ import Testing
         #expect(try h.journal.roms(of: game).count == 1)
     }
 }
+
+@Suite struct ROMGameTests {
+    @Test func findsTheGameItsMatchedTo() throws {
+        let h = try LudeumHarness()
+        let game = try h.addGame("Okami")
+        try h.journal.recordROM(game: game, fileName: "Okami (USA).7z", missing: false)
+        let rom = try #require(try h.journal.roms(of: game).first)
+
+        #expect(try h.journal.game(ofROM: rom.id) == game)
+        #expect(try h.journal.game(ofROM: rom.id + 1) == nil)
+    }
+}
