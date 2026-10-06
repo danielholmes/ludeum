@@ -26,7 +26,8 @@ import Testing
 }
 
 extension ROMFolderImportTests {
-    @Test func archivingRunsAsABackgroundTaskThenTheJournalSeesItArchived() async throws {
+    @Test(.enabled(if: SevenZip.find() != nil, "needs 7-Zip's 7zz"))
+    func archivingRunsAsABackgroundTaskThenTheJournalSeesItArchived() async throws {
         let game = try await okamiInTheJournal()
         try ps2.remove("Okami (USA).7z")
         try ps2.add("Okami (USA).iso", String(repeating: "PS2", count: 10_000))
