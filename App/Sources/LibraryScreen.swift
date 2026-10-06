@@ -74,8 +74,8 @@ struct LibraryScreen: View {
                     TableColumn("Name", sortUsing: KeyPathComparator(\LibraryRow.name)) { row in
                         HStack(spacing: 4) {
                             Text(row.name)
-                            if row.noROMInOpenEmu {
-                                Image(systemName: "externaldrive.badge.xmark").foregroundStyle(.secondary).help("No ROM in OpenEmu")
+                            if row.noPresentROM {
+                                Image(systemName: "externaldrive.badge.xmark").foregroundStyle(.secondary).help("No ROM in its ROM folder")
                             }
                             if row.archived {
                                 Image(systemName: "archivebox").foregroundStyle(.secondary).help("Archived: unarchive to play")
@@ -339,12 +339,12 @@ struct CoverTile: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 // The table's Name column shows the same symbol.
-                if row.noROMInOpenEmu {
+                if row.noPresentROM {
                     Image(systemName: "externaldrive.badge.xmark").font(.system(size: max(12, width / 10))).foregroundStyle(.secondary)
                         .padding(6)
                         .background(.regularMaterial, in: .circle)
                         .padding(5)
-                        .help("No ROM in OpenEmu")
+                        .help("No ROM in its ROM folder")
                 } else if row.archived {
                     Image(systemName: "archivebox").font(.system(size: max(12, width / 10))).foregroundStyle(.secondary)
                         .padding(6)

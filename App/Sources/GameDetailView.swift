@@ -156,7 +156,7 @@ struct GameDetailView: View {
             Text(versionAlert?.message ?? "")
         }
         .task(id: roms.map(\.id)) {
-            // Off the main thread: it reads OpenEmu's library and the files' attributes.
+            // Off the main thread: it reads the ROM folders and the files' attributes.
             let locator = self.locator
             let present = roms.filter { !$0.missing }
             romFiles = await Task.detached(priority: .utility) {
@@ -441,7 +441,7 @@ struct GameDetailView: View {
         }
     }
 
-    /// Reveals the ROM's file in OpenEmu's library folder.
+    /// Reveals the ROM's file in its ROM folder.
     private func showInFinder(_ rom: LudeumROM) {
         do {
             guard let file = try locator.file(of: rom) else {
@@ -522,7 +522,7 @@ func parseRating(_ text: String) -> Rating? {
 
 private func deletionMessage(_ s: DeletionSummary) -> String {
     guard s.canDelete else {
-        return "It has \(s.presentROMs) ROM\(s.presentROMs == 1 ? "" : "s") in OpenEmu. Remove them in OpenEmu first, then Import."
+        return "It has \(s.presentROMs) ROM\(s.presentROMs == 1 ? "" : "s") in its ROM folder. Move them out of the folder first."
     }
     var parts: [String] = []
     if s.ratingEntries > 0 { parts.append("its Rating history (\(s.ratingEntries))") }
@@ -551,7 +551,7 @@ func journalErrorText(_ error: Error) -> String {
     case .endBeforeStart: "The end date can't come before the start date."
     case .listNameTaken: "There's already a List with that name."
     case .playerNameTaken: "There's already a Player with that name."
-    case .gameHasPresentROMs: "This Game has ROMs in OpenEmu. Remove them in OpenEmu first."
+    case .gameHasPresentROMs: "This Game has ROMs in its ROM folder. Move them out first."
     case .igdbLinkTaken: "Another Game already has that IGDB link."
     case .alreadyLinked: "This Game already has an IGDB link. Use Change IGDB link… to replace it."
     case .gameHasROMs: "This Game has ROMs, so its Platform can't change."

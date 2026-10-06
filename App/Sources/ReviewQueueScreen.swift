@@ -270,7 +270,7 @@ private struct ReviewItemDetail: View {
                 Text(item.romName).font(.title2).bold()
                 LabeledContent("Platform", value: platforms.map(\.name).joined(separator: " or "))
                 Text(reason).foregroundStyle(.secondary)
-                if item.missing { Text("Its file is missing from OpenEmu.").foregroundStyle(.orange) }
+                if item.missing { Text("Its file is missing from its ROM folder.").foregroundStyle(.orange) }
             }
             if item.suggestedIgdbGameId != nil || picked != nil {
                 Section(picked == nil ? "Suggestion" : "Picked from search") {
@@ -339,7 +339,7 @@ private struct ReviewItemDetail: View {
         ) {
             Button("Match anyway") { duplicateWarning?() }
         } message: {
-            Text("It's still Matched, but the Game shows under Duplicate Versions until you remove ROMs in OpenEmu.")
+            Text("It's still Matched, but the Game shows under Duplicate Versions until you remove ROMs from its ROM folder.")
         }
     }
 
@@ -501,10 +501,10 @@ private struct AssignToGameSheet: View {
     }
 }
 
-/// Make by hand…: a Game with no IGDB link, its Platform pre-selected from the ROM's system.
+/// Make by hand…: a Game with no IGDB link, its Platform pre-selected from the ROM's.
 private struct MakeByHandSheet: View {
     @State var name: String
-    /// The ROM's system's platforms, offered first.
+    /// The ROM's Platform, offered first.
     let platforms: [IGDBPlatform]
     let allPlatforms: [IGDBPlatform]
     let make: (String, IGDBPlatform) -> Void
@@ -543,7 +543,7 @@ private struct MakeByHandSheet: View {
     }
 }
 
-/// A Duplicate Versions item: the Game and its present ROMs. It's resolved only by removing ROMs in OpenEmu.
+/// A Duplicate Versions item: the Game and its present ROMs. It's resolved only by removing ROMs from its ROM folder.
 private struct DuplicateVersionsDetail: View {
     let item: DuplicateVersionsGame
     let checkAgain: () -> Void
@@ -552,7 +552,7 @@ private struct DuplicateVersionsDetail: View {
         Form {
             Section {
                 Text(item.game.name).font(.title2).bold()
-                Text("Remove all but one Version in OpenEmu, then Check again. Real exceptions need a code change.")
+                Text("Remove all but one Version from its ROM folder, then Check again. Real exceptions need a code change.")
                     .foregroundStyle(.secondary)
             }
             Section("Present ROMs") {
@@ -564,8 +564,6 @@ private struct DuplicateVersionsDetail: View {
                 }
             }
             Button("Check again", action: checkAgain)
-            Text("Check again uses the last Import. Run an Import after removing ROMs in OpenEmu.").font(.caption).foregroundStyle(
-                .secondary)
         }
         .formStyle(.grouped)
     }

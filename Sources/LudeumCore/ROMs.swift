@@ -17,7 +17,7 @@ extension LudeumStore {
     }
 
     /// Hard-deletes a Game with all its journal data and its missing ROMs.
-    /// Refused while it has a present ROM: those are removed in OpenEmu first.
+    /// Refused while it has a present ROM: those are moved out of their ROM folder first.
     public func deleteGame(_ game: GameID) throws {
         // Refuse before backing up, so a refused deletion leaves no backup behind.
         if try db.read({ try hasPresentROMs($0, game) }) { throw LudeumError.gameHasPresentROMs }

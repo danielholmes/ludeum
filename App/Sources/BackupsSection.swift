@@ -69,7 +69,7 @@ struct RestoreSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Restore from backup").font(.headline)
-            Text("The journal is backed up first, then replaced, and Ludeum relaunches. Nothing is written to OpenEmu.")
+            Text("The journal is backed up first, then replaced, and Ludeum relaunches.")
                 .font(.callout).foregroundStyle(.secondary)
             List(list, id: \.url, selection: $selection) { backup in
                 HStack {

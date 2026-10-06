@@ -41,7 +41,7 @@ import Testing
         #expect(doomRow.intent == .backlog)
         #expect(doomRow.isPlaying)
         #expect(rows[2].outcomes == [.finished])
-        #expect(rows.allSatisfy { !$0.noROMInOpenEmu })
+        #expect(rows.allSatisfy { !$0.noPresentROM })
     }
 
     @Test func sortsByPlayedAndChildhood() throws {
@@ -75,7 +75,7 @@ import Testing
         try h.journal.recordROM(game: zelda, fileName: "z.sfc", missing: true)
         try h.journal.recordROM(game: zelda, fileName: "z2.sfc", missing: false)
 
-        let marked = try h.journal.library(LibraryFilter(), sort: .name, ascending: true).filter(\.noROMInOpenEmu).map(\.name)
+        let marked = try h.journal.library(LibraryFilter(), sort: .name, ascending: true).filter(\.noPresentROM).map(\.name)
 
         #expect(marked == ["Doom"])
     }
@@ -148,7 +148,15 @@ import Testing
 
         #expect(try h.journal.playedViaSuggestions(for: other) == ["Steam Deck", "Switch Online"])
         try rom("Resident Evil 2 (USA).chd")
-        #expect(try h.journal.playedViaSuggestions(for: game) == ["OpenEmu", "Steam Deck", "Switch Online"])
+        #expect(try h.journal.playedViaSuggestions(for: game) == ["MesenCE", "Steam Deck", "Switch Online"])
+    }
+
+    @Test func itsEmulatorIsSuggestedOnceEvenWhenUsedBefore() throws {
+        try rom("Resident Evil 2 (USA).sfc")
+        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished, playedVia: "MesenCE"))
+        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2021")!, outcome: .finished, playedVia: "Analogue Pocket"))
+
+        #expect(try h.journal.playedViaSuggestions(for: game) == ["MesenCE", "Analogue Pocket"])
     }
 
     @Test func aDeletionSaysWhatGoesWithIt() throws {

@@ -127,7 +127,7 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     /// The Outcomes of its finished and dropped Playthroughs, without repeats.
     public let outcomes: Set<Outcome>
     /// It has ROMs, and every one is missing.
-    public let noROMInOpenEmu: Bool
+    public let noPresentROM: Bool
     /// It has present ROMs, and every one is Archived: nothing to Play until one is Unarchived.
     public var archived = false
     /// IGDB's first release year, when the rows came with IGDB's facts (`withIGDBFacts(_:)`).
@@ -237,7 +237,7 @@ extension LudeumStore {
                     childhood: row["childhood"], isPlaying: row["playing"],
                     playingSince: (row["playingSince"] as String?).flatMap(PartialDate.init),
                     outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }),
-                    noROMInOpenEmu: row["noROM"], archived: row["archived"])
+                    noPresentROM: row["noROM"], archived: row["archived"])
             }
         }
     }

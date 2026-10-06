@@ -78,17 +78,17 @@ extension LudeumStore {
         return seen
     }
 
-    /// "Played via" suggestions: OpenEmu for a Game with ROMs, then every value I've used, alphabetically.
+    /// "Played via" suggestions: its Platform's Emulator for a Game with ROMs, then every value I've used, alphabetically.
     public func playedViaSuggestions(for game: GameID) throws -> [String] {
-        let openEmu = try roms(of: game).isEmpty ? [] : ["OpenEmu"]
-        return try openEmu
-            + db.read { db in
-                try String.fetchAll(
-                    db,
-                    sql:
-                        "SELECT DISTINCT playedVia FROM playthrough WHERE playedVia IS NOT NULL AND playedVia != '' ORDER BY playedVia COLLATE NOCASE"
-                )
-            }
+        let emulator = try roms(of: game).isEmpty ? [] : [Emulator.of(platformId: try self.game(game).platformId)?.name].compactMap { $0 }
+        let used = try db.read { db in
+            try String.fetchAll(
+                db,
+                sql:
+                    "SELECT DISTINCT playedVia FROM playthrough WHERE playedVia IS NOT NULL AND playedVia != '' ORDER BY playedVia COLLATE NOCASE"
+            )
+        }
+        return emulator + used.filter { !emulator.contains($0) }
     }
 
     public func deletionSummary(_ game: GameID) throws -> DeletionSummary {
