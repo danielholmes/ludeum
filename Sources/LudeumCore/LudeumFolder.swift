@@ -91,7 +91,7 @@ public struct DataFolderMissing: Error, Equatable, CustomStringConvertible {
             }
         return """
             \(problem) It holds the ROM folders and Backups, so nothing works without it. \
-            Create that folder, or link it to where they're kept: ln -s ~/Dropbox/Ludeum "\(unslashed)"
+            Create that folder, or link it to where they're kept: ln -s ~/Dropbox/games/Ludeum "\(unslashed)"
             """
     }
 

@@ -20,12 +20,12 @@ import Testing
 
         #expect(error?.remedy.contains(data.path(percentEncoded: false)) == true)
         #expect(error?.remedy.contains("Create") == true)
-        #expect(error?.remedy.contains("ln -s ~/Dropbox/Ludeum") == true)
+        #expect(error?.remedy.contains("ln -s ~/Dropbox/games/Ludeum") == true)
         #expect(!exists(data))
     }
 
     @Test func aDataFolderLinkedToSomewhereGoneIsRefusedNamingWhereItLinks() throws {
-        let gone = root.appending(path: "Dropbox/Ludeum", directoryHint: .notDirectory)
+        let gone = root.appending(path: "Dropbox/games/Ludeum", directoryHint: .notDirectory)
         try FileManager.default.createSymbolicLink(at: data, withDestinationURL: gone)
 
         let error = #expect(throws: DataFolderMissing.self) { try ludeum.checkData() }
@@ -41,7 +41,7 @@ import Testing
     }
 
     @Test func aFoundDataFolderGetsItsROMsAndBackupsFoldersAndResolvesThroughItsLink() throws {
-        let dropbox = root.appending(path: "Dropbox/Ludeum", directoryHint: .isDirectory)
+        let dropbox = root.appending(path: "Dropbox/games/Ludeum", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: dropbox, withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: data, withDestinationURL: dropbox)
 
