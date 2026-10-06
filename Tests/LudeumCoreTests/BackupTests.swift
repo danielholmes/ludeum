@@ -153,8 +153,9 @@ import Testing
         #expect(try backups().all().count == 2)  // today's, and the newer of the two from 40 days ago
     }
 
-    @Test func theBeforeMigrationBackupAndWhatsBesideItAreNeverPruned() throws {
-        let migration = try backups().backUp(h.journal, operation: .beforeMigration)
+    @Test(arguments: [BackupOperation.beforeMigration, .beforeRecovery])
+    func aBackupWithAMoveLogAndWhatsBesideItAreNeverPruned(operation: BackupOperation) throws {
+        let migration = try backups().backUp(h.journal, operation: operation)
         let stem = migration.url.deletingPathExtension()
         try Data("a\tb\n".utf8).write(to: stem.appendingPathExtension("moves.log"))
         h.clock.advance(seconds: 3_600)
@@ -163,11 +164,11 @@ import Testing
 
         _ = try backups().backUp(h.journal, operation: .daily)
 
-        #expect(try backups().all().map(\.operation).contains(.beforeMigration))
+        #expect(try backups().all().map(\.operation).contains(operation))
         #expect(
-            try files(folder).filter { $0.hasPrefix("\(stamp)-before-migration") } == [
-                "\(stamp)-before-migration.moves.log",
-                "\(stamp)-before-migration.sqlite",
+            try files(folder).filter { $0.hasPrefix("\(stamp)-\(operation.rawValue)") } == [
+                "\(stamp)-\(operation.rawValue).moves.log",
+                "\(stamp)-\(operation.rawValue).sqlite",
             ])
     }
 

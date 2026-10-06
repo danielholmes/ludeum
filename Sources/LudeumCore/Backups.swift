@@ -12,13 +12,15 @@ public enum BackupOperation: String, Sendable, CaseIterable {
     case beforeRestore = "before-restore"
     /// `migrate-openemu`'s: never pruned.
     case beforeMigration = "before-migration"
+    /// `recover-openemu-renamed`'s: never pruned.
+    case beforeRecovery = "before-recovery"
     /// Opening a journal whose schema this build moves on.
     case beforeSchemaMigration = "before-schema-migration"
     /// `into-folders`'s: never pruned.
     case beforeIntoFolders = "before-into-folders"
 
     /// A one-off command's, the one way back from it.
-    var isKeptForever: Bool { self == .beforeMigration || self == .beforeIntoFolders }
+    var isKeptForever: Bool { self == .beforeMigration || self == .beforeIntoFolders || self == .beforeRecovery }
 }
 
 /// One backup file of the journal database.
@@ -53,9 +55,9 @@ public enum BackupName {
 }
 
 /// The backups to delete: every backup from the last 7 days is kept, then the newest of each
-/// day up to 30 days old, then the newest of each month forever. The `before-migration` and `before-into-folders`
-/// backups are kept whatever their age, as the one way back from `migrate-openemu` and `into-folders`; neither counts
-/// as nor stands in for the newest of its day or month.
+/// day up to 30 days old, then the newest of each month forever. The `before-migration`, `before-into-folders` and
+/// `before-recovery` backups are kept whatever their age, as the one way back from `migrate-openemu`, `into-folders` and
+/// `recover-openemu-renamed`; none counts as nor stands in for the newest of its day or month.
 public func backupsToPrune(_ backups: [Backup], now: Date, calendar: Calendar) -> [Backup] {
     var keep = Set<URL>()
     var newestPerPeriod: [String: Backup] = [:]

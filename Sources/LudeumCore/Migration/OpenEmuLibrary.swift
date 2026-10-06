@@ -10,6 +10,8 @@ public struct OpenEmuROMRecord: Sendable, Hashable {
     public let file: URL?
     /// The file is there. An orphaned entry (row kept, file gone) has none.
     public let isPresent: Bool
+    /// `ZFILENAME`: for a ROM OpenEmu reads from inside an archive, the file in it (e.g. "Tetris (World).gb" in a `.7z`).
+    public let archiveFileName: String?
 }
 
 /// OpenEmu system → IGDB platform ids, most likely first: the Platforms `migrate-openemu` lets a system's ROM
@@ -70,7 +72,7 @@ public enum OpenEmuLibrary {
             let roms = try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.Z_PK AS pk, r.ZLOCATION AS location, s.ZSYSTEMIDENTIFIER AS system
+                    SELECT r.Z_PK AS pk, r.ZLOCATION AS location, r.ZFILENAME AS archiveFileName, s.ZSYSTEMIDENTIFIER AS system
                     FROM ZROM r JOIN ZGAME g ON r.ZGAME = g.Z_PK JOIN ZSYSTEM s ON g.ZSYSTEM = s.Z_PK
                     ORDER BY r.Z_PK
                     """
@@ -81,7 +83,8 @@ public enum OpenEmuLibrary {
                 }
                 return OpenEmuROMRecord(
                     pk: row["pk"], system: row["system"], file: file,
-                    isPresent: file.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false)
+                    isPresent: file.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false,
+                    archiveFileName: row["archiveFileName"])
             }
             return OpenEmuLibrarySnapshot(roms: roms)
         }

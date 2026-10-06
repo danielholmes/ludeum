@@ -35,7 +35,7 @@ final class FakeOpenEmu {
                 sql: """
                     CREATE TABLE ZSYSTEM (Z_PK INTEGER PRIMARY KEY, ZSYSTEMIDENTIFIER VARCHAR UNIQUE);
                     CREATE TABLE ZGAME (Z_PK INTEGER PRIMARY KEY, ZSYSTEM INTEGER, ZNAME VARCHAR);
-                    CREATE TABLE ZROM (Z_PK INTEGER PRIMARY KEY, ZGAME INTEGER, ZLOCATION VARCHAR, ZMD5 VARCHAR);
+                    CREATE TABLE ZROM (Z_PK INTEGER PRIMARY KEY, ZGAME INTEGER, ZLOCATION VARCHAR, ZMD5 VARCHAR, ZFILENAME VARCHAR);
                     """)
         }
     }
@@ -44,22 +44,36 @@ final class FakeOpenEmu {
     @discardableResult
     func addROM(_ name: String, md5: String, system: String = "openemu.system.snes", fileName: String? = "rom.sfc") throws -> Int64 {
         let pk = nextPK
+        if let fileName { try addFile("\(system)/\(pk)-\(fileName)", "rom \(pk)") }
+        return try addROM(name, md5: md5, system: system, location: "\(system)/\(pk)-\(fileName ?? "missing.sfc")")
+    }
+
+    /// Adds a ROM's row as OpenEmu records it, at `location` under `roms/` (e.g. "Game Boy/Tetris (World).gb"), with no
+    /// file put there. `archiveFileName` is its `ZFILENAME`: the file inside the archive at `location`. Returns its `Z_PK`.
+    @discardableResult
+    func addROM(_ name: String, md5: String, system: String, location: String, archiveFileName: String? = nil) throws -> Int64 {
+        let pk = nextPK
         nextPK += 1
-        let location = "\(system)/\(pk)-\(fileName ?? "missing.sfc")"
-        if let fileName {
-            let file = folder.appending(path: "roms").appending(path: "\(system)/\(pk)-\(fileName)")
-            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data("rom \(pk)".utf8).write(to: file)
-        }
         try db.write { db in
             try db.execute(sql: "INSERT OR IGNORE INTO ZSYSTEM (ZSYSTEMIDENTIFIER) VALUES (?)", arguments: [system])
             let systemPK = try Int64.fetchOne(db, sql: "SELECT Z_PK FROM ZSYSTEM WHERE ZSYSTEMIDENTIFIER = ?", arguments: [system])!
             try db.execute(sql: "INSERT INTO ZGAME VALUES (?, ?, ?)", arguments: [pk, systemPK, name])
             try db.execute(
-                sql: "INSERT INTO ZROM VALUES (?, ?, ?, ?)",
-                arguments: [pk, pk, location.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed), md5.uppercased()])
+                sql: "INSERT INTO ZROM (Z_PK, ZGAME, ZLOCATION, ZMD5, ZFILENAME) VALUES (?, ?, ?, ?, ?)",
+                arguments: [
+                    pk, pk, location.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed), md5.uppercased(), archiveFileName,
+                ])
         }
         return pk
+    }
+
+    /// Puts a file at `path` under `roms/`, whether or not a ROM's row names it, and returns it.
+    @discardableResult
+    func addFile(_ path: String, _ contents: String = "rom") throws -> URL {
+        let file = folder.appending(path: "roms").appending(path: path)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(contents.utf8).write(to: file)
+        return file
     }
 
     /// A core's battery save, in `<Core>/Battery Saves/` in the Application Support folder. Returns its file.
