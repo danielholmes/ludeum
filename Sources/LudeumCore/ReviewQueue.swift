@@ -31,6 +31,11 @@ public struct DuplicateVersionsGame: Sendable, Equatable, Identifiable {
     /// Its present ROMs.
     public let roms: [LudeumROM]
     public var id: GameID { game.id }
+    /// Its present ROMs grouped into Versions, in the order given: a multi-disc Version's Discs (and playlist) together,
+    /// any other ROM alone. Keep only this Version and Split into its own Game each take one.
+    public var versions: [[LudeumROM]] {
+        LudeumCore.versions(of: roms.map(gameROM)).map { version in version.compactMap { rom in roms.first { $0.id == rom.id } } }
+    }
 }
 
 /// A Game whose ROMs are all missing: it can't be Played until a file comes back, or I delete it.
@@ -250,6 +255,63 @@ extension LudeumStore {
         for copy in forms.trash { try moveToTrash(copy) }
     }
 
+    /// Split into its own Game: the Version's ROMs leave the Game unmatched, to be Matched again from the Review queue
+    /// (e.g. to IGDB's own listing of an enhanced re-release). The Game keeps its journal data and its other Versions.
+    /// Throws, changing nothing, when the Game's Versions aren't the ones shown.
+    public func splitOff(_ version: [LudeumROM], from item: DuplicateVersionsGame) throws {
+        try checkVersionsUnchanged(version, of: item)
+        try db.write { db in
+            for rom in version {
+                try db.execute(
+                    sql: "UPDATE rom SET gameId = NULL, matchKind = NULL, matchedAt = NULL WHERE id = ? AND gameId = ?",
+                    arguments: [rom.id, item.game.id])
+                guard db.changesCount == 1 else { throw ReviewError.duplicateVersionsChanged }
+            }
+        }
+    }
+
+    /// Keep only this Version: sends the other Versions' ROMs to the Trash and forgets them, so the Game is left with this
+    /// one. Everything is checked before anything moves: when the Game's Versions aren't the ones shown, or a ROM's files
+    /// aren't in its ROM folder, it throws with nothing sent to the Trash.
+    public func keepOnly(
+        _ version: [LudeumROM], of item: DuplicateVersionsGame, romFolders: [ROMFolder],
+        moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+    ) throws {
+        try checkVersionsUnchanged(version, of: item)
+        let kept = Set(version.map(\.id))
+        let trashing = try item.roms.filter { !kept.contains($0.id) }.map { rom in
+            guard let folder = romFolders.first(where: { $0.platformId == rom.platformId }) else { throw ReviewError.noROMFolder }
+            guard let file = try folder.rom(named: rom.folderName) else { throw ReviewError.romFilesNotFound }
+            return (rom: rom, folder: folder, items: try folder.trashItems(of: file))
+        }
+        // A playlist ROM's files include its Discs, which are ROMs of their own.
+        var trashed: Set<URL> = []
+        for (i, (rom, _, items)) in trashing.enumerated() {
+            do {
+                for item in items where !trashed.contains(item) {
+                    try moveToTrash(item)
+                    trashed.insert(item)
+                }
+            } catch {
+                // Whatever reached the Trash before the failure (a playlist's Discs among it), the journal sees what's left.
+                for (rom, folder, _) in trashing[i...] {
+                    try? checkROMAgain(rom.id, in: folder)
+                    // One whose files all reached the Trash is forgotten, as it would have been.
+                    try? db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ? AND missing", arguments: [rom.id]) }
+                }
+                throw error
+            }
+            try db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ?", arguments: [rom.id]) }
+        }
+    }
+
+    /// Throws unless the Game's present ROMs are still the ones shown, and `version` is one of their Versions.
+    private func checkVersionsUnchanged(_ version: [LudeumROM], of item: DuplicateVersionsGame) throws {
+        let present = try roms(of: item.game.id).filter { !$0.missing }.map(\.id)
+        guard Set(present) == Set(item.roms.map(\.id)), item.versions.contains(where: { $0.map(\.id) == version.map(\.id) })
+        else { throw ReviewError.duplicateVersionsChanged }
+    }
+
     /// Assign to Game…: Matches the ROM to an existing Game by hand.
     public func assign(_ item: ReviewItem, to game: GameID) throws {
         try db.write { db in try Self.match(db, rom: item.romId, to: game, kind: "manual", day: today(), now: clock.now()) }
@@ -372,6 +434,8 @@ public enum ReviewError: Error, Equatable {
     case noDiscsWithoutPlaylist
     /// The ROM's copies aren't the ones shown when I chose which to keep: one gone, or another added meanwhile.
     case bothFormsChanged
+    /// The Game's present ROMs aren't the ones shown when I chose a Version: one Split off, gone, or added meanwhile.
+    case duplicateVersionsChanged
 }
 
 private func gameROM(_ rom: LudeumROM) -> GameROM {

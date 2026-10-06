@@ -27,6 +27,8 @@ struct ReviewQueueScreen: View {
     @State private var items = ReviewQueueItems()
     @State private var kind: Kind? = .namesAgree
     @State private var selection: Int64?
+    /// Selected once `kind` changes, which otherwise clears the selection.
+    @State private var selectAfterKindChange: Int64?
     @State private var error: String?
     @State private var confirmingAll = false
     @State private var compactingAll = false
@@ -128,7 +130,13 @@ struct ReviewQueueScreen: View {
 
             Group {
                 if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
-                    DuplicateVersionsDetail(item: d, checkAgain: checkAgain)
+                    DuplicateVersionsDetail(
+                        services: services, item: d, checkAgain: checkAgain, showGame: { shownGame = d.id },
+                        showSplitOff: { version in
+                            // Straight to the split-off ROM, to Match it.
+                            selectAfterKindChange = version.first?.id
+                            kind = .noSuggestion
+                        }, failed: { error = $0 })
                 } else if kind == .missingROMs, let m = items.missingROMs.first(where: { $0.id == selection }) {
                     MissingROMsDetail(item: m, checkAgain: checkAgain, showGame: { shownGame = m.id })
                 } else if kind == .oldMissingROMs, let m = items.oldMissingROMs.first(where: { $0.id == selection }) {
@@ -157,7 +165,10 @@ struct ReviewQueueScreen: View {
             reload()
             await loadSuggestionNames()
         }
-        .onChange(of: kind) { selection = nil }
+        .onChange(of: kind) {
+            selection = selectAfterKindChange
+            selectAfterKindChange = nil
+        }
         .confirmationDialog("Confirm all \(items.namesAgree.count) suggestions whose names agree?", isPresented: $confirmingAll) {
             Button("Confirm all") { confirmAll() }
         } message: {
@@ -467,7 +478,7 @@ private struct ReviewItemDetail: View {
         ) {
             Button("Match anyway") { duplicateWarning?() }
         } message: {
-            Text("It's still Matched, but the Game shows under Duplicate Versions until you remove ROMs from its ROM folder.")
+            Text("It's still Matched, but the Game shows under Duplicate Versions until it's left with one Version.")
         }
     }
 
@@ -680,29 +691,79 @@ private struct MakeByHandSheet: View {
     }
 }
 
-/// A Duplicate Versions item: the Game and its present ROMs. It's resolved only by removing ROMs from its ROM folder.
+/// A Duplicate Versions item: the Game and its present ROMs by Version. I Keep only one Version (the rest go to the Trash),
+/// or Split one into its own Game, to be Matched again; or remove ROMs from its ROM folder myself and Check again.
 private struct DuplicateVersionsDetail: View {
+    let services: Services
     let item: DuplicateVersionsGame
     let checkAgain: () -> Void
+    let showGame: () -> Void
+    /// Shows the Version's ROMs, Split off and waiting to be Matched.
+    let showSplitOff: ([LudeumROM]) -> Void
+    let failed: (String?) -> Void
+    @State private var keeping: [LudeumROM]?
 
     var body: some View {
         Form {
             Section {
                 Text(item.game.name).font(.title2).bold()
-                Text("Remove all but one Version from its ROM folder, then Check again. Real exceptions need a code change.")
-                    .foregroundStyle(.secondary)
+                Text(
+                    "It has more than one Version. Keep only one, sending the rest to the Trash, or Split one into its own Game "
+                        + "if it's a different game (a re-release IGDB lists apart, say). Real exceptions need a code change."
+                )
+                .foregroundStyle(.secondary)
             }
-            Section("Present ROMs") {
-                ForEach(item.roms) { rom in
-                    VStack(alignment: .leading) {
-                        Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
-                        Text(rom.fileName).font(.caption)
+            ForEach(Array(item.versions.enumerated()), id: \.offset) { _, version in
+                Section {
+                    ForEach(version) { ROMRow(rom: $0) }
+                    FlowLayout(spacing: 8) {
+                        Button("Keep only this Version") { keeping = version }
+                            .help("Sends the other Versions' ROMs to the Trash, and forgets them")
+                        Button("Split into its own Game") { split(version) }
+                            .help("Takes it off this Game, to be Matched again from No suggestion")
                     }
+                    .disabled(busy)
                 }
             }
-            Button("Check again", action: checkAgain)
+            FlowLayout(spacing: 8) {
+                Button("Show Game", action: showGame)
+                Button("Check again", action: checkAgain)
+            }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "Send the other Versions to the Trash?", isPresented: Binding(get: { keeping != nil }, set: { if !$0 { keeping = nil } })
+        ) {
+            Button("Keep only this Version") { keeping.map(keepOnly) }
+        } message: {
+            Text("Their ROMs go to the Trash and \(item.game.name) keeps its journal data.")
+        }
+    }
+
+    /// A Background task is queued or working on one of its ROMs.
+    private var busy: Bool { item.roms.contains { services.tasks.isActive(.rom($0.id)) } }
+
+    private func keepOnly(_ version: [LudeumROM]) {
+        guard let journal = services.journal else { return }
+        do {
+            try journal.keepOnly(version, of: item, romFolders: services.settings.romFolders)
+            failed(nil)
+        } catch {
+            failed(journalErrorText(error))
+        }
+        services.changes.coverChanged()
+    }
+
+    private func split(_ version: [LudeumROM]) {
+        guard let journal = services.journal else { return }
+        do {
+            try journal.splitOff(version, from: item)
+            failed(nil)
+            showSplitOff(version)
+        } catch {
+            failed(journalErrorText(error))
+        }
+        services.changes.coverChanged()
     }
 }
 

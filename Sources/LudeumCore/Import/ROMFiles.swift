@@ -47,4 +47,10 @@ extension ROMFolder {
         }
         return files + [rom.archive, rom.compactedBesideReady].compactMap { $0 }.filter { !files.contains($0) }
     }
+
+    /// What sending a ROM to the Trash moves: its subfolder whole, with its `.7z` and Compacted copy, else `files(of:)`.
+    func trashItems(of rom: FolderROMFile) throws -> [URL] {
+        guard let subfolder = subfolder(of: rom.name, holding: rom.ready) else { return try files(of: rom) }
+        return [subfolder] + [rom.archive, rom.compactedBesideReady].compactMap { $0 }
+    }
 }
