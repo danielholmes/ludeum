@@ -98,6 +98,7 @@ struct EmulatorsSheet: View {
     let services: Services
     @Environment(\.dismiss) private var dismiss
     @State private var platforms: [PlatformCount] = []
+    @State private var openError: String?
 
     private var checks: EmulatorVersionChecks { services.versions }
 
@@ -111,6 +112,7 @@ struct EmulatorsSheet: View {
                     Text("Needs")
                     Text("Installed")
                     Text("Plays")
+                    Text("")
                 }
                 .font(.callout.bold()).foregroundStyle(.secondary)
                 Divider()
@@ -122,6 +124,7 @@ struct EmulatorsSheet: View {
                         Text(checks.installed[emulator.bundleIdentifier] ?? "–").monospacedDigit()
                         Text(plays(emulator)).foregroundStyle(.secondary).lineLimit(2)
                             .frame(maxWidth: 260, alignment: .leading)
+                        openButton(emulator)
                     }
                 }
             }
@@ -130,6 +133,7 @@ struct EmulatorsSheet: View {
                     + "a newer major version, or one whose version can't be read, gets a warning the first time it Plays."
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let openError { Text(openError).font(.callout).foregroundStyle(.red) }
             HStack {
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
@@ -157,6 +161,26 @@ struct EmulatorsSheet: View {
                     Label("Checking…", systemImage: "hourglass").foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    /// Opens an Emulator the launch check found installed on its own, with no ROM, e.g. to change its
+    /// settings or update it (even one too old to Play).
+    @ViewBuilder private func openButton(_ emulator: Emulator) -> some View {
+        if checks.finished, !checks.notInstalled.contains(emulator.bundleIdentifier) {
+            Button("Open") {
+                openError = nil
+                guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: emulator.bundleIdentifier) else {
+                    openError = "Couldn't find \(emulator.name). Is it still installed?"
+                    return
+                }
+                NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+                    if let error { Task { @MainActor in openError = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
+                }
+            }
+            .help("Open \(emulator.name) with no ROM")
+        } else {
+            Text("")
         }
     }
 
