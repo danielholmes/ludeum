@@ -212,6 +212,19 @@ struct FakeROMFolder {
         #expect(try j.journal.roms(of: game).map(\.missing) == [true])
     }
 
+    @Test func theLibraryMarksAGameWhoseROMsAreAllArchived() async throws {
+        let game = try await okamiInTheJournal()
+        func archived() throws -> Bool? {
+            try j.journal.library(LibraryFilter(), sort: .name, ascending: true).first { $0.id == game }?.archived
+        }
+        #expect(try archived() == true)
+
+        try ps2.add("Okami (USA)/Okami.iso")
+        try j.journal.checkROMsAgain(game, in: [ps2.folder])
+
+        #expect(try archived() == false)
+    }
+
     @Test func anArchivedROMIsPresentSoItsGameCantBeDeleted() async throws {
         let game = try await okamiInTheJournal()
 

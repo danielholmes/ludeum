@@ -128,6 +128,8 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let outcomes: Set<Outcome>
     /// It has ROMs, and every one is missing.
     public let noROMInOpenEmu: Bool
+    /// It has present ROMs, and every one is Archived: nothing to Play until one is Unarchived.
+    public var archived = false
     /// IGDB's first release year, when the rows came with IGDB's facts (`withIGDBFacts(_:)`).
     public var releaseYear: Int? = nil
     /// IGDB players' average rating, with the same proviso.
@@ -217,7 +219,9 @@ extension LudeumStore {
                 (SELECT MAX(start) FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playingSince,
                 (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
                 EXISTS (SELECT 1 FROM rom WHERE gameId = g.id)
-                    AND NOT EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AS noROM
+                    AND NOT EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AS noROM,
+                EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing)
+                    AND NOT EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing AND NOT archived) AS archived
             FROM game g
             JOIN platform pl ON pl.id = g.platformId
             LEFT JOIN ratingEntry r ON r.id = (SELECT id FROM ratingEntry WHERE gameId = g.id \(Self.ratingOrder) LIMIT 1)
@@ -233,7 +237,7 @@ extension LudeumStore {
                     childhood: row["childhood"], isPlaying: row["playing"],
                     playingSince: (row["playingSince"] as String?).flatMap(PartialDate.init),
                     outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }),
-                    noROMInOpenEmu: row["noROM"])
+                    noROMInOpenEmu: row["noROM"], archived: row["archived"])
             }
         }
     }

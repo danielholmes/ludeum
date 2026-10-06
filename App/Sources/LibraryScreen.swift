@@ -81,6 +81,9 @@ struct LibraryScreen: View {
                             if row.noROMInOpenEmu {
                                 Image(systemName: "externaldrive.badge.xmark").foregroundStyle(.secondary).help("No ROM in OpenEmu")
                             }
+                            if row.archived {
+                                Image(systemName: "archivebox").foregroundStyle(.secondary).help("Archived: unarchive to play")
+                            }
                         }
                     }
                     TableColumn("Platform", value: \.platformName)
@@ -381,6 +384,12 @@ struct CoverTile: View {
                         .background(.regularMaterial, in: .circle)
                         .padding(5)
                         .help("No ROM in OpenEmu")
+                } else if row.archived {
+                    Image(systemName: "archivebox").font(.system(size: max(12, width / 10))).foregroundStyle(.secondary)
+                        .padding(6)
+                        .background(.regularMaterial, in: .circle)
+                        .padding(5)
+                        .help("Archived: unarchive to play")
                 }
             }
     }
