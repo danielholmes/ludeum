@@ -12,7 +12,7 @@ enum FilterKind: CaseIterable {
     /// The kinds a scope already sets, so the menu doesn't offer them again.
     static func fixed(by scope: LibraryFilter) -> Set<FilterKind> {
         var k: Set<FilterKind> = []
-        if scope.platformId != nil { k.insert(.platform) }
+        if scope.platformId != nil || scope.archivablePlatforms { k.insert(.platform) }
         if scope.rating != nil { k.insert(.rating) }
         if scope.intent != nil { k.insert(.intent) }
         if scope.listId != nil { k.insert(.list) }
@@ -122,7 +122,20 @@ private struct AddFilterMenu: View {
     var body: some View {
         Menu("Filter", systemImage: "plus") {
             if kinds.contains(.platform) {
-                Menu("Platform") { ForEach(platforms) { p in Button(p.name) { filter.platformId = p.id } } }
+                Menu("Platform") {
+                    Button("Archivable") {
+                        filter.platformId = nil
+                        filter.archivablePlatforms = true
+                    }
+                    .help("PS2, PSP, GameCube, Wii and the disc Platforms, whose ROMs can be Archived")
+                    Divider()
+                    ForEach(platforms) { p in
+                        Button(p.name) {
+                            filter.archivablePlatforms = false
+                            filter.platformId = p.id
+                        }
+                    }
+                }
             }
             if kinds.contains(.rating) {
                 Menu("Rating") {
@@ -229,6 +242,7 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
     if let id = filter.platformId {
         c.append(Chip(text: platforms.first { $0.id == id }?.name ?? "One Platform") { $0.platformId = nil })
     }
+    if filter.archivablePlatforms { c.append(Chip(text: "Archivable Platforms") { $0.archivablePlatforms = false }) }
     switch filter.rating {
     case .unrated: c.append(Chip(text: "Unrated") { $0.rating = nil })
     case .atLeast(let r): c.append(Chip(text: "Rated \(ratingText(r)) or more") { $0.rating = nil })

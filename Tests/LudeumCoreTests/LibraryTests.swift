@@ -63,6 +63,17 @@ import Testing
         #expect(try names(LibraryFilter(platformId: 19, childhood: false)) == ["Super Metroid"])
     }
 
+    @Test func filtersByArchivablePlatforms() throws {
+        try h.journal.addPlatform(id: ROMPlatform.ps2, name: "PS2")
+        try h.journal.addPlatform(id: 7, name: "PlayStation")
+        _ = try h.journal.addGame(platformId: ROMPlatform.ps2, name: "Ico")
+        _ = try h.journal.addGame(platformId: 7, name: "Vagrant Story")
+
+        #expect(try names(LibraryFilter(archivablePlatforms: true)) == ["Ico", "Vagrant Story"])
+        #expect(try names(LibraryFilter(platformId: 7, archivablePlatforms: true)) == ["Vagrant Story"])
+        #expect(try names(LibraryFilter(platformId: 19, archivablePlatforms: true)).isEmpty)
+    }
+
     @Test func filtersByOutcome() throws {
         #expect(try names(LibraryFilter(outcome: .playing)) == ["Doom"])
         #expect(try names(LibraryFilter(outcome: .finished)) == ["Super Metroid"])

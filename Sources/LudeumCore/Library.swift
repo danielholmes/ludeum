@@ -4,6 +4,8 @@ import GRDB
 /// The Library's filters. Nil means "any"; set filters combine.
 public struct LibraryFilter: Sendable, Equatable {
     public var platformId: Int64?
+    /// Games on a Platform whose ROMs can be Archived (`ROMPlatform.archiving`).
+    public var archivablePlatforms = false
     public var rating: RatingFilter?
     /// `.some(nil)` is "no Intent"; `nil` is any.
     public var intent: Intent??
@@ -25,9 +27,9 @@ public struct LibraryFilter: Sendable, Equatable {
     public var name = ""
 
     public init(
-        platformId: Int64? = nil, rating: RatingFilter? = nil, intent: Intent?? = nil, listId: Int64? = nil,
-        player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil, roms: ROMFilter? = nil,
-        genre: String? = nil,
+        platformId: Int64? = nil, archivablePlatforms: Bool = false, rating: RatingFilter? = nil, intent: Intent?? = nil,
+        listId: Int64? = nil, player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
+        roms: ROMFilter? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         name: String = ""
     ) {
@@ -38,6 +40,7 @@ public struct LibraryFilter: Sendable, Equatable {
         self.franchise = franchise
         self.series = series
         self.platformId = platformId
+        self.archivablePlatforms = archivablePlatforms
         self.rating = rating
         self.intent = intent
         self.listId = listId
@@ -58,6 +61,7 @@ extension LibraryFilter {
     public func scoped(by scope: LibraryFilter) -> LibraryFilter {
         var f = self
         if let v = scope.platformId { f.platformId = v }
+        if scope.archivablePlatforms { f.archivablePlatforms = true }
         if let v = scope.rating { f.rating = v }
         if let v = scope.intent { f.intent = v }
         if let v = scope.listId { f.listId = v }
@@ -199,6 +203,11 @@ extension LudeumStore {
         var arguments: [any DatabaseValueConvertible] = []
         if let platformId = filter.platformId {
             let ids = PlatformGroups.ids(shownAs: platformId)
+            conditions.append("g.platformId IN (\(ids.map { _ in "?" }.joined(separator: ",")))")
+            arguments += ids
+        }
+        if filter.archivablePlatforms {
+            let ids = ROMPlatform.all.filter { $0.value.archiving != nil }.keys.sorted()
             conditions.append("g.platformId IN (\(ids.map { _ in "?" }.joined(separator: ",")))")
             arguments += ids
         }
