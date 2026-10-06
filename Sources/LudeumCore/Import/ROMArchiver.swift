@@ -17,6 +17,22 @@ public enum ArchiveError: Error, Equatable {
     case sevenZipFailed(String)
 }
 
+extension ArchiveError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .noSevenZip: "7-Zip isn't installed. Run `brew install sevenzip`, then try again."
+        case .ambiguous(let images): "Several images and no cue sheet: \(images.joined(separator: ", "))."
+        case .noImage: "Nothing in the archive is a game image."
+        case .notEnoughSpace(let needed):
+            "Needs \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)) free."
+        case .nothingToDo: "There's no file to work on. Check again, then try again."
+        case .alreadyThere(let name): "\(name) is already in the ROM folder."
+        case .checkFailed(let name): "\(name) didn't check out, so the original is kept."
+        case .sevenZipFailed(let message): "7-Zip failed: \(message)"
+        }
+    }
+}
+
 /// What an Unarchive will do, worked out from the archive's listing before anything is touched.
 public struct UnarchivePlan: Sendable, Equatable {
     public let archive: URL

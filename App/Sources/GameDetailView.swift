@@ -283,7 +283,7 @@ struct GameDetailView: View {
     }
 
     /// One of this Game's ROMs is queued or running in Background tasks: its files are about to change.
-    private var isBeingArchived: Bool { roms.contains { services.tasks.active(Self.taskSubject($0)) != nil } }
+    private var isBeingArchived: Bool { roms.contains { services.tasks.active(.rom($0.id)) != nil } }
 
     /// Every present ROM is archived, so there's nothing to Play until one is Unarchived.
     private var isArchived: Bool {
@@ -379,7 +379,7 @@ struct GameDetailView: View {
 
     /// Archive or Unarchive, as a Background task; while it's queued or running, its progress.
     @ViewBuilder private func archiveButton(_ rom: LudeumROM) -> some View {
-        if let task = services.tasks.active(Self.taskSubject(rom)) {
+        if let task = services.tasks.active(.rom(rom.id)) {
             if task.state == .running {
                 HStack(spacing: 6) {
                     ProgressView(value: task.progress ?? 0).controlSize(.small).frame(width: 80)
@@ -399,8 +399,6 @@ struct GameDetailView: View {
         }
     }
 
-    private static func taskSubject(_ rom: LudeumROM) -> String { "rom \(rom.id)" }
-
     private var locator: ROMLocator {
         ROMLocator(openEmuLibrary: services.settings.openEmuLibrary, romFolders: services.settings.romFolders)
     }
@@ -408,7 +406,7 @@ struct GameDetailView: View {
     private func unarchive(_ rom: LudeumROM) {
         guard let folder = locator.folder(of: rom), let name = rom.folderName else { return }
         let archive = folder.url.appending(path: rom.fileName)
-        services.tasks.enqueue("Unarchiving \(name)", subject: Self.taskSubject(rom)) { progress in
+        services.tasks.enqueue("Unarchiving \(name)", subject: .rom(rom.id)) { progress in
             try await ROMArchiver.installed().unarchive(archive, romName: name, in: folder, progress: progress)
         } finished: {
             checkROMsAgain()
@@ -417,7 +415,7 @@ struct GameDetailView: View {
 
     private func archive(_ rom: LudeumROM) {
         guard let folder = locator.folder(of: rom), let name = rom.folderName else { return }
-        services.tasks.enqueue("Archiving \(name)", subject: Self.taskSubject(rom)) { progress in
+        services.tasks.enqueue("Archiving \(name)", subject: .rom(rom.id)) { progress in
             try await ROMArchiver.installed().archive(name, in: folder, progress: progress)
         } finished: {
             checkROMsAgain()
@@ -545,7 +543,7 @@ private struct ArchiveContentsList: View {
         do {
             contents = .listed(try await sevenZip.contents(of: archive))
         } catch {
-            contents = .failed("Couldn't read what's inside: \(BackgroundTasks.describe(error))")
+            contents = .failed("Couldn't read what's inside: \(error.localizedDescription)")
         }
     }
 }
