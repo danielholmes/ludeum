@@ -258,6 +258,20 @@ struct Sidebar: View {
         error = apply(change)
     }
 
+    /// Off the main thread, as a backup of the whole journal is taken first.
+    private func delete(_ list: GameList) {
+        guard let journal = services.journal else { return }
+        let id = list.id
+        Task {
+            do {
+                try await offMain { try journal.deleteList(id) }
+                services.changes.changed()
+            } catch {
+                self.error = journalErrorText(error)
+            }
+        }
+    }
+
     /// Runs a journal change and reloads the screens, or returns what went wrong.
     private func apply(_ change: (LudeumStore) throws -> Void) -> String? {
         guard let journal = services.journal else { return nil }
@@ -282,20 +296,6 @@ struct ListNaming: Identifiable {
 struct ListNameSheet: View {
     let naming: ListNaming
     let save: (String) -> String?
-    /// Off the main thread, as a backup of the whole journal is taken first.
-    private func delete(_ list: GameList) {
-        guard let journal = services.journal else { return }
-        let id = list.id
-        Task {
-            do {
-                try await offMain { try journal.deleteList(id) }
-                services.changes.changed()
-            } catch {
-                self.error = journalErrorText(error)
-            }
-        }
-    }
-
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var error: String?
