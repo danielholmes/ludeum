@@ -70,6 +70,18 @@ import Testing
         #expect(try names(LibraryFilter(outcome: .notPlayed)) == ["A Link to the Past"])
     }
 
+    @Test func filtersByPlayableOrArchivedROMs() throws {
+        try h.journal.recordROM(game: metroid, fileName: "Super Metroid (USA).sfc", missing: false)
+        try h.journal.recordROM(game: metroid, fileName: "Super Metroid (Japan).7z", missing: false)
+        try h.journal.recordROM(game: zelda, fileName: "A Link to the Past (USA).7z", missing: false)
+        try h.journal.recordROM(game: zelda, fileName: "A Link to the Past (Japan).sfc", missing: true)
+        try h.journal.recordROM(game: doom, fileName: "Doom.zip", missing: true)
+        try h.journal.db.write { try $0.execute(sql: "UPDATE rom SET archived = 1 WHERE fileName LIKE '%.7z'") }
+
+        #expect(try names(LibraryFilter(roms: .playable)) == ["Super Metroid"])
+        #expect(try names(LibraryFilter(roms: .archived)) == ["A Link to the Past"])
+    }
+
     @Test func aGameWhoseROMsAreAllMissingIsMarked() throws {
         try h.journal.recordROM(game: doom, fileName: "doom.zip", missing: true)
         try h.journal.recordROM(game: zelda, fileName: "z.sfc", missing: true)

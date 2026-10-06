@@ -4,7 +4,7 @@ import SwiftUI
 /// The kinds of filter the Add filter menu offers. A screen offers the ones it applies, less the
 /// ones its scope already fixes.
 enum FilterKind: CaseIterable {
-    case platform, rating, intent, list, player, genre, theme, played, childhood
+    case platform, rating, intent, list, player, genre, theme, played, childhood, roms
 
     /// What every Library-shaped screen offers.
     static let library = Set(allCases)
@@ -21,6 +21,7 @@ enum FilterKind: CaseIterable {
         if scope.theme != nil { k.insert(.theme) }
         if scope.outcome != nil { k.insert(.played) }
         if scope.childhood != nil { k.insert(.childhood) }
+        if scope.roms != nil { k.insert(.roms) }
         return k
     }
 }
@@ -167,6 +168,12 @@ private struct AddFilterMenu: View {
                     Button("Not childhood") { filter.childhood = false }
                 }
             }
+            if kinds.contains(.roms) {
+                Menu("ROMs") {
+                    Button("Playable") { filter.roms = .playable }
+                    Button("Archived") { filter.roms = .archived }
+                }
+            }
         }
         .menuStyle(.borderlessButton).fixedSize()
         .help("Add a filter")
@@ -253,6 +260,11 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
     }
     if let ch = filter.childhood {
         c.append(Chip(text: ch ? "Childhood" : "Not childhood") { $0.childhood = nil })
+    }
+    switch filter.roms {
+    case .playable: c.append(Chip(text: "Playable") { $0.roms = nil })
+    case .archived: c.append(Chip(text: "Archived") { $0.roms = nil })
+    case nil: break
     }
     if let genre = filter.genre { c.append(Chip(text: genre) { $0.genre = nil }) }
     if let theme = filter.theme { c.append(Chip(text: theme) { $0.theme = nil }) }

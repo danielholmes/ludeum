@@ -11,6 +11,7 @@ public struct LibraryFilter: Sendable, Equatable {
     public var player: PlayerFilter?
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
+    public var roms: ROMFilter?
     /// An IGDB genre. Not applied by `library(_:sort:ascending:)`: genres live in the cache, so
     /// the caller narrows the rows with `having(genre:in:)`.
     public var genre: String?
@@ -25,7 +26,8 @@ public struct LibraryFilter: Sendable, Equatable {
 
     public init(
         platformId: Int64? = nil, rating: RatingFilter? = nil, intent: Intent?? = nil, listId: Int64? = nil,
-        player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil, genre: String? = nil,
+        player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil, roms: ROMFilter? = nil,
+        genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         name: String = ""
     ) {
@@ -42,6 +44,7 @@ public struct LibraryFilter: Sendable, Equatable {
         self.player = player
         self.outcome = outcome
         self.childhood = childhood
+        self.roms = roms
     }
 }
 
@@ -57,6 +60,7 @@ extension LibraryFilter {
         if let v = scope.player { f.player = v }
         if let v = scope.outcome { f.outcome = v }
         if let v = scope.childhood { f.childhood = v }
+        if let v = scope.roms { f.roms = v }
         if let v = scope.genre { f.genre = v }
         if let v = scope.theme { f.theme = v }
         if let v = scope.franchise { f.franchise = v }
@@ -85,6 +89,14 @@ public enum OutcomeFilter: String, Sendable, CaseIterable {
     case finished, dropped
     /// No Playthroughs at all.
     case notPlayed
+}
+
+/// Games by what their present ROMs let me do. A Game with no present ROM is neither.
+public enum ROMFilter: Sendable {
+    /// At least one present ROM isn't Archived, so it can be Played.
+    case playable
+    /// Every present ROM is Archived: nothing to Play until one is Unarchived (or Compacted).
+    case archived
 }
 
 public enum LibrarySort: String, Sendable, CaseIterable {
@@ -137,6 +149,11 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
 }
 
 extension LudeumStore {
+    /// Game `g` has a present ROM that isn't Archived.
+    static let playableSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing AND NOT archived)"
+    /// Game `g` has present ROMs, and every one is Archived.
+    static let archivedSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AND NOT \(playableSQL)"
+
     /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent)
     /// sort last either way; ties go by name.
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool) throws -> [LibraryRow] {
@@ -189,6 +206,11 @@ extension LudeumStore {
             conditions.append("g.childhood = ?")
             arguments.append(childhood)
         }
+        switch filter.roms {
+        case .playable: conditions.append(Self.playableSQL)
+        case .archived: conditions.append("(\(Self.archivedSQL))")
+        case nil: break
+        }
         let search = filter.name.trimmingCharacters(in: .whitespaces)
         if !search.isEmpty {
             // Every name the Game goes by, so an override doesn't hide IGDB's or the No-Intro one.
@@ -220,8 +242,7 @@ extension LudeumStore {
                 (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
                 EXISTS (SELECT 1 FROM rom WHERE gameId = g.id)
                     AND NOT EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AS noROM,
-                EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing)
-                    AND NOT EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing AND NOT archived) AS archived
+                \(Self.archivedSQL) AS archived
             FROM game g
             JOIN platform pl ON pl.id = g.platformId
             LEFT JOIN ratingEntry r ON r.id = (SELECT id FROM ratingEntry WHERE gameId = g.id \(Self.ratingOrder) LIMIT 1)
