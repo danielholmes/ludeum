@@ -54,6 +54,19 @@ import Testing
         #expect(h.internet.sent(to: FakeInternet.Hosts.github).isEmpty)  // the listing is cached
     }
 
+    @Test func itSaysWhetherAnyROMsBoxArtChanged() async throws {
+        try snes.add("Super Metroid (USA).sfc")
+        try snes.add("Homebrew Nobody Scanned.sfc")
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [snes.folder])
+        let boxArt = BoxArtImport(journal: j.journal, libretro: h.libretro)
+
+        #expect(await boxArt.run())
+        // Nothing left to look up.
+        #expect(await boxArt.run() == false)
+        // Looked up again, each ROM finds the Box art it has.
+        #expect(try await boxArt.lookUp(try roms().map { $0["id"] }) == false)
+    }
+
     @Test func whenLibretroIsUnreachableTheImportStillCommitsAndTheNextOneLooksItUp() async throws {
         try snes.add("Super Metroid (USA).sfc")
         h.internet.setDown(FakeInternet.Hosts.github, true)

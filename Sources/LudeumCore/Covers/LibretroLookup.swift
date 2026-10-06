@@ -17,9 +17,16 @@ enum LibretroLookup {
 
     /// A title match on the file name, then on each of `titles`, by region preference.
     static func fuzzy(fileName: String, titles: [String], in names: Set<String>) -> String? {
-        let stem = substituted(Self.stem(fileName))
+        fuzzy(fileName: fileName, titles: titles, in: titleIndex(names))
+    }
 
-        let byTitle = Dictionary(grouping: names.filter { !isPrerelease($0) }, by: { titleKey($0) })
+    /// A folder's released names by title key: what a fuzzy match looks in.
+    static func titleIndex(_ names: Set<String>) -> [String: [String]] {
+        Dictionary(grouping: names.filter { !isPrerelease($0) }, by: { titleKey($0) })
+    }
+
+    static func fuzzy(fileName: String, titles: [String], in byTitle: [String: [String]]) -> String? {
+        let stem = substituted(Self.stem(fileName))
         let regions = ROMName(stem).regions.map { preferredOrder.filter($0.contains) } ?? []
         for title in [stem] + titles {
             let key = titleKey(title)
@@ -84,5 +91,21 @@ enum LibretroLookup {
         let order = own + preferredOrder.filter { !own.contains($0) }
         let region = order.firstIndex(where: regions.contains) ?? order.count
         return (region, withoutDisc(name) == name ? 0 : 1, name.count, name)
+    }
+}
+
+/// One libretro-thumbnails folder's image names (without `.png`), looked in for any number of ROMs: the title index a
+/// fuzzy match needs is worked out once, the first time an exact name misses, not for every ROM.
+struct LibretroFolder: Sendable {
+    let names: Set<String>
+    private var byTitle: [String: [String]]?
+
+    init(_ names: Set<String>) { self.names = names }
+
+    mutating func find(fileName: String, titles: [String]) -> String? {
+        if let exact = LibretroLookup.exact(fileName: fileName, in: names) { return exact }
+        let index = byTitle ?? LibretroLookup.titleIndex(names)
+        byTitle = index
+        return LibretroLookup.fuzzy(fileName: fileName, titles: titles, in: index)
     }
 }

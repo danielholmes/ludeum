@@ -40,18 +40,16 @@ public final class LibretroThumbnails: Sendable {
     /// Looks a ROM up in its Platform's listings (`ROMPlatform.libretroRepo`). Nil for a Platform with no ROM folder,
     /// whose ROMs libretro isn't asked about.
     public func names(platform: Int64, fileName: String, titles: [String]) async throws -> LibretroNames? {
-        guard let repo = ROMPlatform.all[platform]?.libretroRepo else { return nil }
-        let folders = try await listing(repo)
-        // An exact name beats a title match.
-        func find(_ folder: String) -> String? {
-            let names = folders[folder] ?? []
-            guard
-                let name = LibretroLookup.exact(fileName: fileName, in: names)
-                    ?? LibretroLookup.fuzzy(fileName: fileName, titles: titles, in: names)
-            else { return nil }
-            return "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png"
-        }
-        return LibretroNames(boxart: find("Named_Boxarts"), snap: find("Named_Snaps"), title: find("Named_Titles"))
+        var listing = try await listing(platform: platform)
+        guard listing.repo != nil else { return nil }
+        return listing.names(fileName: fileName, titles: titles)
+    }
+
+    /// A Platform's listings, read once to look up any number of its ROMs. One with no ROM folder, whose ROMs libretro
+    /// isn't asked about, has an empty one that finds nothing.
+    func listing(platform: Int64) async throws -> LibretroListing {
+        guard let repo = ROMPlatform.all[platform]?.libretroRepo else { return LibretroListing(repo: nil, folders: [:]) }
+        return LibretroListing(repo: repo, folders: try await listing(repo).mapValues(LibretroFolder.init))
     }
 
     /// An image by its path, from the cache or downloaded the first time. The CDN can lag behind the
@@ -107,5 +105,23 @@ public final class LibretroThumbnails: Sendable {
             folders[parts[0], default: []].append(String(parts[1].dropLast(4)))
         }
         return try JSONEncoder().encode(folders)
+    }
+}
+
+/// One Platform's libretro-thumbnails listings, by folder.
+struct LibretroListing: Sendable {
+    /// Nil for a Platform libretro isn't asked about.
+    let repo: String?
+    var folders: [String: LibretroFolder]
+
+    /// The ROM's name in each folder: an exact name beats a title match.
+    mutating func names(fileName: String, titles: [String]) -> LibretroNames {
+        guard let repo else { return LibretroNames() }
+        var paths: [String: String] = [:]
+        for folder in LibretroThumbnails.folders {
+            guard let name = folders[folder]?.find(fileName: fileName, titles: titles) else { continue }
+            paths[folder] = "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png"
+        }
+        return LibretroNames(boxart: paths["Named_Boxarts"], snap: paths["Named_Snaps"], title: paths["Named_Titles"])
     }
 }
