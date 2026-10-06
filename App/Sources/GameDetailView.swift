@@ -281,17 +281,19 @@ struct GameDetailView: View {
         }
     }
 
-    /// ▶ Play in the Platform's Emulator, and beside it the Emulator's settings. A Platform with no
-    /// Emulator says so instead.
+    /// ▶ Play in the Platform's Emulator, and beside it the Emulator's settings, or under it when the panel's too
+    /// narrow for both. A Platform with no Emulator says so instead.
     @ViewBuilder private var playControls: some View {
         let refusal = playing.availability.refusal
         if refusal == .archived {
-            HStack(spacing: 12) {
+            SideBySideOrStacked {
+                // Stacked and still too wide, it wraps rather than being cut short.
                 Label(Play.Refusal.archived.message, systemImage: "archivebox").foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let rom = roms.first(where: { !$0.missing && $0.archived }) { archiveButton(rom) }
             }
         } else if let emulator, let platformId = game?.platformId {
-            HStack(spacing: 12) {
+            SideBySideOrStacked {
                 Button {
                     play(in: emulator)
                 } label: {
@@ -520,6 +522,19 @@ struct GameDetailView: View {
 
     private func deleteGame() {
         delete({ [id] in try $0.deleteGame(id) }, then: deleted)
+    }
+}
+
+/// Its views in a row while they fit unwrapped, else one above the other, so a narrow panel doesn't squeeze each into
+/// a column of wrapped words.
+private struct SideBySideOrStacked<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { content }
+            VStack(alignment: .leading, spacing: 8) { content }
+        }
     }
 }
 

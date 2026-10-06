@@ -90,19 +90,25 @@ struct IGDBFactsRows: View {
     }
 }
 
-/// IGDB's screenshots in two rows of three, then a tile to show the rest. Click one to see it full size.
+/// IGDB's screenshots in two rows of three (three rows of two in a narrow panel), then a tile to show the rest. Click
+/// one to see it full size.
 struct ScreenshotsSection: View {
     let igdb: IGDBClient
     let screenshots: [String]
     @State private var showingAll = false
+    /// Three across while each gets at least `narrowest` points (in Game detail, a panel of about 400 points), else two.
+    @State private var columns = 3
     @State private var viewing: Screenshot?
+
+    private nonisolated static let spacing: CGFloat = 12
+    private nonisolated static let narrowest: CGFloat = 105
 
     var body: some View {
         Section("Screenshots") {
             let limit = 6
             let collapsed = !showingAll && screenshots.count > limit
             let shown = collapsed ? Array(screenshots.prefix(limit - 1)) : screenshots
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columns), spacing: Self.spacing) {
                 ForEach(shown, id: \.self) { imageID in
                     ScreenshotImage(igdb: igdb, imageID: imageID, large: false)
                         .aspectRatio(16 / 9, contentMode: .fit)
@@ -127,6 +133,11 @@ struct ScreenshotsSection: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+            .onGeometryChange(for: Int.self) {
+                $0.size.width >= 3 * Self.narrowest + 2 * Self.spacing ? 3 : 2
+            } action: {
+                columns = $0
             }
         }
         .onChange(of: screenshots) { showingAll = false }
