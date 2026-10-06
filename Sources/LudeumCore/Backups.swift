@@ -10,7 +10,10 @@ public enum BackupOperation: String, Sendable, CaseIterable {
     case beforeSync = "before-sync"
     case beforeDelete = "before-delete"
     case beforeRestore = "before-restore"
+    /// `migrate-openemu`'s: never pruned.
     case beforeMigration = "before-migration"
+    /// Opening a journal whose schema this build moves on.
+    case beforeSchemaMigration = "before-schema-migration"
 }
 
 /// One backup file of the journal database.

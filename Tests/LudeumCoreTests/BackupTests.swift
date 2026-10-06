@@ -215,3 +215,60 @@ import Testing
         #expect(Set(try names(copy)) == ["Super Metroid", "Earthbound"])
     }
 }
+
+/// Opening a journal whose schema is behind this build's.
+@Suite struct SchemaMigrationBackupTests {
+    let directory = FileManager.default.temporaryDirectory.appending(
+        path: "schema backup \(UUID().uuidString)", directoryHint: .isDirectory)
+    var journalFolder: URL { directory.appending(path: "journal", directoryHint: .isDirectory) }
+    var backupFolder: URL { directory.appending(path: "Backups", directoryHint: .isDirectory) }
+    let clock = TestClock()
+
+    func backups() -> Backups { Backups(folder: backupFolder, fallback: backupFolder, clock: clock) }
+
+    func open() throws -> LudeumStore { try LudeumStore(directory: journalFolder, clock: clock, backups: backups()) }
+
+    /// A journal left at `migration` with one Game on it.
+    func oldJournal(at migration: String) throws {
+        try FileManager.default.createDirectory(at: journalFolder, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: journalFolder.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: migration)
+        try db.write {
+            try $0.execute(
+                sql: "INSERT INTO platform VALUES (19, 'SNES'); INSERT INTO game (platformId, name) VALUES (19, 'Super Metroid')")
+        }
+        try db.close()
+    }
+
+    @Test func anOldJournalIsBackedUpAsItWasBeforeItsMigrationsRun() throws {
+        try oldJournal(at: "v13 players")
+
+        _ = try open()
+
+        let backup = try #require(try backups().all().first)
+        #expect(try backups().all().map(\.operation) == [.beforeSchemaMigration])
+        let copy = try DatabaseQueue(path: backup.url.path(percentEncoded: false))
+        #expect(try copy.read { try LudeumSchema.migrator.appliedIdentifiers($0).contains("v14 roms keyed by platform") } == false)
+        #expect(try copy.read { try String.fetchOne($0, sql: "SELECT name FROM game") } == "Super Metroid")
+    }
+
+    @Test func aNewJournalOrOneAlreadyUpToDateIsntBackedUp() throws {
+        _ = try open()
+        _ = try open()
+
+        #expect(try backups().all().isEmpty)
+    }
+
+    @Test func oneWaitingForMigrateOpenEmuIsntBackedUpAgainEachLaunch() throws {
+        try oldJournal(at: LudeumSchema.lastWithOpenEmu)
+        let db = try DatabaseQueue(path: journalFolder.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try db.write {
+            try $0.execute(sql: "INSERT INTO rom (openEmuPk, md5, fileName, platformId) VALUES (10, 'aa', 'Super Metroid.sfc', 19)")
+        }
+        try db.close()
+
+        _ = try open()
+
+        #expect(try backups().all().isEmpty)
+    }
+}
