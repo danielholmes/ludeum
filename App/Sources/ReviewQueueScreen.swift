@@ -149,9 +149,6 @@ struct ReviewQueueScreen: View {
             }
             .frame(minWidth: Self.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
-        // Given less than `minWidth` (the window's columns not yet laid out again), it's cut off at the right rather than
-        // drawn over the sidebar.
-        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).clipped()
         .navigationTitle("Review queue")
         .overlay(alignment: .bottom) {
             if let error { Text(error).foregroundStyle(.white).padding(8).background(.red, in: .rect(cornerRadius: 6)).padding() }
