@@ -29,8 +29,9 @@ import SwiftUI
 
     var isBusy: Bool { items.contains { $0.state == .queued || $0.state == .running } }
 
-    func isQueuedOrRunning(_ subject: String) -> Bool {
-        items.contains { $0.subject == subject && ($0.state == .queued || $0.state == .running) }
+    /// The queued or running task working on `subject`, if any.
+    func active(_ subject: String) -> Item? {
+        items.first { $0.subject == subject && ($0.state == .queued || $0.state == .running) }
     }
 
     /// Adds work to the queue. `finished` runs on the main actor after it succeeds.
