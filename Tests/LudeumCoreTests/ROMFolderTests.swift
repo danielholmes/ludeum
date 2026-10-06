@@ -148,7 +148,6 @@ struct FakeROMFolder {
 
         let result = try await importNow()
 
-        #expect(result.matched.isEmpty)
         #expect(result.sentToReview.map(\.romName) == ["Okami (USA)"])
         let item = try #require(try j.journal.reviewQueue().namesAgree.first)
         #expect(item.suggestedIgdbGameId == 1234)

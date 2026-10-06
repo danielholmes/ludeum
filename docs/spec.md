@@ -116,7 +116,7 @@ GRDB over SQLite, with foreign keys on. Table and column names are as they'll ap
 - **The first Import**, from OpenEmu, was staged as an Import draft and committed once, in one step, with my start dates for `_Current` games. It's done, and went with OpenEmu: its unmatched ROMs carried over into the Review queue with their OpenEmu data held (`heldOpenEmuData`), and OpenEmu's orphaned entries (150, 60 holding data) became missing ROMs.
 - **Each Import:** new ROMs go through matching. A ROM whose files are all gone is marked missing; one that comes back rejoins its old Game with its old Match, without review. A new ROM (or a Review queue answer) that gives an existing Game Duplicate Versions is still Matched, and the Game gets a Duplicate Versions item in the Review queue. Each Import re-checks it.
   - **When it runs:** at app launch, and with the Review queue's Check again (a request mid-Import runs once more afterwards). The journal never watches the folders.
-  - **What I'm told:** Automatic Matches are added silently. The Review queue carries a count badge. After an Import that changed something, a dismissible in-app summary lists ROMs added, matched, sent to review and gone missing (linking to their Games). An Import that changed nothing shows nothing. A failed Import says why, dismissibly. No system notifications.
+  - **What I'm told:** Automatic Matches are added silently. The Review queue carries a count badge. After an Import that changed something, a dismissible in-app summary lists ROMs sent to review and gone missing (linking to their Games). An Import that changed nothing shows nothing. A failed Import says why, dismissibly. No system notifications.
 
 ### ROM folders
 

@@ -10,16 +10,14 @@ public struct ImportedROM: Sendable, Equatable {
 
 /// What an Import changed. An Import that changed nothing shows nothing.
 public struct ImportResult: Sendable, Equatable {
-    /// New ROMs Matched automatically (added silently, but listed in the summary).
-    public var matched: [ImportedROM] = []
-    /// New ROMs waiting in the Review queue.
+    /// New ROMs, all waiting in the Review queue: with no checksum, none is Matched automatically.
     public var sentToReview: [ImportedROM] = []
     /// Missing ROMs that came back and rejoined their old Game, silently.
     public var returned: [ImportedROM] = []
     public var goneMissing: [ImportedROM] = []
 
-    /// Whether the summary has anything to say: ROMs added, matched, sent to review or gone missing.
-    public var changedSomething: Bool { !(matched.isEmpty && sentToReview.isEmpty && goneMissing.isEmpty) }
+    /// Whether the summary has anything to say: ROMs sent to review or gone missing.
+    public var changedSomething: Bool { !(sentToReview.isEmpty && goneMissing.isEmpty) }
 }
 
 public enum ImportError: Error, Equatable {
