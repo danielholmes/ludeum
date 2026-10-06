@@ -9,8 +9,10 @@ import Testing
     let h: Harness
     let j: LudeumHarness
     let openEmu: FakeOpenEmu
-    let roms: URL
-    let backupFolder: URL
+    /// Stands in for the Data folder: the real one is never touched.
+    let data: URL
+    var roms: URL { data.appending(path: "ROMs", directoryHint: .isDirectory) }
+    var backupFolder: URL { data.appending(path: "Backups", directoryHint: .isDirectory) }
 
     init() throws {
         h = try Harness()
@@ -18,16 +20,13 @@ import Testing
         // OpenEmu keeps its library inside its Application Support folder, beside each core's saves.
         let support = j.directory.appending(path: "OpenEmu", directoryHint: .isDirectory)
         openEmu = try FakeOpenEmu(in: support)
-        roms = j.directory.appending(path: "games", directoryHint: .isDirectory)
-        backupFolder = j.directory.appending(path: "Backups", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: roms, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
+        data = j.directory.appending(path: "Data", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
     }
 
     func migration(openEmuRunning: Bool = false) -> OpenEmuMigration {
         OpenEmuMigration(
-            journal: j.journal, library: openEmu.folder, romFolder: { ROMPlatform.all[$0].map { roms.appending(path: $0.folderName) } },
-            backups: Backups(folder: backupFolder, fallback: backupFolder, clock: j.clock, timeZone: j.timeZone),
+            journal: j.journal, library: openEmu.folder, folder: LudeumFolder(url: j.directory, data: data),
             isOpenEmuRunning: { openEmuRunning }, libretro: h.libretro)
     }
 
@@ -134,7 +133,7 @@ import Testing
         #expect(plan.roms.map(\.moves.first?.to) == [roms.appending(path: "Game Boy Color/1-Gold.gbc")])
         #expect(exists("roms/openemu.system.gb/1-Gold.gbc", in: openEmu.folder))
         #expect(try await j.journal.db.read { try Int64.fetchOne($0, sql: "SELECT openEmuPk FROM rom") } == 1)
-        #expect(try Backups(folder: backupFolder, fallback: backupFolder).all().isEmpty)
+        #expect(try Backups(folder: backupFolder).all().isEmpty)
     }
 
     @Test func itRefusesWhileOpenEmuIsRunning() async throws {
@@ -155,7 +154,7 @@ import Testing
         }
         #expect(exists("roms/openemu.system.gb/1-Gold.gbc", in: openEmu.folder))
         #expect(try await j.journal.db.read { try Int64.fetchOne($0, sql: "SELECT openEmuPk FROM rom") } == 1)
-        #expect(try Backups(folder: backupFolder, fallback: backupFolder).all().isEmpty)
+        #expect(try Backups(folder: backupFolder).all().isEmpty)
     }
 
     @Test func aGameOnAPlatformItsSystemCantHoldStopsTheMigration() async throws {
@@ -198,7 +197,8 @@ import Testing
 
         let result = try await migration().run()
 
-        #expect(try Backups(folder: backupFolder, fallback: backupFolder).all().map(\.operation) == [.beforeMigration])
+        #expect(try Backups(folder: backupFolder).all().map(\.operation) == [.beforeMigration])
+        #expect(result.log.deletingLastPathComponent().standardizedFileURL == backupFolder.standardizedFileURL)
         let log = try String(contentsOf: result.log, encoding: .utf8)
         let from = openEmu.folder.appending(path: "roms/openemu.system.gb/1-Gold.gbc").path(percentEncoded: false)
         let to = roms.appending(path: "Game Boy Color/1-Gold.gbc").path(percentEncoded: false)
@@ -237,11 +237,32 @@ import Testing
 
         let result = try await migration().run()
 
-        let archived = result.batterySaveArchive.appending(path: "Gambatte/Battery Saves/Pokemon Gold.sav")
-        #expect(try Data(contentsOf: archived) == Data("save".utf8))
+        let archive = data.appending(path: "OpenEmu Battery Saves archive", directoryHint: .isDirectory)
+        #expect(result.batterySaveArchive.standardizedFileURL == archive.standardizedFileURL)
+        #expect(try Data(contentsOf: archive.appending(path: "Gambatte/Battery Saves/Pokemon Gold.sav")) == Data("save".utf8))
         #expect(FileManager.default.fileExists(atPath: saves.appending(path: "Pokemon Gold.sav").path(percentEncoded: false)))
-        #expect(
-            !FileManager.default.fileExists(atPath: result.batterySaveArchive.appending(path: "Save States").path(percentEncoded: false)))
+        #expect(!exists("Save States", in: archive))
+    }
+
+    @Test func anArchiveAlreadyInTheDataFolderStopsTheMigration() async throws {
+        let archive = data.appending(path: "OpenEmu Battery Saves archive/Gambatte/Battery Saves", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
+
+        let plan = try migration().plan()
+
+        #expect(!plan.isRunnable)
+        #expect(plan.clashes == ["OpenEmu Battery Saves archive: already in the Data folder"])
+    }
+
+    @Test func withoutTheDataFolderItRefusesAndMakesNothing() async throws {
+        let gold = try game("Pokemon Gold", platform: 22)
+        try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Gold.gbc", to: gold)
+        try FileManager.default.removeItem(at: data)
+
+        await #expect(throws: DataFolderMissing.self) { try await migration().run() }
+
+        #expect(!FileManager.default.fileExists(atPath: data.path(percentEncoded: false)))
+        #expect(exists("roms/openemu.system.gb/1-Gold.gbc", in: openEmu.folder))
     }
 
     @Test func openEmuROMsWithNoJournalEntryAreListedAndLeftInPlace() async throws {

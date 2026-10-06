@@ -4,37 +4,40 @@ import GRDB
 /// `migrate-openemu`: run once, by hand, to move every OpenEmu ROM the journal has into its Platform's
 /// ROM folder, so the journal no longer needs OpenEmu (ADR 0009). No journal data is lost.
 ///
-/// Order: refuse on a journal already migrated, and while OpenEmu is running; plan and check everything (the dry
-/// run stops there); take a `before-migration` backup; copy OpenEmu's battery saves, unchanged, into an archive
-/// beside it; move the files, logging each old path → new path beside the backup; then rewrite the ROM rows in one
+/// Order: refuse on a journal already migrated, while OpenEmu is running, and without the Data folder; plan and check
+/// everything (the dry run stops there); take a `before-migration` backup; copy OpenEmu's battery saves, unchanged, into
+/// `OpenEmu Battery Saves archive/` in the Data folder; move the files into the Data folder's ROM folders, logging each
+/// old path → new path beside the backup; then rewrite the ROM rows in one
 /// transaction, after which the journal drops OpenEmu's columns and link tables; last, delete OpenEmu's cached Box art and look each
 /// moved ROM up in libretro again (a miss keeps its old Box art; a failed lookup never fails the migration).
 /// A failed move stops before that transaction: restore nothing, and the log says what moved. Undo is restoring the backup and moving the logged files back.
 public struct OpenEmuMigration {
     let journal: LudeumStore
     let library: URL
-    let romFolder: (Int64) -> URL?
+    let folder: LudeumFolder
     let backups: Backups
     let isOpenEmuRunning: () -> Bool
     let libretro: LibretroThumbnails?
 
-    /// `romFolder` gives each Platform's ROM folder; nil for a Platform without one.
+    /// `folder`'s Data folder gets the ROM folders, the backup and the battery-save archive.
     public init(
-        journal: LudeumStore, library: URL, romFolder: @escaping (Int64) -> URL?, backups: Backups,
-        isOpenEmuRunning: @escaping () -> Bool, libretro: LibretroThumbnails?
+        journal: LudeumStore, library: URL, folder: LudeumFolder, isOpenEmuRunning: @escaping () -> Bool,
+        libretro: LibretroThumbnails?
     ) {
         self.journal = journal
         self.library = library
-        self.romFolder = romFolder
-        self.backups = backups
+        self.folder = folder
+        backups = Backups(folder: folder.backups, clock: journal.clock, timeZone: journal.calendar.timeZone)
         self.isOpenEmuRunning = isOpenEmuRunning
         self.libretro = libretro
     }
 
-    /// The dry run: everything the migration would do, and anything that stops it. Changes nothing.
+    /// The dry run: everything the migration would do, and anything that stops it. Changes nothing but the `ROMs/` and
+    /// `Backups/` folders, made in the Data folder if they're missing. Throws `DataFolderMissing` without it.
     public func plan() throws -> OpenEmuMigrationPlan {
         guard try journal.needsOpenEmuMigration() else { throw OpenEmuMigrationError.alreadyMigrated }
         guard !isOpenEmuRunning() else { throw OpenEmuMigrationError.openEmuRunning }
+        try folder.checkData()
         let snapshotFile = FileManager.default.temporaryDirectory.appending(path: "ludeum-migrate-\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: snapshotFile) }
         try OpenEmuLibrary.snapshot(library: library, to: snapshotFile)
@@ -72,7 +75,7 @@ public struct OpenEmuMigration {
             }
             // With no system to check its Platform against, it's listed rather than passed over.
             if record == nil { plan.goneFromOpenEmu.append("\(label): Platform \(platformId)") }
-            guard let folder = romFolder(platformId) else {
+            guard let folder = self.folder.romFolder(platform: platformId) else {
                 plan.noROMFolder.append("\(label): Platform \(platformId) has no ROM folder")
                 continue
             }
@@ -117,6 +120,10 @@ public struct OpenEmuMigration {
         let known = Set(rows.map { $0["openEmuPk"] as Int64 })
         plan.leftInOpenEmu = snapshot.roms.filter { !known.contains($0.pk) && $0.isPresent }.compactMap(\.file)
         plan.batterySaves = batterySaveFolders()
+        // A run that failed part-way left one: moved aside by hand, so an older copy is never mixed in or replaced.
+        if FileManager.default.fileExists(atPath: folder.batterySaveArchive.path(percentEncoded: false)) {
+            plan.clashes.append("\(folder.batterySaveArchive.lastPathComponent): already in the Data folder")
+        }
         plan.clashes.sort()
         return plan
     }
@@ -128,9 +135,8 @@ public struct OpenEmuMigration {
         let plan = try plan()
         guard plan.isRunnable else { throw OpenEmuMigrationError.blocked(plan) }
         let backup = try backups.backUp(journal, operation: .beforeMigration)
-        let stem = backup.url.deletingPathExtension()
-        let archive = stem.appendingPathExtension("openemu-battery-saves")
-        let log = stem.appendingPathExtension("moves.log")
+        let log = backup.url.deletingPathExtension().appendingPathExtension("moves.log")
+        let archive = folder.batterySaveArchive
         try archiveBatterySaves(plan.batterySaves, into: archive)
 
         FileManager.default.createFile(atPath: log.path(percentEncoded: false), contents: nil)
