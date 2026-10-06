@@ -11,8 +11,9 @@ public final class CacheStore: Sendable {
 
     /// How long a cached entry stays fresh unless a client says otherwise.
     public static let defaultMaxAge: TimeInterval = 60 * 86_400
-    /// Shared by the app and `ludeum-import`.
-    public static let defaultDirectory = URL.applicationSupportDirectory.appending(path: "Ludeum/cache", directoryHint: .isDirectory)
+    /// `~/Library/Caches/Ludeum/`, outside the Ludeum folder since it can always be rebuilt (ADR 0010). Shared by the app
+    /// and `ludeum-import`. A cache left in the Ludeum folder by an older build is ignored.
+    public static let defaultDirectory = URL.cachesDirectory.appending(path: "Ludeum", directoryHint: .isDirectory)
 
     let db: DatabaseQueue
     let directory: URL
