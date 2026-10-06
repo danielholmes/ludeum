@@ -272,7 +272,7 @@ struct GameDetailView: View {
     }
 
     /// One of this Game's ROMs is queued or running in Background tasks: its files are about to change.
-    private var isBeingArchived: Bool { roms.contains { services.tasks.isQueuedOrRunning(Self.taskSubject($0)) } }
+    private var isBeingArchived: Bool { roms.contains { services.tasks.active(Self.taskSubject($0)) != nil } }
 
     /// Every present ROM is archived, so there's nothing to Play until one is Unarchived.
     private var isArchived: Bool {
