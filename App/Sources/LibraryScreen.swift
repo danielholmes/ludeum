@@ -312,38 +312,40 @@ struct CoverTile: View {
     let width: Double
 
     var body: some View {
+        // Every badge is this tall (the Rating's pill as wide as its text needs), growing with the Cover, and sits the
+        // same margin in from the Cover's sides. Only the status badges that hang from the top edge touch an edge.
+        let height = max(24, width / 5.5)
+        let margin = 5.0
         CoverView(services: services, game: row.id, name: row.name)
             .frame(width: width, height: width * 4 / 3)
             .overlay(alignment: .bottomLeading) {
                 if let rating = row.rating {
-                    // Grows with the Cover: about an eighth of its width, never under 15 pt.
                     Text(ratingText(rating))
-                        .font(.system(size: max(15, width / 7.8), weight: .bold, design: .rounded))
+                        .font(.system(size: height * 0.64, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(ratingColor(rating))
-                        .padding(.horizontal, max(7, width / 21)).padding(.vertical, 2.3)
+                        .padding(.horizontal, height * 0.3)
+                        .frame(height: height)
                         // A dark pill, so the Rating's colour reads the same over any cover, light or dark.
                         .background(.black.opacity(0.75), in: .capsule)
-                        .padding(5)
+                        .padding(margin)
                         .help("Rating")
                 }
             }
             .overlay(alignment: .topTrailing) {
                 if let status = CoverStatus(row) {
-                    Image(systemName: status.symbol).font(.system(size: 17, weight: .bold)).foregroundStyle(status.color)
-                        .padding(7)
-                        .background(.regularMaterial, in: .circle)
-                        .padding(5)
+                    status.badge(height: height)
+                        .padding(.trailing, margin)
+                        .padding(.top, status.hangsFromTop ? 0 : margin)
                         .help(status.help)
+                        .accessibilityLabel(status.help)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
                 // The table's Name column shows the same symbol.
                 if let badge = ROMBadge(row.roms) {
-                    Image(systemName: badge.symbol).font(.system(size: max(12, width / 10))).foregroundStyle(badge.color)
-                        .padding(6)
-                        .background(.regularMaterial, in: .circle)
-                        .padding(5)
+                    RoundBadge(symbol: badge.symbol, color: badge.color, side: height)
+                        .padding(margin)
                         .help(badge.help)
                 }
             }
@@ -405,21 +407,22 @@ private enum CoverStatus {
         }
     }
 
-    var symbol: String {
-        switch self {
-        case .playing: "play.fill"
-        case .finished: "checkmark"
-        case .upNext: "arrow.up.forward"
-        case .backlog: "tray.full"
-        }
-    }
+    /// Playing's bookmark and Up next's and Backlog's post-its hang from the Cover's top edge; Finished's tick sits off it.
+    var hangsFromTop: Bool { self != .finished }
 
-    var color: Color {
+    @ViewBuilder
+    func badge(height: Double) -> some View {
         switch self {
-        case .playing: .blue
-        case .finished: .green
-        case .upNext: .orange
-        case .backlog: .secondary
+        case .playing:
+            Bookmark().fill(Color(red: 0.13, green: 0.6, blue: 0.27))
+                .frame(width: height * 0.6, height: height)
+                .shadow(color: .black.opacity(0.4), radius: 1.5, y: 1)
+        case .upNext:
+            PostIt(color: Color(red: 0.62, green: 0.9, blue: 0.5), side: height)
+        case .backlog:
+            PostIt(color: Color(red: 1, green: 0.9, blue: 0.4), side: height)
+        case .finished:
+            RoundBadge(symbol: "checkmark", color: .green, side: height, weight: .bold)
         }
     }
 
@@ -430,6 +433,80 @@ private enum CoverStatus {
         case .upNext: "Up next"
         case .backlog: "Backlog"
         }
+    }
+}
+
+/// A symbol on a disc of frosted glass, for the badges that sit off the Cover's edges.
+private struct RoundBadge: View {
+    let symbol: String
+    let color: Color
+    let side: Double
+    var weight: Font.Weight = .regular
+
+    var body: some View {
+        Image(systemName: symbol).font(.system(size: side * 0.5, weight: weight)).foregroundStyle(color)
+            .frame(width: side, height: side)
+            .background(.regularMaterial, in: .circle)
+    }
+}
+
+/// A square note with its bottom trailing corner folded over.
+private struct PostIt: View {
+    let color: Color
+    let side: Double
+
+    var body: some View {
+        ZStack {
+            Sheet().fill(color)
+            Fold().fill(.black.opacity(0.18))
+        }
+        .frame(width: side, height: side)
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.4), radius: 1.5, y: 1)
+    }
+
+    private nonisolated static func foldLength(_ rect: CGRect) -> Double { rect.width / 4 }
+
+    /// The note, less its folded corner.
+    private struct Sheet: Shape {
+        func path(in rect: CGRect) -> Path {
+            let fold = PostIt.foldLength(rect)
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - fold))
+            path.addLine(to: CGPoint(x: rect.maxX - fold, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.closeSubpath()
+            return path
+        }
+    }
+
+    /// The folded corner's underside, lying on the note.
+    private struct Fold: Shape {
+        func path(in rect: CGRect) -> Path {
+            let fold = PostIt.foldLength(rect)
+            var path = Path()
+            path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - fold))
+            path.addLine(to: CGPoint(x: rect.maxX - fold, y: rect.maxY - fold))
+            path.addLine(to: CGPoint(x: rect.maxX - fold, y: rect.maxY))
+            path.closeSubpath()
+            return path
+        }
+    }
+}
+
+/// A ribbon with a notch cut into its foot.
+private struct Bookmark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - rect.width * 0.4))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
