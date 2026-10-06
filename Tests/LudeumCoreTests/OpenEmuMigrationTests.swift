@@ -168,6 +168,18 @@ import Testing
         #expect(plan.platformMismatches.count == 1)
     }
 
+    @Test func aFileItsPlatformsROMFolderWontReadStopsTheMigration() async throws {
+        let gold = try game("Pokemon Gold", platform: 22)
+        try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Gold.zip", to: gold)
+        let tetris = try game("Tetris", platform: 33)
+        try matched("Tetris", system: "openemu.system.gb", fileName: "Tetris.7z", to: tetris)
+
+        let plan = try migration().plan()
+
+        #expect(!plan.isRunnable)
+        #expect(plan.unreadableFiles == ["Game Boy Color/1-Gold.zip: its ROM folder doesn't read .zip files"])
+    }
+
     @Test func itBacksUpLogsEachMoveAndDropsOpenEmusLinkTables() async throws {
         let gold = try game("Pokemon Gold", platform: 22)
         try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Gold.gbc", to: gold)

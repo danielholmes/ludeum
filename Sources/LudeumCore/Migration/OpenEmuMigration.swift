@@ -80,6 +80,10 @@ public struct OpenEmuMigration {
             let key = Key(platformId: platformId, name: name)
             keys[key, default: []].append(label)
             if taken.contains(key) { plan.clashes.append("\(folder.lastPathComponent)/\(name): already a ROM there") }
+            if main != nil, ROMFolder.platform(platformId, folder)?.reads(fileName: fileName) != true {
+                let ext = (fileName as NSString).pathExtension.lowercased()
+                plan.unreadableFiles.append("\(folder.lastPathComponent)/\(fileName): its ROM folder doesn't read .\(ext) files")
+            }
 
             var files: [OpenEmuMigrationPlan.Move] = []
             if let main {
@@ -230,6 +234,8 @@ public struct OpenEmuMigrationPlan: Sendable, Equatable {
     public var noROMFolder: [String] = []
     /// Two ROMs with one name in a Platform's folder, or a file already where one would go. Resolved by hand.
     public var clashes: [String] = []
+    /// A ROM whose file its Platform's ROM folder wouldn't read, so it would go missing once moved. Converted by hand.
+    public var unreadableFiles: [String] = []
     public var unwritableFolders: [URL] = []
     /// OpenEmu ROM files with no journal entry: listed, and left where they are.
     public var leftInOpenEmu: [URL] = []
@@ -237,7 +243,7 @@ public struct OpenEmuMigrationPlan: Sendable, Equatable {
     public var batterySaves: [URL] = []
 
     public var isRunnable: Bool {
-        platformMismatches.isEmpty && noROMFolder.isEmpty && clashes.isEmpty && unwritableFolders.isEmpty
+        platformMismatches.isEmpty && noROMFolder.isEmpty && clashes.isEmpty && unreadableFiles.isEmpty && unwritableFolders.isEmpty
     }
 }
 

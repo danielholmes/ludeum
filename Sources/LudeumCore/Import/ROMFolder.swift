@@ -19,6 +19,12 @@ public struct ROMFolder: Sendable, Equatable {
         ROMPlatform.all[id].map { ROMFolder(platformId: id, url: url, readyExtensions: $0.readyExtensions) }
     }
 
+    /// Whether a file with this name, at the top of the folder, is a ROM to it: ready, or a `.7z`.
+    func reads(fileName: String) -> Bool {
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        return ext == "7z" || readyExtensions.contains(ext)
+    }
+
     /// Every ROM in the folder, by name. Throws when the folder can't be read (Dropbox not there,
     /// say), so an Import leaves its ROMs alone instead of marking them all missing.
     public func scan() throws -> [FolderROMFile] {

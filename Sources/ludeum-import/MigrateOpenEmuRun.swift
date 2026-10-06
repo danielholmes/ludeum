@@ -60,6 +60,7 @@ private func describe(_ plan: OpenEmuMigrationPlan) -> String {
     section("Games on a Platform their ROM's OpenEmu system can't hold", plan.platformMismatches)
     section("ROMs on a Platform with no ROM folder", plan.noROMFolder)
     section("File name clashes", plan.clashes)
+    section("Files their Platform's ROM folder won't read (convert them first)", plan.unreadableFiles)
     section("Folders that can't be written to", plan.unwritableFolders.map { $0.path(percentEncoded: false) })
     section("OpenEmu ROM files with no journal entry, left where they are", plan.leftInOpenEmu.map { $0.path(percentEncoded: false) })
     return lines.joined(separator: "\n")
