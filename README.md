@@ -28,7 +28,7 @@ cd ludeum
 scripts/run.sh
 ```
 
-`scripts/run.sh` generates the Xcode project, builds the Debug configuration, and opens the app. To work in Xcode instead:
+`scripts/run.sh` generates the Xcode project, builds the Debug configuration, and opens the app; `scripts/build.sh` does the same without opening it. To work in Xcode instead:
 
 ```sh
 xcodegen
