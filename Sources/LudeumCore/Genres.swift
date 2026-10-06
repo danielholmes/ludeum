@@ -57,6 +57,11 @@ extension GameFacts {
 }
 
 extension LudeumStore {
+    /// The IGDB game of every linked Game: the ones with facts to read.
+    public func linkedIGDBGames() throws -> Set<Int64> {
+        try db.read { db in try Int64.fetchSet(db, sql: "SELECT DISTINCT igdbGameId FROM game WHERE igdbGameId IS NOT NULL") }
+    }
+
     /// The Library with the IGDB facts applied: the filter's genre, theme, franchise, series and
     /// company, and a search that also matches the Game's companies, franchises and series. It stops
     /// early with `CancellationError` when its task is cancelled (a newer search replaced it).

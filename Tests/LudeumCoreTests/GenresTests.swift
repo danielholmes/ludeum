@@ -41,6 +41,15 @@ import Testing
         #expect(h.internet.sent.isEmpty)
     }
 
+    @Test func theLinkedGamesAreTheOnesWithFactsToRead() throws {
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        _ = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
+        _ = try j.journal.addGame(platformId: 19, name: "Chrono Trigger", igdbGameId: 5, igdbName: "Chrono Trigger")
+        _ = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
+
+        #expect(try j.journal.linkedIGDBGames() == [1103, 5])
+    }
+
     @Test func theLibraryNarrowsToOneGenreOrThemeAndUnlinkedGamesNeverMatch() async throws {
         for (id, name) in [(1103, "Super Metroid"), (1070, "Super Mario World"), (5, "Chrono Trigger")] {
             try j.journal.addGame(platformId: 19, name: name, igdbGameId: Int64(id), igdbName: name)
