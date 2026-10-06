@@ -86,6 +86,14 @@ import Testing
         #expect(settings().romFolder(platform: ROMPlatform.ps2)?.path(percentEncoded: false) == "/elsewhere/PS2/")
         #expect(settings().romFolder(platform: 6) == nil)
     }
+
+    @Test func aRootGivenForOneRunLeavesTheSettingAlone() {
+        let s = settings()
+        let root = URL(filePath: "/tmp/other games", directoryHint: .isDirectory)
+
+        #expect(s.romFolder(platform: 22, root: root)?.path(percentEncoded: false) == "/tmp/other games/Game Boy Color/")
+        #expect(settings().romFoldersRoot.path(percentEncoded: false).hasSuffix("/Dropbox/games/"))
+    }
 }
 
 @Suite struct KeychainTests {

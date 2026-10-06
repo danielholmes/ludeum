@@ -68,9 +68,12 @@ public final class AppSettings: @unchecked Sendable {
     }
 
     /// A Platform's ROM folder: PS2's is its own setting, every other under the root. Nil for a Platform without one.
-    public func romFolder(platform: Int64) -> URL? {
+    public func romFolder(platform: Int64) -> URL? { romFolder(platform: platform, root: romFoldersRoot) }
+
+    /// A Platform's ROM folder under `root` in place of the root setting, which is left alone. PS2's is still its own.
+    public func romFolder(platform: Int64, root: URL) -> URL? {
         if platform == ROMPlatform.ps2 { return ps2Folder }
-        return ROMPlatform.all[platform].map { romFoldersRoot.appending(path: $0.folderName, directoryHint: .isDirectory) }
+        return ROMPlatform.all[platform].map { root.appending(path: $0.folderName, directoryHint: .isDirectory) }
     }
 
     /// Every ROM folder an Import reads: one per Platform that has one, by IGDB platform id.

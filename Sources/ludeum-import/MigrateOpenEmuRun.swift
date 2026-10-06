@@ -12,12 +12,14 @@ func migrateOpenEmuRun(_ arguments: [String]) async throws {
         }
     }
     let settings = AppSettings(defaults: UserDefaults(suiteName: "org.danielholmes.Ludeum") ?? .standard)
-    if let roms = option("--roms") { settings.romFoldersRoot = roms }
+    // For this run only: the app's own setting is left alone.
+    let romsRoot = option("--roms") ?? settings.romFoldersRoot
     let journalFolder = option("--journal") ?? AppSettings.appFolder
-    let journal = try LudeumStore(directory: journalFolder)
+    // Opening the journal may migrate its schema, so it's backed up first like the app's.
+    let journal = try LudeumStore(directory: journalFolder, backups: settings.backups())
     let migration = OpenEmuMigration(
         journal: journal, library: option("--library") ?? settings.openEmuLibrary,
-        romFolder: { settings.romFolder(platform: $0) }, backups: settings.backups(),
+        romFolder: { settings.romFolder(platform: $0, root: romsRoot) }, backups: settings.backups(),
         isOpenEmuRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: "org.openemu.OpenEmu").isEmpty },
         libretro: LibretroThumbnails(cache: try CacheStore(directory: cacheDirectory)))
 
