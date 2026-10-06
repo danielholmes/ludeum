@@ -23,11 +23,11 @@ A game file in a ROM folder. A ROM identifies a Version of a Game, and is linked
 _Avoid_: File, image
 
 **ROM folder**:
-The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. A ROM is never kept in both forms at once: when it is, it waits in the Review queue.
+The folder of one Platform's ROMs, which the journal reads directly. Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state, and so is Compacting `Tetris (World).gb` into `Tetris (World).7z`. A ROM is never kept in both forms at once (a Compacted `.7z` alone is one form): when it is, it waits in the Review queue.
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
-A ROM that is still in its library but packed in a form its Platform's Emulator can't open, so it can't be Played until I Unarchive it. It is present, not missing. Whether a ROM is archived depends on the Emulator: a `.7z` that one Emulator opens directly is an ordinary ROM there.
+A ROM that is still in its library but packed in a form its Platform's Emulator can't open, so it can't be Played until I Unarchive it (or, on N64 and Mega Drive, Compact it). It is present, not missing. Whether a ROM is archived depends on the Emulator: a `.7z` that one Emulator opens directly is an ordinary ROM there.
 _Avoid_: Compressed, needs extraction (that's the fix, not the state)
 
 **Playable ROM**:
@@ -35,8 +35,12 @@ A present ROM that isn't Archived. Every present ROM is either Playable or Archi
 _Avoid_: Active, unarchived, ordinary ROM
 
 **Archive / Unarchive**:
-Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played. Either way only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2 ROMs can be Archived or Unarchived so far.
+Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played (a PSP ROM, always one file, unpacks to that file, named after the ROM). Either way only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2 and PSP ROMs can be Archived or Unarchived so far.
 _Avoid_: Extract, compress, decompress
+
+**Compact**:
+Packing a ROM into the archive its Platform's Emulator opens directly, so it takes less room and still Plays: a `.7z`, or a `.zip` on N64 and Mega Drive, whose Emulator (ares) can't open a `.7z`. An Archived `.7z` there is repacked as a `.zip`. Only one copy is kept, as with Archive. Only Platforms whose Emulator opens an archive can be Compacted: the cartridge ones (NES, SNES, the Game Boys, Master System, Game Gear, N64, Mega Drive) and DS. A present ROM there that isn't Compacted waits in the Review queue.
+_Avoid_: Compress, zip, Archive (that leaves it unplayable)
 
 **Disc**:
 One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version.
@@ -153,7 +157,7 @@ Reading the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
 
 **Review queue**:
-Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, Games whose ROMs are all missing, ROMs whose Discs have no playlist, and ROMs kept in both forms.
+Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, Games whose ROMs are all missing, ROMs whose Discs have no playlist, ROMs kept in both forms, and ROMs that could be Compacted but aren't.
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:

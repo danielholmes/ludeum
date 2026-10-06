@@ -16,12 +16,42 @@ import Testing
         #expect(ROMArchiving.action(for: folderROM("Okami (USA)", missing: true)) == nil)
     }
 
-    @Test func anotherPlatformsROMCantBeEither() {
-        let rom = LudeumROM(
-            id: 1, folderName: "Zelda", platformId: 19, fileName: "Zelda.sfc", name: "Zelda", version: "", disc: nil, missing: false,
-            archived: false)
+    @Test func aPlatformWithNeitherCantDoAnything() {
+        #expect(ROMArchiving.action(for: rom("Metroid Prime (USA)", on: 21, "Metroid Prime (USA).rvz")) == nil)
+    }
 
-        #expect(ROMArchiving.action(for: rom) == nil)
+    @Test func aPSPROMCanBeArchivedAndUnarchived() {
+        #expect(ROMArchiving.action(for: rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).iso")) == .archive)
+        #expect(ROMArchiving.action(for: rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).7z", archived: true)) == .unarchive)
+    }
+
+    @Test func aLooseCartridgeROMCanBeCompactedIntoA7z() {
+        let zelda = rom("Zelda (USA)", on: 19, "Zelda (USA).sfc")
+
+        #expect(ROMArchiving.action(for: zelda) == .compact)
+        #expect(ROMArchiving.compactFileName(for: zelda) == "Zelda (USA).7z")
+    }
+
+    @Test func aCompactedOneCantBeArchivedOrCompactedAgain() {
+        #expect(ROMArchiving.action(for: rom("Zelda (USA)", on: 19, "Zelda (USA).7z")) == nil)
+        #expect(ROMArchiving.action(for: rom("Sonic (USA)", on: 29, "Sonic (USA).zip")) == nil)
+    }
+
+    @Test func anAresROMCompactsIntoAZipEvenFromA7zAresCantOpen() {
+        let sonic = rom("Sonic (USA)", on: 29, "Sonic (USA).7z", archived: true)
+
+        #expect(ROMArchiving.action(for: sonic) == .compact)
+        #expect(ROMArchiving.compactFileName(for: sonic) == "Sonic (USA).zip")
+    }
+
+    @Test func aMissingOneCantBeCompacted() {
+        #expect(ROMArchiving.action(for: rom("Zelda (USA)", on: 19, "Zelda (USA).sfc", missing: true)) == nil)
+    }
+
+    func rom(_ name: String, on platform: Int64, _ fileName: String, archived: Bool = false, missing: Bool = false) -> LudeumROM {
+        LudeumROM(
+            id: 1, folderName: name, platformId: platform, fileName: fileName, name: name, version: "", disc: nil, missing: missing,
+            archived: archived)
     }
 }
 
@@ -35,13 +65,13 @@ extension ROMFolderImportTests {
         let rom = try #require(try j.journal.roms(of: game).first)
 
         try await Self.archive(
-            rom, of: game, journal: j.journal, locator: ROMLocator(romFolders: [ps2.folder]),
+            rom, journal: j.journal, locator: ROMLocator(romFolders: [ps2.folder]),
             trash: h.directory.appending(path: "Trash", directoryHint: .isDirectory))
 
         #expect(try j.journal.roms(of: game).map(\.archived) == [true])
     }
 
-    @MainActor static func archive(_ rom: LudeumROM, of game: GameID, journal: LudeumStore, locator: ROMLocator, trash: URL) async throws {
+    @MainActor static func archive(_ rom: LudeumROM, journal: LudeumStore, locator: ROMLocator, trash: URL) async throws {
         try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
         let tasks = BackgroundTasks()
         let archiving = ROMArchiving(
@@ -53,7 +83,7 @@ extension ROMFolderImportTests {
             })
         var finished = false
 
-        archiving.start(rom, of: game) { finished = true }
+        archiving.start(rom) { finished = true }
 
         #expect(tasks.active(.rom(rom.id))?.title == "Archiving Okami (USA)")
         await untilIdle(tasks)

@@ -180,6 +180,19 @@ extension LudeumStore {
         }
     }
 
+    /// Reads one ROM's files again from its ROM folder, as `checkROMsAgain` does for a Game's: after an Archive, Unarchive
+    /// or Compact, whether or not the ROM is Matched yet.
+    public func checkROMAgain(_ rom: Int64, in folder: ROMFolder) throws {
+        guard
+            let name = try db.read({ db in
+                try String.fetchOne(
+                    db, sql: "SELECT folderName FROM rom WHERE id = ? AND platformId = ?", arguments: [rom, folder.platformId])
+            })
+        else { return }
+        let file = try folder.scan().first { $0.name == name }
+        try db.write { db in try Self.setFolderROM(db, rom, to: file) }
+    }
+
     /// A ROM's state from its files: nil is missing (keeping whether it was archived).
     static func setFolderROM(_ db: Database, _ id: Int64, to file: FolderROMFile?) throws {
         if let file {

@@ -68,7 +68,7 @@ struct SettingsView: View {
                 Text("ROM folders")
             } footer: {
                 Text(
-                    "Each Platform's ROM folder is in ROMs in the Data folder, named for the Platform (SNES, PS2, Game Boy Color…). Link the Data folder into Dropbox to keep it safe. A .7z in a ROM folder is Archived: Unarchive it in Game detail to play."
+                    "Each Platform's ROM folder is in ROMs in the Data folder, named for the Platform (SNES, PS2, Game Boy Color…). Link the Data folder into Dropbox to keep it safe. A cartridge ROM can be a .7z (a .zip for N64 and Mega Drive), which its Emulator opens directly: Compact one from the Review queue. A .7z its Emulator can't open is Archived: Unarchive it (PS2, PSP), or Compact it, in Game detail."
                 )
                 .foregroundStyle(.secondary)
             }

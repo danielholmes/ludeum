@@ -53,10 +53,13 @@ public struct SevenZip: Sendable {
             progress: progress)
     }
 
-    /// A new archive at maximum compression, holding `files` (names in `folder`) without any folder.
-    func create(_ archive: URL, files: [String], in folder: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
+    /// A new archive at maximum compression, holding `files` (names in `folder`) without any folder. `format` is its
+    /// type, as its extension: `7z` or `zip`.
+    func create(
+        _ archive: URL, format: String = "7z", files: [String], in folder: URL, progress: @escaping @Sendable (Double) -> Void
+    ) async throws {
         _ = try await run(
-            ["a", "-t7z", "-mx=9", "-bsp1", archive.path(percentEncoded: false)] + files, in: folder, progress: progress)
+            ["a", "-t\(format)", "-mx=9", "-bsp1", archive.path(percentEncoded: false)] + files, in: folder, progress: progress)
     }
 
     /// Throws unless every file in the archive tests as intact.

@@ -18,6 +18,7 @@ struct ReviewQueueScreen: View {
         case duplicateVersions = "Duplicate Versions"
         case noPlaylist = "No playlist"
         case missingROMs = "Missing ROMs"
+        case notCompacted = "Not compacted"
         var id: Self { self }
     }
 
@@ -26,6 +27,7 @@ struct ReviewQueueScreen: View {
     @State private var selection: Int64?
     @State private var error: String?
     @State private var confirmingAll = false
+    @State private var compactingAll = false
     /// Suggested IGDB games' names, for the middle column.
     @State private var suggestionNames: [Int64: String] = [:]
 
@@ -40,8 +42,23 @@ struct ReviewQueueScreen: View {
                 if kind == .namesAgree, !items.namesAgree.isEmpty {
                     Button("Confirm all \(items.namesAgree.count)") { confirmingAll = true }.padding(8)
                 }
+                if kind == .notCompacted, !notCompactedIdle.isEmpty {
+                    Button("Compact all \(notCompactedIdle.count)") { compactingAll = true }.padding(8)
+                }
                 List(selection: $selection) {
-                    if kind == .duplicateVersions {
+                    if kind == .notCompacted {
+                        ForEach(items.notCompacted) { item in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(item.rom.name)
+                                    Text("\(item.rom.fileName) → \(item.compactFileName)").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if let task = services.tasks.active(.rom(item.id)) { BackgroundTaskProgress(task: task) }
+                            }
+                            .tag(item.id)
+                        }
+                    } else if kind == .duplicateVersions {
                         ForEach(items.duplicateVersions) { d in
                             VStack(alignment: .leading) {
                                 Text(d.game.name)
@@ -87,6 +104,8 @@ struct ReviewQueueScreen: View {
                     MissingROMsDetail(item: m, checkAgain: checkAgain, showGame: { shownGame = m.id })
                 } else if kind == .noPlaylist, let item = items.noPlaylist.first(where: { $0.id == selection }) {
                     NoPlaylistDetail(services: services, item: item, failed: { error = $0 })
+                } else if kind == .notCompacted, let item = items.notCompacted.first(where: { $0.id == selection }) {
+                    NotCompactedDetail(services: services, item: item, showGame: { shownGame = $0 })
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
                     ReviewItemDetail(services: services, item: item, failed: { error = $0 }, answered: { shownGame = $0 })
                 } else {
@@ -109,7 +128,19 @@ struct ReviewQueueScreen: View {
         } message: {
             Text("Each ROM is Matched to its suggestion. To keep one out, answer it on its own first.")
         }
+        .confirmationDialog("Compact all \(notCompactedIdle.count) ROMs?", isPresented: $compactingAll) {
+            Button("Compact all") {
+                for item in notCompactedIdle { compact(item, services: services) }
+            }
+        } message: {
+            Text(
+                "Each is packed into the archive its Emulator opens directly, one at a time in Background tasks. The files they "
+                    + "replace go to the Trash. Online-only files download first.")
+        }
     }
+
+    /// The Not compacted items no Background task is working on yet.
+    private var notCompactedIdle: [NotCompactedROM] { items.notCompacted.filter { services.tasks.active(.rom($0.id)) == nil } }
 
     private var romItems: [ReviewItem] {
         switch kind {
@@ -117,7 +148,7 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions
         case .name: items.nameSuggestions
         case .noSuggestion: items.noSuggestion
-        case .duplicateVersions, .noPlaylist, .missingROMs, nil: []
+        case .duplicateVersions, .noPlaylist, .missingROMs, .notCompacted, nil: []
         }
     }
 
@@ -130,6 +161,7 @@ struct ReviewQueueScreen: View {
         case .duplicateVersions: items.duplicateVersions.count
         case .noPlaylist: items.noPlaylist.count
         case .missingROMs: items.missingROMs.count
+        case .notCompacted: items.notCompacted.count
         }
     }
 
@@ -139,6 +171,7 @@ struct ReviewQueueScreen: View {
         case .duplicateVersions: items.duplicateVersions.map(\.id)
         case .noPlaylist: items.noPlaylist.map(\.id)
         case .missingROMs: items.missingROMs.map(\.id)
+        case .notCompacted: items.notCompacted.map(\.id)
         default: romItems.map(\.romId)
         }
     }
@@ -688,4 +721,50 @@ private struct MissingROMsDetail: View {
         }
         .formStyle(.grouped)
     }
+}
+
+/// A Not compacted item: the ROM, and Compact, which packs it into the archive its Emulator opens directly as a
+/// Background task. Once that's done, the item leaves the queue.
+private struct NotCompactedDetail: View {
+    let services: Services
+    let item: NotCompactedROM
+    let showGame: (GameID) -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                Text(item.rom.name).font(.title2).bold()
+                Text(explanation).foregroundStyle(.secondary)
+            }
+            Section("Files") {
+                LabeledContent("Now", value: item.rom.fileName)
+                LabeledContent("Compacted", value: item.compactFileName)
+            }
+            HStack {
+                if let task = services.tasks.active(.rom(item.id)) {
+                    BackgroundTaskProgress(task: task)
+                } else {
+                    Button("Compact") { compact(item, services: services) }
+                }
+                if let game = item.game { Button("Show Game") { showGame(game) } }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var explanation: String {
+        let emulator = Emulator.of(platformId: item.rom.platformId)?.name ?? "Its Emulator"
+        return item.rom.archived
+            ? "\(emulator) can't open its .7z. Compact repacks it as \(item.compactFileName), which \(emulator) opens directly, "
+                + "and sends the .7z to the Trash once that checks out."
+            : "\(emulator) opens \(item.compactFileName) directly. Compact packs it at maximum compression and sends "
+                + "\(item.rom.fileName) to the Trash once the archive checks out."
+    }
+}
+
+/// Compacts the ROM as a Background task. Once done, whichever screen is showing sees the change, and its Not
+/// compacted item is gone.
+@MainActor private func compact(_ item: NotCompactedROM, services: Services) {
+    ROMArchiving(locator: ROMLocator(romFolders: services.settings.romFolders), journal: services.journal, tasks: services.tasks)
+        .start(item.rom) { [changes = services.changes] in changes.changed() }
 }

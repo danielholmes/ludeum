@@ -2,23 +2,34 @@ import Foundation
 
 /// A ROM folder: one IGDB Platform's ROMs, read straight from a folder. The folder alone gives a ROM
 /// its Platform. A ROM there is known by its name: a file's without the extension, or a subfolder's. So Unarchiving
-/// `Okami (USA).7z` into `Okami (USA)/` is the same ROM changing from archived to ready. A subfolder
-/// is a ROM when it holds the game, at any depth: one playlist (a multi-disc Version), else one cue sheet, else one
-/// image, else Discs with no playlist yet. Hidden folders are ignored.
+/// `Okami (USA).7z` into `Okami (USA)/` is the same ROM changing from archived to ready, and so is Compacting
+/// `Tetris (World).gb` into `Tetris (World).7z`. A subfolder is a ROM when it holds the game, at any depth: one
+/// playlist (a multi-disc Version), else one cue sheet, else one image, else Discs with no playlist yet. Hidden folders
+/// are ignored.
 public struct ROMFolder: Sendable, Equatable {
     /// The IGDB platform its ROMs are on.
     public let platformId: Int64
     public let url: URL
-    /// What its Emulator opens, most preferred first. Anything else but a `.7z` is ignored.
+    /// What its Emulator opens, most preferred first, ending with its compact extension. Anything else but a `.7z`
+    /// is ignored.
     let readyExtensions: [String]
+    /// The archive its Emulator opens directly, that its ROMs are Compacted into: nil where it opens none.
+    let compactExtension: String?
 
     /// PS2, played in PCSX2.
     public static func ps2(_ url: URL) -> ROMFolder { platform(ROMPlatform.ps2, url)! }
 
     /// The ROM folder of a Platform that has one.
     public static func platform(_ id: Int64, _ url: URL) -> ROMFolder? {
-        ROMPlatform.all[id].map { ROMFolder(platformId: id, url: url, readyExtensions: $0.readyExtensions) }
+        ROMPlatform.all[id].map {
+            ROMFolder(
+                platformId: id, url: url, readyExtensions: $0.readyExtensions + ($0.compactExtension.map { [$0] } ?? []),
+                compactExtension: $0.compactExtension)
+        }
     }
+
+    /// How its ROMs are Archived, when they can be.
+    var archiving: ROMPlatform.Archiving? { ROMPlatform.all[platformId]?.archiving }
 
     /// Whether a file with this name, at the top of the folder, is a ROM to it: ready, or a `.7z`.
     func reads(fileName: String) -> Bool {
@@ -42,9 +53,9 @@ public struct ROMFolder: Sendable, Equatable {
         for file in files where !tracks.contains(file.lastPathComponent.lowercased()) {
             let name = file.deletingPathExtension().lastPathComponent
             let ext = file.pathExtension.lowercased()
-            if ext == "7z" {
-                archives[name] = file
-            } else if let rank = readyExtensions.firstIndex(of: ext) {
+            // A `.7z` is the ROM's archive whether or not its Emulator opens it too.
+            if ext == "7z" { archives[name] = file }
+            if let rank = readyExtensions.firstIndex(of: ext) {
                 if let current = ready[name], let currentRank = readyExtensions.firstIndex(of: current.pathExtension.lowercased()),
                     currentRank <= rank
                 {
@@ -109,7 +120,8 @@ public struct ROMFolder: Sendable, Equatable {
     }
 }
 
-/// One ROM in a ROM folder: its ready file, its `.7z` archive, or both. Archived when there's no ready file.
+/// One ROM in a ROM folder: its ready file, its `.7z` archive, or both. Archived when there's no ready file. Where its
+/// Emulator opens a `.7z`, a Compacted ROM's `.7z` is both.
 public struct FolderROMFile: Sendable, Equatable {
     public let name: String
     public let ready: URL?
@@ -162,7 +174,7 @@ struct ROMMove {
         } else {
             items = []
         }
-        items += rom.archive.map { [$0] } ?? []
+        if let archive = rom.archive, !items.contains(archive) { items.append(archive) }
         let base = from.url.standardizedFileURL.path(percentEncoded: false)
         let moves = items.map { item in
             let path = item.standardizedFileURL.path(percentEncoded: false)

@@ -50,6 +50,17 @@ public struct NoPlaylistItem: Sendable, Equatable, Identifiable {
     public var id: Int64 { romId }
 }
 
+/// A present ROM on a Platform whose Emulator opens an archive, not yet Compacted into it: a loose file, or a `.7z` ares
+/// can't open.
+public struct NotCompactedROM: Sendable, Equatable, Identifiable {
+    public let rom: LudeumROM
+    /// What Compact makes of it, e.g. `Tetris (World).7z`.
+    public let compactFileName: String
+    /// Its Game, once it's Matched.
+    public let game: GameID?
+    public var id: Int64 { rom.id }
+}
+
 /// Everything waiting in the Review queue, by kind.
 public struct ReviewQueueItems: Sendable, Equatable {
     /// Name and related-record suggestions whose names agree: bulk-confirmable.
@@ -60,13 +71,15 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var duplicateVersions: [DuplicateVersionsGame] = []
     public var missingROMs: [MissingROMsGame] = []
     public var noPlaylist: [NoPlaylistItem] = []
+    /// Bulk-compactable.
+    public var notCompacted: [NotCompactedROM] = []
 
     public init() {}
 
     /// The sidebar badge.
     public var count: Int {
         namesAgree.count + checksumSuggestions.count + nameSuggestions.count + noSuggestion.count + duplicateVersions.count
-            + noPlaylist.count + missingROMs.count
+            + noPlaylist.count + missingROMs.count + notCompacted.count
     }
 }
 
@@ -116,7 +129,33 @@ extension LudeumStore {
             )
             .map { NoPlaylistItem(romId: $0["id"], romName: $0["folderName"], platformId: $0["platformId"]) }
         }
+        items.notCompacted = try notCompacted()
         return items
+    }
+
+    /// Present ROM folder ROMs that can be Compacted, Matched or not, by name.
+    private func notCompacted() throws -> [NotCompactedROM] {
+        let platforms = ROMPlatform.all.filter { $0.value.compactExtension != nil }.keys.map(String.init).joined(separator: ", ")
+        return try db.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT id, folderName, platformId, archived, fileName, COALESCE(name, fileName) AS displayName, version,
+                        discNumber, gameId
+                    FROM rom
+                    WHERE folderName IS NOT NULL AND NOT missing AND platformId IN (\(platforms))
+                    ORDER BY displayName COLLATE NOCASE, id
+                    """)
+        }
+        .compactMap { row in
+            let fileName: String = row["fileName"]
+            let parsed = ROMName((fileName as NSString).deletingPathExtension)
+            let rom = LudeumROM(
+                id: row["id"], folderName: row["folderName"], platformId: row["platformId"], fileName: fileName,
+                name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
+                missing: false, archived: row["archived"])
+            return ROMArchiving.compactFileName(for: rom).map { NotCompactedROM(rom: rom, compactFileName: $0, game: row["gameId"]) }
+        }
     }
 
     /// Whether Matching this ROM to the Game would give it Duplicate Versions. It warns, never blocks.

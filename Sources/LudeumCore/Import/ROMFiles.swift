@@ -41,6 +41,6 @@ extension ROMFolder {
         } else if let ready = rom.ready {
             files = ROMFiles.files(of: ready)
         }
-        return files + (rom.archive.map { [$0] } ?? [])
+        return files + (rom.archive.flatMap { files.contains($0) ? nil : [$0] } ?? [])
     }
 }

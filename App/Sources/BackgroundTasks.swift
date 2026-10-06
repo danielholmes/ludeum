@@ -77,3 +77,21 @@ struct BackgroundTasksPanel: View {
         .help("Refreshing IGDB and Hasheous data older than 60 days. Pauses during an Import.")
     }
 }
+
+/// A queued or running task working on one thing, in place of the button that started it: its progress, or Queued.
+struct BackgroundTaskProgress: View {
+    let task: BackgroundTasks.Item
+
+    var body: some View {
+        if task.state == .running {
+            HStack(spacing: 6) {
+                ProgressView(value: task.progress ?? 0).controlSize(.small).frame(width: 80)
+                Text(task.progress.map { "\(Int($0 * 100))%" } ?? "").font(.caption).monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            .help(task.title)
+        } else {
+            Text("Queued").font(.caption).foregroundStyle(.secondary).help("Waiting in Background tasks")
+        }
+    }
+}

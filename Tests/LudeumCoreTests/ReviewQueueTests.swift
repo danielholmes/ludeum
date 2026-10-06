@@ -30,11 +30,14 @@ import Testing
             try ROMPlatform.ensureKnown(db, 19)
             try db.execute(
                 sql: """
-                    INSERT INTO rom (folderName, md5, fileName, platformId, missing, version, suggestedIgdbGameId, suggestionKind,
+                    INSERT INTO rom (folderName, md5, fileName, name, platformId, missing, version, suggestedIgdbGameId, suggestionKind,
                         checksumIgdbGameId, namesAgree)
-                    VALUES (?, ?, ?, 19, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, 19, ?, ?, ?, ?, ?, ?)
                     """,
-                arguments: [name, "md5-\(pk)", name, missing, ROMName(name).version, suggestion, kind, checksumGame, namesAgree])
+                // Compacted, so it isn't also waiting to be.
+                arguments: [
+                    name, "md5-\(pk)", "\(name).7z", name, missing, ROMName(name).version, suggestion, kind, checksumGame, namesAgree,
+                ])
             let id = db.lastInsertedRowID
             let json = String(decoding: try JSONEncoder().encode(collections), as: UTF8.self)
             try db.execute(
@@ -168,7 +171,7 @@ import Testing
         let duplicates = try j.journal.reviewQueue().duplicateVersions
         #expect(duplicates.count == 1)
         #expect(duplicates[0].game.id == game)
-        #expect(duplicates[0].roms.map(\.fileName) == ["Double Dragon III (Japan)", "Double Dragon III (USA)"])
+        #expect(duplicates[0].roms.map(\.fileName) == ["Double Dragon III (Japan).7z", "Double Dragon III (USA).7z"])
     }
 
     @Test func gamesWhoseROMsAreAllMissingAreListed() throws {
@@ -187,7 +190,7 @@ import Testing
 
         let items = try j.journal.reviewQueue()
         #expect(items.missingROMs.map(\.game.id) == [gone])
-        #expect(items.missingROMs[0].roms.map(\.fileName) == ["Zombies Ate My Neighbors (Europe)", "Zombies Ate My Neighbors (USA)"])
+        #expect(items.missingROMs[0].roms.map(\.fileName) == ["Zombies Ate My Neighbors (Europe).7z", "Zombies Ate My Neighbors (USA).7z"])
         #expect(items.count == 1)
     }
 }

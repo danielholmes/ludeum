@@ -27,7 +27,7 @@ import Testing
             busyROMs: [4])
 
         #expect(play.availability == .refused(.busy))
-        #expect(play.availability.refusal?.message == "Waiting for Archive or Unarchive to finish")
+        #expect(play.availability.refusal?.message == "Waiting for Archive, Unarchive or Compact to finish")
     }
 
     @Test func otherwiseItPlaysInThePlatformsEmulator() {
@@ -44,10 +44,10 @@ import Testing
 
     func press(
         _ roms: [LudeumROM], in folder: FakeROMFolder, version: Play.VersionStatus = .ok, settings: EmulatorSettings = EmulatorSettings(),
-        installed: Bool = true
+        installed: Bool = true, platformId: Int64 = 18
     ) -> Play.Outcome {
         let mesen = mesen
-        return Play(platformId: 18, platformName: "NES", roms: roms, settings: settings)
+        return Play(platformId: platformId, platformName: "NES", roms: roms, settings: settings)
             .prepare(
                 locator: ROMLocator(romFolders: [folder.folder]), version: version,
                 app: { installed && $0 == Emulator.mesenCE.bundleIdentifier ? mesen : nil })
@@ -119,6 +119,7 @@ import Testing
         let ps2 = try FakeROMFolder(in: directory)
         try ps2.add("Zelda.7z")
 
-        #expect(press([folderROM("Zelda", fileName: "Zelda.7z", archived: true)], in: ps2) == .refused(.archived))
+        // PC Engine CD: MesenCE, which can't open a `.7z` disc.
+        #expect(press([folderROM("Zelda", fileName: "Zelda.7z", archived: true)], in: ps2, platformId: 150) == .refused(.archived))
     }
 }

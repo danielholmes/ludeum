@@ -7,6 +7,8 @@ public enum ArchiveError: Error, Equatable {
     case ambiguous([String])
     /// Nothing in the archive is a file the Emulator opens.
     case noImage
+    /// An archive for a Platform that unpacks to a single file holds more than one.
+    case notOneFile([String])
     case notEnoughSpace(needed: Int64)
     /// The ROM has no file to Archive, or no archive to Unarchive.
     case nothingToDo
@@ -23,6 +25,7 @@ extension ArchiveError: LocalizedError {
         case .noSevenZip: "7-Zip isn't installed. Run `brew install sevenzip`, then try again."
         case .ambiguous(let images): "Several images and no cue sheet: \(images.joined(separator: ", "))."
         case .noImage: "Nothing in the archive is a game image."
+        case .notOneFile(let files): "It should hold just the game, but holds \(files.joined(separator: ", "))."
         case .notEnoughSpace(let needed):
             "Needs \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)) free."
         case .nothingToDo: "There's no file to work on. Check again, then try again."
@@ -39,13 +42,14 @@ public struct UnarchivePlan: Sendable, Equatable {
     public let romName: String
     /// Everything in the archive, all of it kept.
     public let entries: [SevenZip.Entry]
-    /// The ROM's folder, named after it, that the archive's contents go into.
+    /// Where the archive's contents go: the ROM's folder, named after it, or (on a Platform that unpacks to a single
+    /// file) its one file, named after it.
     public let destination: URL
 
     public var bytesNeeded: Int64 { entries.reduce(0) { $0 + $1.size } }
 }
 
-/// Archive and Unarchive for a ROM folder's ROMs. Work happens in a hidden folder inside the ROM
+/// Archive, Unarchive and Compact for a ROM folder's ROMs. Work happens in a hidden folder inside the ROM
 /// folder (on the same disk, and ignored as a subfolder) and moves into place only once checked;
 /// the file it replaces goes to the Trash last of all.
 public struct ROMArchiver: Sendable {
@@ -83,6 +87,14 @@ public struct ROMArchiver: Sendable {
     // MARK: Unarchive
 
     static func unarchivePlan(listing: [SevenZip.Entry], archive: URL, romName: String, folder: ROMFolder) throws -> UnarchivePlan {
+        if folder.archiving == .singleFile {
+            guard let image = listing.first else { throw ArchiveError.noImage }
+            guard listing.count == 1 else { throw ArchiveError.notOneFile(listing.map(\.fileName)) }
+            let ext = (image.path as NSString).pathExtension.lowercased()
+            guard folder.readyExtensions.contains(ext) else { throw ArchiveError.noImage }
+            return UnarchivePlan(
+                archive: archive, romName: romName, entries: listing, destination: folder.url.appending(path: "\(romName).\(ext)"))
+        }
         // The folder only plays if it holds the game: one cue sheet, or one image.
         let images = listing.filter { folder.readyExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
         let cues = images.filter { ($0.path as NSString).pathExtension.lowercased() == "cue" }
@@ -93,14 +105,15 @@ public struct ROMArchiver: Sendable {
             destination: folder.url.appending(path: romName, directoryHint: .isDirectory))
     }
 
-    /// Unarchives everything in the archive into a folder named after the ROM, checks every file's
-    /// size against the listing, then sends the archive to the Trash.
+    /// Unarchives everything in the archive into a folder named after the ROM (or, on a Platform that unpacks to a single
+    /// file, its one file named after the ROM), checks every file's size against the listing, then sends the archive to
+    /// the Trash.
     public func unarchive(
         _ archive: URL, romName: String, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws {
         let plan = try Self.unarchivePlan(listing: try await sevenZip.list(archive), archive: archive, romName: romName, folder: folder)
         if FileManager.default.fileExists(atPath: plan.destination.path(percentEncoded: false)) {
-            throw ArchiveError.alreadyThere(romName)
+            throw ArchiveError.alreadyThere(plan.destination.lastPathComponent)
         }
         try checkSpace(plan.bytesNeeded, in: folder)
         let work = try workFolder(in: folder)
@@ -111,7 +124,8 @@ public struct ROMArchiver: Sendable {
             let size = try? unpacked.appending(path: entry.path).resourceValues(forKeys: [.fileSizeKey]).fileSize
             guard size.map(Int64.init) == entry.size else { throw ArchiveError.checkFailed(entry.fileName) }
         }
-        try FileManager.default.moveItem(at: unpacked, to: plan.destination)
+        let unpackedFile = folder.archiving == .singleFile ? plan.entries.first.map { unpacked.appending(path: $0.path) } : nil
+        try FileManager.default.moveItem(at: unpackedFile ?? unpacked, to: plan.destination)
         try moveToTrash(archive)
     }
 
@@ -122,7 +136,65 @@ public struct ROMArchiver: Sendable {
     /// ROM folder, then sends what it packed to the Trash.
     public func archive(_ name: String, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws {
         guard let ready = try folder.readyFile(named: name) else { throw ArchiveError.nothingToDo }
-        let destination = folder.url.appending(path: "\(name).7z")
+        try await pack(name, ready: ready, in: folder, format: "7z", progress: progress)
+    }
+
+    // MARK: Compact
+
+    /// Packs the ROM into `<name>.<compact extension>` at maximum compression, the archive its Emulator opens
+    /// directly, then sends what it packed to the Trash, as Archive does. An Archived ROM (a `.7z` ares can't open) is
+    /// repacked instead: unpacked, packed again, and its listing checked against the `.7z`'s before that goes to the
+    /// Trash.
+    public func compact(_ name: String, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws {
+        guard let format = folder.compactExtension, let rom = try folder.scan().first(where: { $0.name == name }) else {
+            throw ArchiveError.nothingToDo
+        }
+        if let ready = rom.ready {
+            guard ready.pathExtension.lowercased() != format else { throw ArchiveError.nothingToDo }
+            try await pack(name, ready: ready, in: folder, format: format, progress: progress)
+        } else if let archive = rom.archive {
+            try await repack(archive, as: name, in: folder, format: format, progress: progress)
+        } else {
+            throw ArchiveError.nothingToDo
+        }
+    }
+
+    private func repack(
+        _ archive: URL, as name: String, in folder: ROMFolder, format: String, progress: @escaping @Sendable (Double) -> Void
+    ) async throws {
+        let destination = folder.url.appending(path: "\(name).\(format)")
+        if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
+            throw ArchiveError.alreadyThere(destination.lastPathComponent)
+        }
+        let listing = try await sevenZip.list(archive)
+        // The unpacked files, and the new archive beside them at no bigger than they are.
+        try checkSpace(2 * listing.reduce(0) { $0 + $1.size }, in: folder)
+        let work = try workFolder(in: folder)
+        defer { try? FileManager.default.removeItem(at: work) }
+        let unpacked = work.appending(path: "unpacked", directoryHint: .isDirectory)
+        try await sevenZip.extract(archive, paths: [], to: unpacked) { progress($0 / 2) }
+        let packed = work.appending(path: destination.lastPathComponent)
+        try await sevenZip.create(
+            packed, format: format, files: try FileManager.default.contentsOfDirectory(atPath: unpacked.path(percentEncoded: false)),
+            in: unpacked
+        ) { progress(0.5 + $0 / 2) }
+        try await sevenZip.test(packed)
+        let byPath: ([SevenZip.Entry]) -> [SevenZip.Entry] = { $0.sorted { $0.path < $1.path } }
+        guard byPath(try await sevenZip.list(packed)) == byPath(listing) else {
+            throw ArchiveError.checkFailed(destination.lastPathComponent)
+        }
+        try FileManager.default.moveItem(at: packed, to: destination)
+        try moveToTrash(archive)
+    }
+
+    // MARK: Packing
+
+    /// Packs the ROM's folder's contents, or its loose file (a cue sheet with its tracks), into `<name>.<format>`.
+    /// Tests the archive and checks its listing, moves it into the ROM folder, then sends what it packed to the Trash.
+    private func pack(
+        _ name: String, ready: URL, in folder: ROMFolder, format: String, progress: @escaping @Sendable (Double) -> Void
+    ) async throws {
+        let destination = folder.url.appending(path: "\(name).\(format)")
         if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
             throw ArchiveError.alreadyThere(destination.lastPathComponent)
         }
@@ -140,7 +212,7 @@ public struct ROMArchiver: Sendable {
         let work = try workFolder(in: folder)
         defer { try? FileManager.default.removeItem(at: work) }
         let packed = work.appending(path: destination.lastPathComponent)
-        try await sevenZip.create(packed, files: packing.items, in: packing.root, progress: progress)
+        try await sevenZip.create(packed, format: format, files: packing.items, in: packing.root, progress: progress)
         try await sevenZip.test(packed)
         let listed = try await sevenZip.list(packed)
         guard listed.count == sizes.count, listed.map(\.size).reduce(0, +) == sizes.values.reduce(0, +) else {

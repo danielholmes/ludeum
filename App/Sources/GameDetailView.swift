@@ -374,27 +374,31 @@ struct GameDetailView: View {
         }
     }
 
-    // MARK: Archive and Unarchive
+    // MARK: Archive, Unarchive and Compact
 
-    /// Archive or Unarchive, as a Background task; while it's queued or running, its progress.
+    /// Archive, Unarchive or Compact, as a Background task; while it's queued or running, its progress.
     @ViewBuilder private func archiveButton(_ rom: LudeumROM) -> some View {
         if let task = services.tasks.active(.rom(rom.id)) {
-            if task.state == .running {
-                HStack(spacing: 6) {
-                    ProgressView(value: task.progress ?? 0).controlSize(.small).frame(width: 80)
-                    Text(task.progress.map { "\(Int($0 * 100))%" } ?? "").font(.caption).monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
-                .help(task.title)
-            } else {
-                Text("Queued").font(.caption).foregroundStyle(.secondary).help("Waiting in Background tasks")
-            }
-        } else if rom.archived {
-            Button("Unarchive", systemImage: "archivebox") { startArchiving(rom) }
-                .help("Unpack it into a folder named after it, so it can be Played. The .7z goes to the Trash.")
+            BackgroundTaskProgress(task: task)
         } else {
-            Button("Archive", systemImage: "archivebox") { startArchiving(rom) }
-                .help("Pack it into a .7z at maximum compression. The image goes to the Trash.")
+            switch ROMArchiving.action(for: rom) {
+            case .unarchive:
+                Button("Unarchive", systemImage: "archivebox") { startArchiving(rom) }
+                    .help(
+                        rom.platformId == ROMPlatform.psp
+                            ? "Unpack its file, so it can be Played. The .7z goes to the Trash."
+                            : "Unpack it into a folder named after it, so it can be Played. The .7z goes to the Trash.")
+            case .archive:
+                Button("Archive", systemImage: "archivebox") { startArchiving(rom) }
+                    .help("Pack it into a .7z at maximum compression. The image goes to the Trash.")
+            case .compact:
+                Button("Compact", systemImage: "archivebox") { startArchiving(rom) }
+                    .help(
+                        "Pack it into \(ROMArchiving.compactFileName(for: rom) ?? "an archive"), which its Emulator still opens. "
+                            + "The file it replaces goes to the Trash.")
+            case nil:
+                EmptyView()
+            }
         }
     }
 
@@ -402,9 +406,9 @@ struct GameDetailView: View {
         ROMLocator(romFolders: services.settings.romFolders)
     }
 
-    /// Archive or Unarchive, whichever it needs. Once done, whichever screen is showing sees the change.
+    /// Archive, Unarchive or Compact, whichever it needs. Once done, whichever screen is showing sees the change.
     private func startArchiving(_ rom: LudeumROM) {
-        ROMArchiving(locator: locator, journal: services.journal, tasks: services.tasks).start(rom, of: id) {
+        ROMArchiving(locator: locator, journal: services.journal, tasks: services.tasks).start(rom) {
             [changes = services.changes] in
             changes.changed()
         }

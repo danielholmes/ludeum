@@ -16,6 +16,8 @@ public struct Play: Sendable {
     public enum Refusal: Sendable, Equatable {
         case noEmulator(String)
         case archived
+        /// Archived in a `.7z` its Emulator can't open, on a Platform whose ROMs Compact into one it can (ares's `.zip`).
+        case archivedNeedsCompacting
         case needsPlaylist
         case busy
         case tooOld(String)
@@ -28,8 +30,9 @@ public struct Play: Sendable {
             switch self {
             case .noEmulator(let platform): "No \(platform) emulator yet"
             case .archived: "Archived: unarchive to play"
+            case .archivedNeedsCompacting: "Archived: compact to play"
             case .needsPlaylist: "Its Discs have no playlist: make one in the Review queue"
-            case .busy: "Waiting for Archive or Unarchive to finish"
+            case .busy: "Waiting for Archive, Unarchive or Compact to finish"
             case .tooOld(let message): message
             case .notInstalled(let emulator): "\(emulator.name) isn't installed."
             case .fileNotFound(let file): "Couldn't find \(file). Run an Import, then try again."
@@ -64,7 +67,9 @@ public struct Play: Sendable {
     public var availability: Availability {
         guard let emulator = Emulator.of(platformId: platformId) else { return .refused(.noEmulator(platformName)) }
         let present = roms.filter { !$0.missing }
-        if !present.isEmpty, present.allSatisfy(\.archived) { return .refused(.archived) }
+        if !present.isEmpty, present.allSatisfy(\.archived) {
+            return .refused(ROMPlatform.all[platformId]?.compactExtension == nil ? .archived : .archivedNeedsCompacting)
+        }
         if roms.contains(where: { busyROMs.contains($0.id) }) { return .refused(.busy) }
         if rom?.needsPlaylist == true { return .refused(.needsPlaylist) }
         return .ready(emulator)
