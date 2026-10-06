@@ -112,6 +112,16 @@ public struct ROMFolder: Sendable, Equatable {
         return numbered.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
+    /// The subfolder the ROM `name`'s ready file is in, when it's in one. A folder of its name that doesn't hold the game
+    /// isn't the ROM's: its loose file is.
+    func subfolder(of name: String, holding ready: URL?) -> URL? {
+        let subfolder = url.appending(path: name, directoryHint: .isDirectory)
+        let inside = subfolder.standardizedFileURL.path(percentEncoded: false)
+        guard let ready, ready.standardizedFileURL.path(percentEncoded: false).hasPrefix(inside.hasSuffix("/") ? inside : inside + "/")
+        else { return nil }
+        return subfolder
+    }
+
     /// The file a Play opens for the ROM `name`, if it isn't archived.
     public func readyFile(named name: String) throws -> URL? {
         try scan().first { $0.name == name }?.ready
@@ -189,9 +199,8 @@ struct ROMMove {
     static func plan(_ name: String, from: ROMFolder, to: ROMFolder) throws -> ROMMove {
         guard let rom = try? from.scan().first(where: { $0.name == name }) else { throw ReviewError.romFilesNotFound }
         if (try? to.scan())?.contains(where: { $0.name == name }) == true { throw ReviewError.alreadyInROMFolder }
-        let subfolder = from.url.appending(path: name, directoryHint: .isDirectory)
         var items: [URL]
-        if (try? subfolder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+        if let subfolder = from.subfolder(of: name, holding: rom.ready) {
             items = [subfolder]
         } else if let ready = rom.ready {
             guard to.reads(fileName: ready.lastPathComponent) else { throw ReviewError.siblingWontReadFile }

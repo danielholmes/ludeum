@@ -38,8 +38,7 @@ extension ROMFolder {
     /// Every file of a ROM from a scan, as `files(named:)`.
     func files(of rom: FolderROMFile) throws -> [URL] {
         var files: [URL] = []
-        let subfolder = url.appending(path: rom.name, directoryHint: .isDirectory)
-        if (try? subfolder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+        if let subfolder = subfolder(of: rom.name, holding: rom.ready) {
             files = try FileManager.default.subpathsOfDirectory(atPath: subfolder.path(percentEncoded: false)).sorted()
                 .map { subfolder.appending(path: $0, directoryHint: .notDirectory) }
                 .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }

@@ -123,6 +123,17 @@ struct ROMArchiverTests {
         #expect(FileManager.default.fileExists(atPath: ps2.url.appending(path: "ICO/readme.html").path(percentEncoded: false)))
     }
 
+    @Test func aFolderOfTheROMsNameThatDoesntHoldTheGameIsLeftAloneAndTheLooseFileIsPacked() async throws {
+        try ps2.add("Okami (USA).iso", String(repeating: "PS2", count: 10_000))
+        try ps2.add("Okami (USA)/notes.txt", "extras")
+
+        try await archiver().archive("Okami (USA)", in: ps2.folder)
+
+        #expect(try trashed() == ["Okami (USA).iso"])
+        #expect(try await SevenZip.find()!.contents(of: ps2.url.appending(path: "Okami (USA).7z")).map(\.path) == ["Okami (USA).iso"])
+        #expect(FileManager.default.fileExists(atPath: ps2.url.appending(path: "Okami (USA)/notes.txt").path(percentEncoded: false)))
+    }
+
     @Test func anArchivesContentsCanBeListedWithoutUnarchivingIt() async throws {
         try ps2.add("ICO/ICO.bin", "image")
         try ps2.add("ICO/readme.html", "readme")

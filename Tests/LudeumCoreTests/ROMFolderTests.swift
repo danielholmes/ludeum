@@ -340,6 +340,14 @@ struct FakeROMFolder {
         #expect(try ps2.folder.files(named: "ICO") == [bin, readme])
     }
 
+    @Test func aFolderOfTheROMsNameThatDoesntHoldTheGameIsntItsFiles() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let iso = try ps2.add("ICO.iso")
+        try ps2.add("ICO/notes.txt")
+
+        #expect(try ps2.folder.files(named: "ICO") == [iso])
+    }
+
     @Test func anArchivedROMFolderROMIsItsArchive() throws {
         let ps2 = try FakeROMFolder(in: directory)
         let archive = try ps2.add("ICO.7z")

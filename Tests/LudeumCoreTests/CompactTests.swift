@@ -56,6 +56,13 @@ import Testing
         #expect(try plan(["lumines.ISO"]).destination == URL(filePath: "/Games/PSP/Lumines (USA).iso"))
     }
 
+    @Test func findersHiddenFilesBesideTheImageAreLeftBehind() throws {
+        let p = try plan([".DS_Store", "lumines.iso"])
+
+        #expect(p.entries.map(\.path) == ["lumines.iso"])
+        #expect(p.destination == URL(filePath: "/Games/PSP/Lumines (USA).iso"))
+    }
+
     @Test func anythingBesideTheImageIsRefused() {
         #expect(throws: ArchiveError.notOneFile(["lumines.iso", "readme.txt"])) { try plan(["lumines.iso", "readme.txt"]) }
     }
@@ -121,6 +128,30 @@ struct CompactTests {
         try snes.add("Zelda (USA).7z")
 
         await #expect(throws: ArchiveError.nothingToDo) { try await archiver.compact("Zelda (USA)", in: snes.folder) }
+    }
+
+    @Test func aPSPROMInASubfolderArchivesWithoutFindersHiddenFilesSoItUnarchives() async throws {
+        let psp = try FakeROMFolder(in: directory, platform: ROMPlatform.psp)
+        try psp.add("Lumines (USA)/Lumines (USA).iso", String(repeating: "PSP", count: 10_000))
+        try psp.add("Lumines (USA)/.DS_Store", "finder")
+
+        try await archiver.archive("Lumines (USA)", in: psp.folder)
+        #expect(try trashed() == ["Lumines (USA)"])
+        try await archiver.unarchive(psp.url.appending(path: "Lumines (USA).7z"), romName: "Lumines (USA)", in: psp.folder)
+
+        #expect(try psp.folder.scan().map(\.fileName) == ["Lumines (USA).iso"])
+    }
+
+    @Test func aPSPROMsSubfolderHoldingMoreThanTheGameIsntArchived() async throws {
+        let psp = try FakeROMFolder(in: directory, platform: ROMPlatform.psp)
+        try psp.add("Lumines (USA)/Lumines (USA).iso", String(repeating: "PSP", count: 10_000))
+        try psp.add("Lumines (USA)/readme.txt", "notes")
+
+        await #expect(throws: ArchiveError.notOneFile(["Lumines (USA).iso", "readme.txt"])) {
+            try await archiver.archive("Lumines (USA)", in: psp.folder)
+        }
+        #expect(try trashed().isEmpty)
+        #expect(try psp.folder.scan().map(\.fileName) == ["Lumines (USA)/Lumines (USA).iso"])
     }
 
     @Test func aPSPROMArchivesAndUnarchivesAsOneLooseFile() async throws {

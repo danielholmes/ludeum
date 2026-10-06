@@ -116,6 +116,17 @@ import Testing
         #expect(try await unmigrated.journal.db.read { try Int64.fetchOne($0, sql: "SELECT platformId FROM rom") } == 22)
     }
 
+    @Test func aFolderOfTheROMsNameThatDoesntHoldTheGameStaysBehindWhenItsFileMoves() async throws {
+        let item = try gold()
+        try gameBoy.add("Pokemon Gold (USA)/notes.txt")
+
+        _ = try await queue.confirm(item, on: 22)
+
+        #expect(exists(colour, "Pokemon Gold (USA).gbc"))
+        #expect(!exists(gameBoy, "Pokemon Gold (USA).gbc"))
+        #expect(exists(gameBoy, "Pokemon Gold (USA)/notes.txt"))
+    }
+
     @Test func aPlatformThatIsntASiblingIsRefused() async throws {
         let item = try gold()
 
