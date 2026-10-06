@@ -301,8 +301,8 @@ struct GameDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         VStack(alignment: .leading) {
-                            // Without its extension; GoodTools region codes spelled out.
-                            Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
+                            // Its file's full name, extension and all.
+                            Text(rom.fileName).strikethrough(rom.missing)
                             Text(
                                 [
                                     readableVersion(rom.version), rom.disc.map { "Disc \($0)" },
@@ -334,7 +334,8 @@ struct GameDetailView: View {
         }
     }
 
-    /// The ROM's files, folded away: "3 files · 702 MB", opening to each file and its size.
+    /// The ROM's files, folded away: "3 files · 702 MB", opening to each file and its size. An archive's size is its
+    /// compressed one, and it lists what's inside, each file at its uncompressed size.
     /// The whole line is the button, not just the chevron.
     private func fileList(_ rom: LudeumROM, _ files: [ROMFileInfo]) -> some View {
         let total = files.compactMap(\.size).reduce(0, +)
@@ -359,16 +360,16 @@ struct GameDetailView: View {
             if expanded {
                 ForEach(files, id: \.url) { file in
                     HStack {
-                        Text(file.name).lineLimit(1).truncationMode(.middle)
+                        Text(file.name).fixedSize(horizontal: false, vertical: true)
                         Spacer()
                         if let size = file.size {
-                            Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)).foregroundStyle(.secondary)
-                                .monospacedDigit()
+                            Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file) + (file.isArchive ? " compressed" : ""))
+                                .foregroundStyle(.secondary).monospacedDigit().fixedSize()
                         }
                     }
                     .font(.callout)
                     .padding(.leading, 18)
-                    if rom.archived, file.url.pathExtension.lowercased() == "7z" { ArchiveContentsList(archive: file.url) }
+                    if file.isArchive { ArchiveContentsList(archive: file.url, archiveSize: file.size) }
                 }
             }
         }
@@ -464,10 +465,12 @@ struct GameDetailView: View {
     }
 }
 
-/// What's inside an archived ROM's `.7z`, read when its file list is opened. An online-only archive
-/// isn't read: that would download all of it just to list it.
+/// What's inside an Archived or Compacted ROM's archive, read from its index when its file list is opened, with
+/// how much room the archive saves. An online-only archive isn't read: that would download all of it just to list it.
 private struct ArchiveContentsList: View {
     let archive: URL
+    /// Its compressed size, to set against what's inside.
+    let archiveSize: Int64?
 
     private enum Contents {
         case loading, onlineOnly
@@ -486,11 +489,15 @@ private struct ArchiveContentsList: View {
             case .listed(let entries):
                 ForEach(entries, id: \.path) { entry in
                     HStack {
-                        Text(entry.path).lineLimit(1).truncationMode(.middle)
+                        Text(entry.path).fixedSize(horizontal: false, vertical: true)
                         Spacer()
                         Text(ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)).foregroundStyle(.secondary)
-                            .monospacedDigit()
+                            .monospacedDigit().fixedSize()
                     }
+                }
+                let unpacked = entries.map(\.size).reduce(0, +)
+                if let archiveSize, let saving = SevenZip.saving(archiveSize: archiveSize, unpacked: unpacked) {
+                    savingLine(saving, unpacked: unpacked)
                 }
             case .failed(let message): Text(message).foregroundStyle(.secondary)
             }
@@ -498,6 +505,20 @@ private struct ArchiveContentsList: View {
         .font(.callout)
         .padding(.leading, 36)
         .task(id: archive) { await load() }
+    }
+
+    /// "1.2 GB uncompressed · 75% smaller", or in red with a warning, "12% bigger", when packing made it take more room.
+    @ViewBuilder private func savingLine(_ saving: Double, unpacked: Int64) -> some View {
+        let size = ByteCountFormatter.string(fromByteCount: unpacked, countStyle: .file)
+        // A few bytes bigger still warns, not as "0% bigger".
+        let percent = abs(saving) < 0.005 ? "under 1%" : abs(saving).formatted(.percent.precision(.fractionLength(0)))
+        if saving < 0 {
+            Label("\(size) uncompressed · \(percent) bigger", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .help("The archive takes more room than its files unpacked.")
+        } else {
+            Text("\(size) uncompressed · \(percent) smaller").foregroundStyle(.secondary)
+        }
     }
 
     private func load() async {

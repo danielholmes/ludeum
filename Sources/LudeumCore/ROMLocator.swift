@@ -46,4 +46,8 @@ public struct ROMFileInfo: Sendable, Equatable {
     public let size: Int64?
     public let created: Date?
     public let modified: Date?
+
+    /// A `.7z` or `.zip` (an Archived or Compacted ROM's, or one inside its subfolder), whose contents can be listed
+    /// from its index.
+    public var isArchive: Bool { ["7z", "zip"].contains(url.pathExtension.lowercased()) }
 }

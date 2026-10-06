@@ -23,6 +23,13 @@ public struct SevenZip: Sendable {
     /// on disk, but an online-only one is downloaded first (check `isOnDisk(_:)`).
     public func contents(of archive: URL) async throws -> [Entry] { try await list(archive) }
 
+    /// How much smaller the archive is than what's inside it (`unpacked`, its entries' sizes from its index): 0.75
+    /// when it takes a quarter of the room. Below zero when it's bigger; nil when there's nothing inside to compare it with.
+    public static func saving(archiveSize: Int64, unpacked: Int64) -> Double? {
+        guard unpacked > 0 else { return nil }
+        return Double(unpacked - archiveSize) / Double(unpacked)
+    }
+
     /// False for a cloud file (Dropbox, iCloud) that's online-only: reading it would download it all.
     public static func isOnDisk(_ file: URL) -> Bool {
         guard let values = try? file.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),

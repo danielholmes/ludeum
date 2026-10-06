@@ -188,3 +188,17 @@ struct ROMArchiverTests {
         #expect(!FileManager.default.fileExists(atPath: leftover.path(percentEncoded: false)))
     }
 }
+
+@Suite struct ArchiveSavingTests {
+    @Test func theSavingIsHowMuchSmallerTheArchiveIsThanWhatsInsideIt() {
+        #expect(SevenZip.saving(archiveSize: 250, unpacked: 1000) == 0.75)
+    }
+
+    @Test func anArchiveBiggerThanWhatsInsideItSavesLessThanNothing() {
+        #expect(SevenZip.saving(archiveSize: 110, unpacked: 100) == -0.1)
+    }
+
+    @Test func anArchiveWithNothingInsideHasNoSaving() {
+        #expect(SevenZip.saving(archiveSize: 32, unpacked: 0) == nil)
+    }
+}

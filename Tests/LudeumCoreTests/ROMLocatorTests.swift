@@ -43,6 +43,26 @@ func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, 
         #expect(files.first?.size == 5)
     }
 
+    @Test func anArchivedOrCompactedROMsFileIsAnArchiveButAPlayableROMsImageIsNot() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        try ps2.add("ICO (USA).7z")
+        let n64 = try FakeROMFolder(in: directory, platform: 4)
+        try n64.add("Mario Kart 64 (USA).ZIP")
+        try ps2.add("Okami (USA).iso")
+        let locator = ROMLocator(romFolders: [ps2.folder, n64.folder])
+
+        let archived = locator.files(of: folderROM("ICO (USA)", fileName: "ICO (USA).7z", archived: true))
+        let compacted = locator.files(
+            of: LudeumROM(
+                id: 2, folderName: "Mario Kart 64 (USA)", platformId: 4, fileName: "Mario Kart 64 (USA).ZIP", name: "Mario Kart 64 (USA)",
+                version: "", disc: nil, missing: false, archived: false))
+        let loose = locator.files(of: folderROM("Okami (USA)"))
+
+        #expect(archived.map(\.isArchive) == [true])
+        #expect(compacted.map(\.isArchive) == [true])
+        #expect(loose.map(\.isArchive) == [false])
+    }
+
     @Test func aROMWithNoROMFolderSetIsNotFound() throws {
         let locator = ROMLocator(romFolders: [])
 
