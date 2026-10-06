@@ -1,13 +1,12 @@
 import Foundation
 import Synchronization
 
-/// Work that runs alone: while one runs, the other can't start.
+/// Work that runs alone: while it runs, no other can start.
 public enum ExclusiveWork: Sendable, Equatable {
     case importing
-    case syncing
 }
 
-/// Keeps Import and Sync exclusive, and holds the background refresh while either runs,
+/// Lets one Import run at a time, and holds the background refresh while it runs,
 /// since they share the rate limiters.
 public final class WorkGate: Sendable {
     private struct State {
@@ -21,7 +20,7 @@ public final class WorkGate: Sendable {
 
     public var current: ExclusiveWork? { state.withLock { $0.current } }
 
-    /// Starts `work`, or returns false if an Import or Sync is already running.
+    /// Starts `work`, or returns false if an Import is already running.
     public func begin(_ work: ExclusiveWork) -> Bool {
         state.withLock {
             guard $0.current == nil else { return false }
@@ -41,7 +40,7 @@ public final class WorkGate: Sendable {
         for waiter in waiters { waiter.resume() }
     }
 
-    /// Returns once no Import or Sync is running, or when the waiting task is cancelled.
+    /// Returns once no Import is running, or when the waiting task is cancelled.
     public func waitUntilClear() async {
         let id = UUID()
         await withTaskCancellationHandler {

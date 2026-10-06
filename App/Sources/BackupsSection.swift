@@ -37,7 +37,7 @@ struct BackupsSection: View {
             Text("Backups")
         } footer: {
             Text(
-                "Taken before every Import, Sync and deletion, and daily. Kept: all from the last 7 days, then one a day for 30 days, then one a month."
+                "Taken before every Import and deletion, and daily. Kept: all from the last 7 days, then one a day for 30 days, then one a month."
             )
             .foregroundStyle(.secondary)
         }

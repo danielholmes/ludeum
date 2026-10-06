@@ -2,10 +2,10 @@ import LudeumCore
 import SwiftUI
 import os
 
-/// Work that isn't a screen's own: the launch refresh of the cache, Import and Sync exclusivity,
+/// Work that isn't a screen's own: the launch refresh of the cache, one Import at a time,
 /// and whether the journal can be edited right now.
 @Observable @MainActor final class BackgroundWork {
-    /// Shared with `CacheRefresh`, which waits while an Import or Sync holds it.
+    /// Shared with `CacheRefresh`, which waits while an Import holds it.
     let gate = WorkGate()
     /// The refresh's (done, total) while it runs; nil otherwise.
     private(set) var refreshing: (done: Int, total: Int)?
@@ -16,7 +16,7 @@ import os
 
     private static let log = Logger(subsystem: "org.danielholmes.Ludeum", category: "refresh")
 
-    /// Starts Import or Sync, or returns false while the other (or another of the same) runs.
+    /// Starts an Import, or returns false while another runs.
     func begin(_ work: ExclusiveWork) -> Bool {
         guard gate.begin(work) else { return false }
         exclusive = work

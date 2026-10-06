@@ -27,7 +27,7 @@ import SwiftUI
     let changes = LudeumChanges()
     /// Decoded Covers and genres, shared by every screen.
     let memory = MemoryCache()
-    /// The launch refresh, Import and Sync exclusivity, and the journal's edit lock.
+    /// The launch refresh, one Import at a time, and the journal's edit lock.
     let work = BackgroundWork()
     /// Archive and Unarchive, and other long work, one at a time.
     let tasks = BackgroundTasks()

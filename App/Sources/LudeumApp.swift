@@ -9,7 +9,6 @@ struct LudeumApp: App {
     private let journal: LudeumStore?
     private let services: Services
     private let importModel: ImportModel
-    private let syncModel: SyncModel
 
     init() {
         let settings = AppSettings()
@@ -20,13 +19,12 @@ struct LudeumApp: App {
         journal = try? LudeumStore(directory: AppSettings.appFolder, backups: settings.backups())
         services = Services(settings: settings, journal: journal)
         importModel = ImportModel(services: services)
-        syncModel = SyncModel(services: services, importModel: importModel)
     }
 
     var body: some Scene {
         // One window: no New Window, and closing it hides it until the Dock icon is clicked.
         Window("Ludeum", id: "main") {
-            MainWindow(services: services, importModel: importModel, syncModel: syncModel)
+            MainWindow(services: services, importModel: importModel)
                 .modifier(OpenSettingsWithoutCredentials(settings: settings))
                 .modifier(DailyBackupOnLaunch(journal: journal, backups: settings.backups()))
         }

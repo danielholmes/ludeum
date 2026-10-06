@@ -7,8 +7,6 @@ import LudeumCore
 //   ludeum-import match-report <snapshot>  Match a snapshot of OpenEmu's database and print the counts.
 //   ludeum-import first-import <library> <journal folder> [--commit]
 //                                           The first Import into a scratch journal (OpenEmu is only read).
-//   ludeum-import sync <library COPY> <journal folder> [--write]
-//                                           Previews (or writes) a Sync into a copy of the library.
 //   ludeum-import migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--roms <folder>]
 //                                           Moves OpenEmu's ROMs into ROM folders, once (OpenEmu closed).
 //
@@ -62,12 +60,6 @@ case "first-import" where CommandLine.arguments.count >= 4:
         library: URL(filePath: CommandLine.arguments[2], directoryHint: .isDirectory),
         journalFolder: URL(filePath: CommandLine.arguments[3], directoryHint: .isDirectory),
         commit: CommandLine.arguments.contains("--commit"), igdb: igdb, hasheous: hasheous)
-case "sync" where CommandLine.arguments.count >= 4:
-    let (igdb, _) = try clients()
-    try await syncRun(
-        library: URL(filePath: CommandLine.arguments[2], directoryHint: .isDirectory),
-        journalFolder: URL(filePath: CommandLine.arguments[3], directoryHint: .isDirectory),
-        write: CommandLine.arguments.contains("--write"), igdb: igdb)
 case "migrate-openemu":
     try await migrateOpenEmuRun(Array(CommandLine.arguments.dropFirst(2)))
 default:

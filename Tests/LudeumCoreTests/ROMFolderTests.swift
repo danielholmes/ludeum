@@ -252,18 +252,6 @@ struct FakeROMFolder {
         #expect(try rom("Shadow of the Colossus (USA)") == nil)
     }
 
-    @Test func syncLeavesAPS2GameOutOfOpenEmu() async throws {
-        let game = try await okamiInTheJournal()
-        try j.journal.setRating(game, Rating(tenths: 90))
-        let sync = OpenEmuSync(
-            journal: j.journal, covers: h.covers(j.journal), backupFolder: h.directory.appending(path: "openemu backups"),
-            isOpenEmuRunning: { false })
-
-        _ = try await sync.sync(library: oe.folder, deleting: [])
-
-        #expect(try await oe.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM ZGAME WHERE ZRATING > 0") } == 0)
-    }
-
     @Test func theFileAPlayOpensIsTheReadyOne() async throws {
         let game = try await okamiInTheJournal()
         #expect(try ps2.folder.readyFile(named: "Okami (USA)") == nil)

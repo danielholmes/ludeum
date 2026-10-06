@@ -125,26 +125,24 @@ import Testing
 }
 
 @Suite struct WorkGateTests {
-    @Test func importAndSyncAreExclusive() {
+    @Test func oneImportRunsAtATime() {
         let gate = WorkGate()
 
         #expect(gate.begin(.importing))
-        #expect(!gate.begin(.syncing))
         #expect(!gate.begin(.importing))
         #expect(gate.current == .importing)
 
         gate.end(.importing)
-        #expect(gate.begin(.syncing))
-        #expect(gate.current == .syncing)
+        #expect(gate.current == nil)
+        #expect(gate.begin(.importing))
     }
 
     @Test func endingWorkThatIsntRunningChangesNothing() {
         let gate = WorkGate()
-        #expect(gate.begin(.syncing))
 
         gate.end(.importing)
 
-        #expect(gate.current == .syncing)
+        #expect(gate.current == nil)
     }
 
     @Test func aCancelledWaiterStopsWaiting() async {

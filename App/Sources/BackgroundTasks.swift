@@ -74,6 +74,6 @@ struct BackgroundTasksPanel: View {
                 .font(.caption).monospacedDigit()
             ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).controlSize(.small)
         }
-        .help("Refreshing IGDB and Hasheous data older than 60 days. Pauses during an Import or Sync.")
+        .help("Refreshing IGDB and Hasheous data older than 60 days. Pauses during an Import.")
     }
 }

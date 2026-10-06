@@ -99,16 +99,6 @@ public enum CoverSource: Sendable, Equatable {
     /// IGDB's Cover art in the cache.
     case igdb(URL, imageID: String)
     case placeholder
-
-    /// Which image it is, as Sync records it in `syncedCover.coverKey`.
-    var key: String? {
-        switch self {
-        case .upload(let cover): cover.sha256
-        case .libretro(_, let path): "libretro:\(path)"
-        case .igdb(_, let imageID): imageID
-        case .placeholder: nil
-        }
-    }
 }
 
 /// A Game's Cover: my upload, else libretro Box art, else IGDB's Cover art,

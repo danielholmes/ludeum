@@ -5,7 +5,6 @@ import SwiftUI
 struct MainWindow: View {
     let services: Services
     let importModel: ImportModel
-    let syncModel: SyncModel
     @State private var selectedGame: GameID?
     /// The selected screen and Game, kept for the next launch.
     @AppStorage("mainSelectedScreen") private var savedScreen = Data()
@@ -88,8 +87,6 @@ struct MainWindow: View {
                 case .reviewQueue:
                     ReviewQueueScreen(services: services, checkAgain: importModel.importNow, shownGame: $selectedGame)
                         .disabled(services.work.journalLocked)
-                case .syncPage:
-                    SyncPage(model: syncModel)
                 case .importPage:
                     ImportPage(model: importModel)
                 case let screen?:
@@ -197,7 +194,6 @@ struct Sidebar: View {
             Section("OpenEmu") {
                 row(.reviewQueue, badge: reviewQueueCount)
                 row(.importPage, running: services.work.exclusive == .importing)
-                row(.syncPage, running: services.work.exclusive == .syncing)
             }
             if !platforms.isEmpty {
                 Section("Platforms") {
@@ -233,8 +229,7 @@ struct Sidebar: View {
         ) {
             Button("Delete List", role: .destructive) { if let list = deleting { save { try $0.deleteList(list.id) } } }
         } message: {
-            Text(
-                "Its Games stay in the journal. The next Sync deletes its collection in OpenEmu. There's no undo; a backup is taken first.")
+            Text("Its Games stay in the journal. There's no undo; a backup is taken first.")
         }
         .alert("Couldn't change the List", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") {}
@@ -243,7 +238,7 @@ struct Sidebar: View {
         }
     }
 
-    /// `running` animates the icon while that screen's work (Import, Sync) runs.
+    /// `running` animates the icon while that screen's work (an Import) runs.
     private func row(_ screen: Screen, badge: Int = 0, running: Bool = false) -> some View {
         // The badge goes inside the tag: a badge outside it hides the tag, and the row can't be selected.
         Label {

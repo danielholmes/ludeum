@@ -57,7 +57,7 @@ import SwiftUI
             return
         }
         guard services.work.begin(.importing) else {
-            error = "Wait for the running Import or Sync to finish."
+            error = "Wait for the running Import to finish."
             return
         }
         let previous = state
@@ -137,7 +137,6 @@ import SwiftUI
             runAgain = true
             return
         }
-        // A Sync is running: OpenEmu is closed for it, so there's nothing new to Import yet.
         guard services.work.begin(.importing) else { return }
         importingNow = true
         Self.isRunning = true
@@ -186,7 +185,7 @@ import SwiftUI
     func commit() {
         guard let draft, let firstImport, !committing else { return }
         guard services.work.begin(.importing) else {
-            error = "Wait for the running Import or Sync to finish."
+            error = "Wait for the running Import to finish."
             return
         }
         committing = true

@@ -17,7 +17,6 @@ enum Screen: Hashable, Codable {
     case pinned(Pin)
     case reviewQueue
     case importPage
-    case syncPage
 
     var title: String {
         switch self {
@@ -33,7 +32,6 @@ enum Screen: Hashable, Codable {
         case .pinned(let pin): pin.name
         case .reviewQueue: "Review queue"
         case .importPage: "Import"
-        case .syncPage: "Sync"
         }
     }
 
@@ -57,7 +55,6 @@ enum Screen: Hashable, Codable {
             }
         case .reviewQueue: "tray"
         case .importPage: "square.and.arrow.down"
-        case .syncPage: "arrow.triangle.2.circlepath"
         }
     }
 
