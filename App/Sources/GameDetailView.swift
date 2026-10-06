@@ -340,7 +340,11 @@ struct GameDetailView: View {
                         }
                         Spacer()
                         if ROMArchiving.action(for: rom) != nil { archiveButton(rom) }
-                        if !rom.missing {
+                        if rom.missing {
+                            // Gone from its ROM folder for good, e.g. replaced by a renamed file Import found as a new ROM.
+                            Button("Forget") { save { try $0.forgetROM(rom.id) } }
+                                .help("Stop showing this missing ROM. If its file comes back, an Import finds it again.")
+                        } else {
                             Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
                                 .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
                         }
@@ -589,6 +593,7 @@ func journalErrorText(_ error: Error) -> String {
     case .listNameTaken: "There's already a List with that name."
     case .playerNameTaken: "There's already a Player with that name."
     case .gameHasPresentROMs: "This Game has ROMs in its ROM folder. Move them out first."
+    case .romIsPresent: "That ROM is in its ROM folder, so there's nothing to forget."
     case .igdbLinkTaken: "Another Game already has that IGDB link."
     case .alreadyLinked: "This Game already has an IGDB link. Use Change IGDB link… to replace it."
     case .gameHasROMs: "This Game has ROMs, so its Platform can't change."

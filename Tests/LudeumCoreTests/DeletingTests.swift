@@ -40,3 +40,34 @@ import Testing
         try h.journal.recordROM(game: again, fileName: "Super Metroid (Japan, USA).sfc", missing: false)
     }
 }
+
+@Suite struct ForgettingROMsTests {
+    let h: LudeumHarness
+    let game: GameID
+
+    init() throws {
+        h = try LudeumHarness()
+        game = try h.addGame("Road Rash")
+    }
+
+    private func rom(_ fileName: String) throws -> LudeumROM {
+        try #require(try h.journal.roms(of: game).first { $0.fileName == fileName })
+    }
+
+    @Test func forgetsAMissingROMAndKeepsTheGame() throws {
+        try h.journal.recordROM(game: game, fileName: "Road Rash.7z", missing: true)
+        try h.journal.recordROM(game: game, fileName: "Road Rash (USA).7z", missing: false)
+
+        try h.journal.forgetROM(try rom("Road Rash.7z").id)
+
+        #expect(try h.journal.roms(of: game).map(\.fileName) == ["Road Rash (USA).7z"])
+        #expect(try h.journal.game(game).name == "Road Rash")
+    }
+
+    @Test func refusesAPresentROM() throws {
+        try h.journal.recordROM(game: game, fileName: "Road Rash (USA).7z", missing: false)
+
+        #expect(throws: LudeumError.romIsPresent) { try h.journal.forgetROM(try rom("Road Rash (USA).7z").id) }
+        #expect(try h.journal.roms(of: game).count == 1)
+    }
+}

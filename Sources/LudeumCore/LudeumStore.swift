@@ -9,6 +9,8 @@ public enum LudeumError: Error, Equatable {
     case listNameTaken
     case playerNameTaken
     case gameHasPresentROMs
+    /// Only a missing ROM is forgotten by hand: a present one is in its ROM folder, where Import would find it again.
+    case romIsPresent
     case gameNotFound
     case nameRequired
     /// A Game's IGDB link is changed only on purpose (`replacing`), and never removed.

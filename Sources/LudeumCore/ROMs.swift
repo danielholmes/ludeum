@@ -28,6 +28,15 @@ extension LudeumStore {
         }
     }
 
+    /// Forgets a missing ROM, so its Game no longer shows it. Its Game and journal data stay; if its file comes back,
+    /// the next Import records it afresh. Refused for a present ROM, which an Import would only find again.
+    public func forgetROM(_ rom: Int64) throws {
+        try db.write { db in
+            try db.execute(sql: "DELETE FROM rom WHERE id = ? AND missing", arguments: [rom])
+            if db.changesCount == 0 { throw LudeumError.romIsPresent }
+        }
+    }
+
     private func hasPresentROMs(_ db: Database, _ game: GameID) throws -> Bool {
         try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ? AND NOT missing)", arguments: [game])!
     }

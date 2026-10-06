@@ -19,7 +19,7 @@ One specific edition of a Game, e.g. a region, a revision, or a fan translation 
 _Avoid_: Release, revision, dump
 
 **ROM**:
-A game file in a ROM folder. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten. It is forgotten only when its Game is deleted, or when the move from OpenEmu, or the recovery of its renamed files after it, finds it duplicates a playlist's disc, and a Game can't be deleted while it has a present ROM.
+A game file in a ROM folder. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten. It is forgotten only when I forget it by hand, when its Game is deleted, or when the move from OpenEmu, or the recovery of its renamed files after it, finds it duplicates a playlist's disc, and a Game can't be deleted while it has a present ROM.
 _Avoid_: File, image
 
 **ROM folder**:
