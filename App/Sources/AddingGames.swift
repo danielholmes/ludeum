@@ -64,7 +64,7 @@ import SwiftUI
 
     var libretro: LibretroThumbnails? { cache.map { LibretroThumbnails(cache: $0) } }
 
-    var covers: Covers? { journal.map { Covers(journal: $0, cache: cache, igdb: igdb, libretro: libretro) } }
+    var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb, libretro: libretro) } }
 }
 
 /// The one IGDB search component: a search box, an optional Platform filter, genre, theme and company

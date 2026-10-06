@@ -105,14 +105,12 @@ public enum CoverSource: Sendable, Equatable {
 /// else a placeholder. Everything but uploads lives in the cache, downloaded the first time it's shown.
 public struct Covers: Sendable {
     let journal: LudeumStore
-    let cache: CacheStore?
     let igdb: IGDBClient?
     let libretro: LibretroThumbnails?
 
     /// Without a client (no cache, no credentials) its source is skipped.
-    public init(journal: LudeumStore, cache: CacheStore?, igdb: IGDBClient?, libretro: LibretroThumbnails?) {
+    public init(journal: LudeumStore, igdb: IGDBClient?, libretro: LibretroThumbnails?) {
         self.journal = journal
-        self.cache = cache
         self.igdb = igdb
         self.libretro = libretro
     }

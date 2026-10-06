@@ -42,5 +42,5 @@ final class Harness {
 
 extension Harness {
     /// Covers with every source wired to the fake internet.
-    func covers(_ journal: LudeumStore) -> Covers { Covers(journal: journal, cache: cache, igdb: igdb, libretro: libretro) }
+    func covers(_ journal: LudeumStore) -> Covers { Covers(journal: journal, igdb: igdb, libretro: libretro) }
 }
