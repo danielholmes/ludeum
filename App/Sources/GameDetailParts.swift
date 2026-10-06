@@ -1,3 +1,4 @@
+import AppKit
 import LudeumCore
 import SwiftUI
 
@@ -325,4 +326,37 @@ enum FactStyle {
     static let value = Font.body
     /// The label column's width, so the values line up.
     static let labelWidth: CGFloat = 92
+}
+
+/// Opens `play`'s ROM in `emulator`, with every Emulator setting on the command line. A running Emulator gets the ROM
+/// in its open window. `refused` gets why it couldn't, then or once the Emulator fails to open; `alert` gets a version
+/// check's title and message.
+@MainActor func startPlay(
+    _ play: Play, in emulator: Emulator, services: Services, refused: @escaping @MainActor (String) -> Void,
+    alert: (_ title: String, _ message: String) -> Void
+) {
+    let version: Play.VersionStatus =
+        if let tooOld = services.versions.tooOldMessage(emulator) {
+            .tooOld(tooOld)
+        } else if let warning = services.versions.warningOnce(emulator) {
+            .warn(warning)
+        } else {
+            .ok
+        }
+    let locator = ROMLocator(romFolders: services.settings.romFolders)
+    switch play.prepare(locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:)) {
+    case .refused(.tooOld(let message)):
+        alert("Can't Play in \(emulator.name)", message)
+    case .refused(let refusal):
+        refused(refusal.message)
+    case .open(let app, let arguments, let warning):
+        if let warning { alert("Check \(emulator.name)'s version", warning) }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.arguments = arguments
+        // A second MesenCE hands its arguments to the running one and quits; DuckStation opens another window.
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
+            if let error { Task { @MainActor in refused("Couldn't open \(emulator.name): \(error.localizedDescription)") } }
+        }
+    }
 }

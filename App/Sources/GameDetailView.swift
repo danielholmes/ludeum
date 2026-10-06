@@ -481,29 +481,7 @@ struct GameDetailView: View {
     /// Emulator gets the ROM in its open window.
     private func play(in emulator: Emulator) {
         playError = nil
-        let version: Play.VersionStatus =
-            if let tooOld = services.versions.tooOldMessage(emulator) {
-                .tooOld(tooOld)
-            } else if let warning = services.versions.warningOnce(emulator) {
-                .warn(warning)
-            } else {
-                .ok
-            }
-        switch playing.prepare(locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:)) {
-        case .refused(.tooOld(let message)):
-            versionAlert = ("Can't Play in \(emulator.name)", message)
-        case .refused(let refusal):
-            playError = refusal.message
-        case .open(let app, let arguments, let warning):
-            if let warning { versionAlert = ("Check \(emulator.name)'s version", warning) }
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.arguments = arguments
-            // A second MesenCE hands its arguments to the running one and quits; DuckStation opens another window.
-            configuration.createsNewApplicationInstance = true
-            NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
-                if let error { Task { @MainActor in self.playError = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
-            }
-        }
+        startPlay(playing, in: emulator, services: services, refused: { playError = $0 }, alert: { versionAlert = ($0, $1) })
     }
 
     /// Reveals the ROM's file in its ROM folder.

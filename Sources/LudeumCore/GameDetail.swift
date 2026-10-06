@@ -51,6 +51,15 @@ extension LudeumStore {
 
     /// The Game's ROMs, present first, then by file name.
     public func roms(of game: GameID) throws -> [LudeumROM] {
+        try roms(where: "r.gameId = ?", arguments: [game])
+    }
+
+    /// A ROM, Matched or not, e.g. an unmatched one to Play from the Review queue.
+    public func rom(_ id: Int64) throws -> LudeumROM? {
+        try roms(where: "r.id = ?", arguments: [id]).first
+    }
+
+    private func roms(where condition: String, arguments: StatementArguments) throws -> [LudeumROM] {
         try db.read { db in
             try Row.fetchAll(
                 db,
@@ -59,9 +68,9 @@ extension LudeumStore {
                         COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
                         \(try Self.hasNeedsPlaylist(db) ? "r.needsPlaylist" : "0") AS needsPlaylist
                     FROM rom r
-                    WHERE r.gameId = ?
+                    WHERE \(condition)
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
-                    """, arguments: [game]
+                    """, arguments: arguments
             ).map { row in
                 let fileName: String = row["fileName"]
                 let parsed = ROMName((fileName as NSString).deletingPathExtension)

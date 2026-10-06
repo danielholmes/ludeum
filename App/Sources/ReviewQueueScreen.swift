@@ -284,6 +284,10 @@ private struct ReviewItemDetail: View {
     @State private var makingByHand = false
     @State private var deleting = false
     @State private var duplicateWarning: (() -> Void)?
+    /// The ROM itself, for Play.
+    @State private var rom: LudeumROM?
+    @State private var playError: String?
+    @State private var versionAlert: (title: String, message: String)?
 
     /// This ROM beside the suggestion, row by row: name, platform (shared ones highlighted), region and year.
     @ViewBuilder private var comparison: some View {
@@ -403,6 +407,7 @@ private struct ReviewItemDetail: View {
                 LabeledContent("Platform", value: romPlatform?.name ?? "")
                 Text(reason).foregroundStyle(.secondary)
                 if item.missing { Text("Its file is missing from its ROM folder.").foregroundStyle(.orange) }
+                if let emulator = playableEmulator { playControls(emulator) }
             }
             if item.suggestedIgdbGameId != nil || picked != nil {
                 Section(picked == nil ? "Suggestion" : "Picked from search") {
@@ -492,6 +497,13 @@ private struct ReviewItemDetail: View {
         } message: {
             Text(item.missing ? "It leaves the Review queue." : "Its files go to the Trash and it leaves the Review queue.")
         }
+        .alert(
+            versionAlert?.title ?? "", isPresented: Binding(get: { versionAlert != nil }, set: { if !$0 { versionAlert = nil } })
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(versionAlert?.message ?? "")
+        }
     }
 
     private var reason: String {
@@ -505,6 +517,42 @@ private struct ReviewItemDetail: View {
         }
     }
 
+    /// A No suggestion ROM's Emulator, to Play it and see what it is: none for a missing ROM, a Platform with no
+    /// Emulator, or one the launch check found isn't installed.
+    private var playableEmulator: Emulator? {
+        guard item.suggestedIgdbGameId == nil, !item.missing, let emulator = Emulator.of(platformId: item.platformId),
+            !services.versions.notInstalled.contains(emulator.bundleIdentifier)
+        else { return nil }
+        return emulator
+    }
+
+    /// The ROM's Play, with its default Emulator settings: settings are kept per Game, and it has none yet.
+    private var playing: Play? {
+        rom.map { rom in
+            Play(
+                platformId: item.platformId, platformName: ROMPlatform.all[item.platformId]?.name ?? "", roms: [rom],
+                settings: EmulatorSettings(), busyROMs: services.tasks.isActive(.rom(rom.id)) ? [rom.id] : [])
+        }
+    }
+
+    @ViewBuilder private func playControls(_ emulator: Emulator) -> some View {
+        let refusal = playing?.availability.refusal
+        Button {
+            guard let playing else { return }
+            playError = nil
+            startPlay(playing, in: emulator, services: services, refused: { playError = $0 }, alert: { versionAlert = ($0, $1) })
+        } label: {
+            Label("Play", systemImage: "play.fill")
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(services.versions.tooOldMessage(emulator) == nil ? nil : .red)
+        .disabled(playing == nil || refusal != nil)
+        .help(refusal?.message ?? "Play in \(emulator.name), to see what it is")
+        if let message = playError ?? refusal?.message ?? services.versions.tooOldMessage(emulator) {
+            Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     /// Loads the picked search result's record into the suggestion.
     private func showPicked() async {
         guard let picked, let igdb = services.igdb else { return }
@@ -513,6 +561,8 @@ private struct ReviewItemDetail: View {
 
     private func load() async {
         picked = nil
+        playError = nil
+        rom = try? services.journal?.rom(item.romId)
         suggestion = nil
         checksumGame = nil
         confirmPlatform = item.platformId

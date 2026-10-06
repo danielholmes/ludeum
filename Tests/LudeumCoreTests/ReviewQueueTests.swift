@@ -71,6 +71,16 @@ import Testing
         #expect(items.count == 5)
     }
 
+    @Test func anUnmatchedROMCanBeReadToPlayIt() throws {
+        let rom = try unmatched(1, "Unknown Homebrew")
+
+        let read = try #require(try j.journal.rom(rom))
+
+        #expect(read.fileName == "Unknown Homebrew.7z")
+        #expect(read.platformId == 19)
+        #expect(try j.journal.rom(rom + 1) == nil)
+    }
+
     @Test func confirmingMatchesTheROMAndAppliesItsHeldOpenEmuData() async throws {
         let rom = try unmatched(
             1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true,
