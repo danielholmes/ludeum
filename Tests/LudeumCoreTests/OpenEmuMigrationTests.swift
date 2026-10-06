@@ -271,6 +271,28 @@ import Testing
         #expect(try boxArt() == "old.png")
     }
 
+    func lookedUp() throws -> Bool {
+        try j.journal.db.read { try Bool.fetchOne($0, sql: "SELECT libretroLookedUp FROM rom")! }
+    }
+
+    @Test func aLookupThatFailsIsLeftForTheNextImportWhichStillKeepsTheOldBoxArtOnAMiss() async throws {
+        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Mario World (USA)"])
+        try lookedUpMetroid(old: "old.png")
+        h.internet.setDown(FakeInternet.Hosts.github, true)
+
+        try await migration().run()
+
+        #expect(try !lookedUp())
+        #expect(try boxArt() == "old.png")
+
+        h.internet.setDown(FakeInternet.Hosts.github, false)
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
+            .run(romFolders: [])
+
+        #expect(try lookedUp())
+        #expect(try boxArt() == "old.png")
+    }
+
     @Test func openEmusCachedBoxArtIsDeleted() async throws {
         _ = try h.cache.store(image: Data("art".utf8), at: "openemu/ART-1")
 

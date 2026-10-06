@@ -65,6 +65,20 @@ import Testing
 
         #expect(try roms()[0]["libretroBoxart"] as String? != nil)
     }
+
+    @Test func aFailedLookupLeavesThatROMForNextTimeAndTheRestAreStillLookedUp() async throws {
+        // libretro has no listing for NES here, so its lookup fails.
+        let nes = try FakeROMFolder(in: h.directory, platform: 18)
+        try nes.add("Metroid (USA).nes")
+        try snes.add("Super Metroid (USA).sfc")
+
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
+            .run(romFolders: [nes.folder, snes.folder])
+
+        let rows = try roms()
+        #expect(rows.map { $0["libretroLookedUp"] as Bool } == [false, true])
+        #expect(rows[1]["libretroBoxart"] as String? != nil)
+    }
 }
 
 /// The migration that ships box-art Covers, on a journal written by the first spec.

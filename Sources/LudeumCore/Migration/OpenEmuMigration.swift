@@ -143,12 +143,17 @@ public struct OpenEmuMigration {
             }
         }
 
+        // Each ROM is to be looked up in libretro again by its new name: one whose lookup doesn't run below waits
+        // for the next Import.
         try await journal.db.write { db in
             for rom in plan.roms {
                 try ROMPlatform.ensureKnown(db, rom.platformId)
                 try db.execute(
-                    sql:
-                        "UPDATE rom SET openEmuPk = NULL, platformId = ?, folderName = ?, fileName = ?, name = ?, missing = ? WHERE id = ?",
+                    sql: """
+                        UPDATE rom SET openEmuPk = NULL, platformId = ?, folderName = ?, fileName = ?, name = ?, missing = ?,
+                            libretroLookedUp = 0
+                        WHERE id = ?
+                        """,
                     arguments: [rom.platformId, rom.folderName, rom.fileName, rom.folderName, rom.missing, rom.romId])
             }
         }
@@ -156,8 +161,7 @@ public struct OpenEmuMigration {
         try journal.completeMigrations()
         // Box art: OpenEmu's cached copies go, and libretro is looked up again by the new names.
         libretro?.cache.removeImages(under: "openemu")
-        let ids = plan.roms.map { String($0.romId) }.joined(separator: ", ")
-        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(romsWhere: "rom.id IN (\(ids))", keepingOnMiss: true)
+        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(plan.roms.map(\.romId))
         return OpenEmuMigrationResult(plan: plan, backup: backup.url, log: log, batterySaveArchive: archive)
     }
 
