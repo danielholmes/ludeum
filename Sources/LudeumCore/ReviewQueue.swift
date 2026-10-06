@@ -227,7 +227,7 @@ extension LudeumStore {
         let lines = discs.map { $0.standardizedFileURL.pathComponents.dropFirst(subfolder.pathComponents.count).joined(separator: "/") }
         let playlist = subfolder.appending(path: "\(item.romName).m3u", directoryHint: .notDirectory)
         try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: playlist, options: .withoutOverwriting)
-        let file = try folder.scan().first { $0.name == item.romName }
+        let file = try folder.rom(named: item.romName)
         try db.write { db in try Self.setFolderROM(db, item.romId, to: file) }
     }
 

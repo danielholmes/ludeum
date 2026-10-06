@@ -31,7 +31,7 @@ extension ROMFolder {
     /// Every file of the ROM `name`: everything in its subfolder, else its loose file (with a cue
     /// sheet's tracks), and its `.7z` and the Compacted copy beside its ready file, when there is one.
     public func files(named name: String) throws -> [URL] {
-        guard let rom = try scan().first(where: { $0.name == name }) else { return [] }
+        guard let rom = try rom(named: name) else { return [] }
         return try files(of: rom)
     }
 

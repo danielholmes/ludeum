@@ -148,7 +148,7 @@ public struct ROMArchiver: Sendable {
     /// repacked instead: unpacked, packed again, and its listing checked against the `.7z`'s before that goes to the
     /// Trash.
     public func compact(_ name: String, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws {
-        guard let format = folder.compactExtension, let rom = try folder.scan().first(where: { $0.name == name }) else {
+        guard let format = folder.compactExtension, let rom = try folder.rom(named: name) else {
             throw ArchiveError.nothingToDo
         }
         if let ready = rom.ready {

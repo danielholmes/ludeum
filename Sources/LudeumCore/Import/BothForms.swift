@@ -20,7 +20,7 @@ public struct BothForms: Sendable, Equatable {
 extension ROMFolder {
     /// How the ROM `name` is resolved when it's kept in both forms; nil when it isn't.
     public func bothForms(named name: String) throws -> BothForms? {
-        try scan().first { $0.name == name }.flatMap(bothForms)
+        try rom(named: name).flatMap(bothForms)
     }
 
     /// As `bothForms(named:)`, for a ROM from a scan.

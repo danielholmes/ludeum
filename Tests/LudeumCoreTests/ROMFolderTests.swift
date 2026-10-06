@@ -134,6 +134,35 @@ struct FakeROMFolder {
         #expect(Emulator.of(platformId: 5) == .dolphin)
     }
 
+    @Test func oneROMLookedUpByNameIsWhatAScanFindsForIt() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        try ps2.add("Okami (USA).7z")
+        let okami = try ps2.add("Okami (USA).iso")
+        try ps2.add("ICO/ICO (USA).bin")
+        try ps2.add("ICO.7z")
+        try ps2.add("Ape Escape 2 (USA).cue", "FILE \"Ape Escape 2 (USA) (Track 1).bin\" BINARY\n")
+        try ps2.add("Ape Escape 2 (USA) (Track 1).bin")
+        try ps2.add("Bully (USA) v1.2.iso")
+        try ps2.add("Demos/a.iso")
+        try ps2.add("Demos/b.iso")
+        try ps2.add("notes.txt")
+
+        let scanned = try ps2.folder.scan()
+
+        #expect(scanned.map(\.name) == ["Ape Escape 2 (USA)", "Bully (USA) v1.2", "ICO", "Okami (USA)"])
+        for rom in scanned {
+            let found = try ps2.folder.rom(named: rom.name)
+            #expect(found == rom)
+            #expect(found?.fileName == rom.fileName)
+        }
+        #expect(try ps2.folder.rom(named: "Okami (USA)")?.ready == okami)
+        // A cue sheet's track, a folder that isn't a game, and nothing at all.
+        #expect(try ps2.folder.rom(named: "Ape Escape 2 (USA) (Track 1)") == nil)
+        #expect(try ps2.folder.rom(named: "Demos") == nil)
+        #expect(try ps2.folder.rom(named: "Bully (USA) v1") == nil)
+        #expect(try ps2.folder.rom(named: "Shadow of the Colossus (USA)") == nil)
+    }
+
     @Test func aFolderThatIsntThereCantBeScanned() {
         let missing = ROMFolder.ps2(directory.appending(path: "nowhere", directoryHint: .isDirectory))
 

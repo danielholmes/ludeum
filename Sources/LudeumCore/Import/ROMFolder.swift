@@ -39,8 +39,20 @@ public struct ROMFolder: Sendable, Equatable {
 
     /// Every ROM in the folder, by name. Throws when the folder can't be read (Dropbox not there,
     /// say), so an Import leaves its ROMs alone instead of marking them all missing.
-    public func scan() throws -> [FolderROMFile] {
-        let items = try FileManager.default.contentsOfDirectory(atPath: url.path(percentEncoded: false)).filter { !$0.hasPrefix(".") }
+    public func scan() throws -> [FolderROMFile] { try scan(only: nil) }
+
+    /// The ROM `name`, exactly as a scan finds it, or nil when there's none. It looks only at what could be it: the
+    /// files and the subfolder of that name, and the folder's cue sheets (their tracks aren't ROMs), so one ROM
+    /// doesn't cost a look at every file of every other.
+    public func rom(named name: String) throws -> FolderROMFile? { try scan(only: name).first { $0.name == name } }
+
+    private func scan(only: String?) throws -> [FolderROMFile] {
+        let items = try FileManager.default.contentsOfDirectory(atPath: url.path(percentEncoded: false)).filter { item in
+            guard !item.hasPrefix(".") else { return false }
+            guard let only else { return true }
+            let name = item as NSString
+            return item == only || name.deletingPathExtension == only || name.pathExtension.lowercased() == "cue"
+        }
         let files = items.map { url.appending(path: $0, directoryHint: .notDirectory) }
             .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
         let folders = items.map { url.appending(path: $0, directoryHint: .isDirectory) }
@@ -125,12 +137,12 @@ public struct ROMFolder: Sendable, Equatable {
 
     /// The file a Play opens for the ROM `name`, if it isn't archived.
     public func readyFile(named name: String) throws -> URL? {
-        try scan().first { $0.name == name }?.ready
+        try rom(named: name)?.ready
     }
 
     /// The Discs of the ROM `name`, in Disc order, when its subfolder has no playlist for them; else none.
     public func discsWithoutPlaylist(named name: String) throws -> [URL] {
-        try scan().first { $0.name == name }?.discsWithoutPlaylist ?? []
+        try rom(named: name)?.discsWithoutPlaylist ?? []
     }
 
     /// The file names a cue sheet's `FILE` lines name, without any folder.
@@ -198,8 +210,8 @@ struct ROMMove {
     /// Checks everything before anything moves: the ROM's files are there, the other folder has nothing in their way,
     /// and it reads the ROM's file.
     static func plan(_ name: String, from: ROMFolder, to: ROMFolder) throws -> ROMMove {
-        guard let rom = try? from.scan().first(where: { $0.name == name }) else { throw ReviewError.romFilesNotFound }
-        if (try? to.scan())?.contains(where: { $0.name == name }) == true { throw ReviewError.alreadyInROMFolder }
+        guard let rom = try? from.rom(named: name) else { throw ReviewError.romFilesNotFound }
+        if (try? to.rom(named: name)) != nil { throw ReviewError.alreadyInROMFolder }
         var items: [URL]
         if let subfolder = from.subfolder(of: name, holding: rom.ready) {
             items = [subfolder]
