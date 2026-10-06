@@ -7,25 +7,28 @@ import GRDB
 /// Order: refuse while OpenEmu is running; plan and check everything (the dry run stops there);
 /// take a `before-migration` backup; copy OpenEmu's battery saves, unchanged, into an archive beside it;
 /// move the files, logging each old path → new path beside the backup; then rewrite the ROM rows and
-/// drop OpenEmu's link tables in one transaction. A failed move stops before that transaction: restore
-/// nothing, and the log says what moved. Undo is restoring the backup and moving the logged files back.
+/// drop OpenEmu's link tables in one transaction; last, delete OpenEmu's cached Box art and look each
+/// moved ROM up in libretro again (a miss keeps its old Box art; a failed lookup never fails the migration).
+/// A failed move stops before that transaction: restore nothing, and the log says what moved. Undo is restoring the backup and moving the logged files back.
 public struct OpenEmuMigration {
     let journal: LudeumStore
     let library: URL
     let romFolder: (Int64) -> URL?
     let backups: Backups
     let isOpenEmuRunning: () -> Bool
+    let libretro: LibretroThumbnails?
 
     /// `romFolder` gives each Platform's ROM folder; nil for a Platform without one.
     public init(
         journal: LudeumStore, library: URL, romFolder: @escaping (Int64) -> URL?, backups: Backups,
-        isOpenEmuRunning: @escaping () -> Bool
+        isOpenEmuRunning: @escaping () -> Bool, libretro: LibretroThumbnails?
     ) {
         self.journal = journal
         self.library = library
         self.romFolder = romFolder
         self.backups = backups
         self.isOpenEmuRunning = isOpenEmuRunning
+        self.libretro = libretro
     }
 
     /// The dry run: everything the migration would do, and anything that stops it. Changes nothing.
@@ -114,7 +117,7 @@ public struct OpenEmuMigration {
     /// Runs the migration. Throws `blocked` (with the plan) when the dry run found anything that stops it,
     /// before anything is touched.
     @discardableResult
-    public func run() throws -> OpenEmuMigrationResult {
+    public func run() async throws -> OpenEmuMigrationResult {
         let plan = try plan()
         guard plan.isRunnable else { throw OpenEmuMigrationError.blocked(plan) }
         let backup = try backups.backUp(journal, operation: .beforeMigration)
@@ -139,15 +142,20 @@ public struct OpenEmuMigration {
             }
         }
 
-        try journal.db.write { db in
+        try await journal.db.write { db in
             for rom in plan.roms {
                 try ROMPlatform.ensureKnown(db, rom.platformId)
                 try db.execute(
-                    sql: "UPDATE rom SET openEmuPk = NULL, platformId = ?, folderName = ?, fileName = ?, missing = ? WHERE id = ?",
-                    arguments: [rom.platformId, rom.folderName, rom.fileName, rom.missing, rom.romId])
+                    sql:
+                        "UPDATE rom SET openEmuPk = NULL, platformId = ?, folderName = ?, fileName = ?, name = ?, missing = ? WHERE id = ?",
+                    arguments: [rom.platformId, rom.folderName, rom.fileName, rom.folderName, rom.missing, rom.romId])
             }
             for table in ["syncedCollection", "syncedCover", "openEmuLibrary"] { try db.execute(sql: "DROP TABLE IF EXISTS \(table)") }
         }
+        // Box art: OpenEmu's cached copies go, and libretro is looked up again by the new names.
+        libretro?.cache.removeImages(under: "openemu")
+        let ids = plan.roms.map { String($0.romId) }.joined(separator: ", ")
+        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(romsWhere: "rom.id IN (\(ids))", keepingOnMiss: true)
         return OpenEmuMigrationResult(plan: plan, backup: backup.url, log: log, batterySaveArchive: archive)
     }
 

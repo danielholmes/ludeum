@@ -6,12 +6,14 @@ import Testing
 
 /// `migrate-openemu` against a fixture OpenEmu library and a journal that points into it.
 @Suite struct OpenEmuMigrationTests {
+    let h: Harness
     let j: LudeumHarness
     let openEmu: FakeOpenEmu
     let roms: URL
     let backupFolder: URL
 
     init() throws {
+        h = try Harness()
         j = try LudeumHarness()
         // OpenEmu keeps its library inside its Application Support folder, beside each core's saves.
         let support = j.directory.appending(path: "OpenEmu", directoryHint: .isDirectory)
@@ -26,7 +28,7 @@ import Testing
         OpenEmuMigration(
             journal: j.journal, library: openEmu.folder, romFolder: { ROMPlatform.all[$0].map { roms.appending(path: $0.folderName) } },
             backups: Backups(folder: backupFolder, fallback: backupFolder, clock: j.clock, timeZone: j.timeZone),
-            isOpenEmuRunning: { openEmuRunning })
+            isOpenEmuRunning: { openEmuRunning }, libretro: h.libretro)
     }
 
     func game(_ name: String, platform: Int64) throws -> GameID {
@@ -63,11 +65,11 @@ import Testing
         FileManager.default.fileExists(atPath: folder.appending(path: path).path(percentEncoded: false))
     }
 
-    @Test func aMatchedROMMovesToItsGamesPlatformFolderAndIsKnownByItsName() throws {
+    @Test func aMatchedROMMovesToItsGamesPlatformFolderAndIsKnownByItsName() async throws {
         let gold = try game("Pokemon Gold", platform: 22)
         try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Pokemon Gold (USA).gbc", to: gold)
 
-        try migration().run()
+        try await migration().run()
 
         #expect(exists("Game Boy Color/1-Pokemon Gold (USA).gbc", in: roms))
         #expect(!exists("roms/openemu.system.gb/1-Pokemon Gold (USA).gbc", in: openEmu.folder))
@@ -77,25 +79,25 @@ import Testing
         #expect(rom.openEmuPk == nil)
         #expect(rom.fileName == "1-Pokemon Gold (USA).gbc")
         #expect(!rom.missing)
-        #expect(try j.journal.db.read { try String.fetchOne($0, sql: "SELECT md5 FROM rom") } == "md5-Pokemon Gold")
+        #expect(try await j.journal.db.read { try String.fetchOne($0, sql: "SELECT md5 FROM rom") } == "md5-Pokemon Gold")
     }
 
-    @Test func anUnmatchedROMGoesToItsSystemsDefaultPlatformAndStaysInReview() throws {
+    @Test func anUnmatchedROMGoesToItsSystemsDefaultPlatformAndStaysInReview() async throws {
         try unmatched("Tetris", system: "openemu.system.gb", fileName: "Tetris.gb")
 
-        try migration().run()
+        try await migration().run()
 
         #expect(exists("Game Boy/1-Tetris.gb", in: roms))
         let item = try #require(try j.journal.reviewQueue().noSuggestion.first)
         #expect(item.platformId == 33)
-        #expect(try j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM heldOpenEmuData") } == 1)
+        #expect(try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM heldOpenEmuData") } == 1)
     }
 
-    @Test func aMissingROMIsKeyedByItsOpenEmuFileNameAndStaysMissing() throws {
+    @Test func aMissingROMIsKeyedByItsOpenEmuFileNameAndStaysMissing() async throws {
         let metroid = try game("Super Metroid", platform: 19)
         try matched("Super Metroid", system: "openemu.system.snes", fileName: nil, to: metroid)
 
-        let result = try migration().run()
+        let result = try await migration().run()
 
         let rom = try #require(try j.journal.roms(of: metroid).first)
         #expect(rom.missing)
@@ -104,7 +106,7 @@ import Testing
         #expect(result.plan.roms.first?.moves == [])
     }
 
-    @Test func aCueSheetMovesWithItsTracks() throws {
+    @Test func aCueSheetMovesWithItsTracks() async throws {
         let ff = try game("Final Fantasy VII", platform: 7)
         let pk = try matched("Final Fantasy VII", system: "openemu.system.psx", fileName: "FF7.cue", to: ff)
         let folder = openEmu.folder.appending(path: "roms/openemu.system.psx")
@@ -112,13 +114,13 @@ import Testing
             to: folder.appending(path: "\(pk)-FF7.cue"), atomically: true, encoding: .utf8)
         try Data("track".utf8).write(to: folder.appending(path: "\(pk)-FF7 (Track 1).bin"))
 
-        try migration().run()
+        try await migration().run()
 
         #expect(exists("PS1/1-FF7.cue", in: roms))
         #expect(exists("PS1/1-FF7 (Track 1).bin", in: roms))
     }
 
-    @Test func theDryRunSaysWhatItWouldDoAndChangesNothing() throws {
+    @Test func theDryRunSaysWhatItWouldDoAndChangesNothing() async throws {
         let gold = try game("Pokemon Gold", platform: 22)
         try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Gold.gbc", to: gold)
 
@@ -131,18 +133,18 @@ import Testing
         #expect(try Backups(folder: backupFolder, fallback: backupFolder).all().isEmpty)
     }
 
-    @Test func itRefusesWhileOpenEmuIsRunning() throws {
-        #expect(throws: OpenEmuMigrationError.openEmuRunning) { try migration(openEmuRunning: true).run() }
+    @Test func itRefusesWhileOpenEmuIsRunning() async throws {
+        await #expect(throws: OpenEmuMigrationError.openEmuRunning) { try await migration(openEmuRunning: true).run() }
     }
 
-    @Test func aFileNameClashRefusesBeforeAnythingIsTouched() throws {
+    @Test func aFileNameClashRefusesBeforeAnythingIsTouched() async throws {
         let gold = try game("Pokemon Gold", platform: 22)
         try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Gold.gbc", to: gold)
         try FileManager.default.createDirectory(at: roms.appending(path: "Game Boy Color"), withIntermediateDirectories: true)
         try Data("mine".utf8).write(to: roms.appending(path: "Game Boy Color/1-Gold.gbc"))
 
-        #expect {
-            try migration().run()
+        await #expect {
+            try await migration().run()
         } throws: { error in
             guard case .blocked(let plan) = error as? OpenEmuMigrationError else { return false }
             return plan.clashes == ["Game Boy Color/1-Gold.gbc: a file is already there"]
@@ -152,7 +154,7 @@ import Testing
         #expect(try Backups(folder: backupFolder, fallback: backupFolder).all().isEmpty)
     }
 
-    @Test func aGameOnAPlatformItsSystemCantHoldStopsTheMigration() throws {
+    @Test func aGameOnAPlatformItsSystemCantHoldStopsTheMigration() async throws {
         let doom = try game("Doom", platform: 6)
         try matched("Doom", system: "openemu.system.snes", fileName: "Doom.sfc", to: doom)
 
@@ -162,11 +164,11 @@ import Testing
         #expect(plan.platformMismatches.count == 1)
     }
 
-    @Test func itBacksUpLogsEachMoveAndDropsOpenEmusLinkTables() throws {
+    @Test func itBacksUpLogsEachMoveAndDropsOpenEmusLinkTables() async throws {
         let gold = try game("Pokemon Gold", platform: 22)
         try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Gold.gbc", to: gold)
 
-        let result = try migration().run()
+        let result = try await migration().run()
 
         #expect(try Backups(folder: backupFolder, fallback: backupFolder).all().map(\.operation) == [.beforeMigration])
         let log = try String(contentsOf: result.log, encoding: .utf8)
@@ -174,19 +176,19 @@ import Testing
         let to = roms.appending(path: "Game Boy Color/1-Gold.gbc").path(percentEncoded: false)
         #expect(log == "\(from)\t\(to)\n")
         for table in ["syncedCollection", "syncedCover", "openEmuLibrary"] {
-            #expect(try j.journal.db.read { try $0.tableExists(table) } == false)
+            #expect(try await j.journal.db.read { try $0.tableExists(table) } == false)
         }
-        #expect(try j.journal.db.read { try $0.tableExists("heldOpenEmuData") })
+        #expect(try await j.journal.db.read { try $0.tableExists("heldOpenEmuData") })
     }
 
-    @Test func batterySavesAreCopiedUnchangedIntoAnArchive() throws {
+    @Test func batterySavesAreCopiedUnchangedIntoAnArchive() async throws {
         let saves = openEmu.folder.deletingLastPathComponent().appending(path: "Gambatte/Battery Saves")
         try FileManager.default.createDirectory(at: saves, withIntermediateDirectories: true)
         try Data("save".utf8).write(to: saves.appending(path: "Pokemon Gold.sav"))
         let states = openEmu.folder.deletingLastPathComponent().appending(path: "Save States/Gambatte")
         try FileManager.default.createDirectory(at: states, withIntermediateDirectories: true)
 
-        let result = try migration().run()
+        let result = try await migration().run()
 
         let archived = result.batterySaveArchive.appending(path: "Gambatte/Battery Saves/Pokemon Gold.sav")
         #expect(try Data(contentsOf: archived) == Data("save".utf8))
@@ -195,13 +197,62 @@ import Testing
             !FileManager.default.fileExists(atPath: result.batterySaveArchive.appending(path: "Save States").path(percentEncoded: false)))
     }
 
-    @Test func openEmuROMsWithNoJournalEntryAreListedAndLeftInPlace() throws {
+    @Test func openEmuROMsWithNoJournalEntryAreListedAndLeftInPlace() async throws {
         try openEmu.addROM("Stray", md5: "aa", system: "openemu.system.nes", fileName: "Stray.nes")
 
-        let result = try migration().run()
+        let result = try await migration().run()
 
         let stray = openEmu.folder.appending(path: "roms/openemu.system.nes/1-Stray.nes")
         #expect(result.plan.leftInOpenEmu.map(\.lastPathComponent) == ["1-Stray.nes"])
         #expect(FileManager.default.fileExists(atPath: stray.path(percentEncoded: false)))
+    }
+
+    // MARK: Box art
+
+    /// Super Metroid, Matched and already looked up in libretro, with `old` as its Box art.
+    func lookedUpMetroid(old: String) throws {
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        let metroid = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
+        try matched("Super Metroid", system: "openemu.system.snes", fileName: "Super Metroid (USA).sfc", to: metroid)
+        try j.journal.db.write { try $0.execute(sql: "UPDATE rom SET libretroLookedUp = 1, libretroBoxart = ?", arguments: [old]) }
+    }
+
+    func boxArt() throws -> String? {
+        try j.journal.db.read { try String.fetchOne($0, sql: "SELECT libretroBoxart FROM rom") }
+    }
+
+    @Test func aMovedROMsNameIsItsNewFileNames() async throws {
+        let gold = try game("Pokemon Gold", platform: 22)
+        try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Pokemon Gold (USA).gbc", to: gold)
+
+        try await migration().run()
+
+        #expect(try await j.journal.db.read { try String.fetchOne($0, sql: "SELECT name FROM rom") } == "1-Pokemon Gold (USA)")
+    }
+
+    @Test func libretroIsLookedUpAgainAndANewMatchReplacesTheOld() async throws {
+        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (USA)"])
+        try lookedUpMetroid(old: "old.png")
+
+        try await migration().run()
+
+        #expect(try boxArt() == "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (USA).png")
+    }
+
+    @Test func aLibretroMissKeepsTheOldBoxArt() async throws {
+        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Mario World (USA)"])
+        try lookedUpMetroid(old: "old.png")
+
+        try await migration().run()
+
+        #expect(try boxArt() == "old.png")
+    }
+
+    @Test func openEmusCachedBoxArtIsDeleted() async throws {
+        _ = try h.cache.store(image: Data("art".utf8), at: "openemu/ART-1")
+
+        try await migration().run()
+
+        #expect(h.cache.cachedImage(at: "openemu/ART-1") == nil)
     }
 }

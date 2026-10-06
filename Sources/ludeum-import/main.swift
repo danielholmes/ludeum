@@ -69,7 +69,7 @@ case "sync" where CommandLine.arguments.count >= 4:
         journalFolder: URL(filePath: CommandLine.arguments[3], directoryHint: .isDirectory),
         write: CommandLine.arguments.contains("--write"), igdb: igdb)
 case "migrate-openemu":
-    try migrateOpenEmuRun(Array(CommandLine.arguments.dropFirst(2)))
+    try await migrateOpenEmuRun(Array(CommandLine.arguments.dropFirst(2)))
 default:
     fail(
         "usage: ludeum-import check | match-report <snapshot.sqlite> | first-import <library> <journal folder> [--commit]"

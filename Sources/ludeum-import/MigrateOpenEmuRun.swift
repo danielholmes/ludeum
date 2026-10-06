@@ -5,7 +5,7 @@ import LudeumCore
 /// `migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>] [--roms <folder>]`: run once, by hand,
 /// with OpenEmu closed. Folders default to the app's own settings: its journal, OpenEmu library, ROM folders
 /// root and backup folder. `--dry-run` prints what would happen and changes nothing.
-func migrateOpenEmuRun(_ arguments: [String]) throws {
+func migrateOpenEmuRun(_ arguments: [String]) async throws {
     func option(_ name: String) -> URL? {
         arguments.firstIndex(of: name).flatMap { i in
             arguments.indices.contains(i + 1) ? URL(filePath: arguments[i + 1], directoryHint: .isDirectory) : nil
@@ -18,7 +18,8 @@ func migrateOpenEmuRun(_ arguments: [String]) throws {
     let migration = OpenEmuMigration(
         journal: journal, library: option("--library") ?? settings.openEmuLibrary,
         romFolder: { settings.romFolder(platform: $0) }, backups: settings.backups(),
-        isOpenEmuRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: "org.openemu.OpenEmu").isEmpty })
+        isOpenEmuRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: "org.openemu.OpenEmu").isEmpty },
+        libretro: LibretroThumbnails(cache: try CacheStore(directory: cacheDirectory)))
 
     let plan: OpenEmuMigrationPlan
     do {
@@ -32,7 +33,7 @@ func migrateOpenEmuRun(_ arguments: [String]) throws {
         print("Dry run: nothing was changed.")
         return
     }
-    let result = try migration.run()
+    let result = try await migration.run()
     print("Migrated. Backup: \(result.backup.path(percentEncoded: false))")
     print("Move log: \(result.log.path(percentEncoded: false))")
     print("Battery saves archived in: \(result.batterySaveArchive.path(percentEncoded: false))")

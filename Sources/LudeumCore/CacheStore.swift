@@ -130,5 +130,10 @@ extension CacheStore {
         return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
     }
 
+    /// Deletes every cached image under a folder, if there are any.
+    func removeImages(under folder: String) {
+        try? FileManager.default.removeItem(at: imageFile(folder))
+    }
+
     private func imageFile(_ path: String) -> URL { directory.appending(path: "images").appending(path: path) }
 }
