@@ -101,7 +101,8 @@ struct ReviewQueueScreen: View {
                 if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
                     DuplicateVersionsDetail(item: d, checkAgain: checkAgain)
                 } else if kind == .missingROMs, let m = items.missingROMs.first(where: { $0.id == selection }) {
-                    MissingROMsDetail(item: m, checkAgain: checkAgain, showGame: { shownGame = m.id })
+                    MissingROMsDetail(
+                        services: services, item: m, checkAgain: checkAgain, showGame: { shownGame = m.id }, failed: { error = $0 })
                 } else if kind == .noPlaylist, let item = items.noPlaylist.first(where: { $0.id == selection }) {
                     NoPlaylistDetail(services: services, item: item, failed: { error = $0 })
                 } else if kind == .notCompacted, let item = items.notCompacted.first(where: { $0.id == selection }) {
@@ -692,25 +693,36 @@ private struct NoPlaylistDetail: View {
     }
 }
 
-/// A Missing ROMs item: a Game whose ROMs are all gone from its ROM folder. For now I fix it by hand: put a file back
-/// and Check again, or delete the Game.
+/// A Missing ROMs item: a Game with ROMs gone from its ROM folder. I put a file back and Check again, or Forget the
+/// ROM; when they're all gone, I can delete the Game instead.
 private struct MissingROMsDetail: View {
+    let services: Services
     let item: MissingROMsGame
     let checkAgain: () -> Void
     let showGame: () -> Void
+    let failed: (String?) -> Void
 
     var body: some View {
         Form {
             Section {
                 Text(item.game.name).font(.title2).bold()
-                Text("Its ROMs are all missing from its ROM folder. Put one back, then Check again, or delete the Game.")
-                    .foregroundStyle(.secondary)
+                Text(
+                    item.allMissing
+                        ? "Its ROMs are all missing from its ROM folder. Put one back, then Check again, forget it, or delete the Game."
+                        : "Some of its ROMs are missing from its ROM folder. Put one back, then Check again, or forget it."
+                )
+                .foregroundStyle(.secondary)
             }
             Section("Missing ROMs") {
                 ForEach(item.roms) { rom in
-                    VStack(alignment: .leading) {
-                        Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
-                        Text(rom.fileName).font(.caption).textSelection(.enabled)
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(rom.version.isEmpty ? rom.fileName : rom.version).bold()
+                            Text(rom.fileName).font(.caption).textSelection(.enabled)
+                        }
+                        Spacer()
+                        Button("Forget") { forget(rom) }
+                            .help("Stop showing this missing ROM. If its file comes back, an Import finds it again.")
                     }
                 }
             }
@@ -720,6 +732,17 @@ private struct MissingROMsDetail: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func forget(_ rom: LudeumROM) {
+        guard let journal = services.journal else { return }
+        do {
+            try journal.forgetROM(rom.id)
+            failed(nil)
+        } catch {
+            failed(journalErrorText(error))
+        }
+        services.changes.changed()
     }
 }
 

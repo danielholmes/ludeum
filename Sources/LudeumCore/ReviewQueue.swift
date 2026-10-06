@@ -33,11 +33,14 @@ public struct DuplicateVersionsGame: Sendable, Equatable, Identifiable {
     public var id: GameID { game.id }
 }
 
-/// A Game whose ROMs are all missing: it can't be Played until a file comes back, or I delete it.
+/// A Game with missing ROMs: each waits until its file comes back or I forget it. When they're all missing, it
+/// can't be Played, and I can delete the Game instead.
 public struct MissingROMsGame: Sendable, Equatable, Identifiable {
     public let game: Game
-    /// Its ROMs, all missing.
+    /// Its missing ROMs.
     public let roms: [LudeumROM]
+    /// It has no present ROM.
+    public let allMissing: Bool
     public var id: GameID { game.id }
 }
 
@@ -117,10 +120,13 @@ extension LudeumStore {
         }
         items.duplicateVersions.sort { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
         let missing = try db.read { db in
-            try GameID.fetchAll(db, sql: "SELECT gameId FROM rom WHERE gameId IS NOT NULL GROUP BY gameId HAVING MIN(missing) = 1")
+            try GameID.fetchAll(db, sql: "SELECT DISTINCT gameId FROM rom WHERE gameId IS NOT NULL AND missing")
         }
-        items.missingROMs = try missing.map { MissingROMsGame(game: try self.game($0), roms: try roms(of: $0)) }
-            .sorted { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
+        items.missingROMs = try missing.map { game in
+            let roms = try roms(of: game)
+            return MissingROMsGame(game: try self.game(game), roms: roms.filter(\.missing), allMissing: roms.allSatisfy(\.missing))
+        }
+        .sorted { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
         items.noPlaylist = try db.read { db in
             guard try Self.hasNeedsPlaylist(db) else { return [] }
             return try Row.fetchAll(

@@ -174,7 +174,7 @@ import Testing
         #expect(duplicates[0].roms.map(\.fileName) == ["Double Dragon III (Japan).7z", "Double Dragon III (USA).7z"])
     }
 
-    @Test func gamesWhoseROMsAreAllMissingAreListed() throws {
+    @Test func everyGameWithAMissingROMIsListedWithItsMissingROMs() throws {
         try j.journal.addPlatform(id: 19, name: "SNES")
         let gone = try j.journal.addGame(
             platformId: 19, name: "Zombies Ate My Neighbors", igdbGameId: 4, igdbName: "Zombies Ate My Neighbors")
@@ -189,8 +189,24 @@ import Testing
         }
 
         let items = try j.journal.reviewQueue()
-        #expect(items.missingROMs.map(\.game.id) == [gone])
-        #expect(items.missingROMs[0].roms.map(\.fileName) == ["Zombies Ate My Neighbors (Europe).7z", "Zombies Ate My Neighbors (USA).7z"])
-        #expect(items.count == 1)
+        #expect(items.missingROMs.map(\.game.id) == [replaced, gone])
+        #expect(items.missingROMs[0].roms.map(\.fileName) == ["Pilotwings (Japan).7z"])
+        #expect(!items.missingROMs[0].allMissing)
+        #expect(items.missingROMs[1].roms.map(\.fileName) == ["Zombies Ate My Neighbors (Europe).7z", "Zombies Ate My Neighbors (USA).7z"])
+        #expect(items.missingROMs[1].allMissing)
+        #expect(items.count == 2)
+    }
+
+    @Test func aForgottenMissingROMLeavesTheQueue() throws {
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        let game = try j.journal.addGame(platformId: 19, name: "Streets of Rage", igdbGameId: 5, igdbName: "Streets of Rage")
+        try unmatched(22, "Streets of Rage (Japan)", missing: true)
+        try unmatched(23, "Streets of Rage (World)")
+        for item in try j.journal.reviewQueue().noSuggestion { try j.journal.assign(item, to: game) }
+        let missing = try #require(try j.journal.reviewQueue().missingROMs.first?.roms.first)
+
+        try j.journal.forgetROM(missing.id)
+
+        #expect(try j.journal.reviewQueue().missingROMs.isEmpty)
     }
 }

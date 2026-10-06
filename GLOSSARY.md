@@ -157,7 +157,7 @@ Reading the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
 
 **Review queue**:
-Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, Games whose ROMs are all missing, ROMs whose Discs have no playlist, ROMs kept in both forms, and ROMs that could be Compacted but aren't.
+Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, missing ROMs, ROMs whose Discs have no playlist, ROMs kept in both forms, and ROMs that could be Compacted but aren't.
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:
