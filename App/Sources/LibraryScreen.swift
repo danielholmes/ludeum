@@ -212,6 +212,9 @@ struct LibraryScreen: View {
             (platforms, lists, players) = try filterChoices(journal)
             error = nil
         } catch {
+            // A newer reload replaced this one, and its search stopped early with `CancellationError`: not
+            // a failure, so the newer reload's rows, or its error, win.
+            guard !Task.isCancelled else { return }
             self.error = error.localizedDescription
         }
     }
