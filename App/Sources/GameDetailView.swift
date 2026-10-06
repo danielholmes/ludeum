@@ -33,6 +33,8 @@ struct GameDetailView: View {
     @State private var error: String?
     /// Why the last Play didn't open, shown under Play.
     @State private var playError: String?
+    /// An Emulator version problem found on Play: refused (too old), or a once-per-launch warning.
+    @State private var versionAlert: (title: String, message: String)?
 
     var body: some View {
         if let game {
@@ -67,7 +69,9 @@ struct GameDetailView: View {
                         }
                         if !roms.isEmpty, !roms.allSatisfy(\.missing) {
                             playControls
-                            if let playError { Text(playError).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
+                            if let message = playError ?? emulator.flatMap(services.versions.tooOldMessage) {
+                                Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
                 }
@@ -144,6 +148,13 @@ struct GameDetailView: View {
         .formStyle(.grouped)
         .task(id: services.changes.revision) { load() }
         .onChange(of: id) { playError = nil }
+        .alert(
+            versionAlert?.title ?? "", isPresented: Binding(get: { versionAlert != nil }, set: { if !$0 { versionAlert = nil } })
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(versionAlert?.message ?? "")
+        }
         .task(id: roms.map(\.id)) {
             // Off the main thread: it reads OpenEmu's library and the files' attributes.
             let library = services.settings.openEmuLibrary
@@ -257,6 +268,7 @@ struct GameDetailView: View {
                     Label("Play", systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(services.versions.tooOldMessage(emulator) == nil ? nil : .red)
                 .disabled(isBeingArchived)
                 .help(isBeingArchived ? "Waiting for Archive or Unarchive to finish" : "Play in \(emulator.name)")
                 // Dolphin has no per-Game settings: every Game gets the same ones.
@@ -440,6 +452,11 @@ struct GameDetailView: View {
     /// Emulator gets the ROM in its open window.
     private func play(in emulator: Emulator) {
         playError = nil
+        if let tooOld = services.versions.tooOldMessage(emulator) {
+            versionAlert = ("Can't Play in \(emulator.name)", tooOld)
+            return
+        }
+        if let warning = services.versions.warningOnce(emulator) { versionAlert = ("Check \(emulator.name)'s version", warning) }
         guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: emulator.bundleIdentifier) else {
             playError = "\(emulator.name) isn't installed."
             return

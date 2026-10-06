@@ -25,6 +25,8 @@ import SwiftUI
     let work = BackgroundWork()
     /// Archive and Unarchive, and other long work, one at a time.
     let tasks = BackgroundTasks()
+    /// Each installed Emulator's version, checked at launch.
+    let versions = EmulatorVersionChecks()
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
 

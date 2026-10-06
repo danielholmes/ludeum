@@ -111,6 +111,7 @@ struct MainWindow: View {
         .onChange(of: selection) { if selection != .library { libraryFilter = LibraryFilter() } }
         .modifier(OngoingImportTriggers(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
+        .modifier(EmulatorVersionsOnLaunch(services: services))
         .toolbar {
             ToolbarItem {
                 HStack(spacing: 6) {
