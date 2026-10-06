@@ -117,11 +117,14 @@ struct PlayersSection: View {
         ) {
             Button("Delete Player", role: .destructive) {
                 guard let p = deleting, let journal else { return }
-                do {
-                    try journal.deletePlayer(p.id)
-                    load()
-                } catch {
-                    self.error = journalErrorText(error)
+                Task {
+                    do {
+                        // Off the main thread: a backup of the whole journal is taken first.
+                        try await offMain { try journal.deletePlayer(p.id) }
+                        load()
+                    } catch {
+                        self.error = journalErrorText(error)
+                    }
                 }
             }
         } message: {

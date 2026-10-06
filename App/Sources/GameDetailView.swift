@@ -32,6 +32,8 @@ struct GameDetailView: View {
     @State private var editingGame = false
     @State private var deletion: DeletionSummary?
     @State private var deletingPlaythrough: Playthrough?
+    /// A delete is running: nothing here can be changed until it's done.
+    @State private var deleteRunning = false
     @State private var error: String?
     /// Why the last Play didn't open, shown under Play.
     @State private var playError: String?
@@ -40,7 +42,7 @@ struct GameDetailView: View {
 
     var body: some View {
         if let game {
-            form(game)
+            form(game).disabled(deleteRunning)
         } else {
             ContentUnavailableView(
                 error == nil ? "Game not found" : "Couldn't read this Game", systemImage: "gamecontroller",
@@ -210,7 +212,7 @@ struct GameDetailView: View {
             isPresented: Binding(get: { deletingPlaythrough != nil }, set: { if !$0 { deletingPlaythrough = nil } })
         ) {
             Button("Delete Playthrough", role: .destructive) {
-                if let p = deletingPlaythrough { save { try $0.deletePlaythrough(p.id) } }
+                if let p = deletingPlaythrough { delete { try $0.deletePlaythrough(p.id) } }
             }
         } message: {
             Text("Its dates, Outcome and notes go with it. There's no undo; a backup is taken first.")
@@ -258,6 +260,24 @@ struct GameDetailView: View {
             services.changes.changed()
         } catch {
             self.error = journalErrorText(error)
+        }
+    }
+
+    /// Runs a delete, then reloads every screen showing the journal. Off the main thread, as a backup of the whole
+    /// journal is taken first.
+    private func delete(_ change: @escaping @Sendable (LudeumStore) throws -> Void, then done: @escaping () -> Void = {}) {
+        guard let journal = services.journal, !deleteRunning else { return }
+        deleteRunning = true
+        Task {
+            defer { deleteRunning = false }
+            do {
+                try await offMain { try change(journal) }
+                error = nil
+                services.changes.changed()
+                done()
+            } catch {
+                self.error = journalErrorText(error)
+            }
         }
     }
 
@@ -499,8 +519,7 @@ struct GameDetailView: View {
     }
 
     private func deleteGame() {
-        save { try $0.deleteGame(id) }
-        if error == nil { deleted() }
+        delete({ [id] in try $0.deleteGame(id) }, then: deleted)
     }
 }
 
@@ -647,6 +666,7 @@ struct PlaythroughSheet: View {
     @State private var selectedPlayers: Set<Int64> = []
     @State private var error: String?
     @State private var confirmingDelete = false
+    @State private var deleteRunning = false
 
     var body: some View {
         Form {
@@ -671,6 +691,7 @@ struct PlaythroughSheet: View {
         }
         .formStyle(.grouped)
         .frame(width: 440)
+        .disabled(deleteRunning)
         .confirmationDialog("Delete this Playthrough?", isPresented: $confirmingDelete) {
             Button("Delete Playthrough", role: .destructive, action: delete)
         } message: {
@@ -727,13 +748,18 @@ struct PlaythroughSheet: View {
         }
     }
 
+    /// Off the main thread, as a backup of the whole journal is taken first.
     private func delete() {
-        guard let journal = services.journal, let id = edit.id else { return }
-        do {
-            try journal.deletePlaythrough(id)
-            done()
-        } catch {
-            self.error = journalErrorText(error)
+        guard let journal = services.journal, let id = edit.id, !deleteRunning else { return }
+        deleteRunning = true
+        Task {
+            defer { deleteRunning = false }
+            do {
+                try await offMain { try journal.deletePlaythrough(id) }
+                done()
+            } catch {
+                self.error = journalErrorText(error)
+            }
         }
     }
 

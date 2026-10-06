@@ -39,13 +39,18 @@ public enum BackupName {
 
     /// Nil for anything that isn't a backup, including half-written temporary files.
     public static func parse(_ name: String, timeZone: TimeZone) -> (date: Date, operation: BackupOperation)? {
+        parse(name, with: formatter(timeZone))
+    }
+
+    /// `parse` with a formatter from `formatter(_:)`, so a folder of backups is read with one, not one each.
+    static func parse(_ name: String, with formatter: DateFormatter) -> (date: Date, operation: BackupOperation)? {
         guard let m = name.wholeMatch(of: /(\d{4}-\d{2}-\d{2}T\d{4})-([a-z-]+?)(-\d+)?\.sqlite/),
-            let date = formatter(timeZone).date(from: String(m.1)), let operation = BackupOperation(rawValue: String(m.2))
+            let date = formatter.date(from: String(m.1)), let operation = BackupOperation(rawValue: String(m.2))
         else { return nil }
         return (date, operation)
     }
 
-    private static func formatter(_ timeZone: TimeZone) -> DateFormatter {
+    static func formatter(_ timeZone: TimeZone) -> DateFormatter {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = timeZone
@@ -98,8 +103,9 @@ public struct Backups: Sendable {
 
     private func backups(in dir: URL) throws -> [Backup] {
         guard FileManager.default.fileExists(atPath: dir.path(percentEncoded: false)) else { return [] }
+        let formatter = BackupName.formatter(calendar.timeZone)
         return try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil).compactMap { url in
-            BackupName.parse(url.lastPathComponent, timeZone: calendar.timeZone).map {
+            BackupName.parse(url.lastPathComponent, with: formatter).map {
                 Backup(url: url, date: $0.date, operation: $0.operation)
             }
         }
