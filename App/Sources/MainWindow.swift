@@ -226,7 +226,7 @@ struct Sidebar: View {
         .confirmationDialog(
             "Delete the List \(deleting?.name ?? "")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
         ) {
-            Button("Delete List", role: .destructive) { if let list = deleting { save { try $0.deleteList(list.id) } } }
+            Button("Delete List", role: .destructive) { if let list = deleting { delete(list) } }
         } message: {
             Text("Its Games stay in the journal. There's no undo; a backup is taken first.")
         }
@@ -282,6 +282,20 @@ struct ListNaming: Identifiable {
 struct ListNameSheet: View {
     let naming: ListNaming
     let save: (String) -> String?
+    /// Off the main thread, as a backup of the whole journal is taken first.
+    private func delete(_ list: GameList) {
+        guard let journal = services.journal else { return }
+        let id = list.id
+        Task {
+            do {
+                try await offMain { try journal.deleteList(id) }
+                services.changes.changed()
+            } catch {
+                self.error = journalErrorText(error)
+            }
+        }
+    }
+
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var error: String?
