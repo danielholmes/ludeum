@@ -76,6 +76,33 @@ struct FakeROMFolder {
         #expect(try ps2.folder.scan() == [FolderROMFile(name: "Ape Escape 2 (USA)", ready: cue, archive: nil)])
     }
 
+    @Test func aSubfolderHoldingOneImageIsAReadyROMNamedAfterTheFolder() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let bin = try ps2.add("ICO/ICO (USA).bin")
+        try ps2.add("ICO/readme.html")
+        try ps2.add("ICO.7z")
+
+        #expect(try ps2.folder.scan() == [FolderROMFile(name: "ICO", ready: bin, archive: ps2.url.appending(path: "ICO.7z"))])
+        #expect(try ps2.folder.scan().first?.fileName == "ICO/ICO (USA).bin")
+    }
+
+    @Test func aSubfolderWithACueSheetPlaysTheCueSheet() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let cue = try ps2.add("Ape Escape 2/Disc/Ape Escape 2.cue", "FILE \"Ape Escape 2 (Track 1).bin\" BINARY\n")
+        try ps2.add("Ape Escape 2/Disc/Ape Escape 2 (Track 1).bin")
+
+        #expect(try ps2.folder.scan() == [FolderROMFile(name: "Ape Escape 2", ready: cue, archive: nil)])
+    }
+
+    @Test func aSubfolderWithSeveralImagesAndNoCueSheetIsntAROM() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        try ps2.add("ICO/ICO.iso")
+        try ps2.add("ICO/ICO (Demo).iso")
+        try ps2.add(".ludeum-work/x/ICO.iso")
+
+        #expect(try ps2.folder.scan().isEmpty)
+    }
+
     @Test func aFolderThatIsntThereCantBeScanned() {
         let missing = ROMFolder.ps2(directory.appending(path: "nowhere", directoryHint: .isDirectory))
 

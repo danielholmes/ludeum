@@ -23,7 +23,7 @@ A game file in an emulator library: OpenEmu's, or a ROM folder. A ROM identifies
 _Avoid_: File, image
 
 **ROM folder**:
-A folder of a Platform's ROMs that the journal reads directly, for Platforms OpenEmu doesn't have (e.g. PS2). A ROM there is known by its file name without the extension, so extracting `Okami (USA).7z` to `Okami (USA).iso`, or archiving it again, is the same ROM changing state. When both files exist, the playable one is used. Subfolders are ignored.
+A folder of a Platform's ROMs that the journal reads directly, for Platforms OpenEmu doesn't have (e.g. PS2). A ROM there is known by its name: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, or a cue sheet with its tracks, alongside anything else). So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state. When both exist, the playable one is used.
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
@@ -31,7 +31,7 @@ A ROM that is still in its library but packed in a form its Platform's Emulator 
 _Avoid_: Compressed, needs extraction (that's the fix, not the state)
 
 **Archive / Unarchive**:
-Packing a ROM folder ROM into a `.7z`, or unpacking it so it can be Played. Either way only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2 ROMs can be Archived or Unarchived so far.
+Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played. Either way only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2 ROMs can be Archived or Unarchived so far.
 _Avoid_: Extract, compress, decompress
 
 **Disc**:

@@ -13,49 +13,16 @@ import Testing
         try ROMArchiver.unarchivePlan(listing: entries, archive: archive, romName: "ICO", folder: folder)
     }
 
-    @Test func oneImageNamedLikeTheROMNeedsNothingConfirmed() throws {
-        let p = try plan([entry("ICO.bin", 638)])
+    @Test func everythingInTheArchiveIsKept() throws {
+        let p = try plan([entry("ICO (USA).bin", 638), entry("readme.html", 1)])
 
-        #expect(p.kept.map(\.path) == ["ICO.bin"])
-        #expect(p.discarded.isEmpty)
-        #expect(!p.needsRename)
-        #expect(p.bytesNeeded == 638)
+        #expect(p.entries.map(\.path) == ["ICO (USA).bin", "readme.html"])
+        #expect(p.bytesNeeded == 639)
+        #expect(p.destination == URL(filePath: "/Games/PS2/ICO", directoryHint: .isDirectory))
     }
 
-    @Test func filesThatArentTheGameAreDiscarded() throws {
-        let p = try plan([entry("ICO.bin"), entry("readme.html", 1)])
-
-        #expect(p.kept.map(\.path) == ["ICO.bin"])
-        #expect(p.discarded == ["readme.html"])
-    }
-
-    @Test func anImageNamedDifferentlyAsksToBeRenamed() throws {
-        let p = try plan([entry("ICO (USA)/ICO (USA).iso")])
-
-        #expect(p.needsRename)
-        #expect(p.mainFile == "ICO (USA).iso")
-        #expect(p.renamedMainFile == "ICO.iso")
-    }
-
-    @Test func aCueSheetKeepsItsTracks() throws {
-        let p = try plan([entry("ICO.cue", 1), entry("ICO (Track 1).bin"), entry("ICO (Track 2).bin"), entry("cover.jpg")])
-
-        #expect(p.kept.map(\.path) == ["ICO.cue", "ICO (Track 1).bin", "ICO (Track 2).bin"])
-        #expect(p.mainFile == "ICO.cue")
-        #expect(p.discarded == ["cover.jpg"])
-    }
-
-    @Test func aCueSheetKeepsOnlyItsTracksNotOtherImages() throws {
-        let p = try plan([entry("ICO.cue", 1), entry("ICO.bin"), entry("ICO (Demo).iso")])
-
-        #expect(p.kept.map(\.path) == ["ICO.cue", "ICO.bin"])
-        #expect(p.discarded == ["ICO (Demo).iso"])
-    }
-
-    @Test func filesThatWouldLandOnTheSameNameAreRefused() {
-        #expect(throws: ArchiveError.ambiguous(["Track 1.bin", "Track 1.bin"])) {
-            try plan([entry("ICO.cue", 1), entry("CD1/Track 1.bin"), entry("CD2/Track 1.bin")])
-        }
+    @Test func aCueSheetWithItsTracksIsAGame() throws {
+        _ = try plan([entry("ICO.cue", 1), entry("ICO (Track 1).bin"), entry("ICO (Track 2).bin")])
     }
 
     @Test func severalImagesWithoutACueSheetAreRefused() {
@@ -99,31 +66,32 @@ struct ROMArchiverTests {
         #expect(try trashed() == ["ICO.bin"])
     }
 
-    @Test func unarchivingExtractsTheImageAndTrashesTheArchive() async throws {
+    @Test func unarchivingPutsEverythingInAFolderNamedAfterTheROMAndTrashesTheArchive() async throws {
         try ps2.add("ICO.bin", String(repeating: "PS2", count: 10_000))
         try await archiver().archive("ICO", in: ps2.folder)
         let archive = try #require(try ps2.folder.scan().first?.archive)
-        let plan = try await archiver().planUnarchive(archive, romName: "ICO", in: ps2.folder)
 
-        try await archiver().unarchive(plan, renaming: false, in: ps2.folder)
+        try await archiver().unarchive(archive, romName: "ICO", in: ps2.folder)
 
         let rom = try #require(try ps2.folder.scan().first)
+        #expect(rom.name == "ICO")
         #expect(!rom.archived)
+        #expect(rom.fileName == "ICO/ICO.bin")
         #expect(try String(contentsOf: rom.ready!, encoding: .utf8) == String(repeating: "PS2", count: 10_000))
         #expect(try trashed() == ["ICO.7z", "ICO.bin"])
     }
 
-    @Test func unarchivingCanRenameTheImageToTheROMsName() async throws {
-        try ps2.add("ICO (USA).iso", "image")
-        try await archiver().archive("ICO (USA)", in: ps2.folder)
-        try FileManager.default.moveItem(at: ps2.url.appending(path: "ICO (USA).7z"), to: ps2.url.appending(path: "ICO.7z"))
-        let plan = try await archiver().planUnarchive(ps2.url.appending(path: "ICO.7z"), romName: "ICO", in: ps2.folder)
-        #expect(plan.needsRename)
+    @Test func archivingAROMsFolderPacksItsContentsAndTrashesTheFolder() async throws {
+        try ps2.add("ICO/ICO (USA).bin", "image")
+        try ps2.add("ICO/readme.html", "readme")
 
-        try await archiver().unarchive(plan, renaming: true, in: ps2.folder)
+        try await archiver().archive("ICO", in: ps2.folder)
+        #expect(try ps2.folder.scan().map(\.archived) == [true])
+        #expect(try trashed() == ["ICO"])
+        try await archiver().unarchive(ps2.url.appending(path: "ICO.7z"), romName: "ICO", in: ps2.folder)
 
-        #expect(try ps2.folder.scan().map(\.name) == ["ICO"])
-        #expect(try ps2.folder.readyFile(named: "ICO")?.lastPathComponent == "ICO.iso")
+        #expect(try ps2.folder.scan().first?.fileName == "ICO/ICO (USA).bin")
+        #expect(FileManager.default.fileExists(atPath: ps2.url.appending(path: "ICO/readme.html").path(percentEncoded: false)))
     }
 
     @Test func withoutEnoughSpaceNothingHappens() async throws {
