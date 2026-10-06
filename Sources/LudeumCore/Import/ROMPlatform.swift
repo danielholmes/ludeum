@@ -21,7 +21,7 @@ public struct ROMPlatform: Sendable, Equatable {
 
     /// How an Archived ROM unpacks.
     enum Archiving: Sendable, Equatable {
-        /// Everything in the archive, into a folder named after the ROM (PS2, PS1, Saturn, PC Engine CD).
+        /// Everything in the archive, into a folder named after the ROM (PS2 and the disc Platforms).
         case intoFolder
         /// Its one file, named after the ROM, loose in the ROM folder (PSP and GameCube).
         case singleFile
@@ -111,7 +111,8 @@ public struct ROMPlatform: Sendable, Equatable {
             compactExtension: "7z"),
         78: .init(
             name: "Sega CD", folderName: "Sega CD", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"],
-            libretroRepo: "Sega_-_Mega-CD_-_Sega_CD"),
+            libretroRepo: "Sega_-_Mega-CD_-_Sega_CD",
+            archiving: .intoFolder),
         32: .init(
             name: "Sega Saturn", folderName: "Saturn", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"], libretroRepo: "Sega_-_Saturn",
             archiving: .intoFolder),
