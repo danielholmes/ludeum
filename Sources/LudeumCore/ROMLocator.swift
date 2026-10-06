@@ -56,3 +56,19 @@ public struct ROMFileInfo: Sendable, Equatable {
     /// from its index.
     public var isArchive: Bool { ["7z", "zip"].contains(url.pathExtension.lowercased()) }
 }
+
+extension SevenZip {
+    /// How much room a ROM's archives save, from their listings, for Game detail's folded file line: as
+    /// `saving(archiveSize:unpacked:)`. Nil unless its files are all archives, each listed and sized, with something inside.
+    public static func saving(files: [ROMFileInfo], contents: [URL: [Entry]]) -> Double? {
+        guard !files.isEmpty, files.allSatisfy(\.isArchive) else { return nil }
+        var packed: Int64 = 0
+        var unpacked: Int64 = 0
+        for file in files {
+            guard let size = file.size, let entries = contents[file.url] else { return nil }
+            packed += size
+            unpacked += entries.map(\.size).reduce(0, +)
+        }
+        return saving(archiveSize: packed, unpacked: unpacked)
+    }
+}

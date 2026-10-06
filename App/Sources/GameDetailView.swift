@@ -22,6 +22,8 @@ struct GameDetailView: View {
     /// Each present ROM file's created and modified dates, by ROM id, read from disk.
     /// Each present ROM's files on disk, read off the main thread.
     @State private var romFiles: [Int64: [ROMFileInfo]] = [:]
+    /// What's inside each of those files that's an archive, by its file.
+    @State private var archiveListings: [URL: ArchiveListing] = [:]
     /// ROMs whose files are shown.
     @State private var expandedROMs: Set<Int64> = []
     @State private var facts = GameFacts.none
@@ -155,7 +157,8 @@ struct GameDetailView: View {
         } message: {
             Text(versionAlert?.message ?? "")
         }
-        .task(id: roms.map(\.id)) {
+        // Again when a ROM changes file (Archive, Compact), not only when the ROMs do.
+        .task(id: roms) {
             // Off the main thread: it reads the ROM folders and the files' attributes.
             let locator = self.locator
             let present = roms.filter { !$0.missing }
@@ -164,6 +167,13 @@ struct GameDetailView: View {
                 for rom in present { out[rom.id] = locator.files(of: rom) }
                 return out
             }.value
+            // Then what's inside the archives, from their indexes, for the folded lines' savings.
+            var listings: [URL: ArchiveListing] = [:]
+            for file in romFiles.values.joined() where file.isArchive {
+                listings[file.url] = await ArchiveListing.read(file.url)
+                if Task.isCancelled { return }
+            }
+            archiveListings = listings
         }
         .task(id: game.igdbGameId) {
             facts = .none
@@ -341,12 +351,14 @@ struct GameDetailView: View {
         }
     }
 
-    /// The ROM's files, folded away: "3 files · 702 MB", opening to each file and its size. An archive's size is its
-    /// compressed one, and it lists what's inside, each file at its uncompressed size.
+    /// The ROM's files, folded away: "3 files · 702 MB", or for an archive "1 file · 390 KB (57% smaller)", that in
+    /// green, or red when the archive is bigger than what's inside. Opening it shows each file and its size; an
+    /// archive's size is its compressed one, and it lists what's inside, each file at its uncompressed size.
     /// The whole line is the button, not just the chevron.
     private func fileList(_ rom: LudeumROM, _ files: [ROMFileInfo]) -> some View {
         let total = files.compactMap(\.size).reduce(0, +)
         let expanded = expandedROMs.contains(rom.id)
+        let saving = SevenZip.saving(files: files, contents: archiveListings.compactMapValues(\.entries))
         return VStack(alignment: .leading, spacing: 4) {
             Button {
                 if expanded { expandedROMs.remove(rom.id) } else { expandedROMs.insert(rom.id) }
@@ -356,6 +368,7 @@ struct GameDetailView: View {
                     Text(
                         "\(files.count) file\(files.count == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"
                     )
+                    if let saving { savingText(saving) }
                     Spacer()
                 }
                 .font(.callout).foregroundStyle(.secondary)
@@ -376,10 +389,19 @@ struct GameDetailView: View {
                     }
                     .font(.callout)
                     .padding(.leading, 18)
-                    if file.isArchive { ArchiveContentsList(archive: file.url, archiveSize: file.size) }
+                    if file.isArchive { ArchiveContentsList(listing: archiveListings[file.url]) }
                 }
             }
         }
+    }
+
+    /// "(57% smaller)" in green, or "(12% bigger)" in red when packing made it take more room.
+    private func savingText(_ saving: Double) -> some View {
+        // A few bytes either way reads "<1%", not "0%".
+        let percent = abs(saving) < 0.005 ? "<1%" : abs(saving).formatted(.percent.precision(.fractionLength(0)))
+        return Text("(\(percent) \(saving < 0 ? "bigger" : "smaller"))")
+            .foregroundStyle(saving < 0 ? .red : .green).monospacedDigit()
+            .help(saving < 0 ? "The archive takes more room than its files unpacked." : "How much room the archive saves.")
     }
 
     // MARK: Archive, Unarchive and Compact
@@ -472,25 +494,36 @@ struct GameDetailView: View {
     }
 }
 
-/// What's inside an Archived or Compacted ROM's archive, read from its index when its file list is opened, with
-/// how much room the archive saves. An online-only archive isn't read: that would download all of it just to list it.
-private struct ArchiveContentsList: View {
-    let archive: URL
-    /// Its compressed size, to set against what's inside.
-    let archiveSize: Int64?
+/// What's inside an Archived or Compacted ROM's archive, read from its index when Game detail opens. An online-only
+/// archive isn't read: that would download all of it just to list it.
+private enum ArchiveListing {
+    case onlineOnly
+    case listed([SevenZip.Entry])
+    case failed(String)
 
-    private enum Contents {
-        case loading, onlineOnly
-        case listed([SevenZip.Entry])
-        case failed(String)
+    var entries: [SevenZip.Entry]? {
+        if case .listed(let entries) = self { entries } else { nil }
     }
 
-    @State private var contents = Contents.loading
+    static func read(_ archive: URL) async -> ArchiveListing {
+        guard let sevenZip = SevenZip.find() else { return .failed("Install 7-Zip (`brew install sevenzip`) to see what's inside.") }
+        guard SevenZip.isOnDisk(archive) else { return .onlineOnly }
+        do {
+            return .listed(try await sevenZip.contents(of: archive))
+        } catch {
+            return .failed("Couldn't read what's inside: \(error.localizedDescription)")
+        }
+    }
+}
+
+/// An archive's files, each at its uncompressed size; nil while it's still being read.
+private struct ArchiveContentsList: View {
+    let listing: ArchiveListing?
 
     var body: some View {
         Group {
-            switch contents {
-            case .loading: ProgressView().controlSize(.small)
+            switch listing {
+            case nil: ProgressView().controlSize(.small)
             case .onlineOnly:
                 Text("Online-only in Dropbox: what's inside shows once it's downloaded.").foregroundStyle(.secondary)
             case .listed(let entries):
@@ -502,46 +535,11 @@ private struct ArchiveContentsList: View {
                             .monospacedDigit().fixedSize()
                     }
                 }
-                let unpacked = entries.map(\.size).reduce(0, +)
-                if let archiveSize, let saving = SevenZip.saving(archiveSize: archiveSize, unpacked: unpacked) {
-                    savingLine(saving, unpacked: unpacked)
-                }
             case .failed(let message): Text(message).foregroundStyle(.secondary)
             }
         }
         .font(.callout)
         .padding(.leading, 36)
-        .task(id: archive) { await load() }
-    }
-
-    /// "1.2 GB uncompressed · 75% smaller", or in red with a warning, "12% bigger", when packing made it take more room.
-    @ViewBuilder private func savingLine(_ saving: Double, unpacked: Int64) -> some View {
-        let size = ByteCountFormatter.string(fromByteCount: unpacked, countStyle: .file)
-        // A few bytes bigger still warns, not as "0% bigger".
-        let percent = abs(saving) < 0.005 ? "under 1%" : abs(saving).formatted(.percent.precision(.fractionLength(0)))
-        if saving < 0 {
-            Label("\(size) uncompressed · \(percent) bigger", systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-                .help("The archive takes more room than its files unpacked.")
-        } else {
-            Text("\(size) uncompressed · \(percent) smaller").foregroundStyle(.secondary)
-        }
-    }
-
-    private func load() async {
-        guard let sevenZip = SevenZip.find() else {
-            contents = .failed("Install 7-Zip (`brew install sevenzip`) to see what's inside.")
-            return
-        }
-        guard SevenZip.isOnDisk(archive) else {
-            contents = .onlineOnly
-            return
-        }
-        do {
-            contents = .listed(try await sevenZip.contents(of: archive))
-        } catch {
-            contents = .failed("Couldn't read what's inside: \(error.localizedDescription)")
-        }
     }
 }
 

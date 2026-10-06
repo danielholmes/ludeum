@@ -89,3 +89,35 @@ func folderROM(_ name: String, fileName: String? = nil, archived: Bool = false, 
         #expect(locator.files(of: folderROM("Okami (USA)")).isEmpty)
     }
 }
+
+@Suite struct ROMArchiveSavingTests {
+    func file(_ name: String, _ size: Int64?) -> ROMFileInfo {
+        ROMFileInfo(url: URL(filePath: "/ROMs/\(name)"), name: name, size: size, created: nil, modified: nil)
+    }
+
+    @Test func aROMsArchiveSavesWhatsInsideItLessItsOwnSize() {
+        let saving = SevenZip.saving(
+            files: [file("ICO.7z", 250)],
+            contents: [
+                URL(filePath: "/ROMs/ICO.7z"): [SevenZip.Entry(path: "ICO.bin", size: 600), SevenZip.Entry(path: "readme", size: 400)]
+            ])
+
+        #expect(saving == 0.75)
+    }
+
+    @Test func aROMWithALooseFileBesideItsArchiveHasNoSaving() {
+        let saving = SevenZip.saving(
+            files: [file("ICO/ICO.bin", 1000), file("ICO.7z", 250)],
+            contents: [URL(filePath: "/ROMs/ICO.7z"): [SevenZip.Entry(path: "ICO.bin", size: 1000)]])
+
+        #expect(saving == nil)
+    }
+
+    @Test func anArchiveNotListedYetOrWithNoSizeHasNoSaving() {
+        let contents = [URL(filePath: "/ROMs/ICO.7z"): [SevenZip.Entry(path: "ICO.bin", size: 1000)]]
+
+        #expect(SevenZip.saving(files: [file("Okami.7z", 250)], contents: contents) == nil)
+        #expect(SevenZip.saving(files: [file("ICO.7z", nil)], contents: contents) == nil)
+        #expect(SevenZip.saving(files: [], contents: contents) == nil)
+    }
+}
