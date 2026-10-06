@@ -385,12 +385,12 @@ struct GameDetailView: View {
             case .unarchive:
                 Button("Unarchive", systemImage: "archivebox") { startArchiving(rom) }
                     .help(
-                        rom.platformId == ROMPlatform.psp
+                        ROMArchiving.unarchivesToOneFile(rom)
                             ? "Unpack its file, so it can be Played. The .7z goes to the Trash."
                             : "Unpack it into a folder named after it, so it can be Played. The .7z goes to the Trash.")
             case .archive:
                 Button("Archive", systemImage: "archivebox") { startArchiving(rom) }
-                    .help("Pack it into a .7z at maximum compression. The image goes to the Trash.")
+                    .help("Pack it into a .7z at maximum compression. What it packed goes to the Trash.")
             case .compact:
                 Button("Compact", systemImage: "archivebox") { startArchiving(rom) }
                     .help(

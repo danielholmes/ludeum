@@ -74,13 +74,18 @@ public struct ROMFolder: Sendable, Equatable {
             .map { FolderROMFile(name: $0, ready: ready[$0], archive: archives[$0], in: url, discsWithoutPlaylist: discs[$0] ?? []) }
     }
 
-    /// The game in a subfolder: its one playlist, else its one cue sheet, else its one image. Several cue sheets (or,
-    /// with none, several images) that are each a different Disc are a game too, opening at Disc 1 until it has a
-    /// playlist. Nil when there's nothing, or several that aren't Discs.
+    /// The game in a subfolder, as `game(among:)` finds it.
     private func game(in folder: URL) -> (file: URL, discsWithoutPlaylist: [URL])? {
         let files = ((try? FileManager.default.subpathsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? [])
             .map { folder.appending(path: $0, directoryHint: .notDirectory) }
             .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+        return game(among: files)
+    }
+
+    /// The game among a subfolder's files: its one playlist, else its one cue sheet, else its one image. Several cue
+    /// sheets (or, with none, several images) that are each a different Disc are a game too, opening at Disc 1 until it
+    /// has a playlist. Nil when there's nothing, or several that aren't Discs.
+    func game(among files: [URL]) -> (file: URL, discsWithoutPlaylist: [URL])? {
         let images = files.filter { readyExtensions.contains($0.pathExtension.lowercased()) }
         let playlists = images.filter { $0.pathExtension.lowercased() == "m3u" }
         if playlists.count == 1 { return (playlists[0], []) }

@@ -3,7 +3,7 @@ import Foundation
 public enum ArchiveError: Error, Equatable {
     /// 7-Zip's `7zz` isn't installed.
     case noSevenZip
-    /// Several images and no cue sheet: which is the game isn't clear.
+    /// Several files that could each be the game: which is isn't clear.
     case ambiguous([String])
     /// Nothing in the archive is a file the Emulator opens.
     case noImage
@@ -23,7 +23,7 @@ extension ArchiveError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .noSevenZip: "7-Zip isn't installed. Run `brew install sevenzip`, then try again."
-        case .ambiguous(let images): "Several images and no cue sheet: \(images.joined(separator: ", "))."
+        case .ambiguous(let images): "Which of these is the game isn't clear: \(images.joined(separator: ", "))."
         case .noImage: "Nothing in the archive is a game image."
         case .notOneFile(let files): "It should hold just the game, but holds \(files.joined(separator: ", "))."
         case .notEnoughSpace(let needed):
@@ -95,14 +95,14 @@ public struct ROMArchiver: Sendable {
             return UnarchivePlan(
                 archive: archive, romName: romName, entries: listing, destination: folder.url.appending(path: "\(romName).\(ext)"))
         }
-        // The folder only plays if it holds the game: one cue sheet, or one image.
-        let images = listing.filter { folder.readyExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
-        let cues = images.filter { ($0.path as NSString).pathExtension.lowercased() == "cue" }
-        if images.isEmpty { throw ArchiveError.noImage }
-        if cues.count > 1 || (cues.isEmpty && images.count > 1) { throw ArchiveError.ambiguous(images.map(\.fileName)) }
-        return UnarchivePlan(
-            archive: archive, romName: romName, entries: listing,
-            destination: folder.url.appending(path: romName, directoryHint: .isDirectory))
+        // The folder only plays if it holds the game, as a scan of the ROM folder finds it.
+        let destination = folder.url.appending(path: romName, directoryHint: .isDirectory)
+        let files = listing.map { destination.appending(path: $0.path, directoryHint: .notDirectory) }
+        if folder.game(among: files) == nil {
+            let images = listing.filter { folder.readyExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
+            throw images.isEmpty ? ArchiveError.noImage : ArchiveError.ambiguous(images.map(\.fileName))
+        }
+        return UnarchivePlan(archive: archive, romName: romName, entries: listing, destination: destination)
     }
 
     /// Unarchives everything in the archive into a folder named after the ROM (or, on a Platform that unpacks to a single

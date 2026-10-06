@@ -1,8 +1,8 @@
 import Foundation
 
 /// Archive, Unarchive and Compact: a ROM folder ROM packed into a `.7z`, unpacked so it can be Played, or packed into
-/// the archive its Emulator opens directly, as a Background task. Archive and Unarchive are PS2's and PSP's; Compact
-/// is for the Platforms whose Emulator opens an archive.
+/// the archive its Emulator opens directly, as a Background task. Archive and Unarchive are for the Platforms whose
+/// ROMs can be Archived (`ROMPlatform.all`); Compact is for the Platforms whose Emulator opens an archive.
 @MainActor public struct ROMArchiving {
     public enum Action: Sendable, Equatable {
         case archive, unarchive, compact
@@ -24,12 +24,17 @@ import Foundation
     }
 
     /// What can be done to the ROM: Compact while it isn't yet in its Platform's compact extension, Archive or
-    /// Unarchive on PS2 and PSP, and nil for a missing ROM or any other.
+    /// Unarchive on a Platform whose ROMs can be Archived, and nil for a missing ROM or any other.
     public nonisolated static func action(for rom: LudeumROM) -> Action? {
         guard !rom.missing, let platform = ROMPlatform.all[rom.platformId] else { return nil }
         if platform.compactExtension != nil { return platform.canCompact(fileName: rom.fileName) ? .compact : nil }
         guard platform.archiving != nil else { return nil }
         return rom.archived ? .unarchive : .archive
+    }
+
+    /// Whether the ROM's Unarchive unpacks its one file loose, rather than everything into a folder named after it.
+    public nonisolated static func unarchivesToOneFile(_ rom: LudeumROM) -> Bool {
+        ROMPlatform.all[rom.platformId]?.archiving == .singleFile
     }
 
     /// The file a Compact makes, e.g. `Tetris (World).7z`; nil when the ROM can't be Compacted.

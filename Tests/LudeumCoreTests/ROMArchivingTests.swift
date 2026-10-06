@@ -17,12 +17,28 @@ import Testing
     }
 
     @Test func aPlatformWithNeitherCantDoAnything() {
-        #expect(ROMArchiving.action(for: rom("Metroid Prime (USA)", on: 21, "Metroid Prime (USA).rvz")) == nil)
+        #expect(ROMArchiving.action(for: rom("Sonic CD (USA)", on: 78, "Sonic CD (USA)/Sonic CD (USA).cue")) == nil)
+    }
+
+    @Test(arguments: [
+        (Int64(7), "Vagrant Story (USA)/Vagrant Story (USA).cue"), (32, "Nights (USA)/Nights (USA).cue"), (150, "Ys (USA)/Ys (USA).cue"),
+        (21, "Metroid Prime (USA).rvz"),
+    ])
+    func aDiscOrGameCubeROMCanBeArchivedAndUnarchived(platform: Int64, fileName: String) {
+        #expect(ROMArchiving.action(for: rom("Game", on: platform, fileName)) == .archive)
+        #expect(ROMArchiving.action(for: rom("Game", on: platform, "Game.7z", archived: true)) == .unarchive)
     }
 
     @Test func aPSPROMCanBeArchivedAndUnarchived() {
         #expect(ROMArchiving.action(for: rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).iso")) == .archive)
         #expect(ROMArchiving.action(for: rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).7z", archived: true)) == .unarchive)
+    }
+
+    @Test func pspAndGameCubeROMsUnarchiveToOneFileAndDiscROMsIntoAFolder() {
+        #expect(ROMArchiving.unarchivesToOneFile(rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).7z", archived: true)))
+        #expect(ROMArchiving.unarchivesToOneFile(rom("Metroid Prime (USA)", on: 21, "Metroid Prime (USA).7z", archived: true)))
+        #expect(!ROMArchiving.unarchivesToOneFile(rom("Vagrant Story (USA)", on: 7, "Vagrant Story (USA).7z", archived: true)))
+        #expect(!ROMArchiving.unarchivesToOneFile(rom("ICO", on: ROMPlatform.ps2, "ICO.7z", archived: true)))
     }
 
     @Test func aLooseCartridgeROMCanBeCompactedIntoA7z() {

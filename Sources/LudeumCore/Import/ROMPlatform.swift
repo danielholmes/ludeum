@@ -21,9 +21,9 @@ public struct ROMPlatform: Sendable, Equatable {
 
     /// How an Archived ROM unpacks.
     enum Archiving: Sendable, Equatable {
-        /// Everything in the archive, into a folder named after the ROM (PS2).
+        /// Everything in the archive, into a folder named after the ROM (PS2, PS1, Saturn, PC Engine CD).
         case intoFolder
-        /// Its one file, named after the ROM, loose in the ROM folder (PSP).
+        /// Its one file, named after the ROM, loose in the ROM folder (PSP and GameCube).
         case singleFile
     }
 
@@ -84,10 +84,12 @@ public struct ROMPlatform: Sendable, Equatable {
             name: "Nintendo DS", folderName: "DS", readyExtensions: ["nds"], libretroRepo: "Nintendo_-_Nintendo_DS", compactExtension: "7z"),
         21: .init(
             name: "Nintendo GameCube", folderName: "GameCube", readyExtensions: ["rvz", "iso", "gcm", "ciso", "gcz", "wbfs"],
-            libretroRepo: "Nintendo_-_GameCube"),
+            libretroRepo: "Nintendo_-_GameCube",
+            archiving: .singleFile),
         7: .init(
             name: "PlayStation", folderName: "PS1", readyExtensions: ["m3u", "chd", "cue", "pbp", "iso", "bin", "img"],
-            libretroRepo: "Sony_-_PlayStation"),
+            libretroRepo: "Sony_-_PlayStation",
+            archiving: .intoFolder),
         38: .init(
             name: "PlayStation Portable", folderName: "PSP", readyExtensions: ["iso", "cso", "chd", "pbp"],
             libretroRepo: "Sony_-_PlayStation_Portable",
@@ -111,11 +113,12 @@ public struct ROMPlatform: Sendable, Equatable {
             name: "Sega CD", folderName: "Sega CD", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"],
             libretroRepo: "Sega_-_Mega-CD_-_Sega_CD"),
         32: .init(
-            name: "Sega Saturn", folderName: "Saturn", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"], libretroRepo: "Sega_-_Saturn"
-        ),
+            name: "Sega Saturn", folderName: "Saturn", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"], libretroRepo: "Sega_-_Saturn",
+            archiving: .intoFolder),
         150: .init(
             name: "Turbografx-16/PC Engine CD", folderName: "PC Engine CD", readyExtensions: ["m3u", "chd", "cue", "bin"],
-            libretroRepo: "NEC_-_PC_Engine_CD_-_TurboGrafx-CD"),
+            libretroRepo: "NEC_-_PC_Engine_CD_-_TurboGrafx-CD",
+            archiving: .intoFolder),
     ]
 
     /// Platforms OpenEmu kept under one system, so a ROM from it may belong on any of them.
