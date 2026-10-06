@@ -157,12 +157,11 @@ struct GameDetailView: View {
         }
         .task(id: roms.map(\.id)) {
             // Off the main thread: it reads OpenEmu's library and the files' attributes.
-            let library = services.settings.openEmuLibrary
-            let folders = services.settings.romFolders
+            let locator = self.locator
             let present = roms.filter { !$0.missing }
             romFiles = await Task.detached(priority: .utility) {
                 var out: [Int64: [ROMFileInfo]] = [:]
-                for rom in present { out[rom.id] = filesOnDisk(rom, library: library, folders: folders) }
+                for rom in present { out[rom.id] = locator.files(of: rom) }
                 return out
             }.value
         }
@@ -402,10 +401,12 @@ struct GameDetailView: View {
 
     private static func taskSubject(_ rom: LudeumROM) -> String { "rom \(rom.id)" }
 
-    private func folder(of rom: LudeumROM) -> ROMFolder? { services.settings.romFolders.first { $0.systemId == rom.systemId } }
+    private var locator: ROMLocator {
+        ROMLocator(openEmuLibrary: services.settings.openEmuLibrary, romFolders: services.settings.romFolders)
+    }
 
     private func unarchive(_ rom: LudeumROM) {
-        guard let folder = folder(of: rom), let name = rom.folderName else { return }
+        guard let folder = locator.folder(of: rom), let name = rom.folderName else { return }
         let archive = folder.url.appending(path: rom.fileName)
         services.tasks.enqueue("Unarchiving \(name)", subject: Self.taskSubject(rom)) { progress in
             try await ROMArchiver.installed().unarchive(archive, romName: name, in: folder, progress: progress)
@@ -415,7 +416,7 @@ struct GameDetailView: View {
     }
 
     private func archive(_ rom: LudeumROM) {
-        guard let folder = folder(of: rom), let name = rom.folderName else { return }
+        guard let folder = locator.folder(of: rom), let name = rom.folderName else { return }
         services.tasks.enqueue("Archiving \(name)", subject: Self.taskSubject(rom)) { progress in
             try await ROMArchiver.installed().archive(name, in: folder, progress: progress)
         } finished: {
@@ -437,7 +438,7 @@ struct GameDetailView: View {
         let present = roms.filter { !$0.missing && !$0.archived }
         guard let rom = present.first(where: { $0.fileName.lowercased().hasSuffix(".m3u") }) ?? present.first else { return nil }
         do {
-            guard let file = try romFile(rom, library: services.settings.openEmuLibrary, folders: services.settings.romFolders, ready: true)
+            guard let file = try locator.file(of: rom, ready: true)
             else {
                 playError = "Couldn't find \(rom.fileName). Run an Import, then try again."
                 return nil
@@ -480,7 +481,7 @@ struct GameDetailView: View {
     /// Reveals the ROM's file in OpenEmu's library folder.
     private func showInFinder(_ rom: LudeumROM) {
         do {
-            guard let file = try romFile(rom, library: services.settings.openEmuLibrary, folders: services.settings.romFolders) else {
+            guard let file = try locator.file(of: rom) else {
                 error = "Couldn't find \(rom.fileName). Run an Import, then try again."
                 return
             }
@@ -547,52 +548,6 @@ private struct ArchiveContentsList: View {
             contents = .failed("Couldn't read what's inside: \(BackgroundTasks.describe(error))")
         }
     }
-}
-
-/// One file of a ROM, as Game detail lists it.
-struct ROMFileInfo: Sendable {
-    let url: URL
-    /// Its path from the ROM's own folder (the ROM folder, or the folder OpenEmu keeps it in).
-    let name: String
-    let size: Int64?
-    let created: Date?
-    let modified: Date?
-}
-
-/// Every file of a ROM on disk, the file a Play opens first. Empty when it can't be found.
-private func filesOnDisk(_ rom: LudeumROM, library: URL, folders: [ROMFolder]) -> [ROMFileInfo] {
-    let files: [URL]
-    let base: URL
-    if let pk = rom.openEmuPk {
-        guard let main = try? OpenEmuLibrary.romFile(library: library, openEmuPk: pk) else { return [] }
-        files = ROMFiles.files(of: main)
-        base = main.deletingLastPathComponent()
-    } else if let name = rom.folderName, let folder = folders.first(where: { $0.systemId == rom.systemId }) {
-        files = (try? folder.files(named: name)) ?? []
-        base = folder.url
-    } else {
-        return []
-    }
-    let basePath = base.standardizedFileURL.path(percentEncoded: false)
-    return files.map { file in
-        let values = try? file.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey])
-        let path = file.standardizedFileURL.path(percentEncoded: false)
-        return ROMFileInfo(
-            url: file,
-            name: path.hasPrefix(basePath)
-                ? String(path.dropFirst(basePath.count)).trimmingPrefix("/").description : file.lastPathComponent,
-            size: values?.fileSize.map(Int64.init), created: values?.creationDate, modified: values?.contentModificationDate)
-    }
-}
-
-/// Where a ROM's file is: in OpenEmu's library, or in its ROM folder. `ready` asks for the file a
-/// Play opens, so an archived ROM has none.
-private func romFile(_ rom: LudeumROM, library: URL, folders: [ROMFolder], ready: Bool = false) throws -> URL? {
-    if let pk = rom.openEmuPk { return try OpenEmuLibrary.romFile(library: library, openEmuPk: pk) }
-    guard let name = rom.folderName, let folder = folders.first(where: { $0.systemId == rom.systemId }) else { return nil }
-    if ready { return try folder.readyFile(named: name) }
-    let file = folder.url.appending(path: rom.fileName)
-    return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
 }
 
 /// "9.5" → 95 tenths. Nil for anything else, including a second decimal place.
