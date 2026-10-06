@@ -1,17 +1,12 @@
-import CryptoKit
 import Foundation
 import Testing
 
 @testable import LudeumCore
 
 @Suite struct MatcherTests {
-    let snes = "openemu.system.snes"
-
-    func rom(
-        _ name: String, md5: String = "00000000000000000000000000000000", system: String = "openemu.system.snes",
-        title: String? = nil, file: URL? = nil
-    ) -> ROMToMatch {
-        ROMToMatch(id: 1, name: name, openVGDBTitle: title, system: system, md5: md5, file: file)
+    /// On the SNES unless said otherwise.
+    func rom(_ name: String, md5: String? = nil, platforms: [Int] = [19]) -> ROMToMatch {
+        ROMToMatch(id: 1, name: name, md5: md5, platforms: platforms)
     }
 
     func match(_ h: Harness, _ r: ROMToMatch) async throws -> MatchResult {
@@ -43,7 +38,7 @@ import Testing
         h.internet.addGame(2, "Resident Evil 2: Dual Shock Ver.")
 
         #expect(
-            try await match(h, rom("Resident Evil 2 - Dual Shock Ver. (USA) (Disc 1) (Leon)", md5: "aa", system: "openemu.system.psx"))
+            try await match(h, rom("Resident Evil 2 - Dual Shock Ver. (USA) (Disc 1) (Leon)", md5: "aa", platforms: [7]))
                 == .suggestion(Suggestion(gameID: 2, source: .relatedRecord, namesAgree: true, checksumGameID: 1)))
     }
 
@@ -69,13 +64,13 @@ import Testing
                 == .suggestion(Suggestion(gameID: 6, source: .nameSearch, namesAgree: false)))
     }
 
-    @Test func searchTriesTheOpenVGDBTitleAndTheSystemsOtherPlatforms() async throws {
+    @Test func searchTriesEachOfItsPlatforms() async throws {
         let h = try Harness()
         h.internet.addGame(8, "Pocket Monsters Gold")
         h.internet.addSearch("Pocket Monsters Gold", platform: 22, results: [8])
 
         #expect(
-            try await match(h, rom("PMG (J)", system: "openemu.system.gb", title: "Pocket Monsters Gold"))
+            try await match(h, rom("Pocket Monsters Gold (J)", platforms: [33, 22]))
                 == .suggestion(Suggestion(gameID: 8, source: .nameSearch, namesAgree: true)))
     }
 
@@ -91,24 +86,5 @@ import Testing
     @Test func nothingFoundIsNoSuggestion() async throws {
         let h = try Harness()
         #expect(try await match(h, rom("Unknown Homebrew")) == .noSuggestion)
-    }
-
-    @Test func aHeaderedNESDumpOnDiskIsRetriedWithoutItsHeader() async throws {
-        let h = try Harness()
-        let body = Data(repeating: 0x42, count: 64)
-        let file = h.directory.appending(path: "Holy Diver (Japan).nes")
-        try (Data([0x4E, 0x45, 0x53, 0x1A]) + Data(repeating: 0, count: 12) + body).write(to: file)
-        let headerless = Insecure.MD5.hash(data: body).map { String(format: "%02x", $0) }.joined()
-        h.internet.addHash(md5: headerless, game: 9, platform: 18)
-        h.internet.addGame(9, "Holy Diver")
-
-        #expect(try await match(h, rom("Holy Diver (Japan)", md5: "bb", system: "openemu.system.nes", file: file)) == .automatic(gameID: 9))
-    }
-
-    @Test func aMissingFileIsNotRetried() async throws {
-        let h = try Harness()
-        let file = h.directory.appending(path: "gone.nes")
-
-        #expect(try await match(h, rom("Gone (USA)", md5: "bb", system: "openemu.system.nes", file: file)) == .noSuggestion)
     }
 }

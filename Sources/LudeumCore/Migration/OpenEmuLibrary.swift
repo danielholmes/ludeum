@@ -12,6 +12,16 @@ public struct OpenEmuROMRecord: Sendable, Hashable {
     public let isPresent: Bool
 }
 
+/// OpenEmu system → IGDB platform ids, most likely first: the Platforms `migrate-openemu` lets a system's ROM
+/// go to. Game Boy covers Game Boy Color, and SNES/NES cover the Japanese Super Famicom/Famicom releases.
+let openEmuSystemPlatforms: [String: [Int]] = [
+    "openemu.system.gb": [33, 22], "openemu.system.snes": [19, 58], "openemu.system.nes": [18, 99],
+    "openemu.system.psx": [7], "openemu.system.sg": [29], "openemu.system.gba": [24],
+    "openemu.system.nds": [20], "openemu.system.psp": [38], "openemu.system.n64": [4],
+    "openemu.system.gc": [21], "openemu.system.sms": [64], "openemu.system.scd": [78],
+    "openemu.system.saturn": [32], "openemu.system.gg": [35], "openemu.system.pcecd": [150],
+]
+
 /// What `migrate-openemu` reads from one snapshot of OpenEmu's database.
 public struct OpenEmuLibrarySnapshot: Sendable, Equatable {
     /// Ordered by `Z_PK`.

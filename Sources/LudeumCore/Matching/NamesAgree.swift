@@ -4,11 +4,10 @@ import Foundation
 /// name after normalising. Never a prefix or containment test, because nearly every wrong
 /// checksum match is the IGDB name being a prefix of the ROM's title (ADR 0004).
 ///
-/// ROM side: the ROM's name and OpenVGDB's title. IGDB side: the game's name, its alternative
-/// names and its localizations, where a regional one only counts for a ROM from that region
-/// (or of unknown region).
-public func namesAgree(romName: String, openVGDBTitle: String?, game: IGDBGame) -> Bool {
-    let keys = Set(([romName] + [openVGDBTitle].compactMap { $0 }).flatMap(romTitles).map(nameKey)).subtracting([""])
+/// ROM side: the ROM's name. IGDB side: the game's name, its alternative names and its localizations,
+/// where a regional one only counts for a ROM from that region (or of unknown region).
+public func namesAgree(romName: String, game: IGDBGame) -> Bool {
+    let keys = Set(romTitles(romName).map(nameKey)).subtracting([""])
     let regions = ROMName(romName).regions
     return igdbNames(game, for: regions).contains { keys.contains(nameKey(cleanName($0))) }
 }

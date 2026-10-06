@@ -70,7 +70,7 @@ public final class Import: Sendable {
         // No checksum, so a new ROM is only ever suggested: always the Review queue (ADR 0004).
         let results = try await matcher.match(
             newROMs.enumerated().map { i, rom in
-                ROMToMatch(id: i, name: rom.file.name, openVGDBTitle: nil, system: "", md5: "", file: nil, platforms: [Int(rom.platformId)])
+                ROMToMatch(id: i, name: rom.file.name, platforms: [Int(rom.platformId)])
             })
         plan.new = newROMs.enumerated().map { i, rom in (rom.platformId, rom.file, results[i] ?? .noSuggestion) }
 

@@ -13,8 +13,8 @@ import Testing
             ]))
     }
 
-    func agree(_ rom: String, _ g: IGDBGame, title: String? = nil) -> Bool {
-        namesAgree(romName: rom, openVGDBTitle: title, game: g)
+    func agree(_ rom: String, _ g: IGDBGame) -> Bool {
+        namesAgree(romName: rom, game: g)
     }
 
     @Test func equalNamesAfterNormalisingAgree() {
@@ -54,10 +54,6 @@ import Testing
         #expect(agree("0173 - Harry Potter (Europe)", game("Harry Potter")))
         #expect(agree("Metroid Prime (USA).nkit", game("Metroid Prime")))
         #expect(agree("Earthbound (USA) - bofner patch", game("EarthBound")))
-    }
-
-    @Test func openVGDBsTitleCountsToo() {
-        #expect(agree("RSHAKE", game("Resident Evil"), title: "Resident Evil"))
     }
 
     @Test func alternativeNamesAndLocalizationsAgree() {
