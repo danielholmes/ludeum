@@ -33,7 +33,12 @@ struct LudeumApp: App {
         .defaultSize(width: 1700, height: 900)
         // Every launch opens at this size with the columns at their ideal widths, not as last left.
         .restorationBehavior(.disabled)
-        .commands { TrimmedMenus() }
+        .commands {
+            TrimmedMenus()
+            CommandGroup(after: .appSettings) {
+                Button("Emulators…") { services.versions.showingSheet = true }
+            }
+        }
 
         Settings {
             SettingsView(settings: settings, journal: journal)

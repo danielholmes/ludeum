@@ -112,6 +112,7 @@ struct MainWindow: View {
         .modifier(OngoingImportTriggers(model: importModel))
         .modifier(CacheRefreshOnLaunch(services: services))
         .modifier(EmulatorVersionsOnLaunch(services: services))
+        .sheet(isPresented: Bindable(services.versions).showingSheet) { EmulatorsSheet(services: services) }
         .toolbar {
             ToolbarItem {
                 HStack(spacing: 6) {

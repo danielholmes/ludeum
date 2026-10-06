@@ -32,6 +32,23 @@ import Testing
         #expect(EmulatorVersions.check(found: "0.1-99999-gabc", for: .duckStation) == .ok)
     }
 
+    @Test func whatTheInstalledEmulatorsPrintIsUnderstood() {
+        // Each Emulator's real `--version` / `-version` output, from the installed apps.
+        #expect(EmulatorVersions.check(found: "v148", for: .ares) == .ok)
+        #expect(EmulatorVersions.check(found: "v1.20.4", for: .ppsspp) == .ok)
+        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
+        #expect(
+            EmulatorVersions.check(
+                found: "DuckStation Version 0.1-12070-g4122fed9a (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)
+        #expect(EmulatorVersions.check(found: "v147", for: .ares) == .tooOld(found: "147"))
+    }
+
+    @Test func theInstalledVersionIsShownTheWayItsCompared() {
+        #expect(EmulatorVersions.shown(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == "2.9.103")
+        #expect(EmulatorVersions.shown(found: "DuckStation Version 0.1-12070-g4122fed9a (dev)", for: .duckStation) == "12070")
+        #expect(EmulatorVersions.shown(found: nil, for: .pcsx2) == nil)
+    }
+
     @Test func aVersionThatCantBeReadSaysSo() {
         #expect(EmulatorVersions.check(found: nil, for: .pcsx2) == .unreadable)
         #expect(EmulatorVersions.check(found: "dev build", for: .pcsx2) == .unreadable)

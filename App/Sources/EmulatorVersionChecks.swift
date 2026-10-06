@@ -8,6 +8,14 @@ import SwiftUI
 @Observable @MainActor final class EmulatorVersionChecks {
     /// By bundle identifier; an Emulator that isn't installed, or isn't checked yet, has none.
     private(set) var results: [String: VersionCheck] = [:]
+    /// The installed version each check found, when it could be read.
+    private(set) var installed: [String: String] = [:]
+    /// Emulators the launch check found aren't installed.
+    private(set) var notInstalled: Set<String> = []
+    /// The launch check has been through every Emulator.
+    private(set) var finished = false
+    /// The Emulators sheet, opened from the app menu.
+    var showingSheet = false
     /// Emulators already warned about this launch.
     private var warned: Set<String> = []
 
@@ -15,11 +23,16 @@ import SwiftUI
 
     func checkAll() async {
         for emulator in Emulator.all {
-            guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: emulator.bundleIdentifier) else { continue }
-            results[emulator.bundleIdentifier] = await Task.detached(priority: .utility) {
-                EmulatorVersions.check(emulator, app: app)
-            }.value
+            let id = emulator.bundleIdentifier
+            guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
+                notInstalled.insert(id)
+                continue
+            }
+            let found = await Task.detached(priority: .utility) { EmulatorVersions.check(emulator, app: app) }.value
+            results[id] = found?.check
+            installed[id] = found?.installed
         }
+        finished = true
     }
 
     /// Why Play is refused, when the installed version is too old.
@@ -55,5 +68,80 @@ struct EmulatorVersionsOnLaunch: ViewModifier {
             Self.started = true
             Task { await services.versions.checkAll() }
         }
+    }
+}
+
+/// Every Emulator Ludeum plays Games in, with what the launch check found: whether it's installed,
+/// the version Ludeum needs against the one installed, and the Platforms it plays.
+struct EmulatorsSheet: View {
+    let services: Services
+    @Environment(\.dismiss) private var dismiss
+    @State private var platforms: [PlatformCount] = []
+
+    private var checks: EmulatorVersionChecks { services.versions }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Emulators").font(.title2.bold())
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                GridRow {
+                    Text("Emulator")
+                    Text("Status")
+                    Text("Needs")
+                    Text("Installed")
+                    Text("Plays")
+                }
+                .font(.callout.bold()).foregroundStyle(.secondary)
+                Divider()
+                ForEach(Emulator.all, id: \.bundleIdentifier) { emulator in
+                    GridRow {
+                        Text(emulator.name).bold()
+                        status(emulator)
+                        Text(emulator.expectedVersion ?? "–").monospacedDigit()
+                        Text(checks.installed[emulator.bundleIdentifier] ?? "–").monospacedDigit()
+                        Text(plays(emulator)).foregroundStyle(.secondary).lineLimit(2)
+                            .frame(maxWidth: 260, alignment: .leading)
+                    }
+                }
+            }
+            Text(
+                "Checked when Ludeum opens. An Emulator older than it needs can't Play; "
+                    + "a newer major version, or one whose version can't be read, gets a warning the first time it Plays."
+            )
+            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 680)
+        .task { platforms = (try? services.journal?.platformCounts()) ?? [] }
+    }
+
+    @ViewBuilder private func status(_ emulator: Emulator) -> some View {
+        let id = emulator.bundleIdentifier
+        if checks.notInstalled.contains(id) {
+            Label("Not installed", systemImage: "minus.circle").foregroundStyle(.secondary)
+        } else {
+            switch checks.result(emulator) {
+            case .ok: Label("OK", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            case .tooOld: Label("Too old: can't Play", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+            case .newerMajor: Label("Newer major version", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            case .unreadable: Label("Version unreadable", systemImage: "questionmark.circle.fill").foregroundStyle(.orange)
+            case nil:
+                if checks.finished {
+                    Label("Not checked", systemImage: "minus.circle").foregroundStyle(.secondary)
+                } else {
+                    Label("Checking…", systemImage: "hourglass").foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// The Library's Platforms it plays, e.g. "SNES, Game Boy".
+    private func plays(_ emulator: Emulator) -> String {
+        let names = platforms.filter { Emulator.of(platformId: $0.id) == emulator }.map(\.name)
+        return names.isEmpty ? "–" : names.joined(separator: ", ")
     }
 }

@@ -62,12 +62,21 @@ public enum EmulatorVersions {
     static var mesenSettings: URL { URL.applicationSupportDirectory.appending(path: "MesenCE/settings.json") }
 
     /// Reads and checks the installed app's version. Runs a process for some Emulators, so not on the main thread.
-    /// Nil for an Emulator that isn't checked.
-    public static func check(_ emulator: Emulator, app: URL) -> VersionCheck? {
-        emulator.versionSpec == nil ? nil : check(found: read(emulator, app: app), for: emulator)
+    /// The installed app's version (as `shown(found:for:)` gives it) and how it compares. Runs a
+    /// process for some Emulators, so not on the main thread. Nil for an Emulator that isn't checked.
+    public static func check(_ emulator: Emulator, app: URL) -> (installed: String?, check: VersionCheck)? {
+        guard emulator.versionSpec != nil else { return nil }
+        let found = read(emulator, app: app)
+        return (shown(found: found, for: emulator), check(found: found, for: emulator))
     }
 
     /// `found` (whatever the source printed) against what's expected.
+    /// The version `found` names, as compared: "2.9.103", or DuckStation's build number. Nil when it can't be read.
+    public static func shown(found: String?, for emulator: Emulator) -> String? {
+        guard let spec = emulator.versionSpec, let text = found, let version = parse(text, spec.format) else { return nil }
+        return version.map(String.init).joined(separator: ".")
+    }
+
     static func check(found: String?, for emulator: Emulator) -> VersionCheck {
         guard let spec = emulator.versionSpec, let text = found, let version = parse(text, spec.format),
             let expected = parse(spec.expected, spec.format)
