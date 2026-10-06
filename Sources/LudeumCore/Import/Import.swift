@@ -227,6 +227,13 @@ extension LudeumStore {
             }
             for rom in plan.new {
                 let file = rom.file
+                // Recorded while the Import ran (an Add ROM): it stays as that left it.
+                if try Bool.fetchOne(
+                    db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE platformId = ? AND folderName = ?)",
+                    arguments: [rom.platformId, file.name]) == true
+                {
+                    continue
+                }
                 let parsed = ROMName(file.name)
                 try ROMPlatform.ensureKnown(db, rom.platformId)
                 try db.execute(

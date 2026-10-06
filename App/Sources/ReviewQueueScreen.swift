@@ -138,7 +138,8 @@ struct ReviewQueueScreen: View {
                             kind = .noSuggestion
                         }, failed: { error = $0 })
                 } else if kind == .missingROMs, let m = items.missingROMs.first(where: { $0.id == selection }) {
-                    MissingROMsDetail(item: m, checkAgain: checkAgain, showGame: { shownGame = m.id })
+                    MissingROMsDetail(
+                        services: services, item: m, checkAgain: checkAgain, showGame: { shownGame = m.id }, failed: { error = $0 })
                 } else if kind == .oldMissingROMs, let m = items.oldMissingROMs.first(where: { $0.id == selection }) {
                     OldMissingROMsDetail(
                         services: services, item: m, checkAgain: checkAgain, showGame: { shownGame = m.id }, failed: { error = $0 })
@@ -825,27 +826,62 @@ private struct NoPlaylistDetail: View {
     }
 }
 
-/// A Missing ROMs item: a Game whose ROMs are all gone from its ROM folder. I put a file back and Check again, or
-/// delete the Game.
+/// A Missing ROMs item: a Game whose ROMs are all gone from its ROM folder. I Add a ROM, put a file back and Check
+/// again, or delete the Game.
 private struct MissingROMsDetail: View {
+    let services: Services
     let item: MissingROMsGame
     let checkAgain: () -> Void
     let showGame: () -> Void
+    let failed: (String?) -> Void
+    @State private var picked: PickedROM?
+
+    /// Its Platform keeps each ROM in a subfolder, so a folder is picked.
+    private var picksFolder: Bool { ROMPlatform.all[item.game.platformId]?.archiving == .intoFolder }
 
     var body: some View {
         Form {
             Section {
-                Text(item.game.name).font(.title2).bold()
-                Text("Its ROMs are all missing from its ROM folder. Put one back, then Check again, or delete the Game.")
+                HStack {
+                    Text(item.game.name).font(.title2).bold()
+                    Button("Copy name", systemImage: "doc.on.doc") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(item.game.name, forType: .string)
+                    }
+                    .labelStyle(.iconOnly).buttonStyle(.hover).help("Copy the Game's name, to search for its ROM")
+                }
+                Text("Its ROMs are all missing from its ROM folder. Add a ROM, put one back then Check again, or delete the Game.")
                     .foregroundStyle(.secondary)
             }
             Section("Missing ROMs") { ForEach(item.roms) { ROMRow(rom: $0) } }
             FlowLayout(spacing: 8) {
+                Button(picksFolder ? "Add ROM folder…" : "Add ROM file…", action: addROM)
+                    .help("Choose a ROM for this Game: it goes into its ROM folder, ready to Play")
                 Button("Show Game", action: showGame)
                 Button("Check again", action: checkAgain)
             }
         }
         .formStyle(.grouped)
+        .sheet(item: $picked) { picked in
+            AddROMToGameSheet(services: services, game: item.game, picked: picked, missingROMs: item.roms.count)
+        }
+    }
+
+    private func addROM() {
+        guard let urls = pickROM(folders: picksFolder) else { return }
+        let platform = item.game.platformId
+        Task {
+            do {
+                let read = try await readPicked(urls)
+                guard read.platforms.contains(platform) else {
+                    throw AddROMError.platformWontReadIt(ROMPlatform.all[platform]?.name ?? "Its Platform")
+                }
+                failed(nil)
+                picked = read
+            } catch {
+                failed(journalErrorText(error))
+            }
+        }
     }
 }
 

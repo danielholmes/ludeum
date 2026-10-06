@@ -27,6 +27,9 @@ struct MainWindow: View {
     @State private var pins: [Pin] = []
     /// The journal still has OpenEmu ROMs: `migrate-openemu` hasn't run.
     @State private var needsOpenEmuMigration = false
+    /// Picked in Add ROM, until its game is chosen.
+    @State private var addingROM: PickedROM?
+    @State private var addROMError: String?
 
     /// Opens a Game in the detail column, leaving any IGDB result.
     private func openGame(_ id: GameID) {
@@ -39,6 +42,18 @@ struct MainWindow: View {
         libraryFilter = filter
         libraryRequest += 1
         selection = .library
+    }
+
+    /// Add ROM: asks for the ROM, then which game it is.
+    private func addROM() {
+        guard let urls = pickROM(folders: nil) else { return }
+        Task {
+            do {
+                addingROM = try await readPicked(urls)
+            } catch {
+                addROMError = journalErrorText(error)
+            }
+        }
     }
 
     /// A Search: the Library with every filter cleared, and the text as its Text filter.
@@ -141,6 +156,12 @@ struct MainWindow: View {
         .sheet(isPresented: Bindable(services.sheets).emulators) { EmulatorsSheet(services: services) }
         .sheet(isPresented: Bindable(services.sheets).players) { PlayersSheet(services: services) }
         .sheet(isPresented: Bindable(services.sheets).storageStats) { StorageStatsSheet(services: services) }
+        .sheet(item: $addingROM) { AddROMSheet(services: services, picked: $0, added: openGame) }
+        .alert("Couldn't add the ROM", isPresented: Binding(get: { addROMError != nil }, set: { if !$0 { addROMError = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(addROMError ?? "")
+        }
         .toolbar {
             ToolbarItem {
                 HStack(spacing: 6) {
@@ -152,6 +173,9 @@ struct MainWindow: View {
                         igdbFocusRequest += 1
                     }
                     .help("Search IGDB to add a Game")
+                    Button("Add ROM", systemImage: "square.and.arrow.up", action: addROM)
+                        .help("Add a ROM from a file or folder: it goes into its ROM folder, ready to Play")
+                        .disabled(services.journal == nil)
                 }
             }
         }

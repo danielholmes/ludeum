@@ -15,12 +15,12 @@ public struct ROMPlatform: Sendable, Equatable {
     let libretroRepo: String
     /// The archive its Emulator opens directly, so its ROMs can be Compacted into it: `7z` for MesenCE and melonDS,
     /// `zip` for ares (which can't open a `.7z`). Nil where the Emulator opens neither.
-    let compactExtension: String?
+    public let compactExtension: String?
     /// How its ROMs are Archived, when they can be: nil for the rest.
-    let archiving: Archiving?
+    public let archiving: Archiving?
 
     /// How an Archived ROM unpacks.
-    enum Archiving: Sendable, Equatable {
+    public enum Archiving: Sendable, Equatable {
         /// Everything in the archive, into a folder named after the ROM (PS2 and the disc Platforms).
         case intoFolder
         /// Its one file, named after the ROM, loose in the ROM folder (PSP, GameCube and Wii).
