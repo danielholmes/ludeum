@@ -359,6 +359,8 @@ struct GameDetailView: View {
         let total = files.compactMap(\.size).reduce(0, +)
         let expanded = expandedROMs.contains(rom.id)
         let saving = SevenZip.saving(files: files, contents: archiveListings.compactMapValues(\.entries))
+        // Its saving can't be read from an archive Dropbox keeps online-only.
+        let onlineOnly = files.allSatisfy(\.isArchive) && files.contains { archiveListings[$0.url] == .onlineOnly }
         return VStack(alignment: .leading, spacing: 4) {
             Button {
                 if expanded { expandedROMs.remove(rom.id) } else { expandedROMs.insert(rom.id) }
@@ -368,7 +370,11 @@ struct GameDetailView: View {
                     Text(
                         "\(files.count) file\(files.count == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"
                     )
-                    if let saving { savingText(saving) }
+                    if let saving {
+                        savingText(saving)
+                    } else if onlineOnly {
+                        Text("(online-only in Dropbox)").help("Download it to see how much room its archive saves.")
+                    }
                     Spacer()
                 }
                 .font(.callout).foregroundStyle(.secondary)
@@ -496,7 +502,7 @@ struct GameDetailView: View {
 
 /// What's inside an Archived or Compacted ROM's archive, read from its index when Game detail opens. An online-only
 /// archive isn't read: that would download all of it just to list it.
-private enum ArchiveListing {
+private enum ArchiveListing: Equatable {
     case onlineOnly
     case listed([SevenZip.Entry])
     case failed(String)
