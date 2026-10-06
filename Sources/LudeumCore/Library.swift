@@ -173,6 +173,27 @@ extension LudeumStore {
 
     /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent)
     /// sort last either way; ties go by name.
+    /// The condition, on `game g`, that a Game goes by `word` under any of its names, so an override doesn't hide
+    /// IGDB's or the No-Intro one.
+    private static func goesBy(_ word: String) -> (sql: String, arguments: [String]) {
+        let escaped = word.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
+        return (
+            "(g.nameOverride LIKE ? ESCAPE '\\' OR g.igdbName LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\')",
+            Array(repeating: "%\(escaped)%", count: 3)
+        )
+    }
+
+    /// Every Game that goes by `word`, as the Library's name search matches it, whatever else is filtered on.
+    func games(goingBy word: String) throws -> Set<GameID> {
+        let goesBy = Self.goesBy(word)
+        return try db.read { db in
+            Set(
+                try GameID.fetchAll(db, sql: "SELECT g.id FROM game g WHERE \(goesBy.sql)", arguments: StatementArguments(goesBy.arguments))
+            )
+        }
+    }
+
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool) throws -> [LibraryRow] {
         var conditions: [String] = []
         var arguments: [any DatabaseValueConvertible] = []
@@ -229,11 +250,9 @@ extension LudeumStore {
         case nil: break
         }
         for word in filter.searchWords {
-            // Every name the Game goes by, so an override doesn't hide IGDB's or the No-Intro one.
-            conditions.append("(g.nameOverride LIKE ? ESCAPE '\\' OR g.igdbName LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\')")
-            let escaped = word.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
-                .replacingOccurrences(of: "_", with: "\\_")
-            arguments += Array(repeating: "%\(escaped)%", count: 3)
+            let goesBy = Self.goesBy(word)
+            conditions.append(goesBy.sql)
+            arguments += goesBy.arguments
         }
         let direction = ascending ? "ASC" : "DESC"
         let name = "displayName COLLATE NOCASE ASC"

@@ -79,10 +79,9 @@ extension LudeumStore {
         var withoutSearch = filter
         withoutSearch.name = ""
         // Each word on its own, so one can match a name and another a company: "capcom x" finds Mega Man X.
+        // Just the Games' ids for each word: the Library itself is read once, below.
         let byName = try words.map { word in
-            var byWord = withoutSearch
-            byWord.name = word
-            let ids = Set(try library(byWord, sort: sort, ascending: ascending).map(\.id))
+            let ids = try games(goingBy: word)
             try Task.checkCancellation()
             return ids
         }
