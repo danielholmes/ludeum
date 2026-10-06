@@ -160,7 +160,7 @@ public struct OpenEmuMigration {
         // No ROM is OpenEmu's now, so the journal takes the migrations it held back: OpenEmu's columns and tables go.
         try journal.completeMigrations()
         // Box art: OpenEmu's cached copies go, and libretro is looked up again by the new names.
-        libretro?.cache.removeImages(under: "openemu")
+        libretro?.cache.removeOpenEmuBoxArt()
         try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(plan.roms.map(\.romId))
         return OpenEmuMigrationResult(plan: plan, backup: backup.url, log: log, batterySaveArchive: archive)
     }

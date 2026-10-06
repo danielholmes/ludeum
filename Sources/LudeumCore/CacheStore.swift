@@ -130,9 +130,9 @@ extension CacheStore {
         return FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) ? file : nil
     }
 
-    /// Deletes every cached image under a folder, if there are any.
-    func removeImages(under folder: String) {
-        try? FileManager.default.removeItem(at: imageFile(folder))
+    /// Deletes the copies of OpenEmu's Box art the cache kept until `migrate-openemu`, if there are any.
+    func removeOpenEmuBoxArt() {
+        try? FileManager.default.removeItem(at: imageFile("openemu"))
     }
 
     private func imageFile(_ path: String) -> URL { directory.appending(path: "images").appending(path: path) }
