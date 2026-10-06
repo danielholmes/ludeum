@@ -157,7 +157,8 @@ private struct ReviewItemDetail: View {
     /// A Search IGDB result I picked: shown as the suggestion until I Confirm it.
     @State private var picked: (igdbGameId: Int64, name: String, platform: IGDBPlatform)?
     @State private var checksumGame: IGDBGame?
-    @State private var platforms: [IGDBPlatform] = []
+    /// The ROM's Platform, once IGDB's list of platforms is loaded.
+    @State private var romPlatform: IGDBPlatform?
     /// Every IGDB platform, for Make by hand's "any other Platform".
     @State private var allPlatforms: [IGDBPlatform] = []
     @State private var searching = false
@@ -168,7 +169,7 @@ private struct ReviewItemDetail: View {
     /// This ROM beside the suggestion, row by row: name, platform (shared ones highlighted), region and year.
     @ViewBuilder private var comparison: some View {
         let rom = ROMName(item.romName)
-        let romPlatforms = Set(platforms.map(\.id))
+        let onROMPlatform = { (id: Int64) in id == item.platformId }
         let suggested = (suggestion?.record["platforms"]?.array ?? []).compactMap { p -> (id: Int64, name: String)? in
             guard let id = p["id"]?.int, let name = p["name"]?.string else { return nil }
             return (Int64(id), name)
@@ -196,16 +197,16 @@ private struct ReviewItemDetail: View {
             }
             GridRow {
                 label("Platform")
-                Text(platforms.map(\.name).joined(separator: " or ")).fixedSize(horizontal: false, vertical: true)
+                Text(romPlatform?.name ?? "").fixedSize(horizontal: false, vertical: true)
                 FlowLayout(spacing: 4) {
-                    // The ROM's own platforms first, highlighted.
-                    ForEach(suggested.sorted { romPlatforms.contains($0.id) && !romPlatforms.contains($1.id) }, id: \.id) { p in
-                        let match = romPlatforms.contains(p.id)
+                    // The ROM's own Platform first, highlighted.
+                    ForEach(suggested.sorted { onROMPlatform($0.id) && !onROMPlatform($1.id) }, id: \.id) { p in
+                        let match = onROMPlatform(p.id)
                         Text(p.name).font(.caption).padding(.horizontal, 6).padding(.vertical, 1)
                             .foregroundStyle(match ? Color.white : Color.secondary)
                             .background(match ? AnyShapeStyle(Color.green) : AnyShapeStyle(.quaternary), in: .capsule)
                     }
-                    if !suggested.isEmpty, !suggested.contains(where: { romPlatforms.contains($0.id) }) {
+                    if !suggested.isEmpty, !suggested.contains(where: { onROMPlatform($0.id) }) {
                         Label("Not on this platform", systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
                     }
                 }
@@ -268,7 +269,7 @@ private struct ReviewItemDetail: View {
         Form {
             Section {
                 Text(item.romName).font(.title2).bold()
-                LabeledContent("Platform", value: platforms.map(\.name).joined(separator: " or "))
+                LabeledContent("Platform", value: romPlatform?.name ?? "")
                 Text(reason).foregroundStyle(.secondary)
                 if item.missing { Text("Its file is missing from its ROM folder.").foregroundStyle(.orange) }
             }
@@ -306,7 +307,7 @@ private struct ReviewItemDetail: View {
         .task(id: item.romId) { await load() }
         .sheet(isPresented: $searching) {
             if let search = services.gameSearch {
-                ReviewSearchSheet(search: search, item: item, platforms: platforms) { result, platform in
+                ReviewSearchSheet(search: search, item: item, romPlatform: romPlatform) { result, platform in
                     // Show it for comparison first; Confirm matches it.
                     picked = (result.igdbGameId, result.name, platform)
                     Task { await showPicked() }
@@ -329,7 +330,7 @@ private struct ReviewItemDetail: View {
             }
         }
         .sheet(isPresented: $makingByHand) {
-            MakeByHandSheet(name: cleanName(item.romName), platforms: platforms, allPlatforms: allPlatforms) { name, platform in
+            MakeByHandSheet(name: cleanName(item.romName), romPlatform: romPlatform, allPlatforms: allPlatforms) { name, platform in
                 act { try services.journal?.makeByHand(item, name: name, platform: platform) }
             }
         }
@@ -364,10 +365,9 @@ private struct ReviewItemDetail: View {
         picked = nil
         suggestion = nil
         checksumGame = nil
-        let ids = [item.platformId]
         let all = (try? await services.igdb?.platforms()) ?? []
         allPlatforms = all
-        platforms = ids.compactMap { id in all.first { $0.id == id } }
+        romPlatform = all.first { $0.id == item.platformId }
         guard let igdb = services.igdb else { return }
         let wanted = [item.suggestedIgdbGameId, item.checksumIgdbGameId].compactMap { $0.map(Int.init) }
         let games = (try? await igdb.games(ids: wanted)) ?? [:]
@@ -433,11 +433,11 @@ private struct SuggestionCover: View {
     }
 }
 
-/// Search IGDB…: the shared search, its Platform filter pre-set to the ROM's platforms.
+/// Search IGDB…: the shared search, its Platform filter pre-set to the ROM's Platform.
 private struct ReviewSearchSheet: View {
     let search: GameSearch
     let item: ReviewItem
-    let platforms: [IGDBPlatform]
+    let romPlatform: IGDBPlatform?
     let choose: (GameSearchResult, IGDBPlatform) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
@@ -446,8 +446,9 @@ private struct ReviewSearchSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Match \(item.romName)").font(.title2)
             IGDBSearchView(
-                search: search, platforms: platforms, usedPlatforms: Set(platforms.map(\.id)), query: $query,
-                platformFilter: platforms.first
+                search: search, platforms: romPlatform.map { [$0] } ?? [], usedPlatforms: Set(romPlatform.map { [$0.id] } ?? []),
+                query: $query,
+                platformFilter: romPlatform
             ) {
                 result, platform in
                 choose(result, platform)
@@ -505,7 +506,7 @@ private struct AssignToGameSheet: View {
 private struct MakeByHandSheet: View {
     @State var name: String
     /// The ROM's Platform, offered first.
-    let platforms: [IGDBPlatform]
+    let romPlatform: IGDBPlatform?
     let allPlatforms: [IGDBPlatform]
     let make: (String, IGDBPlatform) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -516,14 +517,16 @@ private struct MakeByHandSheet: View {
             TextField("Name", text: $name)
             LabeledContent("Platform") {
                 HStack {
-                    if !platforms.isEmpty {
+                    if let romPlatform {
                         Picker("Platform", selection: $platform) {
-                            ForEach(platforms) { Text($0.name).tag(IGDBPlatform?.some($0)) }
-                            if let platform, !platforms.contains(platform) { Text(platform.name).tag(IGDBPlatform?.some(platform)) }
+                            Text(romPlatform.name).tag(IGDBPlatform?.some(romPlatform))
+                            if let platform, platform != romPlatform { Text(platform.name).tag(IGDBPlatform?.some(platform)) }
                         }
                         .labelsHidden()
                     }
-                    PlatformMenu(title: "Other…", platforms: allPlatforms, used: Set(platforms.map(\.id))) { platform = $0 }
+                    PlatformMenu(title: "Other…", platforms: allPlatforms, used: Set(romPlatform.map { [$0.id] } ?? [])) {
+                        platform = $0
+                    }
                 }
             }
             HStack {
@@ -539,7 +542,7 @@ private struct MakeByHandSheet: View {
         }
         .padding()
         .frame(width: 400)
-        .onAppear { platform = platforms.first }
+        .onAppear { platform = romPlatform }
     }
 }
 
