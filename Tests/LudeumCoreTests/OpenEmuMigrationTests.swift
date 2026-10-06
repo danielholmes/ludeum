@@ -68,6 +68,90 @@ import Testing
         FileManager.default.fileExists(atPath: folder.appending(path: path).path(percentEncoded: false))
     }
 
+    /// Writes `files` (name → contents) into the folder of a ROM's file in OpenEmu's library, and returns that folder.
+    @discardableResult
+    func folder(ofROM pk: Int64, system: String, fileName: String, with files: [String: String]) throws -> URL {
+        let folder = openEmu.folder.appending(path: "roms/\(system)/\(pk)-\(fileName)").deletingLastPathComponent()
+        for (name, contents) in files { try contents.write(to: folder.appending(path: name), atomically: true, encoding: .utf8) }
+        return folder
+    }
+
+    /// Fear Effect as OpenEmu has it: a playlist of two discs, then each disc added again later as its own ROM, its files
+    /// copies with the playlist's discs' names and sizes. Each disc is on `discGame`, else the playlist's Game.
+    /// Returns each disc ROM's folder.
+    @discardableResult
+    func fearEffect(discGame: GameID? = nil, disc2Bin: String = "disc 2") throws -> [URL] {
+        let psx = "openemu.system.psx"
+        let fearEffect = try game("Fear Effect", platform: 7)
+        func cue(_ n: Int) -> String { "FILE \"Fear Effect (Disc \(n)).bin\" BINARY\n" }
+        let playlist = try matched("Fear Effect", system: psx, fileName: "Fear Effect/Fear Effect.m3u", to: fearEffect)
+        try folder(
+            ofROM: playlist, system: psx, fileName: "Fear Effect/Fear Effect.m3u",
+            with: [
+                "Fear Effect.m3u": "Fear Effect (Disc 1).cue\nFear Effect (Disc 2).cue\n",
+                "Fear Effect (Disc 1).cue": cue(1), "Fear Effect (Disc 1).bin": "disc 1",
+                "Fear Effect (Disc 2).cue": cue(2), "Fear Effect (Disc 2).bin": "disc 2",
+            ])
+        var folders: [URL] = []
+        for n in 1...2 {
+            let fileName = "Fear Effect (Disc \(n))/Fear Effect (Disc \(n)).cue"
+            let pk = try matched("Fear Effect (Disc \(n))", system: psx, fileName: fileName, to: discGame ?? fearEffect)
+            folders.append(
+                try folder(
+                    ofROM: pk, system: psx, fileName: fileName,
+                    with: ["Fear Effect (Disc \(n)).cue": cue(n), "Fear Effect (Disc \(n)).bin": n == 2 ? disc2Bin : "disc 1"]))
+        }
+        return folders
+    }
+
+    @Test func aDiscAddedAgainBesideItsPlaylistIsListedAsADuplicateNotAClash() throws {
+        try fearEffect()
+
+        let plan = try migration().plan()
+
+        #expect(plan.isRunnable)
+        #expect(plan.clashes == [])
+        #expect(plan.roms.map(\.fileName) == ["Fear Effect.m3u"])
+        #expect(
+            plan.duplicateDiscs.map { "\($0.name) of \($0.playlist)" } == [
+                "Fear Effect (Disc 1).cue of Fear Effect.m3u", "Fear Effect (Disc 2).cue of Fear Effect.m3u",
+            ])
+    }
+
+    @Test func aDiscWhoseFileSizeDiffersFromItsPlaylistsIsNoDuplicateAndStillClashes() throws {
+        try fearEffect(disc2Bin: "disc 2, dumped again")
+
+        let plan = try migration().plan()
+
+        #expect(plan.duplicateDiscs.map(\.name) == ["Fear Effect (Disc 1).cue"])
+        #expect(plan.clashes == ["PS1/Fear Effect (Disc 2).bin: two ROMs' files", "PS1/Fear Effect (Disc 2).cue: two ROMs' files"])
+    }
+
+    @Test func aDuplicateDiscIsLeftInOpenEmuAndForgottenWhileItsGameStays() async throws {
+        let discsOnly = try game("Fear Effect Disc", platform: 7)
+        let discFolders = try fearEffect(discGame: discsOnly)
+        // Unmatched, in the Review queue with OpenEmu data held for it.
+        let again = "Again/Fear Effect (Disc 1).cue"
+        let pk = try unmatched("Fear Effect Again", system: "openemu.system.psx", fileName: again)
+        try folder(
+            ofROM: pk, system: "openemu.system.psx", fileName: again,
+            with: ["Fear Effect (Disc 1).cue": "FILE \"Fear Effect (Disc 1).bin\" BINARY\n", "Fear Effect (Disc 1).bin": "disc 1"])
+
+        try await migration().run()
+
+        #expect(try await j.journal.db.read { try String.fetchAll($0, sql: "SELECT fileName FROM rom") } == ["Fear Effect.m3u"])
+        #expect(exists("PS1/Fear Effect (Disc 1).bin", in: roms))
+        for folder in discFolders {
+            #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false)).count == 2)
+        }
+        #expect(
+            try await j.journal.db.read {
+                try Bool.fetchOne($0, sql: "SELECT EXISTS (SELECT 1 FROM game WHERE id = ?)", arguments: [discsOnly])
+            } == true)
+        #expect(try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM heldOpenEmuData") } == 0)
+        #expect(try await j.journal.db.read { try Row.fetchAll($0, sql: "PRAGMA foreign_key_check").isEmpty })
+    }
+
     @Test func aMatchedROMMovesToItsGamesPlatformFolderAndIsKnownByItsName() async throws {
         let gold = try game("Pokemon Gold", platform: 22)
         try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Pokemon Gold (USA).gbc", to: gold)

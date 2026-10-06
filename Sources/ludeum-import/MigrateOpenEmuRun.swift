@@ -73,6 +73,9 @@ private func describe(_ plan: OpenEmuMigrationPlan) -> String {
         lines.append("\(title) (\(items.count)):")
         lines += items.map { "  \($0)" }
     }
+    for (playlist, discs) in Dictionary(grouping: plan.duplicateDiscs, by: \.playlist).sorted(by: { $0.key < $1.key }) {
+        lines.append("Duplicate discs of \(playlist), left in OpenEmu: \(discs.map(\.name).joined(separator: ", "))")
+    }
     section("Games on a Platform their ROM's OpenEmu system can't hold", plan.platformMismatches)
     section("Journal ROMs OpenEmu no longer has, so their Platform isn't checked; they stay missing", plan.goneFromOpenEmu)
     section("ROMs on a Platform with no ROM folder", plan.noROMFolder)

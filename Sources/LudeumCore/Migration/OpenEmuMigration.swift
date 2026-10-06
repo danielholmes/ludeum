@@ -2,7 +2,9 @@ import Foundation
 import GRDB
 
 /// `migrate-openemu`: run once, by hand, to move every OpenEmu ROM the journal has into its Platform's
-/// ROM folder, so the journal no longer needs OpenEmu (ADR 0009). No journal data is lost.
+/// ROM folder, so the journal no longer needs OpenEmu (ADR 0009). No journal data is lost. A duplicate disc (a disc
+/// added to OpenEmu again on its own, whose files a playlist ROM on its Platform already has) isn't moved: its files
+/// stay in OpenEmu's library and its row is forgotten in the transaction below, while its Game stays.
 ///
 /// Order: refuse on a journal already migrated, while OpenEmu is running, and without the Data folder; plan and check
 /// everything (the dry run stops there); take a `before-migration` backup; copy OpenEmu's battery saves, unchanged, into
@@ -67,6 +69,17 @@ public struct OpenEmuMigration {
                 })
         }
 
+        // By its Game's Platform; an unmatched ROM keeps the one it was given, its system's most likely.
+        func platform(_ row: Row) -> Int64 { row["gamePlatformId"] ?? row["platformId"] }
+        func present(_ record: OpenEmuROMRecord?) -> URL? { record.flatMap { $0.isPresent ? $0.file : nil } }
+        // Each playlist ROM's disc files (its cue sheets and their tracks), by Platform.
+        var playlists: [Int64: [(label: String, discs: Set<FileStamp>)]] = [:]
+        for row in rows {
+            guard let main = present(inOpenEmu[row["openEmuPk"]]), main.pathExtension.lowercased() == "m3u" else { continue }
+            let discs = ROMFiles.files(of: main).dropFirst().compactMap(FileStamp.init)
+            playlists[platform(row), default: []].append((main.lastPathComponent, Set(discs)))
+        }
+
         var plan = OpenEmuMigrationPlan()
         var keys: [Key: [String]] = [:]
         var destinations: [URL: URL] = [:]
@@ -74,9 +87,18 @@ public struct OpenEmuMigration {
             let pk: Int64 = row["openEmuPk"]
             let storedFileName: String = row["fileName"]
             let record = inOpenEmu[pk]
-            // By its Game's Platform; an unmatched ROM keeps the one it was given, its system's most likely.
-            let platformId: Int64 = row["gamePlatformId"] ?? row["platformId"]
+            let platformId = platform(row)
             let label = record?.file?.lastPathComponent ?? storedFileName
+            // A disc added to OpenEmu again on its own, beside its playlist: left there, and forgotten.
+            if let main = present(record), main.pathExtension.lowercased() != "m3u" {
+                let stamps = ROMFiles.files(of: main).map(FileStamp.init)
+                if !stamps.isEmpty, !stamps.contains(nil),
+                    let playlist = playlists[platformId]?.first(where: { $0.discs.isSuperset(of: stamps.compactMap { $0 }) })
+                {
+                    plan.duplicateDiscs.append(.init(romId: row["id"], name: label, playlist: playlist.label))
+                    continue
+                }
+            }
             if let record, let candidates = openEmuSystemPlatforms[record.system], !candidates.contains(Int(platformId)) {
                 plan.platformMismatches.append("\(label): \(record.system) can't hold a Game on Platform \(platformId)")
                 continue
@@ -87,7 +109,7 @@ public struct OpenEmuMigration {
                 plan.noROMFolder.append("\(label): Platform \(platformId) has no ROM folder")
                 continue
             }
-            let main = record.flatMap { $0.isPresent ? $0.file : nil }
+            let main = present(record)
             let fileName = main?.lastPathComponent ?? storedFileName
             let name = (fileName as NSString).deletingPathExtension
             let key = Key(platformId: platformId, name: name)
@@ -166,6 +188,10 @@ public struct OpenEmuMigration {
         // Each ROM is to be looked up in libretro again by its new name: one whose lookup doesn't run below waits
         // for the next Import.
         try await journal.db.write { db in
+            // A duplicate disc is forgotten, with what hangs off its row (held OpenEmu data); its Game stays.
+            for duplicate in plan.duplicateDiscs {
+                try db.execute(sql: "DELETE FROM rom WHERE id = ?", arguments: [duplicate.romId])
+            }
             for rom in plan.roms {
                 try ROMPlatform.ensureKnown(db, rom.platformId)
                 try db.execute(
@@ -214,6 +240,19 @@ public struct OpenEmuMigration {
         let name: String
     }
 
+    /// A file's name and size, from its metadata alone: OpenEmu's files may be Dropbox online-only, and reading
+    /// them would download them.
+    private struct FileStamp: Hashable {
+        let name: String
+        let size: Int
+
+        init?(_ file: URL) {
+            guard let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return nil }
+            name = file.lastPathComponent
+            self.size = size
+        }
+    }
+
     /// The folder, or the nearest one above it that exists, can be written to.
     private static func canWrite(into folder: URL) -> Bool {
         var dir = folder
@@ -244,7 +283,18 @@ public struct OpenEmuMigrationPlan: Sendable, Equatable {
         public let moves: [Move]
     }
 
+    /// A ROM whose every file has the name and size of one of a playlist ROM's disc files (a cue sheet or its tracks)
+    /// on its Platform: a disc added to OpenEmu again on its own.
+    public struct DuplicateDisc: Sendable, Equatable {
+        public let romId: Int64
+        public let name: String
+        /// The playlist ROM whose disc it duplicates.
+        public let playlist: String
+    }
+
     public var roms: [ROM] = []
+    /// Its files are left in OpenEmu's library, and its journal row is forgotten; its Game stays.
+    public var duplicateDiscs: [DuplicateDisc] = []
     /// A Game whose Platform its ROM's OpenEmu system can't hold: fix the Game first.
     public var platformMismatches: [String] = []
     /// A journal ROM whose row OpenEmu no longer has: its Platform can't be checked against a system, and it
