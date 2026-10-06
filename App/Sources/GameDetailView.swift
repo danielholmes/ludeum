@@ -572,6 +572,7 @@ private func reviewErrorText(_ error: ReviewError) -> String {
     case .romFilesNotFound: "This ROM's files aren't in its ROM folder, so it can't move. Check again first."
     case .noROMFolder: "That Platform has no ROM folder."
     case .siblingWontReadFile: "That Platform's ROM folder doesn't read this ROM's file type. Nothing was moved."
+    case .noDiscsWithoutPlaylist: "This ROM's folder no longer has Discs without a playlist. Check again."
     }
 }
 

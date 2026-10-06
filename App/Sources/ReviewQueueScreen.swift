@@ -16,6 +16,7 @@ struct ReviewQueueScreen: View {
         case name = "Name suggestions"
         case noSuggestion = "No suggestion"
         case duplicateVersions = "Duplicate Versions"
+        case noPlaylist = "No playlist"
         var id: Self { self }
     }
 
@@ -47,6 +48,14 @@ struct ReviewQueueScreen: View {
                             }
                             .tag(d.id)
                         }
+                    } else if kind == .noPlaylist {
+                        ForEach(items.noPlaylist) { item in
+                            VStack(alignment: .leading) {
+                                Text(item.romName)
+                                Text("Discs with no playlist").font(.caption).foregroundStyle(.secondary)
+                            }
+                            .tag(item.romId)
+                        }
                     } else {
                         ForEach(romItems) { item in
                             VStack(alignment: .leading) {
@@ -64,6 +73,8 @@ struct ReviewQueueScreen: View {
             Group {
                 if kind == .duplicateVersions, let d = items.duplicateVersions.first(where: { $0.id == selection }) {
                     DuplicateVersionsDetail(item: d, checkAgain: checkAgain)
+                } else if kind == .noPlaylist, let item = items.noPlaylist.first(where: { $0.id == selection }) {
+                    NoPlaylistDetail(services: services, item: item, failed: { error = $0 })
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
                     ReviewItemDetail(services: services, item: item, failed: { error = $0 }, answered: { shownGame = $0 })
                 } else {
@@ -94,7 +105,7 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions
         case .name: items.nameSuggestions
         case .noSuggestion: items.noSuggestion
-        case .duplicateVersions, nil: []
+        case .duplicateVersions, .noPlaylist, nil: []
         }
     }
 
@@ -105,11 +116,18 @@ struct ReviewQueueScreen: View {
         case .name: items.nameSuggestions.count
         case .noSuggestion: items.noSuggestion.count
         case .duplicateVersions: items.duplicateVersions.count
+        case .noPlaylist: items.noPlaylist.count
         }
     }
 
     /// The ids listed in the middle column, in order.
-    private var listedIDs: [Int64] { kind == .duplicateVersions ? items.duplicateVersions.map(\.id) : romItems.map(\.romId) }
+    private var listedIDs: [Int64] {
+        switch kind {
+        case .duplicateVersions: items.duplicateVersions.map(\.id)
+        case .noPlaylist: items.noPlaylist.map(\.id)
+        default: romItems.map(\.romId)
+        }
+    }
 
     private func reload() {
         do {
@@ -587,5 +605,42 @@ private struct DuplicateVersionsDetail: View {
             Button("Check again", action: checkAgain)
         }
         .formStyle(.grouped)
+    }
+}
+
+/// A No playlist item: the ROM's Discs, and Make playlist, which writes one into its subfolder.
+private struct NoPlaylistDetail: View {
+    let services: Services
+    let item: NoPlaylistItem
+    let failed: (String?) -> Void
+    @State private var discs: [URL] = []
+
+    var body: some View {
+        Form {
+            Section {
+                Text(item.romName).font(.title2).bold()
+                Text("Its folder holds its Discs but no playlist, so Play can't open them all. Make playlist writes one.")
+                    .foregroundStyle(.secondary)
+            }
+            Section("Discs") {
+                ForEach(discs, id: \.self) { Text($0.lastPathComponent) }
+            }
+            Button("Make playlist", action: makePlaylist)
+        }
+        .formStyle(.grouped)
+        .task(id: item) { discs = (try? romFolder?.discsWithoutPlaylist(named: item.romName)) ?? [] }
+    }
+
+    private var romFolder: ROMFolder? { services.settings.romFolders.first { $0.platformId == item.platformId } }
+
+    private func makePlaylist() {
+        guard let journal = services.journal else { return }
+        do {
+            try journal.makePlaylist(item, romFolders: services.settings.romFolders)
+            failed(nil)
+        } catch {
+            failed(journalErrorText(error))
+        }
+        services.changes.changed()
     }
 }

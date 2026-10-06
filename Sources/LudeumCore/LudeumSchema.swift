@@ -444,6 +444,10 @@ enum LudeumSchema {
                     CREATE INDEX rom_on_gameId ON rom(gameId);
                     """)
         }
+        // A ROM whose subfolder holds its Discs but no playlist, for the Review queue. The next Import sets it.
+        migrator.registerMigration("v17 rom needs playlist") { db in
+            try db.alter(table: "rom") { t in t.add(column: "needsPlaylist", .boolean).notNull().defaults(to: false) }
+        }
         return migrator
     }
 }

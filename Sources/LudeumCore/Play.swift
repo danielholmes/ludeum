@@ -16,6 +16,7 @@ public struct Play: Sendable {
     public enum Refusal: Sendable, Equatable {
         case noEmulator(String)
         case archived
+        case needsPlaylist
         case busy
         case tooOld(String)
         case notInstalled(Emulator)
@@ -27,6 +28,7 @@ public struct Play: Sendable {
             switch self {
             case .noEmulator(let platform): "No \(platform) emulator yet"
             case .archived: "Archived: unarchive to play"
+            case .needsPlaylist: "Its Discs have no playlist: make one in the Review queue"
             case .busy: "Waiting for Archive or Unarchive to finish"
             case .tooOld(let message): message
             case .notInstalled(let emulator): "\(emulator.name) isn't installed."
@@ -52,12 +54,19 @@ public struct Play: Sendable {
         self.busyROMs = busyROMs
     }
 
+    /// The ROM a Play opens: the playlist of a multi-disc Version, else the first present ROM that isn't archived.
+    var rom: LudeumROM? {
+        let present = roms.filter { !$0.missing && !$0.archived }
+        return present.first { $0.fileName.lowercased().hasSuffix(".m3u") } ?? present.first
+    }
+
     /// Whether Play can be pressed, before it is.
     public var availability: Availability {
         guard let emulator = Emulator.of(platformId: platformId) else { return .refused(.noEmulator(platformName)) }
         let present = roms.filter { !$0.missing }
         if !present.isEmpty, present.allSatisfy(\.archived) { return .refused(.archived) }
         if roms.contains(where: { busyROMs.contains($0.id) }) { return .refused(.busy) }
+        if rom?.needsPlaylist == true { return .refused(.needsPlaylist) }
         return .ready(emulator)
     }
     /// The Emulator's installed version, as the version checks found it.
@@ -96,9 +105,7 @@ public struct Play: Sendable {
         }
         if case .tooOld(let message) = version { return .refused(.tooOld(message)) }
         guard let app = app(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
-        let present = roms.filter { !$0.missing && !$0.archived }
-        // The playlist of a multi-disc Version, else the first present ROM.
-        guard let rom = present.first(where: { $0.fileName.lowercased().hasSuffix(".m3u") }) ?? present.first else {
+        guard let rom else {
             return .refused(.archived)
         }
         let file: URL

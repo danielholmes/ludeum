@@ -33,6 +33,15 @@ public struct DuplicateVersionsGame: Sendable, Equatable, Identifiable {
     public var id: GameID { game.id }
 }
 
+/// A ROM whose subfolder holds its Discs but no playlist, so Play can't open them all: Make playlist writes one.
+public struct NoPlaylistItem: Sendable, Equatable, Identifiable {
+    public let romId: Int64
+    /// The ROM's name: its subfolder's.
+    public let romName: String
+    public let platformId: Int64
+    public var id: Int64 { romId }
+}
+
 /// Everything waiting in the Review queue, by kind.
 public struct ReviewQueueItems: Sendable, Equatable {
     /// Name and related-record suggestions whose names agree: bulk-confirmable.
@@ -41,12 +50,14 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var nameSuggestions: [ReviewItem] = []
     public var noSuggestion: [ReviewItem] = []
     public var duplicateVersions: [DuplicateVersionsGame] = []
+    public var noPlaylist: [NoPlaylistItem] = []
 
     public init() {}
 
     /// The sidebar badge.
     public var count: Int {
         namesAgree.count + checksumSuggestions.count + nameSuggestions.count + noSuggestion.count + duplicateVersions.count
+            + noPlaylist.count
     }
 }
 
@@ -83,6 +94,14 @@ extension LudeumStore {
             }
         }
         items.duplicateVersions.sort { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
+        items.noPlaylist = try db.read { db in
+            guard try Self.hasNeedsPlaylist(db) else { return [] }
+            return try Row.fetchAll(
+                db,
+                sql: "SELECT id, folderName, platformId FROM rom WHERE needsPlaylist AND NOT missing ORDER BY folderName COLLATE NOCASE, id"
+            )
+            .map { NoPlaylistItem(romId: $0["id"], romName: $0["folderName"], platformId: $0["platformId"]) }
+        }
         return items
     }
 
@@ -96,6 +115,20 @@ extension LudeumStore {
         else { return false }
         let added = GameROM(id: Int(rom), name: item["displayName"], isPlaylist: isPlaylist(item["fileName"]), isPresent: !item["missing"])
         return hasDuplicateVersions(try roms(of: game).map(gameROM) + [added])
+    }
+
+    /// Make playlist: writes `<ROM name>.m3u` into the ROM's subfolder, naming its Discs in order, so Play opens them all.
+    /// Throws, writing nothing, when its folder no longer has Discs without a playlist.
+    public func makePlaylist(_ item: NoPlaylistItem, romFolders: [ROMFolder]) throws {
+        guard let folder = romFolders.first(where: { $0.platformId == item.platformId }) else { throw ReviewError.noROMFolder }
+        let discs = try folder.discsWithoutPlaylist(named: item.romName)
+        guard !discs.isEmpty else { throw ReviewError.noDiscsWithoutPlaylist }
+        let subfolder = folder.url.appending(path: item.romName, directoryHint: .isDirectory).standardizedFileURL
+        let lines = discs.map { $0.standardizedFileURL.pathComponents.dropFirst(subfolder.pathComponents.count).joined(separator: "/") }
+        let playlist = subfolder.appending(path: "\(item.romName).m3u", directoryHint: .notDirectory)
+        try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: playlist, options: .withoutOverwriting)
+        let file = try folder.scan().first { $0.name == item.romName }
+        try db.write { db in try Self.setFolderROM(db, item.romId, to: file) }
     }
 
     /// Assign to Game…: Matches the ROM to an existing Game by hand.
@@ -205,6 +238,8 @@ public enum ReviewError: Error, Equatable {
     case noROMFolder
     /// The sibling's ROM folder doesn't read the ROM's file type.
     case siblingWontReadFile
+    /// Make playlist found no Discs without a playlist in the ROM's subfolder: gone, or given one meanwhile.
+    case noDiscsWithoutPlaylist
 }
 
 private func gameROM(_ rom: LudeumROM) -> GameROM {

@@ -16,6 +16,8 @@ public struct LudeumROM: Sendable, Equatable, Identifiable {
     public let missing: Bool
     /// In its ROM folder, but only as a `.7z`: present, but not playable until extracted.
     public let archived: Bool
+    /// Its subfolder holds its Discs but no playlist, so Play can't open them all.
+    public var needsPlaylist = false
 }
 
 /// What deleting a Game takes with it, for the confirmation.
@@ -50,7 +52,8 @@ extension LudeumStore {
                 db,
                 sql: """
                     SELECT r.id, \(Self.folderNameSQL) AS folderName, r.platformId, r.archived, r.fileName,
-                        COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing
+                        COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
+                        \(try Self.hasNeedsPlaylist(db) ? "r.needsPlaylist" : "0") AS needsPlaylist
                     FROM rom r
                     WHERE r.gameId = ?
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
@@ -62,9 +65,15 @@ extension LudeumStore {
                     id: row["id"], folderName: row["folderName"], platformId: row["platformId"],
                     fileName: fileName,
                     name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
-                    missing: row["missing"], archived: row["archived"])
+                    missing: row["missing"], archived: row["archived"], needsPlaylist: row["needsPlaylist"])
             }
         }
+    }
+
+    /// Whether the journal has `rom.needsPlaylist`: one waiting for `migrate-openemu` is held before it, with no ROM
+    /// that could need a playlist.
+    static func hasNeedsPlaylist(_ db: Database) throws -> Bool {
+        try db.columns(in: "rom").contains { $0.name == "needsPlaylist" }
     }
 
     /// A ROM's folder name. Only an OpenEmu ROM waiting for `migrate-openemu` has none: its OpenEmu file name
