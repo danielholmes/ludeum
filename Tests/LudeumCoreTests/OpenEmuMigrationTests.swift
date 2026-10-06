@@ -168,6 +168,18 @@ import Testing
         #expect(plan.platformMismatches.count == 1)
     }
 
+    @Test func aJournalROMOpenEmuNoLongerHasIsListedAndStaysMissing() async throws {
+        let metroid = try game("Super Metroid", platform: 19)
+        try matched("Super Metroid", system: "openemu.system.snes", fileName: "Super Metroid.sfc", to: metroid)
+        try openEmu.removeROM(1)
+
+        let plan = try migration().plan()
+
+        #expect(plan.isRunnable)
+        #expect(plan.goneFromOpenEmu == ["1-Super Metroid.sfc: Platform 19"])
+        #expect(plan.roms.map(\.missing) == [true])
+    }
+
     @Test func aFileItsPlatformsROMFolderWontReadStopsTheMigration() async throws {
         let gold = try game("Pokemon Gold", platform: 22)
         try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Gold.zip", to: gold)

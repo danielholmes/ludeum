@@ -70,6 +70,8 @@ public struct OpenEmuMigration {
                 plan.platformMismatches.append("\(label): \(record.system) can't hold a Game on Platform \(platformId)")
                 continue
             }
+            // With no system to check its Platform against, it's listed rather than passed over.
+            if record == nil { plan.goneFromOpenEmu.append("\(label): Platform \(platformId)") }
             guard let folder = romFolder(platformId) else {
                 plan.noROMFolder.append("\(label): Platform \(platformId) has no ROM folder")
                 continue
@@ -230,6 +232,9 @@ public struct OpenEmuMigrationPlan: Sendable, Equatable {
     public var roms: [ROM] = []
     /// A Game whose Platform its ROM's OpenEmu system can't hold: fix the Game first.
     public var platformMismatches: [String] = []
+    /// A journal ROM whose row OpenEmu no longer has: its Platform can't be checked against a system, and it
+    /// stays missing, re-keyed by the file name the journal knew. Listed for a look; it doesn't stop the migration.
+    public var goneFromOpenEmu: [String] = []
     /// A ROM whose Platform has no ROM folder.
     public var noROMFolder: [String] = []
     /// Two ROMs with one name in a Platform's folder, or a file already where one would go. Resolved by hand.

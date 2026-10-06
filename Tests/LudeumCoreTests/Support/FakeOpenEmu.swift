@@ -48,4 +48,9 @@ final class FakeOpenEmu {
         }
         return pk
     }
+
+    /// Deletes a ROM's row, as removing it in OpenEmu does.
+    func removeROM(_ pk: Int64) throws {
+        try db.write { try $0.execute(sql: "DELETE FROM ZROM WHERE Z_PK = ?", arguments: [pk]) }
+    }
 }
