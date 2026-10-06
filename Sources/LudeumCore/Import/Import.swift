@@ -17,6 +17,9 @@ public struct ImportResult: Sendable, Equatable {
     /// Missing ROMs that came back and rejoined their old Game, silently.
     public var returned: [ImportedROM] = []
     public var goneMissing: [ImportedROM] = []
+    /// Whether any Game's Cover may have changed: a ROM's Box art did, or the ROMs a Game takes its Box art from did.
+    /// When not, the Covers already shown stand.
+    public var coversChanged = false
 
     /// Whether the summary has anything to say: ROMs sent to review or gone missing.
     public var changedSomething: Bool { !(sentToReview.isEmpty && goneMissing.isEmpty) }
@@ -122,9 +125,10 @@ public final class Import: Sendable {
         try Task.checkCancellation()
         await writing()
         if touchesROMs { try backups?.backUp(journal, operation: .beforeImport) }
-        let result = try journal.applyImport(plan)
+        var result = try journal.applyImport(plan)
         await wrote()
-        await boxArt.run()
+        let boxArtChanged = await boxArt.run()
+        result.coversChanged = boxArtChanged || !(result.matched.isEmpty && result.returned.isEmpty && result.goneMissing.isEmpty)
         return result
     }
 }
@@ -307,7 +311,7 @@ extension LudeumStore {
                     db, sql: "SELECT folderName FROM rom WHERE id = ? AND platformId = ?", arguments: [rom, folder.platformId])
             })
         else { return }
-        let file = try folder.scan().first { $0.name == name }
+        let file = try folder.rom(named: name)
         try db.write { db in try Self.setFolderROM(db, rom, to: file) }
     }
 

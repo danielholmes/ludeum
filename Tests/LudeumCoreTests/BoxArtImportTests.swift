@@ -67,6 +67,15 @@ import Testing
         #expect(try await boxArt.boxArtChanges(lookingUp: try roms().map { $0["id"] }) == false)
     }
 
+    @Test func anImportSaysWhetherAnyCoverMayHaveChanged() async throws {
+        try snes.add("Super Metroid (USA).sfc")
+        let run = Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
+
+        #expect(try await run.run(romFolders: [snes.folder]).coversChanged)
+        // Nothing new, so every Cover is as it was.
+        #expect(try await run.run(romFolders: [snes.folder]).coversChanged == false)
+    }
+
     @Test func whenLibretroIsUnreachableTheImportStillCommitsAndTheNextOneLooksItUp() async throws {
         try snes.add("Super Metroid (USA).sfc")
         h.internet.setDown(FakeInternet.Hosts.github, true)

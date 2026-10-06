@@ -39,7 +39,8 @@ import SwiftUI
                 }
                 if result.changedSomething { summary = result }
                 error = nil
-                services.changes.coverChanged()  // the Box art step can change Covers
+                // Only an Import that may have changed a Cover has every Cover read again.
+                if result.coversChanged { services.changes.coverChanged() } else { services.changes.changed() }
             } catch ImportError.openEmuMigrationNeeded {
                 if byHand { error = OpenEmuMigrationBanner.message }
             } catch {
