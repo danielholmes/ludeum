@@ -22,10 +22,10 @@ jobs:
       - uses: actions/cache@v6.1.0
         with:
           path: .build
-          key: spm-${{ runner.os }}-xcode26.6-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          key: spm-${{ runner.os }}-${{ github.event.repository.name }}-xcode26.6-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
-            spm-${{ runner.os }}-xcode26.6-${{ hashFiles('Package.resolved') }}-
-            spm-${{ runner.os }}-xcode26.6-
+            spm-${{ runner.os }}-${{ github.event.repository.name }}-xcode26.6-${{ hashFiles('Package.resolved') }}-
+            spm-${{ runner.os }}-${{ github.event.repository.name }}-xcode26.6-
 
       - name: Lint
         run: swift format lint --strict --recursive Sources Tests App/Sources Package.swift
