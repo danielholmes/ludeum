@@ -13,15 +13,17 @@ struct BoxArtImport {
     func run() async -> Bool {
         guard let ids = try? await journal.db.read({ try Int64.fetchAll($0, sql: "SELECT id FROM rom WHERE NOT libretroLookedUp") })
         else { return false }
-        return (try? await lookUp(ids)) ?? false
+        return (try? await boxArtChanges(lookingUp: ids)) ?? false
     }
 
     /// Looks up each ROM by its file name, then its name, then its Game's IGDB name. Found names replace the
     /// ROM's; a name not found keeps the old one, so a ROM looked up again never loses its Box art to a miss.
     /// A Platform's listing is read once for all its ROMs; when it can't be, they're left as they were, not looked up,
-    /// and the other Platforms' carry on. Returns whether any ROM's Box art changed.
-    @discardableResult
-    func lookUp(_ romIds: [Int64]) async throws -> Bool {
+    /// and the other Platforms' carry on.
+    func lookUp(_ romIds: [Int64]) async throws { _ = try await boxArtChanges(lookingUp: romIds) }
+
+    /// `lookUp`, returning whether any ROM's Box art changed.
+    func boxArtChanges(lookingUp romIds: [Int64]) async throws -> Bool {
         guard let libretro, !romIds.isEmpty else { return false }
         let rows = try journal.db.read { db in
             try Row.fetchAll(

@@ -64,7 +64,7 @@ import Testing
         // Nothing left to look up.
         #expect(await boxArt.run() == false)
         // Looked up again, each ROM finds the Box art it has.
-        #expect(try await boxArt.lookUp(try roms().map { $0["id"] }) == false)
+        #expect(try await boxArt.boxArtChanges(lookingUp: try roms().map { $0["id"] }) == false)
     }
 
     @Test func whenLibretroIsUnreachableTheImportStillCommitsAndTheNextOneLooksItUp() async throws {
