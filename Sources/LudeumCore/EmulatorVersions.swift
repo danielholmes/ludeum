@@ -47,7 +47,8 @@ extension Emulator {
         case .mesenCE: EmulatorVersionSpec(expected: "2.2.1", source: .mesenSettings)
         case .duckStation:
             EmulatorVersionSpec(expected: "12070", source: .commandLine("-version"), format: .buildNumber, warnsOnNewerMajor: false)
-        case .dolphin: EmulatorVersionSpec(expected: "2609", source: .commandLine("--version"), warnsOnNewerMajor: false)
+        // Its `--version` works, but the app version is the same and needs no process.
+        case .dolphin: EmulatorVersionSpec(expected: "2609", source: .appVersion, warnsOnNewerMajor: false)
         case .ares: EmulatorVersionSpec(expected: "148", source: .commandLine("--version"), warnsOnNewerMajor: false)
         case .melonDS: EmulatorVersionSpec(expected: "1.1", source: .appVersion)
         case .ymir: EmulatorVersionSpec(expected: "0.3.3", source: .appVersion)
