@@ -9,6 +9,7 @@ import Testing
     let directory = FileManager.default.temporaryDirectory.appending(path: "disc folder \(UUID().uuidString)")
 
     /// Fear Effect's Discs in its subfolder, each a cue sheet with its track.
+    @discardableResult
     func fearEffect(in ps1: FakeROMFolder) throws -> [URL] {
         try (1...2).map { n in
             try ps1.add("Fear Effect (USA)/Fear Effect (USA) (Disc \(n)).bin")

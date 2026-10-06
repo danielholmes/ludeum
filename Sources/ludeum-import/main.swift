@@ -9,6 +9,10 @@ import LudeumCore
 //                                           Moves OpenEmu's ROMs into ROM folders, once (OpenEmu closed).
 //   ludeum-import into-folders [--dry-run] [--journal <folder>] [--data <folder>]
 //                                           Moves loose disc ROMs into a folder each, once (Ludeum closed).
+//   ludeum-import recover-openemu-renamed [--dry-run] [--journal <folder>] [--library <folder>]
+//                                         [--data <folder>] [--backup <before-migration.sqlite>]
+//                                           After migrate-openemu, moves in the ROMs it left missing
+//                                           whose files had been renamed, once (OpenEmu closed).
 //
 // Every command first needs the Data folder, and refuses without it in the app's words.
 // Credentials come from the environment or a .env file in the current directory
@@ -67,6 +71,8 @@ case "migrate-openemu":
     try await migrateOpenEmuRun(Array(CommandLine.arguments.dropFirst(2)))
 case "into-folders":
     try await intoFoldersRun(Array(CommandLine.arguments.dropFirst(2)))
+case "recover-openemu-renamed":
+    try await recoverOpenEmuRenamedRun(Array(CommandLine.arguments.dropFirst(2)))
 default:
-    fail("usage: ludeum-import check | \(migrateOpenEmuUsage) | \(intoFoldersUsage)")
+    fail("usage: ludeum-import check | \(migrateOpenEmuUsage) | \(intoFoldersUsage) | \(recoverOpenEmuRenamedUsage)")
 }

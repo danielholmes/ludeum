@@ -65,7 +65,7 @@ public struct OpenEmuMigration {
         let taken = try journal.db.read { db in
             Set(
                 try Row.fetchAll(db, sql: "SELECT platformId, folderName FROM rom WHERE folderName IS NOT NULL").map {
-                    Key(platformId: $0["platformId"], name: $0["folderName"])
+                    ROMKey(platformId: $0["platformId"], name: $0["folderName"])
                 })
         }
 
@@ -81,8 +81,7 @@ public struct OpenEmuMigration {
         }
 
         var plan = OpenEmuMigrationPlan()
-        var keys: [Key: [String]] = [:]
-        var destinations: [URL: URL] = [:]
+        var moves = OpenEmuMoves(folder: folder, taken: taken)
         for row in rows {
             let pk: Int64 = row["openEmuPk"]
             let storedFileName: String = row["fileName"]
@@ -105,48 +104,16 @@ public struct OpenEmuMigration {
             }
             // With no system to check its Platform against, it's listed rather than passed over.
             if record == nil { plan.goneFromOpenEmu.append("\(label): Platform \(platformId)") }
-            guard let folder = self.folder.romFolder(platform: platformId) else {
-                plan.noROMFolder.append("\(label): Platform \(platformId) has no ROM folder")
-                continue
+            if let rom = moves.place(
+                romId: row["id"], platformId: platformId, label: label, main: present(record), fileName: storedFileName)
+            {
+                plan.roms.append(rom)
             }
-            let main = present(record)
-            let fileName = main?.lastPathComponent ?? storedFileName
-            let name = (fileName as NSString).deletingPathExtension
-            let key = Key(platformId: platformId, name: name)
-            keys[key, default: []].append(label)
-            if taken.contains(key) { plan.clashes.append("\(folder.lastPathComponent)/\(name): already a ROM there") }
-            if main != nil, ROMFolder.platform(platformId, folder)?.reads(fileName: fileName) != true {
-                let ext = (fileName as NSString).pathExtension.lowercased()
-                plan.unreadableFiles.append("\(folder.lastPathComponent)/\(fileName): its ROM folder doesn't read .\(ext) files")
-            }
-
-            var files: [OpenEmuMigrationPlan.Move] = []
-            if let main {
-                let base = main.deletingLastPathComponent().standardizedFileURL.path(percentEncoded: false)
-                for file in ROMFiles.files(of: main) {
-                    let path = file.standardizedFileURL.path(percentEncoded: false)
-                    let relative =
-                        path.hasPrefix(base) ? String(path.dropFirst(base.count)).trimmingPrefix("/").description : file.lastPathComponent
-                    let to = folder.appending(path: relative)
-                    if let other = destinations[to], other != file {
-                        plan.clashes.append("\(folder.lastPathComponent)/\(relative): two ROMs' files")
-                    } else if destinations[to] == nil {
-                        destinations[to] = file
-                        if FileManager.default.fileExists(atPath: to.path(percentEncoded: false)) {
-                            plan.clashes.append("\(folder.lastPathComponent)/\(relative): a file is already there")
-                        }
-                        files.append(.init(from: file, to: to))
-                    }
-                }
-            }
-            plan.roms.append(
-                .init(romId: row["id"], platformId: platformId, folderName: name, fileName: fileName, missing: main == nil, moves: files))
         }
-        for (key, labels) in keys where labels.count > 1 {
-            plan.clashes.append("\(key.name) on Platform \(key.platformId): \(labels.joined(separator: ", "))")
-        }
-        let folders = Set(plan.roms.flatMap { $0.moves.map { $0.to.deletingLastPathComponent() } })
-        plan.unwritableFolders = folders.filter { !Self.canWrite(into: $0) }.sorted { $0.path < $1.path }
+        plan.unwritableFolders = moves.finish(plan.roms.flatMap(\.moves))
+        plan.noROMFolder = moves.noROMFolder
+        plan.clashes = moves.clashes
+        plan.unreadableFiles = moves.unreadableFiles
         let known = Set(rows.map { $0["openEmuPk"] as Int64 })
         plan.leftInOpenEmu = snapshot.roms.filter { !known.contains($0.pk) && $0.isPresent }.compactMap(\.file)
         plan.batterySaves = batterySaveFolders()
@@ -169,21 +136,7 @@ public struct OpenEmuMigration {
         let archive = folder.batterySaveArchive
         try archiveBatterySaves(plan.batterySaves, into: archive)
 
-        FileManager.default.createFile(atPath: log.path(percentEncoded: false), contents: nil)
-        let handle = try FileHandle(forWritingTo: log)
-        defer { try? handle.close() }
-        for rom in plan.roms {
-            for move in rom.moves {
-                do {
-                    try FileManager.default.createDirectory(at: move.to.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try FileManager.default.moveItem(at: move.from, to: move.to)
-                } catch {
-                    throw OpenEmuMigrationError.moveFailed(file: move.from, log: log, underlying: String(describing: error))
-                }
-                try handle.write(
-                    contentsOf: Data("\(move.from.path(percentEncoded: false))\t\(move.to.path(percentEncoded: false))\n".utf8))
-            }
-        }
+        try OpenEmuMoves.move(plan.roms.flatMap(\.moves), log: log)
 
         // Each ROM is to be looked up in libretro again by its new name: one whose lookup doesn't run below waits
         // for the next Import.
@@ -231,37 +184,6 @@ public struct OpenEmuMigration {
             try FileManager.default.createDirectory(at: to, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: folder, to: to.appending(path: "Battery Saves", directoryHint: .isDirectory))
         }
-    }
-
-    // MARK: Checks
-
-    private struct Key: Hashable {
-        let platformId: Int64
-        let name: String
-    }
-
-    /// A file's name and size, from its metadata alone: OpenEmu's files may be Dropbox online-only, and reading
-    /// them would download them.
-    private struct FileStamp: Hashable {
-        let name: String
-        let size: Int
-
-        init?(_ file: URL) {
-            guard let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return nil }
-            name = file.lastPathComponent
-            self.size = size
-        }
-    }
-
-    /// The folder, or the nearest one above it that exists, can be written to.
-    private static func canWrite(into folder: URL) -> Bool {
-        var dir = folder
-        while !FileManager.default.fileExists(atPath: dir.path(percentEncoded: false)) {
-            let parent = dir.deletingLastPathComponent()
-            if parent == dir { return false }
-            dir = parent
-        }
-        return FileManager.default.isWritableFile(atPath: dir.path(percentEncoded: false))
     }
 }
 
