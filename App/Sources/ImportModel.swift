@@ -8,11 +8,10 @@ import SwiftUI
     var summary: ImportResult?
     /// Why the last Import failed, shown until dismissed.
     var error: String?
-    private(set) var importing = false
     private var runAgain = false
     private let services: Services
 
-    /// True while an Import runs: quitting asks first.
+    /// True while an Import runs: quitting asks first. Static, as the app delegate has no `Services` to ask.
     static var isRunning = false
 
     init(services: Services) {
@@ -22,12 +21,10 @@ import SwiftUI
     /// `byHand` is false for the launch Import, which says nothing when it's refused: the main window's banner does.
     func importNow(byHand: Bool = true) {
         guard let igdb = services.igdb, let hasheous = services.hasheous, let journal = services.journal else { return }
-        guard !importing else {
+        guard services.work.beginImport() else {
             runAgain = true
             return
         }
-        guard services.work.begin(.importing) else { return }
-        importing = true
         Self.isRunning = true
         let run = Import(
             igdb: igdb, hasheous: hasheous, journal: journal, backups: services.settings.backups(), libretro: services.libretro)
@@ -48,9 +45,8 @@ import SwiftUI
             } catch {
                 self.error = "Import failed: \(error.localizedDescription)"
             }
-            importing = false
             Self.isRunning = false
-            services.work.end(.importing)
+            services.work.endImport()
             if runAgain {
                 runAgain = false
                 importNow()

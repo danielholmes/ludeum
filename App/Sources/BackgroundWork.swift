@@ -11,22 +11,22 @@ import os
     private(set) var refreshing: (done: Int, total: Int)?
     /// True during the Import's write step: no journal edits until it's done.
     private(set) var journalLocked = false
-    /// Mirrors `gate.current`, for views.
-    private(set) var exclusive: ExclusiveWork?
+    /// Mirrors `gate.isImporting`, for views.
+    private(set) var importing = false
 
     private static let log = Logger(subsystem: "org.danielholmes.Ludeum", category: "refresh")
 
     /// Starts an Import, or returns false while another runs.
-    func begin(_ work: ExclusiveWork) -> Bool {
-        guard gate.begin(work) else { return false }
-        exclusive = work
+    func beginImport() -> Bool {
+        guard gate.beginImport() else { return false }
+        importing = true
         return true
     }
 
-    func end(_ work: ExclusiveWork) {
-        guard gate.current == work else { return }
-        gate.end(work)
-        exclusive = nil
+    func endImport() {
+        guard gate.isImporting else { return }
+        gate.endImport()
+        importing = false
         journalLocked = false
     }
 

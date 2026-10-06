@@ -1,16 +1,11 @@
 import Foundation
 import Synchronization
 
-/// Work that runs alone: while it runs, no other can start.
-public enum ExclusiveWork: Sendable, Equatable {
-    case importing
-}
-
 /// Lets one Import run at a time, and holds the background refresh while it runs,
 /// since they share the rate limiters.
 public final class WorkGate: Sendable {
     private struct State {
-        var current: ExclusiveWork?
+        var importing = false
         var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     }
 
@@ -18,22 +13,23 @@ public final class WorkGate: Sendable {
 
     public init() {}
 
-    public var current: ExclusiveWork? { state.withLock { $0.current } }
+    /// An Import is running.
+    public var isImporting: Bool { state.withLock { $0.importing } }
 
-    /// Starts `work`, or returns false if an Import is already running.
-    public func begin(_ work: ExclusiveWork) -> Bool {
+    /// Starts an Import, or returns false if one is already running.
+    public func beginImport() -> Bool {
         state.withLock {
-            guard $0.current == nil else { return false }
-            $0.current = work
+            guard !$0.importing else { return false }
+            $0.importing = true
             return true
         }
     }
 
-    /// Ends `work` and releases anything waiting. Ending work that isn't running does nothing.
-    public func end(_ work: ExclusiveWork) {
+    /// Ends the Import and releases anything waiting. Ending when none is running does nothing.
+    public func endImport() {
         let waiters = state.withLock { s -> [CheckedContinuation<Void, Never>] in
-            guard s.current == work else { return [] }
-            s.current = nil
+            guard s.importing else { return [] }
+            s.importing = false
             defer { s.waiters = [:] }
             return Array(s.waiters.values)
         }
@@ -46,7 +42,7 @@ public final class WorkGate: Sendable {
         await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 let resumeNow = state.withLock { s in
-                    if s.current == nil || Task.isCancelled { return true }
+                    if !s.importing || Task.isCancelled { return true }
                     s.waiters[id] = continuation
                     return false
                 }

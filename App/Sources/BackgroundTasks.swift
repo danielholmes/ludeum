@@ -40,7 +40,7 @@ struct BackgroundTasksPanel: View {
         if let running = tasks.items.first(where: { $0.state == .running }) {
             parts.append(running.title + (running.progress.map { " · \(Int($0 * 100))%" } ?? ""))
         } else if work.refreshing != nil {
-            parts.append(work.exclusive == nil ? "Refreshing the cache" : "Cache refresh paused")
+            parts.append(!work.importing ? "Refreshing the cache" : "Cache refresh paused")
         }
         if waiting > 0 { parts.append("\(waiting) waiting") }
         if failed > 0 { parts.append("\(failed) failed") }
@@ -70,7 +70,7 @@ struct BackgroundTasksPanel: View {
 
     private func refreshRow(_ progress: (done: Int, total: Int)) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(work.exclusive == nil ? "Refreshing the cache \(progress.done)/\(progress.total)" : "Cache refresh paused")
+            Text(!work.importing ? "Refreshing the cache \(progress.done)/\(progress.total)" : "Cache refresh paused")
                 .font(.caption).monospacedDigit()
             ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).controlSize(.small)
         }

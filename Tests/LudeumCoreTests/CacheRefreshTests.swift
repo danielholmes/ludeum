@@ -112,14 +112,14 @@ import Testing
         h.clock.advance(days: 61)
         h.internet.resetSent()
         let gate = WorkGate()
-        #expect(gate.begin(.importing))
+        #expect(gate.beginImport())
 
         let refresh = refresh(gate: gate)
         let running = Task { await refresh.run() }
         try await Task.sleep(for: .milliseconds(100))
         #expect(h.internet.sent.isEmpty)
 
-        gate.end(.importing)
+        gate.endImport()
         #expect(await running.value.refreshed == 1)
     }
 }
@@ -128,31 +128,31 @@ import Testing
     @Test func oneImportRunsAtATime() {
         let gate = WorkGate()
 
-        #expect(gate.begin(.importing))
-        #expect(!gate.begin(.importing))
-        #expect(gate.current == .importing)
+        #expect(gate.beginImport())
+        #expect(!gate.beginImport())
+        #expect(gate.isImporting)
 
-        gate.end(.importing)
-        #expect(gate.current == nil)
-        #expect(gate.begin(.importing))
+        gate.endImport()
+        #expect(!gate.isImporting)
+        #expect(gate.beginImport())
     }
 
     @Test func endingWorkThatIsntRunningChangesNothing() {
         let gate = WorkGate()
 
-        gate.end(.importing)
+        gate.endImport()
 
-        #expect(gate.current == nil)
+        #expect(!gate.isImporting)
     }
 
     @Test func aCancelledWaiterStopsWaiting() async {
         let gate = WorkGate()
-        #expect(gate.begin(.importing))
+        #expect(gate.beginImport())
 
         let waiting = Task { await gate.waitUntilClear() }
         waiting.cancel()
         await waiting.value
 
-        #expect(gate.current == .importing)
+        #expect(gate.isImporting)
     }
 }

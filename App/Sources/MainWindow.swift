@@ -187,7 +187,7 @@ struct Sidebar: View {
             Section("Journal") {
                 ForEach(Screen.journal, id: \.self) { row($0) }
                 // Its Check again runs an Import, so it shows while one runs.
-                row(.reviewQueue, badge: reviewQueueCount, running: services.work.exclusive == .importing)
+                row(.reviewQueue, badge: reviewQueueCount, running: services.work.importing)
             }
             if !platforms.isEmpty {
                 Section("Platforms") {
