@@ -31,6 +31,11 @@ import Testing
         #expect(find("Parasite Eve II (USA) (Disc 2).cue", in: names) == "Parasite Eve II (USA)")
     }
 
+    @Test func aFloppySetsDiskUsesItsDisklessName() {
+        let names: Set = ["Snatcher (Japan)", "Snatcher (Japan) (Disk 2)"]
+        #expect(find("Snatcher (Japan) (Disk 2).dsk", in: names) == "Snatcher (Japan)")
+    }
+
     @Test func aFuzzyTitleMatchPrefersTheROMsOwnRegion() {
         let names: Set = ["Rayman DS (USA)", "Rayman DS (Europe) (En,Fr,De)", "Rayman DS (Japan)"]
         #expect(find("Rayman DS (E).nds", in: names) == "Rayman DS (Europe) (En,Fr,De)")

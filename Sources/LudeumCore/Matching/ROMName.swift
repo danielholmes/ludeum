@@ -39,7 +39,8 @@ public struct ROMName: Sendable, Hashable {
                 if !matches(t, Self.dumpFlag) && !matches(t, Self.serial) { parts.append(t) }
                 continue
             }
-            if let n = t.wholeMatch(of: /Disc (\d+)/) {
+            // A floppy set's `(Disk N)` is a Disc too.
+            if let n = t.wholeMatch(of: /Dis[ck] (\d+)/) {
                 disc = Int(n.1)
                 afterDisc = true
                 continue
@@ -71,7 +72,7 @@ public struct ROMName: Sendable, Hashable {
     /// "Resident Evil 2 (USA) (Disc 1) (Leon)".
     public var withoutDisc: String {
         guard let disc else { return raw }
-        var out = raw.replacingOccurrences(of: #"\s*\(Disc \#(disc)\)"#, with: "", options: .regularExpression)
+        var out = raw.replacingOccurrences(of: #"\s*\(Dis[ck] \#(disc)\)"#, with: "", options: .regularExpression)
         if let discLabel { out = out.replacingOccurrences(of: " (\(discLabel))", with: "") }
         return out.trimmingCharacters(in: .whitespaces)
     }

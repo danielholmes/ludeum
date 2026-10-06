@@ -44,7 +44,7 @@ enum LibretroLookup {
     }
 
     static func withoutDisc(_ name: String) -> String {
-        name.replacingOccurrences(of: #" \(Disc \d+\)"#, with: "", options: .regularExpression)
+        name.replacingOccurrences(of: #" \(Dis[ck] \d+\)"#, with: "", options: .regularExpression)
     }
 
     private static let goodToolsRegions: [String: String] = [

@@ -34,6 +34,12 @@ import Testing
         #expect(!hasDuplicateVersions(roms))
     }
 
+    @Test func aFloppySetsDisksAreOneVersion() {
+        let roms = [rom(1, "Snatcher (Japan) (Disk 1)"), rom(2, "Snatcher (Japan) (Disk 2)"), rom(3, "Snatcher (Japan) (Disk 3)")]
+        #expect(ids(versions(of: roms)) == [[1, 2, 3]])
+        #expect(!hasDuplicateVersions(roms))
+    }
+
     @Test func aRepeatedDiscNumberIsNotOneSetOfDiscs() {
         let roms = [rom(1, "Final Fantasy VII (USA) (Disc 1)"), rom(2, "Final Fantasy VII (Europe) (Disc 1)")]
         #expect(hasDuplicateVersions(roms))

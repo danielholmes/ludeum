@@ -58,6 +58,14 @@ import Testing
         #expect(try ps1.folder.scan().isEmpty)
     }
 
+    @Test func aSubfolderOfAFloppySetsDisksIsOneROMOpeningDiskOne() throws {
+        let msx2 = try FakeROMFolder(in: directory, platform: 53)
+        try msx2.add("Snatcher (Japan)/Snatcher (Japan) (Disk 2).dsk")
+        let disk1 = try msx2.add("Snatcher (Japan)/Snatcher (Japan) (Disk 1).dsk")
+
+        #expect(try msx2.folder.scan().map(\.ready) == [disk1])
+    }
+
     @Test func aPlatformThatDoesntReadPlaylistsIgnoresThem() throws {
         let gameCube = try FakeROMFolder(in: directory, platform: 21)
         try gameCube.add("Resident Evil/Resident Evil.m3u")

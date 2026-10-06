@@ -28,6 +28,13 @@ import Testing
         #expect(ROMName("Gran Turismo 2 (USA) (Disc 1) (Arcade Mode) (Rev 1)").version == "USA · Rev 1")
     }
 
+    @Test func aFloppySetsDiskIsADisc() {
+        let name = ROMName("Snatcher (Japan) (Disk 2)")
+        #expect(name.disc == 2)
+        #expect(name.version == "Japan")
+        #expect(name.withoutDisc == "Snatcher (Japan)")
+    }
+
     @Test func regionsComeFromNoIntroAndGoodToolsTags() {
         #expect(ROMName("Holy Diver (Japan)").regions == [.japan])
         #expect(ROMName("Soccer (E) (M3) [S][!]").regions == [.europe])
