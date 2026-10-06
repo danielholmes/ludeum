@@ -365,6 +365,10 @@ enum LudeumSchema {
                     CREATE INDEX rom_on_gameId ON rom(gameId);
                     """)
         }
+        // Covers no longer fall back to OpenEmu's Box art: upload, then libretro, then IGDB.
+        migrator.registerMigration("v15 no openemu box art") { db in
+            try db.alter(table: "rom") { t in t.drop(column: "openEmuBoxArt") }
+        }
         return migrator
     }
 }

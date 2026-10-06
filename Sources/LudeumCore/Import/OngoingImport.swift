@@ -37,7 +37,7 @@ public final class OngoingImport: Sendable {
         libretro: LibretroThumbnails? = nil
     ) {
         self.igdb = igdb
-        boxArt = BoxArtImport(journal: journal, cache: igdb.cache, libretro: libretro)
+        boxArt = BoxArtImport(journal: journal, libretro: libretro)
         matcher = Matcher(igdb: igdb, hasheous: hasheous)
         self.journal = journal
         self.backups = backups
@@ -140,7 +140,7 @@ public final class OngoingImport: Sendable {
         if touchesROMs { try backups?.backUp(journal, operation: .beforeImport) }
         let result = try journal.applyOngoingImport(plan)
         await wrote()
-        await boxArt.run(snapshot)
+        await boxArt.run()
         return result
     }
 }

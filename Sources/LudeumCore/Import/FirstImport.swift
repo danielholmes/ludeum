@@ -145,7 +145,7 @@ public final class FirstImport: Sendable {
         libretro: LibretroThumbnails? = nil
     ) {
         self.igdb = igdb
-        boxArt = BoxArtImport(journal: journal, cache: igdb.cache, libretro: libretro)
+        boxArt = BoxArtImport(journal: journal, libretro: libretro)
         matcher = Matcher(igdb: igdb, hasheous: hasheous)
         self.journal = journal
         self.backups = backups
@@ -264,6 +264,6 @@ public final class FirstImport: Sendable {
         try backups?.backUp(journal, operation: .beforeImport)
         try journal.commitFirstImport(plan)
         try discardDraft()
-        await boxArt.run(draft.library)
+        await boxArt.run()
     }
 }

@@ -71,10 +71,10 @@ extension LudeumStore {
 
     /// The ROMs whose Box art a Game shows, best first: its present ROMs (the playlist, then Disc 1),
     /// or when none is present, the most recently added missing one.
-    func coverROMs(_ game: GameID) throws -> [(libretroBoxart: String?, openEmuBoxArt: String?)] {
+    func coverROMs(_ game: GameID) throws -> [String?] {
         try db.read { db in
             let rows = try Row.fetchAll(
-                db, sql: "SELECT id, fileName, missing, discNumber, libretroBoxart, openEmuBoxArt FROM rom WHERE gameId = ?",
+                db, sql: "SELECT id, fileName, missing, discNumber, libretroBoxart FROM rom WHERE gameId = ?",
                 arguments: [game])
             let present = rows.filter { !($0["missing"] as Bool) }
             let chosen: [Row] =
@@ -86,7 +86,7 @@ extension LudeumStore {
                     }
                     return key($0) < key($1)
                 }
-            return chosen.map { ($0["libretroBoxart"], $0["openEmuBoxArt"]) }
+            return chosen.map { $0["libretroBoxart"] }
         }
     }
 }
@@ -96,8 +96,6 @@ public enum CoverSource: Sendable, Equatable {
     case upload(NormalisedCover)
     /// libretro-thumbnails' Box art (a PNG) in the cache, by its path on the CDN.
     case libretro(URL, path: String)
-    /// OpenEmu's Box art copied into the cache, by its `ZRELATIVEPATH`.
-    case openEmu(URL, path: String)
     /// IGDB's Cover art in the cache.
     case igdb(URL, imageID: String)
     case placeholder
@@ -107,14 +105,13 @@ public enum CoverSource: Sendable, Equatable {
         switch self {
         case .upload(let cover): cover.sha256
         case .libretro(_, let path): "libretro:\(path)"
-        case .openEmu(_, let path): "openemu:\(path)"
         case .igdb(_, let imageID): imageID
         case .placeholder: nil
         }
     }
 }
 
-/// A Game's Cover: my upload, else libretro Box art, else OpenEmu Box art, else IGDB's Cover art,
+/// A Game's Cover: my upload, else libretro Box art, else IGDB's Cover art,
 /// else a placeholder. Everything but uploads lives in the cache, downloaded the first time it's shown.
 public struct Covers: Sendable {
     let journal: LudeumStore
@@ -135,13 +132,8 @@ public struct Covers: Sendable {
     public func cover(for game: GameID) async throws -> CoverSource {
         if let upload = try journal.uploadedCover(game) { return .upload(upload) }
         let roms = try journal.coverROMs(game)
-        if let libretro, let path = roms.lazy.compactMap(\.libretroBoxart).first {
+        if let libretro, let path = roms.compactMap({ $0 }).first {
             return .libretro(try await libretro.image(path), path: path)
-        }
-        if let cache {
-            for path in roms.compactMap(\.openEmuBoxArt) {
-                if let file = cache.cachedImage(at: BoxArtImport.openEmuPath(path)) { return .openEmu(file, path: path) }
-            }
         }
         if let igdb, let id = try journal.game(game).igdbGameId.map(Int.init),
             let imageID = try await igdb.games(ids: [id])[id]?.record["cover"]?["image_id"]?.string

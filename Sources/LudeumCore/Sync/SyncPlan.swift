@@ -71,7 +71,7 @@ struct SyncPlan {
             switch source {
             case .upload(let cover): cover.jpeg
             case .libretro(let file, _): (try? Data(contentsOf: file)).flatMap { try? CoverImage.normalise($0).jpeg }
-            case .openEmu(let file, _), .igdb(let file, _): try? Data(contentsOf: file)
+            case .igdb(let file, _): try? Data(contentsOf: file)
             case .placeholder: nil
             }
         let image = source.key.flatMap { key in jpeg.map { (key: key, jpeg: $0) } }

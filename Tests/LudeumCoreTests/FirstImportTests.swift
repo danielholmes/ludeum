@@ -208,16 +208,15 @@ import Testing
         #expect(game.noROMInOpenEmu)
     }
 
-    @Test func nothingIsCarriedIntoTheJournalOpenEmusBoxArtIsCached() async throws {
+    @Test func nothingIsCarriedIntoTheJournalFromOpenEmusBoxArt() async throws {
         let art = testImage(width: 200, height: 280)
-        let pk = try oe.addROM("Super Mario World (USA)", md5: "bb", boxArt: art)
+        try oe.addROM("Super Mario World (USA)", md5: "bb", boxArt: art)
         let draft = try await start()
 
         try await firstImport.commit(draft)
 
         let covers = try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM cover")! }
         #expect(covers == 0)
-        #expect(try Data(contentsOf: h.cache.cachedImage(at: "openemu/ART-\(pk)")!) == art)
     }
 
     @Test func aGameAlreadyInTheJournalGetsTheROM() async throws {

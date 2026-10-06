@@ -2,7 +2,7 @@ import Foundation
 
 /// Finds a ROM's name in a libretro-thumbnails folder listing, in order: the file name minus its
 /// extension (with libretro's substitutions), then with GoodTools tags rewritten to No-Intro ones,
-/// then a fuzzy title match on the file name, then on each of `titles` (OpenEmu's or IGDB's).
+/// then a fuzzy title match on the file name, then on each of `titles` (the ROM's name, then its Game's IGDB name).
 /// A multi-disc ROM looks for its disc-less name first.
 enum LibretroLookup {
     static func find(fileName: String, titles: [String], in names: Set<String>) -> String? {

@@ -70,7 +70,7 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     }
 }
 
-/// The Cover order: upload, libretro Box art, OpenEmu Box art, IGDB Cover art, placeholder.
+/// The Cover order: upload, libretro Box art, IGDB Cover art, placeholder.
 @Suite struct CoverOrderTests {
     let h: Harness
     let j: LudeumHarness
@@ -113,17 +113,16 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
     }
 
-    @Test func withoutLibretroOpenEmusBoxArtComesFromTheCache() async throws {
-        let art = testImage(width: 20, height: 28)
-        let pk = try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: art)
+    @Test func withoutLibretroOpenEmusBoxArtIsSkippedForIGDBsCoverArt() async throws {
+        try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: testImage(width: 20, height: 28))
         let game = try await firstImport()
-        try FileManager.default.removeItem(at: oe.folder.appending(path: "Artwork/ART-\(pk)"))  // the cache has its own copy
 
-        guard case .openEmu(let file, "ART-\(pk)") = try await covers.cover(for: game) else {
-            Issue.record("expected OpenEmu's Box art")
+        let cover = try await covers.cover(for: game)
+
+        guard case .igdb(_, "co1") = cover else {
+            Issue.record("expected IGDB's Cover art, got \(cover)")
             return
         }
-        #expect(try Data(contentsOf: file) == art)
     }
 
     @Test func withNoBoxArtIGDBsCoverArtShows() async throws {

@@ -87,7 +87,7 @@ private struct EnlargedCover: View {
         let image: NSImage? =
             switch source {
             case .upload(let cover): NSImage(data: cover.jpeg)
-            case .libretro(let file, _), .openEmu(let file, _), .igdb(let file, _): NSImage(contentsOf: file)
+            case .libretro(let file, _), .igdb(let file, _): NSImage(contentsOf: file)
             case .placeholder: nil
             }
         // Force the decode now rather than at first draw.

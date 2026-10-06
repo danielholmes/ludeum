@@ -184,6 +184,7 @@ final class RunningFlag: @unchecked Sendable {
         h.internet.addHash(md5: "a3", game: 1103, platform: 19)
         let pending = try oe.addROM("Super Metroid (Japan)", md5: "a3", fileName: nil, status: 3)
         let mario = try oe.addROM("Super Mario World (USA)", md5: "bb", boxArt: testImage(width: 10, height: 10))
+        h.internet.addGame(1070, "Super Mario World", fields: ["platforms": [["id": 19, "name": "SNES"]], "cover": ["image_id": "co2"]])
         try await firstImport()
 
         let preview = try await sync.preview(library: oe.folder)
@@ -320,8 +321,6 @@ final class RunningFlag: @unchecked Sendable {
 
         try await ongoingImport()
 
-        let path = try await j.journal.db.read { try String.fetchOne($0, sql: "SELECT openEmuBoxArt FROM rom") }
-        #expect(path == nil)
         let preview = try await sync.preview(library: oe.folder)
         #expect(preview.coversReplaced.isEmpty && preview.coversAdded.isEmpty)
         #expect(try boxArt(metroid) != nil)

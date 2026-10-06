@@ -4,7 +4,7 @@ import Testing
 
 @testable import LudeumCore
 
-/// The Box art step of each Import: libretro lookups and OpenEmu's Box art copied into the cache.
+/// The Box art step of each Import: libretro lookups.
 @Suite struct BoxArtImportTests {
     let h: Harness
     let j: LudeumHarness
@@ -78,20 +78,20 @@ import Testing
         #expect(try roms()[0]["libretroBoxart"] as String? != nil)
     }
 
-    @Test func openEmusBoxArtIsCopiedAtEveryImportAndComesBackAfterAWipedCache() async throws {
-        try oe.addROM("Super Metroid (USA)", md5: "aa")
+    @Test func openVGDBsTitleIsntLookedUp() async throws {
+        try oe.addROM("SMW", md5: "zz", fileName: "smw.sfc", title: "Super Mario World")
         try await firstImport()
-        let art = testImage(width: 30, height: 40)
-        let pk = try oe.addROM("Super Mario World (USA)", md5: "zz", boxArt: art)
 
-        try await ongoingImport()
-        #expect(try roms()[1]["openEmuBoxArt"] as String? == "ART-\(pk)")
-        let cached = try #require(h.cache.cachedImage(at: "openemu/ART-\(pk)"))
-        #expect(try Data(contentsOf: cached) == art)
+        #expect(try roms()[0]["libretroBoxart"] as String? == nil)
+    }
 
-        try FileManager.default.removeItem(at: cached)
+    @Test func openEmusBoxArtIsntCopiedIntoTheCache() async throws {
+        let pk = try oe.addROM("Super Metroid (USA)", md5: "aa", boxArt: testImage(width: 30, height: 40))
+
+        try await firstImport()
         try await ongoingImport()
-        #expect(h.cache.cachedImage(at: "openemu/ART-\(pk)") != nil)
+
+        #expect(h.cache.cachedImage(at: "openemu/ART-\(pk)") == nil)
     }
 }
 
