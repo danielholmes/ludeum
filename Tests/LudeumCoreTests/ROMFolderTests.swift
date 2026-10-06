@@ -260,3 +260,56 @@ struct FakeROMFolder {
         #expect(try j.journal.roms(of: game).first?.folderName == "Okami (USA)")
     }
 }
+
+@Suite struct ROMFilesTests {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "rom files \(UUID().uuidString)")
+
+    @Test func aSingleFileROMIsJustThatFile() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let sfc = try ps2.add("Super Metroid (USA).sfc")
+
+        #expect(ROMFiles.files(of: sfc) == [sfc])
+    }
+
+    @Test func aCueSheetBringsItsTracks() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let cue = try ps2.add("RE2.cue", "FILE \"RE2 (Track 1).bin\" BINARY\nFILE \"RE2 (Track 2).bin\" BINARY\n")
+        let t1 = try ps2.add("RE2 (Track 1).bin")
+        let t2 = try ps2.add("RE2 (Track 2).bin")
+
+        #expect(ROMFiles.files(of: cue) == [cue, t1, t2])
+    }
+
+    @Test func aPlaylistBringsItsDiscsAndTheirTracks() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let m3u = try ps2.add("RE2.m3u", "RE2 (Disc 1).cue\nRE2 (Disc 2).cue\n")
+        let d1 = try ps2.add("RE2 (Disc 1).cue", "FILE \"RE2 (Disc 1).bin\" BINARY\n")
+        let b1 = try ps2.add("RE2 (Disc 1).bin")
+        let d2 = try ps2.add("RE2 (Disc 2).cue", "FILE \"RE2 (Disc 2).bin\" BINARY\n")
+        let b2 = try ps2.add("RE2 (Disc 2).bin")
+
+        #expect(ROMFiles.files(of: m3u) == [m3u, d1, b1, d2, b2])
+    }
+
+    @Test func aReferencedFileThatIsntThereIsLeftOut() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let cue = try ps2.add("RE2.cue", "FILE \"RE2 (Track 1).bin\" BINARY\n")
+
+        #expect(ROMFiles.files(of: cue) == [cue])
+    }
+
+    @Test func aROMFolderROMInASubfolderIsEverythingInIt() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let bin = try ps2.add("ICO/ICO (USA).bin")
+        let readme = try ps2.add("ICO/docs/readme.html")
+
+        #expect(try ps2.folder.files(named: "ICO") == [bin, readme])
+    }
+
+    @Test func anArchivedROMFolderROMIsItsArchive() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        let archive = try ps2.add("ICO.7z")
+
+        #expect(try ps2.folder.files(named: "ICO") == [archive])
+    }
+}

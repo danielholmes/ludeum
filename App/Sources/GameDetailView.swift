@@ -20,7 +20,8 @@ struct GameDetailView: View {
     @State private var emulatorSettings = EmulatorSettings()
     @State private var showingHistory = false
     /// Each present ROM file's created and modified dates, by ROM id, read from disk.
-    @State private var fileDates: [Int64: (created: Date?, modified: Date?)] = [:]
+    /// Each present ROM's files on disk, read off the main thread.
+    @State private var romFiles: [Int64: [ROMFileInfo]] = [:]
     @State private var facts = GameFacts.none
     @State private var editing: PlaythroughEdit?
     @State private var linking = false
@@ -146,14 +147,9 @@ struct GameDetailView: View {
             let library = services.settings.openEmuLibrary
             let folders = services.settings.romFolders
             let present = roms.filter { !$0.missing }
-            fileDates = await Task.detached(priority: .utility) {
-                var out: [Int64: (created: Date?, modified: Date?)] = [:]
-                for rom in present {
-                    guard let file = try? romFile(rom, library: library, folders: folders),
-                        let values = try? file.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
-                    else { continue }
-                    out[rom.id] = (values.creationDate, values.contentModificationDate)
-                }
+            romFiles = await Task.detached(priority: .utility) {
+                var out: [Int64: [ROMFileInfo]] = [:]
+                for rom in present { out[rom.id] = filesOnDisk(rom, library: library, folders: folders) }
                 return out
             }.value
         }
@@ -285,36 +281,61 @@ struct GameDetailView: View {
                 Text(roms.contains { $0.folderName != nil } ? "No ROM in its ROM folder" : "No ROM in OpenEmu").foregroundStyle(.orange)
             }
             ForEach(roms) { rom in
-                HStack {
-                    VStack(alignment: .leading) {
-                        // Without its extension; GoodTools region codes spelled out.
-                        Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
-                        Text(
-                            [
-                                readableVersion(rom.version), rom.disc.map { "Disc \($0)" },
-                                rom.missing ? "missing" : rom.archived ? "archived" : nil,
-                            ]
-                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-                        )
-                        .font(.caption).foregroundStyle(.secondary)
-                        if let dates = fileDates[rom.id] {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            // Without its extension; GoodTools region codes spelled out.
+                            Text((rom.fileName as NSString).deletingPathExtension).strikethrough(rom.missing)
                             Text(
                                 [
-                                    dates.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
-                                    dates.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
-                                ].compactMap { $0 }.joined(separator: " · ")
+                                    readableVersion(rom.version), rom.disc.map { "Disc \($0)" },
+                                    rom.missing ? "missing" : rom.archived ? "archived" : nil,
+                                ]
+                                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                             )
                             .font(.caption).foregroundStyle(.secondary)
+                            if let main = romFiles[rom.id]?.first {
+                                Text(
+                                    [
+                                        main.created.map { "Created \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                        main.modified.map { "Modified \($0.formatted(date: .abbreviated, time: .omitted))" },
+                                    ].compactMap { $0 }.joined(separator: " · ")
+                                )
+                                .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        if !rom.missing, rom.systemId == ROMFolder.ps2SystemId { archiveButton(rom) }
+                        if !rom.missing {
+                            Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
+                                .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
                         }
                     }
+                    if let files = romFiles[rom.id], !files.isEmpty { fileList(files) }
+                }
+            }
+        }
+    }
+
+    /// The ROM's files, folded away: "3 files · 702 MB", opening to each file and its size.
+    private func fileList(_ files: [ROMFileInfo]) -> some View {
+        let total = files.compactMap(\.size).reduce(0, +)
+        return DisclosureGroup {
+            ForEach(files, id: \.url) { file in
+                HStack {
+                    Text(file.name).font(.caption).lineLimit(1).truncationMode(.middle)
                     Spacer()
-                    if !rom.missing, rom.systemId == ROMFolder.ps2SystemId { archiveButton(rom) }
-                    if !rom.missing {
-                        Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
-                            .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
+                    if let size = file.size {
+                        Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)).font(.caption).foregroundStyle(.secondary)
+                            .monospacedDigit()
                     }
                 }
             }
+        } label: {
+            Text(
+                "\(files.count) file\(files.count == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"
+            )
+            .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -421,6 +442,42 @@ struct GameDetailView: View {
     private func deleteGame() {
         save { try $0.deleteGame(id) }
         if error == nil { deleted() }
+    }
+}
+
+/// One file of a ROM, as Game detail lists it.
+struct ROMFileInfo: Sendable {
+    let url: URL
+    /// Its path from the ROM's own folder (the ROM folder, or the folder OpenEmu keeps it in).
+    let name: String
+    let size: Int64?
+    let created: Date?
+    let modified: Date?
+}
+
+/// Every file of a ROM on disk, the file a Play opens first. Empty when it can't be found.
+private func filesOnDisk(_ rom: LudeumROM, library: URL, folders: [ROMFolder]) -> [ROMFileInfo] {
+    let files: [URL]
+    let base: URL
+    if let pk = rom.openEmuPk {
+        guard let main = try? OpenEmuLibrary.romFile(library: library, openEmuPk: pk) else { return [] }
+        files = ROMFiles.files(of: main)
+        base = main.deletingLastPathComponent()
+    } else if let name = rom.folderName, let folder = folders.first(where: { $0.systemId == rom.systemId }) {
+        files = (try? folder.files(named: name)) ?? []
+        base = folder.url
+    } else {
+        return []
+    }
+    let basePath = base.standardizedFileURL.path(percentEncoded: false)
+    return files.map { file in
+        let values = try? file.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey])
+        let path = file.standardizedFileURL.path(percentEncoded: false)
+        return ROMFileInfo(
+            url: file,
+            name: path.hasPrefix(basePath)
+                ? String(path.dropFirst(basePath.count)).trimmingPrefix("/").description : file.lastPathComponent,
+            size: values?.fileSize.map(Int64.init), created: values?.creationDate, modified: values?.contentModificationDate)
     }
 }
 
