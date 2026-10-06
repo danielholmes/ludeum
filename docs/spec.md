@@ -9,7 +9,6 @@ This file holds the decisions made so far and the open questions (fog). Vocabula
 - Journal data belongs to a **Game**, never to a ROM file. Removing or re-adding a ROM, or swapping it for another Version, loses nothing.
 - Richer data than OpenEmu offers: a Rating out of 10 in steps of 0.1 with its history, notes, and Playthroughs with Partial dates.
 - Covers every Platform (retro, PC, Xbox, …), not just emulated games.
-- Existing OpenEmu data (collections, play stats) is brought across (stars are not: Ratings start fresh), and OpenEmu stays usable as the place I actually play.
 
 ## Non-goals (for now)
 
@@ -98,17 +97,7 @@ GRDB over SQLite, with foreign keys on. Table and column names are as they'll ap
 
 ### First Import from OpenEmu
 - Reads a snapshot of OpenEmu's database, taken with SQLite's backup API. Safe while OpenEmu is running. Never writes to OpenEmu.
-- Collections map as follows:
-
-  | OpenEmu collection | Becomes |
-  |---|---|
-  | `_TODO` | Intent Backlog |
-  | `_TODO Next` | Intent Up next |
-  | `_Current` | a Playthrough in progress, with the start date I enter during the Import |
-  | `_Completed` | nothing: a Playthrough needs a start date, which OpenEmu doesn't have |
-  | `_Childhood Played` | the Childhood flag |
-  | every other collection | a List |
-
+- Import brings in ROMs only. Intent, Playthroughs and Lists are only ever entered in the journal.
 - **Matching** (confirmed in the dry run on the `prototype/first-import` branch; rules measured on `prototype/matching-rules`):
   1. Hasheous lookup by OpenEmu's MD5. Uncompressed or small archived NES/SNES dumps are retried with the header stripped, only if the file is already on disk. CD images are never read.
   2. It's an **Automatic** Match only when the checksum *and* the name agree ([ADR 0004](adr/0004-automatic-match-needs-checksum-and-name.md)). An IGDB Bundle (`game_type` 3) is treated like any other game: single-cartridge collections (Super Mario Advance, Kirby Super Star, Super Mario All-Stars) really are Bundle records, and the name rule already keeps out wrong multi-game packs.
@@ -124,10 +113,9 @@ GRDB over SQLite, with foreign keys on. Table and column names are as they'll ap
   - Normalising: lowercase; fold diacritics; `&` → `and`; split into words on anything but letters and digits; roman numerals II–XX become digits (not I, V or X); drop `and`, every `the`, and a leading `a`/`an`; drop a leading `Disney's`, `Disney-Pixar's`, `James Bond`, `Tom Clancy's` or `Sid Meier's`; join the words.
 - **Versions** aren't parsed into fields. A Version is described by the ROM name's tags as written (region, languages, revision, dev status, translation and so on), without the Disc and its label, GoodTools dump flags (`[!]`, `[a]`, `[b]`…) and file artefacts. Real names mix No-Intro, Redump, GoodTools, scene and ad-hoc forms, and a Version is only ever shown or suggested as text.
 - **Discs:** the present ROMs of one Game that each carry a `(Disc N)`, with no number repeated, are the Discs of one Version, whatever else their names say (Gran Turismo 2's two Discs come from different DAT versions). An `.m3u` playlist ROM of that Game belongs to the same Version. The free-form flag straight after `(Disc N)` is the disc label.
-- **Start dates for `_Current`:** an in-progress Playthrough needs a start date, so the first Import lists the `_Current` Games (7 in my library) and asks for each one's start date (a Partial date). For any of them I can choose "Not playing" instead, and no Playthrough is created. The Import draft can't be committed until every one is answered.
 - **Duplicate Versions** (2 or more *present* ROMs on one Game that aren't Discs of one Version) block the first Import until I remove ROMs in OpenEmu. There's no exceptions mechanism, and the UI should say that real exceptions need a code change. With these rules my library has 2: Double Dragon III (Japan and USA) and Sweet Home (two translations).
 - **The first Import is staged, as an Import draft.** Nothing becomes journal data until the draft is committed, in one step. The draft (the OpenEmu snapshot plus my answers so far) is saved, so quitting the app resumes it. While a draft exists, Sync and ongoing Imports aren't available.
-  - **Committing** needs only two things: no Duplicate Versions, and every `_Current` start date answered. Unmatched ROMs and pending suggestions carry over into the journal's Review queue as ordinary items, their ROMs imported unmatched with their OpenEmu data held until they're resolved.
+  - **Committing** needs only one thing: no Duplicate Versions. Unmatched ROMs and pending suggestions carry over into the journal's Review queue as ordinary items, their ROMs imported unmatched with their OpenEmu data held until they're resolved.
   - **Duplicate Versions items** show the Game and one row per present ROM: its Version text, file name, OpenEmu data (stars, collections, so I see what I'd lose) and "Show in Finder". Below: remove all but one Version in OpenEmu (exceptions need a code change), and **Check again**. There's no in-app resolve.
   - **Check again** (on those items and on the Import screen) re-reads OpenEmu into the draft. Answers whose ROM (`Z_PK` + MD5) is still present are kept; answers for ROMs that have gone are dropped; new ROMs go through matching. The last re-read is the baseline committed (store UUID, stars and collections).
   - **A ROM removed before the commit** is dropped entirely: never a missing ROM, its OpenEmu data never imported. Orphaned entries (row kept, file gone) are still imported as missing and don't count towards Duplicate Versions.
@@ -250,7 +238,6 @@ A nice-to-have: built after the rest of v1 works.
 ### Import and Sync screens
 - **One page each, shown in the main window's middle area (see Version 1 screens), not a sheet or wizard** (chosen from three variants on `prototype/import-sync`).
 - **Import page:** the left column holds the phase timeline (snapshot, lookups, matching, review), with each phase marked done, running or blocking, plus "Discard draft…". While the phases run, the main area shows determinate progress and Cancel. After that it shows a **"Before you can commit"** checklist of expandable cards:
-  - *Start dates for `_Current`*: a table of the Games, with OpenEmu's last-played date as a hint. Each one takes "Started on…" with a Partial date, or "Not playing".
   - *Duplicate Versions*: the items described under First Import, with Check again.
   
   Below, under **"Not blocking"**, come the Review queue counts (answer now or after committing; they carry over) and a summary of what will be imported.

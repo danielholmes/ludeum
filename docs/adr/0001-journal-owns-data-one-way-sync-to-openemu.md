@@ -1,5 +1,7 @@
 # The journal owns the data; OpenEmu only receives a one-way Sync
 
+Superseded by [0009](0009-ludeum-reads-rom-folders-openemu-is-gone.md).
+
 Ratings, Playthroughs, Intent, Lists and Covers live in the journal, a separate app. OpenEmu's library is read for ROMs (Import) and written to only by a one-way Sync that runs by hand while OpenEmu is closed and after a backup. The journal owns everything it writes: it overwrites stars and the collections it manages, and deletes other regular collections once I confirm. Changes made inside OpenEmu to those things are expected to be lost.
 
 ## Considered Options
