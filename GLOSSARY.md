@@ -179,7 +179,7 @@ Reading the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
 
 **Add ROM**:
-Putting a game from elsewhere (its file, an archive of it, its folder, or its Discs) into its Platform's ROM folder in the form that Platform keeps, then Matching it by hand: to an IGDB game I choose, or to a Game whose ROMs are all missing. A Compactable Platform's ROM goes in Compacted, a disc Platform's in a subfolder with a playlist for its Discs, and anything else as one Playable file; it's never left Archived. I choose whether the picked files are copied or moved (moved ones go to the Trash once the ROM is in). Several ROMs picked at once are Added one at a time, each Matched by hand the same way; one can instead go in without a Match, for the Import that follows to Match automatically or through the Review queue.
+Putting a game from elsewhere (its file, an archive of it, its folder, or its Discs) into its Platform's ROM folder in the form that Platform keeps, then Matching it by hand: to an IGDB game I choose, to a Game whose ROMs are all missing, or to a new Game I make by hand with no IGDB link, for a game IGDB doesn't have. A Compactable Platform's ROM goes in Compacted, a disc Platform's in a subfolder with a playlist for its Discs, and anything else as one Playable file; it's never left Archived. I choose whether the picked files are copied or moved (moved ones go to the Trash once the ROM is in). Several ROMs picked at once are Added one at a time, each Matched by hand the same way; one can instead go in without a Match, for the Import that follows to Match automatically or through the Review queue.
 _Avoid_: Import (that only reads the ROM folders), upload
 
 **Review queue**:

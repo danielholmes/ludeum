@@ -62,8 +62,7 @@ struct AddROMSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        AddROMFlow(services: services, picked: picked) { chosen, platform, keepingOriginals in
-            let match = AddROMMatch.igdb(gameId: chosen.igdbGameId, name: chosen.name, platform: platform)
+        AddROMFlow(services: services, picked: picked) { match, _, platform, keepingOriginals in
             startAddingROM(
                 picked.source, on: platform.id, match: match, keepingOriginals: keepingOriginals, services: services, added: added)
             dismiss()
@@ -76,23 +75,25 @@ struct AddROMSheet: View {
 }
 
 /// One ROM's Add ROM, as the toolbar's sheet and each step of Add ROMs show it: the IGDB search, already run on the ROM's
-/// name, its Platform filter limited to the Platforms that read it (set when one is clear); then where it goes, and
-/// whether the picked files are copied or moved. `buttons` go beside the search's Cancel.
+/// name, its Platform filter limited to the Platforms that read it (set when one is clear), or Make by hand for a game
+/// IGDB doesn't have; then where it goes, and whether the picked files are copied or moved. `buttons` go beside the
+/// search's Cancel.
 struct AddROMFlow<Buttons: View>: View {
     let services: Services
     let picked: PickedROM
     /// Why the Platform can't take it, beyond its ROM folder not reading it: nil when it can.
     let refused: (IGDBPlatform) -> String?
-    let add: (_ game: GameSearchResult, _ platform: IGDBPlatform, _ keepingOriginals: Bool) -> Void
+    let add: (_ match: AddROMMatch, _ gameName: String, _ platform: IGDBPlatform, _ keepingOriginals: Bool) -> Void
     @ViewBuilder let buttons: () -> Buttons
     @Environment(\.dismiss) private var dismiss
     @State private var query: String
-    @State private var chosen: (result: GameSearchResult, platform: IGDBPlatform)?
+    @State private var chosen: AddROMChoice?
+    @State private var makingByHand = false
     @State private var error: String?
 
     init(
         services: Services, picked: PickedROM, refused: @escaping (IGDBPlatform) -> String? = { _ in nil },
-        add: @escaping (_ game: GameSearchResult, _ platform: IGDBPlatform, _ keepingOriginals: Bool) -> Void,
+        add: @escaping (_ match: AddROMMatch, _ gameName: String, _ platform: IGDBPlatform, _ keepingOriginals: Bool) -> Void,
         @ViewBuilder buttons: @escaping () -> Buttons
     ) {
         self.services = services
@@ -108,24 +109,32 @@ struct AddROMFlow<Buttons: View>: View {
         picked.platforms.map { IGDBPlatform(id: $0, name: ROMPlatform.all[$0]?.name ?? "Platform \($0)") }
     }
 
+    private var likeliest: IGDBPlatform? {
+        let likeliest = picked.source.likeliestPlatform(of: picked.platforms)
+        return platforms.first { $0.id == likeliest }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let chosen {
                 AddROMConfirmation(
-                    services: services, source: picked.source, platformId: chosen.platform.id, gameName: chosen.result.name,
-                    existing: try? services.journal?.gameID(igdbGameId: chosen.result.igdbGameId, platformId: chosen.platform.id),
-                    back: { self.chosen = nil }
+                    services: services, source: picked.source, platformId: chosen.platform.id, gameName: chosen.gameName,
+                    existing: chosen.existing, back: { self.chosen = nil }
                 ) { keepingOriginals, _ in
-                    add(chosen.result, chosen.platform, keepingOriginals)
+                    add(chosen.match, chosen.gameName, chosen.platform, keepingOriginals)
                 }
+            } else if makingByHand {
+                AddROMByHand(
+                    journal: services.journal, romName: picked.source.romName, name: query, platforms: platforms,
+                    platform: likeliest, refused: refused, back: { makingByHand = false }
+                ) { chosen = $0 }
             } else {
                 Text("Add \(picked.source.romName)").font(.title2)
                 Text("Choose its game, and the Platform it goes on.").foregroundStyle(.secondary)
                 if let search = services.gameSearch {
-                    let likeliest = picked.source.likeliestPlatform(of: picked.platforms)
                     IGDBSearchView(
                         search: search, platforms: platforms, usedPlatforms: Set(picked.platforms), query: $query,
-                        platformFilter: platforms.first { $0.id == likeliest }
+                        platformFilter: likeliest
                     ) { result, platform in
                         if !picked.platforms.contains(platform.id) {
                             error = AddROMError.platformWontReadIt(platform.name).localizedDescription
@@ -133,7 +142,10 @@ struct AddROMFlow<Buttons: View>: View {
                             error = refusal
                         } else {
                             error = nil
-                            chosen = (result, platform)
+                            chosen = AddROMChoice(
+                                match: .igdb(gameId: result.igdbGameId, name: result.name, platform: platform), gameName: result.name,
+                                platform: platform,
+                                existing: try? services.journal?.gameID(igdbGameId: result.igdbGameId, platformId: platform.id))
                         }
                     }
                 } else {
@@ -141,14 +153,103 @@ struct AddROMFlow<Buttons: View>: View {
                 }
                 if let error { Text(error).foregroundStyle(.red) }
                 HStack {
+                    Button("Make by hand…") { makingByHand = true }
+                        .help("For a game IGDB doesn't have: a new Game with no IGDB link, which can be linked later")
                     buttons()
                     Spacer()
                     Button("Cancel", role: .cancel) { dismiss() }
                 }
             }
         }
-        .frame(height: chosen == nil ? 540 : nil)
+        .frame(height: chosen == nil && !makingByHand ? 540 : nil)
     }
+}
+
+/// Add ROM's Make by hand: a new Game with no IGDB link, its name and the Platform it goes on, with a warning (never a
+/// block) when a Game on that Platform has a name that agrees, which the ROM can join instead.
+private struct AddROMByHand: View {
+    let journal: LudeumStore?
+    let romName: String
+    @State var name: String
+    let platforms: [IGDBPlatform]
+    @State var platform: IGDBPlatform?
+    let refused: (IGDBPlatform) -> String?
+    let back: () -> Void
+    let chose: (AddROMChoice) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var similar: [Game] = []
+    @State private var error: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Text("Make \(romName)'s Game by hand").font(.title2).bold()
+                Text("For a game IGDB doesn't have. It can be linked to IGDB later, from its Game detail.")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                TextField("Name", text: $name)
+                if platforms.count == 1, let only = platforms.first {
+                    LabeledContent("Platform", value: only.name)
+                } else {
+                    Picker("Platform", selection: $platform) {
+                        if platform == nil { Text("Choose…").tag(IGDBPlatform?.none) }
+                        ForEach(platforms, id: \.id) { Text($0.name).tag(IGDBPlatform?.some($0)) }
+                    }
+                }
+                if let error { Text(error).foregroundStyle(.red) }
+            }
+            HStack {
+                Button("Back", action: back)
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                Button("Continue", action: next).keyboardShortcut(.defaultAction)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || platform == nil)
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { if platforms.count == 1 { platform = platforms[0] } }
+        .confirmationDialog(
+            "A Game with this name is already on \(platform?.name ?? "this Platform")",
+            isPresented: Binding(get: { !similar.isEmpty }, set: { if !$0 { similar = [] } })
+        ) {
+            ForEach(similar, id: \.id) { game in
+                Button("Add to \(game.name)") {
+                    guard let platform else { return }
+                    let match = AddROMMatch.game(game.id, forgettingMissing: false)
+                    chose(AddROMChoice(match: match, gameName: game.name, platform: platform, existing: game.id))
+                }
+            }
+            Button("Make it anyway", action: make)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Two games on one platform can share a name, so this is only a warning.")
+        }
+    }
+
+    private func next() {
+        guard let platform else { return }
+        if let refusal = refused(platform) {
+            error = refusal
+            return
+        }
+        error = nil
+        similar = (try? journal?.gamesWhoseNamesAgree(with: name, platformId: platform.id)) ?? []
+        if similar.isEmpty { make() }
+    }
+
+    private func make() {
+        guard let platform else { return }
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        chose(AddROMChoice(match: .byHand(name: name), gameName: name, platform: platform, existing: nil))
+    }
+}
+
+/// What Add ROM Matches the ROM to, and the Platform it goes on.
+struct AddROMChoice {
+    let match: AddROMMatch
+    let gameName: String
+    let platform: IGDBPlatform
+    /// The Game it joins, when the journal has it already.
+    let existing: GameID?
 }
 
 /// The last step of Add ROM: where it goes and what's done to it, and whether the picked files are copied or moved.
@@ -359,10 +460,9 @@ struct AddROMsSheet: View {
             } else {
                 AddROMFlow(
                     services: services, picked: PickedROM(source: row.source, platforms: row.platforms), refused: clash
-                ) { game, platform, keepingOriginals in
-                    let match = AddROMMatch.igdb(gameId: game.igdbGameId, name: game.name, platform: platform)
+                ) { match, gameName, platform, keepingOriginals in
                     startAddingROM(row.source, on: platform.id, match: match, keepingOriginals: keepingOriginals, services: services)
-                    finish(.added(game: game.name, platform: platform.id))
+                    finish(.added(game: gameName, platform: platform.id))
                 } buttons: {
                     Button("Skip") { finish(.skipped) }.help("Leave this ROM out")
                     withoutAMatch
