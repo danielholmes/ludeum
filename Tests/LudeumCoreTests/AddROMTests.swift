@@ -313,6 +313,44 @@ struct AddROMTests {
         #expect(try gameBoy.folder.scan().isEmpty)
     }
 
+    @Test func aGameMadeByHandHasNoIGDBLinkAndTheROMIsMatchedToIt() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let original = try pick("Hermano (World) (Homebrew).gb", "GB")
+
+        let game = try await adder.add(
+            ROMSource([original]), to: gameBoy.folder, match: .byHand(name: "  Hermano  "), keepingOriginals: true)
+
+        let made = try j.journal.game(game)
+        #expect(made.name == "Hermano")
+        #expect(made.igdbGameId == nil)
+        #expect(made.platformId == 33)
+        let row = try #require(try romRow("Hermano (World) (Homebrew)"))
+        #expect(row["gameId"] as GameID == game)
+        #expect(row["matchKind"] as String == "manual")
+    }
+
+    @Test func aGameMadeByHandNeedsANameAndNothingIsTouchedWithout() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let original = try pick("Hermano (World) (Homebrew).gb", "GB")
+
+        await #expect(throws: LudeumError.nameRequired) {
+            try await adder.add(ROMSource([original]), to: gameBoy.folder, match: .byHand(name: " "), keepingOriginals: false)
+        }
+        #expect(try gameBoy.folder.scan().isEmpty)
+        #expect(try romCount() == 0)
+        #expect(try trashed().isEmpty)
+    }
+
+    @Test func aMissingROMOfThatNameOnAnotherGameIsRefusedForAGameMadeByHand() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        _ = try missingGame("Tetris (World)", on: 33)
+        let original = try pick("Tetris (World).gb", "GB")
+
+        await #expect(throws: AddROMError.missingROMIsAnotherGames("Tetris (World)")) {
+            try await adder.add(ROMSource([original]), to: gameBoy.folder, match: .byHand(name: "Tetris"), keepingOriginals: true)
+        }
+    }
+
     @Test func anImportThatReadTheROMBeforeItWasRecordedLeavesItAsAddROMRecordedIt() async throws {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         let original = try pick("Tetris (World).gb", "GB")

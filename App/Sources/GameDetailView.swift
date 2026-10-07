@@ -37,6 +37,8 @@ struct GameDetailView: View {
     @State private var editingGame = false
     @State private var deletion: DeletionSummary?
     @State private var deletingPlaythrough: Playthrough?
+    /// A ROM about to be renamed after the Game, with its new name, for the confirmation.
+    @State private var renaming: (rom: LudeumROM, name: String)?
     /// A delete is running: nothing here can be changed until it's done.
     @State private var deleteRunning = false
     @State private var error: String?
@@ -250,6 +252,16 @@ struct GameDetailView: View {
             }
         }
         .confirmationDialog(
+            "Rename it “\(renaming?.name ?? "")”?",
+            isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), titleVisibility: .visible
+        ) {
+            Button("Rename") { if let renaming { rename(renaming.rom, to: renaming.name) } }
+        } message: {
+            Text(
+                "\(renaming?.rom.folderName ?? "") is renamed after the Game, keeping its tags, in every form it's kept in. "
+                    + "What's inside its folder or archive keeps its names.")
+        }
+        .confirmationDialog(
             "Delete this Playthrough?",
             isPresented: Binding(get: { deletingPlaythrough != nil }, set: { if !$0 { deletingPlaythrough = nil } })
         ) {
@@ -404,6 +416,10 @@ struct GameDetailView: View {
                             }
                         }
                         Spacer()
+                        if let name = newName(for: rom) {
+                            Button("Rename…", systemImage: "character.cursor.ibeam") { renaming = (rom, name) }
+                                .help("Rename it “\(name)”, after its Game")
+                        }
                         if ROMArchiving.action(for: rom) != nil { archiveButton(rom) }
                         if !rom.missing {
                             Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
@@ -541,6 +557,21 @@ struct GameDetailView: View {
                 EmptyView()
             }
         }
+    }
+
+    // MARK: Rename
+
+    /// The name to offer a present ROM that isn't named after its Game, while no Background task is working on it.
+    private func newName(for rom: LudeumROM) -> String? {
+        guard let game, !rom.missing, !services.tasks.isActive(.rom(rom.id)) else { return nil }
+        return ROMRename.newName(forROM: rom.folderName, gameName: game.name)
+    }
+
+    /// Renames the ROM in its ROM folder and the journal.
+    private func rename(_ rom: LudeumROM, to name: String) {
+        // A Background task may have started on it while the confirmation was up.
+        guard let folder = locator.folder(of: rom), !services.tasks.isActive(.rom(rom.id)) else { return }
+        save { try $0.renameROM(rom.id, to: name, in: folder) }
     }
 
     private var locator: ROMLocator {

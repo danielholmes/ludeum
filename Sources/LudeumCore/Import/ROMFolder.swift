@@ -235,6 +235,35 @@ struct ROMMove {
         return ROMMove(moves: moves)
     }
 
+    /// Renaming the ROM `name` within its ROM folder: everything at the top of the folder with its name (its subfolder,
+    /// its file in each form, a save beside it), so nothing of it is left to be found as a new ROM, but not a cue
+    /// sheet's tracks, which it names inside it. Checks nothing is in the way first: another ROM of the new name, or
+    /// any file there that isn't one of these under another case.
+    static func rename(_ name: String, to newName: String, in folder: ROMFolder) throws -> ROMMove {
+        guard let rom = try folder.rom(named: name) else { throw ReviewError.romFilesNotFound }
+        if try folder.rom(named: newName) != nil { throw ReviewError.alreadyInROMFolder }
+        let tracks = Set((rom.ready.map(ROMFiles.files(of:)) ?? []).dropFirst().map { $0.standardizedFileURL.path(percentEncoded: false) })
+        let items = try FileManager.default.contentsOfDirectory(atPath: folder.url.path(percentEncoded: false))
+            .filter { $0 == name || ($0 as NSString).deletingPathExtension == name }
+            .map { folder.url.appending(path: $0) }
+            .filter { !tracks.contains($0.standardizedFileURL.path(percentEncoded: false)) }
+        let moves = items.map { (from: $0, to: folder.url.appending(path: newName + $0.lastPathComponent.dropFirst(name.count))) }
+        if moves.contains(where: { FileManager.default.fileExists(atPath: $0.to.path(percentEncoded: false)) && !sameItem($0.from, $0.to) })
+        {
+            throw ReviewError.alreadyInROMFolder
+        }
+        return ROMMove(moves: moves)
+    }
+
+    /// Whether two paths are the one file or folder, as they are on a case-insensitive disk when only their case differs.
+    private static func sameItem(_ a: URL, _ b: URL) -> Bool {
+        func id(_ url: URL) -> (any NSObjectProtocol & NSCopying)? {
+            try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier
+        }
+        guard let first = id(a), let second = id(b) else { return false }
+        return first.isEqual(second)
+    }
+
     /// Moves every file; on a failure, moves back the ones already moved.
     func run() throws {
         for (i, move) in moves.enumerated() {

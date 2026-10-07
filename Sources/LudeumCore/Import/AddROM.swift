@@ -151,6 +151,8 @@ public enum AddROMMatch: Sendable, Equatable {
     /// A Game the journal has, e.g. one whose ROMs are all missing. `deletingMissing` deletes its missing ROMs once the
     /// new one is in.
     case game(GameID, deletingMissing: Bool)
+    /// A new Game with no IGDB link, made by hand with this name on the ROM's Platform, for a game IGDB doesn't have.
+    case byHand(name: String)
 }
 
 /// Add ROM: puts a game picked from elsewhere into its Platform's ROM folder in the form the Platform keeps, then records
@@ -193,6 +195,9 @@ public struct AddROM: Sendable {
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> GameID {
         let name = source.romName
+        if case .byHand(let gameName) = match, gameName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw LudeumError.nameRequired
+        }
         try await check(source, fits: folder)
         let missingRow = try missingROM(named: name, on: folder.platformId, for: match)
         let (destination, file) = try await put(source, in: folder, progress: progress)
@@ -291,6 +296,7 @@ public struct AddROM: Sendable {
             switch match {
             case .igdb(let gameId, _, let platform): try journal.gameID(igdbGameId: gameId, platformId: platform.id)
             case .game(let game, _): game
+            case .byHand: nil
             }
         guard rowGame == target else { throw AddROMError.missingROMIsAnotherGames(name) }
         return row["id"]
@@ -426,6 +432,16 @@ extension LudeumStore {
                     try db.execute(sql: "DELETE FROM rom WHERE gameId = ? AND missing AND id <> ?", arguments: [target, rom])
                 }
                 game = target
+            case .byHand(let name):
+                if let matched {
+                    game = matched
+                } else {
+                    try db.execute(
+                        sql: "INSERT INTO game (platformId, name) VALUES (?, ?)",
+                        arguments: [platformId, name.trimmingCharacters(in: .whitespacesAndNewlines)])
+                    game = db.lastInsertedRowID
+                    try Self.match(db, rom: rom, to: game, kind: "manual", day: day, now: now)
+                }
             }
             return (game, rom)
         }
