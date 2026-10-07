@@ -21,7 +21,8 @@ struct PickedROM: Identifiable {
         switch folders {
         case true?: "Choose the ROM's folder."
         case false?: "Choose the ROM's file, or an archive of it."
-        case nil: "Choose a ROM: its file, an archive of it, its folder, or each of its Discs."
+        case nil:
+            "Choose a ROM: its file, an archive of it, its folder, or each of its Discs. Choose several ROMs to add them all, for an Import to Match."
         }
     return panel.runModal() == .OK && !panel.urls.isEmpty ? panel.urls : nil
 }
@@ -208,5 +209,193 @@ struct AddROMToGameSheet: View {
         }
         .padding()
         .frame(width: 560)
+    }
+}
+
+/// One of several ROMs picked at once: the Platforms whose ROM folders read it, or why none can.
+struct PickedROMsRow: Identifiable {
+    let source: ROMSource
+    let platforms: [Int64]
+    let problem: String?
+    var id: [URL] { source.urls }
+}
+
+/// Several ROMs picked at once, for the Add ROMs sheet.
+struct PickedROMs: Identifiable {
+    let id = UUID()
+    let rows: [PickedROMsRow]
+}
+
+/// Reads each of several ROMs picked at once, as `readPicked` reads one. Only Platforms with a ROM folder can take one,
+/// and not where that folder has a ROM of its name already.
+func readPicked(several sources: [ROMSource], romFolders: [ROMFolder]) async -> PickedROMs {
+    let sevenZip = SevenZip.find()
+    let folders = Dictionary(romFolders.map { ($0.platformId, $0) }) { first, _ in first }
+    var rows: [PickedROMsRow] = []
+    for source in sources {
+        do {
+            let reading = try await source.platforms(sevenZip: sevenZip).filter { folders[$0] != nil }
+            guard !reading.isEmpty else { throw AddROMError.noPlatformReadsIt }
+            let platforms = reading.filter { (try? folders[$0]?.rom(named: source.romName)) == nil }
+            guard !platforms.isEmpty else { throw AddROMError.alreadyInROMFolder(source.romName) }
+            rows.append(PickedROMsRow(source: source, platforms: platforms, problem: nil))
+        } catch {
+            rows.append(PickedROMsRow(source: source, platforms: [], problem: journalErrorText(error)))
+        }
+    }
+    return PickedROMs(rows: rows)
+}
+
+/// "1 ROM", "3 ROMs".
+func romCount(_ count: Int) -> String { count == 1 ? "1 ROM" : "\(count) ROMs" }
+
+/// Adds several ROMs as one Background task, unmatched. Once it has run (also when some failed or it was cancelled, as
+/// the ones before went in), `then` runs, for the Import that Matches them.
+@MainActor func startAddingROMs(
+    _ roms: [(source: ROMSource, platformId: Int64)], keepingOriginals: Bool, services: Services, then: @escaping () -> Void
+) {
+    guard let journal = services.journal else { return }
+    let folders = services.settings.romFolders
+    let items = roms.compactMap { rom in folders.first { $0.platformId == rom.platformId }.map { (source: rom.source, folder: $0) } }
+    let adder = AddROM(journal: journal, libretro: services.libretro)
+    services.tasks.enqueue("Adding \(romCount(items.count))") { progress in
+        try await adder.add(items, keepingOriginals: keepingOriginals, progress: progress)
+    } ended: {
+        then()
+    }
+}
+
+/// Add ROM with several ROMs picked: each goes into its Platform's ROM folder unmatched, then an Import Matches them,
+/// automatically where the checksum and name agree, else in the Review queue. Each needs a Platform, chosen for me
+/// where it's clear.
+struct AddROMsSheet: View {
+    let services: Services
+    let picked: PickedROMs
+    /// Runs the Import once they're in.
+    let thenImport: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("addROMKeepsOriginals") private var keepingOriginals = true
+    /// Each ROM's Platform, by its row: nil until chosen.
+    @State private var platforms: [[URL]: Int64] = [:]
+    /// Rows I've left out.
+    @State private var skipped: Set<[URL]> = []
+
+    private var addable: [PickedROMsRow] { picked.rows.filter { $0.problem == nil && !skipped.contains($0.id) } }
+    private var undecided: [PickedROMsRow] { addable.filter { platforms[$0.id] == nil } }
+    /// Rows that would go in under the same name as another on the same Platform: only one of them could.
+    private var clashing: Set<[URL]> {
+        let chosen = addable.compactMap { row in platforms[row.id].map { (row.id, "\($0) \(row.source.romName)") } }
+        let counts = Dictionary(chosen.map { ($0.1, 1) }, uniquingKeysWith: +)
+        return Set(chosen.filter { counts[$0.1, default: 0] > 1 }.map(\.0))
+    }
+    /// The Platforms some undecided ROM could go on, for Set Platform.
+    private var undecidedPlatforms: [Int64] {
+        Set(undecided.flatMap(\.platforms)).sorted { name(of: $0).localizedStandardCompare(name(of: $1)) == .orderedAscending }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Add \(picked.rows.count) ROMs").font(.title2).bold()
+            Text(
+                "Each goes into its Platform's ROM folder, ready to Play. Then an Import Matches them: automatically where the checksum and name agree, else they wait in the Review queue."
+            )
+            .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if services.igdb == nil || services.hasheous == nil {
+                Text("Set IGDB and Hasheous credentials in Settings: until then no Import can read them, so they won't be Matched.")
+                    .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
+            List(picked.rows) { row in
+                rowView(row)
+            }
+            .listStyle(.bordered(alternatesRowBackgrounds: true))
+            .frame(minHeight: 200)
+            HStack(alignment: .top) {
+                Picker("Picked files", selection: $keepingOriginals) {
+                    Text("Copy them").tag(true)
+                    Text("Move them").tag(false)
+                }
+                .pickerStyle(.radioGroup)
+                Text(keepingOriginals ? "They stay where they are." : "They go to the Trash once each ROM is in.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if !undecided.isEmpty {
+                    Menu("Set Platform") {
+                        ForEach(undecidedPlatforms, id: \.self) { platform in
+                            Button(name(of: platform)) {
+                                for row in undecided where row.platforms.contains(platform) { platforms[row.id] = platform }
+                            }
+                        }
+                    }
+                    .fixedSize()
+                    .help("Choose the Platform of every ROM still without one that it can go on")
+                }
+            }
+            HStack {
+                if !undecided.isEmpty {
+                    Text("Choose a Platform for each ROM, or leave it out.").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                Button("Add \(romCount(addable.count))", action: add)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(addable.isEmpty || !undecided.isEmpty || !clashing.isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 720, height: 560)
+        .onAppear {
+            for row in picked.rows {
+                if let likeliest = row.source.likeliestPlatform(of: row.platforms) { platforms[row.id] = likeliest }
+            }
+        }
+    }
+
+    @ViewBuilder private func rowView(_ row: PickedROMsRow) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Toggle(
+                "Add",
+                isOn: Binding(
+                    get: { row.problem == nil && !skipped.contains(row.id) },
+                    set: { if $0 { skipped.remove(row.id) } else { skipped.insert(row.id) } })
+            )
+            .labelsHidden()
+            .disabled(row.problem != nil)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.source.romName).lineLimit(1).truncationMode(.middle)
+                if let problem = row.problem {
+                    Text(problem).font(.caption).foregroundStyle(.red)
+                } else if clashing.contains(row.id) {
+                    Text("Another ROM picked goes in under this name on this Platform: leave one out.")
+                        .font(.caption).foregroundStyle(.red)
+                } else if let platform = platforms[row.id],
+                    let folder = services.settings.romFolders.first(where: { $0.platformId == platform })
+                {
+                    Text("ROMs/\(folder.url.lastPathComponent)/\(AddROM.fileName(of: row.source, in: folder))")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+            }
+            Spacer()
+            if row.problem == nil {
+                if row.platforms.count == 1 {
+                    Text(name(of: row.platforms[0])).foregroundStyle(.secondary)
+                } else {
+                    Picker("Platform", selection: Binding(get: { platforms[row.id] }, set: { platforms[row.id] = $0 })) {
+                        Text("Choose…").tag(Int64?.none)
+                        ForEach(row.platforms, id: \.self) { Text(name(of: $0)).tag(Int64?.some($0)) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
+        }
+        .opacity(row.problem == nil && skipped.contains(row.id) ? 0.5 : 1)
+    }
+
+    private func name(of platform: Int64) -> String { ROMPlatform.all[platform]?.name ?? "Platform \(platform)" }
+
+    private func add() {
+        let roms = addable.compactMap { row in platforms[row.id].map { (source: row.source, platformId: $0) } }
+        startAddingROMs(roms, keepingOriginals: keepingOriginals, services: services, then: thenImport)
+        dismiss()
     }
 }

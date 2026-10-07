@@ -9,6 +9,7 @@ import SwiftUI
     /// Why the last Import failed, shown until dismissed.
     var error: String?
     private var runAgain = false
+    private var runAgainShowingMatched = false
     private let services: Services
 
     /// True while an Import runs: quitting asks first. Static, as the app delegate has no `Services` to ask.
@@ -19,10 +20,13 @@ import SwiftUI
     }
 
     /// `byHand` is false for the launch Import, which says nothing when it's refused: the main window's banner does.
-    func importNow(byHand: Bool = true) {
+    /// `showingMatched` has the summary list the ROMs it Matched automatically, and the missing ones that came back to
+    /// their Game, too: as after Add ROMs, where I want to know where each went.
+    func importNow(byHand: Bool = true, showingMatched: Bool = false) {
         guard let igdb = services.igdb, let hasheous = services.hasheous, let journal = services.journal else { return }
         guard services.work.beginImport() else {
             runAgain = true
+            runAgainShowingMatched = runAgainShowingMatched || showingMatched
             return
         }
         Self.isRunning = true
@@ -37,7 +41,12 @@ import SwiftUI
                 } wrote: {
                     await MainActor.run { work.lockJournal(false) }
                 }
-                if result.changedSomething { summary = result }
+                var shown = result
+                if !showingMatched {
+                    shown.matched = []
+                    shown.returned = []
+                }
+                if shown.changedSomething || !shown.matched.isEmpty || !shown.returned.isEmpty { summary = shown }
                 error = nil
                 // The launch Import has every Cover read again only when one may have changed. Check again always
                 // does: it's also how a Cover left stale by something else (a Match by hand) is put right.
@@ -50,8 +59,10 @@ import SwiftUI
             Self.isRunning = false
             services.work.endImport()
             if runAgain {
+                let showing = runAgainShowingMatched
                 runAgain = false
-                importNow()
+                runAgainShowingMatched = false
+                importNow(showingMatched: showing)
             }
         }
     }

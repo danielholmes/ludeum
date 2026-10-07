@@ -43,6 +43,62 @@ import Testing
 
         await #expect(throws: AddROMError.notOneGame) { try await source.platforms(sevenZip: nil) }
     }
+
+    @Test func severalPickedAtOnceAreEachTheirOwnROMWhetherFileFolderOrArchive() async throws {
+        let gb = try file("Tetris (World).gb")
+        let zip = try file("Sonic (USA).zip")
+        try file("Okami (USA)/Okami (USA).iso")
+        let folder = directory.appending(path: "Okami (USA)", directoryHint: .isDirectory)
+
+        let roms = await ROMSource.split([zip, folder, gb])
+
+        #expect(roms.map(\.romName) == ["Okami (USA)", "Sonic (USA)", "Tetris (World)"])
+        #expect(roms.map(\.urls) == [[folder], [zip], [gb]])
+    }
+
+    @Test func aCueSheetsTracksPickedBesideItComeWithIt() async throws {
+        let cue = try file("Ridge Racer (USA).cue", "FILE \"Ridge Racer (USA).bin\" BINARY\n")
+        let bin = try file("Ridge Racer (USA).bin")
+
+        let roms = await ROMSource.split([bin, cue])
+
+        #expect(roms.map(\.urls) == [[cue]])
+    }
+
+    @Test func theDiscsOfOneVersionAreOneROM() async throws {
+        var picked: [URL] = []
+        for n in 1...2 {
+            let name = "Fear Effect (USA) (Disc \(n))"
+            picked.append(try file("\(name).cue", "FILE \"\(name).bin\" BINARY\n"))
+            picked.append(try file("\(name).bin"))
+        }
+        let other = try file("Tetris (World).gb")
+
+        let roms = await ROMSource.split(picked + [other])
+
+        #expect(roms.map(\.romName) == ["Fear Effect (USA)", "Tetris (World)"])
+        #expect(roms[0].urls.map(\.lastPathComponent) == ["Fear Effect (USA) (Disc 1).cue", "Fear Effect (USA) (Disc 2).cue"])
+    }
+
+    @Test func theLikeliestPlatformIsTheOneWhoseEmulatorPrefersItsFilesExtension() async throws {
+        let gb = ROMSource([try file("Tetris (World).gb")])
+        let gbc = ROMSource([try file("Pokemon Gold (USA).gbc")])
+        let iso = ROMSource([try file("Lumines (USA).iso")])
+
+        #expect(gb.likeliestPlatform(of: try await gb.platforms(sevenZip: nil)) == 33)
+        #expect(gbc.likeliestPlatform(of: try await gbc.platforms(sevenZip: nil)) == 22)
+        // PS2's and PSP's Emulators both prefer an .iso.
+        #expect(iso.likeliestPlatform(of: try await iso.platforms(sevenZip: nil)) == nil)
+        #expect(iso.likeliestPlatform(of: [ROMPlatform.psp]) == ROMPlatform.psp)
+    }
+
+    @Test func discsThatNoPlatformReadsTogetherAreEachTheirOwnROM() async throws {
+        let discs = [try file("Tales of Symphonia (USA) (Disc 1).rvz"), try file("Tales of Symphonia (USA) (Disc 2).rvz")]
+
+        let roms = await ROMSource.split(discs)
+
+        #expect(roms.map(\.romName) == ["Tales of Symphonia (USA) (Disc 1)", "Tales of Symphonia (USA) (Disc 2)"])
+    }
 }
 
 @Suite(.enabled(if: SevenZip.find() != nil, "needs 7-Zip's 7zz"))
@@ -80,6 +136,8 @@ struct AddROMTests {
     func romRow(_ name: String) throws -> Row? {
         try j.journal.db.read { try Row.fetchOne($0, sql: "SELECT * FROM rom WHERE folderName = ?", arguments: [name]) }
     }
+
+    func romCount() throws -> Int { try j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM rom") ?? 0 } }
 
     func igdb(_ id: Int64, _ name: String, on platform: Int64) -> AddROMMatch {
         .igdb(gameId: id, name: name, platform: IGDBPlatform(id: platform, name: ROMPlatform.all[platform]!.name))
@@ -267,5 +325,37 @@ struct AddROMTests {
 
         #expect(result.sentToReview.isEmpty)
         #expect(try romRow("Tetris (World)")?["matchKind"] as String? == "manual")
+    }
+
+    @Test func severalAtOnceGoIntoTheirROMFoldersUnmatchedForTheImportToMatch() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let ps2 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps2)
+        let tetris = try pick("Tetris (World).gb", "GB")
+        let kirby = try pick("Kirby's Dream Land (USA).gb", "GB")
+        try pick("Okami (USA)/Okami (USA).iso", "PS2")
+        let okami = picked.appending(path: "Okami (USA)", directoryHint: .isDirectory)
+
+        try await adder.add(
+            [(ROMSource([tetris]), gameBoy.folder), (ROMSource([kirby]), gameBoy.folder), (ROMSource([okami]), ps2.folder)],
+            keepingOriginals: false)
+
+        #expect(try gameBoy.folder.scan().map(\.fileName) == ["Kirby's Dream Land (USA).7z", "Tetris (World).7z"])
+        #expect(try ps2.folder.scan().map(\.fileName) == ["Okami (USA)/Okami (USA).iso"])
+        #expect(try trashed() == ["Kirby's Dream Land (USA).gb", "Okami (USA)", "Tetris (World).gb"])
+        // Not recorded: the Import reads them as new ROMs, Matching them automatically or sending them to review.
+        #expect(try romCount() == 0)
+    }
+
+    @Test func oneThatCantGoInDoesntStopTheRestAndSaysWhy() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        try gameBoy.add("Tetris (World).7z")
+        let tetris = try pick("Tetris (World).gb", "GB")
+        let kirby = try pick("Kirby's Dream Land (USA).gb", "GB")
+
+        await #expect(throws: AddROMError.notAllAdded(["Tetris (World): Tetris (World) is already in its ROM folder."], of: 2)) {
+            try await adder.add([(ROMSource([tetris]), gameBoy.folder), (ROMSource([kirby]), gameBoy.folder)], keepingOriginals: false)
+        }
+        #expect(try gameBoy.folder.scan().map(\.fileName) == ["Kirby's Dream Land (USA).7z", "Tetris (World).7z"])
+        #expect(try trashed() == ["Kirby's Dream Land (USA).gb"])
     }
 }

@@ -1,8 +1,8 @@
 import LudeumCore
 import SwiftUI
 
-/// After an Import that changed something: what was sent to review and what's gone missing,
-/// linking to their Games. Dismissible; an Import that changed nothing shows nothing.
+/// After an Import that changed something: what was sent to review and what's gone missing (and, after Add ROMs, what
+/// it Matched automatically), linking to their Games. Dismissible; an Import that changed nothing shows nothing.
 struct ImportSummaryBanner: View {
     let summary: ImportResult
     let open: (GameID) -> Void
@@ -21,6 +21,8 @@ struct ImportSummaryBanner: View {
                 // An Import can touch a thousand ROMs: scroll rather than grow the window off-screen.
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
+                        section("Matched automatically", summary.matched)
+                        section("Back on their Game", summary.returned)
                         section("Sent to the Review queue", summary.sentToReview)
                         section("Gone missing", summary.goneMissing)
                     }
@@ -37,6 +39,8 @@ struct ImportSummaryBanner: View {
     private var headline: String {
         let added = summary.sentToReview.count
         return [
+            summary.matched.isEmpty ? nil : "\(romCount(summary.matched.count)) Matched automatically",
+            summary.returned.isEmpty ? nil : "\(romCount(summary.returned.count)) back on their Game",
             added > 0 ? "\(added) ROM\(added == 1 ? "" : "s") added to review" : nil,
             summary.goneMissing.isEmpty ? nil : "\(summary.goneMissing.count) gone missing",
         ]

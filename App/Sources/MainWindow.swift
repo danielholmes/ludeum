@@ -29,6 +29,8 @@ struct MainWindow: View {
     @State private var needsOpenEmuMigration = false
     /// Picked in Add ROM, until its game is chosen.
     @State private var addingROM: PickedROM?
+    /// Several picked in Add ROM at once, until each has its Platform.
+    @State private var addingROMs: PickedROMs?
     @State private var addROMError: String?
 
     /// Opens a Game in the detail column, leaving any IGDB result.
@@ -44,12 +46,17 @@ struct MainWindow: View {
         selection = .library
     }
 
-    /// Add ROM: asks for the ROM, then which game it is.
+    /// Add ROM: asks for the ROM, then which game it is. Several ROMs picked at once go in for an Import to Match.
     private func addROM() {
         guard let urls = pickROM(folders: nil) else { return }
         Task {
             do {
-                addingROM = try await readPicked(urls)
+                let sources = await ROMSource.split(urls)
+                if sources.count > 1 {
+                    addingROMs = await readPicked(several: sources, romFolders: services.settings.romFolders)
+                    return
+                }
+                addingROM = try await readPicked(sources.first?.urls ?? urls)
             } catch {
                 addROMError = journalErrorText(error)
             }
@@ -157,6 +164,9 @@ struct MainWindow: View {
         .sheet(isPresented: Bindable(services.sheets).players) { PlayersSheet(services: services) }
         .sheet(isPresented: Bindable(services.sheets).storageStats) { StorageStatsSheet(services: services) }
         .sheet(item: $addingROM) { AddROMSheet(services: services, picked: $0, added: openGame) }
+        .sheet(item: $addingROMs) { picked in
+            AddROMsSheet(services: services, picked: picked) { importModel.importNow(showingMatched: true) }
+        }
         .alert("Couldn't add the ROM", isPresented: Binding(get: { addROMError != nil }, set: { if !$0 { addROMError = nil } })) {
             Button("OK") {}
         } message: {
@@ -174,7 +184,7 @@ struct MainWindow: View {
                     }
                     .help("Search IGDB to add a Game")
                     Button("Add ROM", systemImage: "square.and.arrow.up", action: addROM)
-                        .help("Add a ROM from a file or folder: it goes into its ROM folder, ready to Play")
+                        .help("Add ROMs from files or folders: each goes into its ROM folder, ready to Play")
                         .disabled(services.journal == nil)
                 }
             }

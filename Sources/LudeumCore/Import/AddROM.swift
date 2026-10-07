@@ -18,6 +18,8 @@ public enum AddROMError: Error, Equatable {
     case noImage
     /// Once in place, the ROM folder didn't read it as a Playable ROM, so it was taken out again.
     case notReadAfterward(String)
+    /// Of several ROMs Added at once, these couldn't go in (each "name: why"); the rest did.
+    case notAllAdded([String], of: Int)
 }
 
 extension AddROMError: LocalizedError {
@@ -32,6 +34,8 @@ extension AddROMError: LocalizedError {
         case .ambiguous(let images): "Which of these is the game isn't clear: \(images.joined(separator: ", "))."
         case .noImage: "Nothing in it is a game image."
         case .notReadAfterward(let name): "Its ROM folder didn't read \(name) as a Playable ROM, so it was taken out again."
+        case .notAllAdded(let failures, let total):
+            "\(failures.count) of \(total) ROMs couldn't be added, and the rest were. " + failures.joined(separator: " ")
         }
     }
 }
@@ -43,6 +47,30 @@ public struct ROMSource: Sendable, Equatable {
 
     public init(_ urls: [URL]) {
         self.urls = urls.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+    }
+
+    /// Files picked at once as several ROMs, in name order: each folder and each archive is one, and so is each other
+    /// file, less any that another brings along (a cue sheet's tracks, a playlist's Discs). The Discs of one Version are
+    /// one ROM together, unless no Platform reads them that way (GameCube keeps each Disc a ROM of its own).
+    public static func split(_ urls: [URL]) async -> [ROMSource] {
+        func key(_ url: URL) -> String { url.standardizedFileURL.path(percentEncoded: false) }
+        let loose = urls.filter { ROMSource([$0]).isFolder == false && ROMSource([$0]).archive == nil }
+        let brought = Set(loose.flatMap { ROMFiles.files(of: $0).dropFirst() }.map(key))
+        var sources = urls.filter { url in !loose.contains(url) }.map { ROMSource([$0]) }
+        let versions = Dictionary(grouping: loose.filter { !brought.contains(key($0)) }) {
+            ROMName($0.deletingPathExtension().lastPathComponent).withoutDisc
+        }
+        for files in versions.values {
+            let discs = ROMSource(files)
+            if files.count > 1, !ROMFolder.discs(files).isEmpty, let platforms = try? await discs.platforms(sevenZip: nil),
+                !platforms.isEmpty
+            {
+                sources.append(discs)
+            } else {
+                sources += files.map { ROMSource([$0]) }
+            }
+        }
+        return sources.sorted { $0.romName.localizedStandardCompare($1.romName) == .orderedAscending }
     }
 
     /// The ROM's name: its file's without the extension, or its folder's; with several Discs, Disc 1's without its Disc.
@@ -86,6 +114,16 @@ public struct ROMSource: Sendable, Equatable {
             return !extensions.isDisjoint(with: platform.readyExtensions)
         }
         return platforms.keys.sorted()
+    }
+
+    /// Of the Platforms that read it, the one it's most likely for: the only one, else the only one whose Emulator
+    /// prefers its file's extension above any other (a `.gb` is Game Boy's, though Game Boy Color reads it too).
+    public func likeliestPlatform(of platforms: [Int64]) -> Int64? {
+        if platforms.count == 1 { return platforms[0] }
+        guard urls.count == 1, !isFolder, archive == nil else { return nil }
+        let ext = urls[0].pathExtension.lowercased()
+        let preferring = platforms.filter { ROMPlatform.all[$0]?.readyExtensions.first == ext }
+        return preferring.count == 1 ? preferring[0] : nil
     }
 
     /// Every file in the folder, at any depth, less hidden files that aren't a game.
@@ -155,14 +193,66 @@ public struct AddROM: Sendable {
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> GameID {
         let name = source.romName
+        try await check(source, fits: folder)
+        let missingRow = try missingROM(named: name, on: folder.platformId, for: match)
+        let (destination, file) = try await put(source, in: folder, progress: progress)
+        let game: GameID
+        do {
+            let checksum = await ROMChecksum.of(file, platformId: folder.platformId, sevenZip: sevenZip)
+            (game, _) = try journal.recordAddedROM(file, checksum: checksum, on: folder.platformId, reusing: missingRow, match: match)
+        } catch {
+            // Never in the journal: what was put in place goes again, and the picked files were never touched.
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
+        if !keepingOriginals { trashOriginals(of: source) }
+        if let rom = try journal.romID(named: name, on: folder.platformId) {
+            try? await BoxArtImport(journal: journal, libretro: libretro).lookUp([rom])
+        }
+        return game
+    }
+
+    /// Adds several ROMs at once, one after another, without Matching them: each goes into its ROM folder as `add` puts
+    /// it, and the next Import reads it as a new ROM, Matching it automatically or sending it to the Review queue. One
+    /// that can't go in is left as it was, and the rest still go in; then it throws, saying which and why.
+    public func add(
+        _ roms: [(source: ROMSource, folder: ROMFolder)], keepingOriginals: Bool,
+        progress: @escaping @Sendable (Double) -> Void = { _ in }
+    ) async throws {
+        var failures: [String] = []
+        for (i, rom) in roms.enumerated() {
+            try Task.checkCancellation()
+            let done = Double(i) / Double(roms.count)
+            do {
+                try await check(rom.source, fits: rom.folder)
+                _ = try await put(rom.source, in: rom.folder) { progress(done + $0 / Double(roms.count)) }
+            } catch {
+                // Cancelled, not failed, even when 7-Zip was stopped with an error of its own.
+                if error is CancellationError || Task.isCancelled { throw CancellationError() }
+                failures.append("\(rom.source.romName): \(error.localizedDescription)")
+                continue
+            }
+            if !keepingOriginals { trashOriginals(of: rom.source) }
+        }
+        if !failures.isEmpty { throw AddROMError.notAllAdded(failures, of: roms.count) }
+    }
+
+    /// Throws, touching nothing, when the ROM folder won't read it or already has a ROM of its name.
+    private func check(_ source: ROMSource, fits folder: ROMFolder) async throws {
         let platformName = ROMPlatform.all[folder.platformId]?.name ?? "Platform \(folder.platformId)"
         guard try await source.platforms(sevenZip: sevenZip).contains(folder.platformId) else {
             throw AddROMError.platformWontReadIt(platformName)
         }
         try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
-        if try folder.scan().contains(where: { $0.name == name }) { throw AddROMError.alreadyInROMFolder(name) }
-        let missingRow = try missingROM(named: name, on: folder.platformId, for: match)
+        if try folder.scan().contains(where: { $0.name == source.romName }) { throw AddROMError.alreadyInROMFolder(source.romName) }
+    }
 
+    /// Makes the ROM in a work folder and moves it into place, then checks the ROM folder reads it as a Playable ROM in
+    /// one form, taking it out again if not.
+    private func put(
+        _ source: ROMSource, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> (destination: URL, file: FolderROMFile) {
+        let name = source.romName
         let work = folder.url.appending(path: ROMArchiver.workFolderName, directoryHint: .isDirectory)
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -175,25 +265,15 @@ public struct AddROM: Sendable {
             throw AddROMError.alreadyInROMFolder(destination.lastPathComponent)
         }
         try FileManager.default.moveItem(at: made, to: destination)
-        let game: GameID
         do {
             guard let file = try folder.scan().first(where: { $0.name == name }), !file.archived, !file.inBothForms else {
                 throw AddROMError.notReadAfterward(destination.lastPathComponent)
             }
-            let checksum = await ROMChecksum.of(file, platformId: folder.platformId, sevenZip: sevenZip)
-            (game, _) = try journal.recordAddedROM(file, checksum: checksum, on: folder.platformId, reusing: missingRow, match: match)
+            return (destination, file)
         } catch {
-            // Never in the journal: what was put in place goes again, and the picked files were never touched.
             try? FileManager.default.removeItem(at: destination)
             throw error
         }
-        if !keepingOriginals {
-            for original in Self.originals(of: source) { try? moveToTrash(original) }
-        }
-        if let rom = try journal.romID(named: name, on: folder.platformId) {
-            try? await BoxArtImport(journal: journal, libretro: libretro).lookUp([rom])
-        }
-        return game
     }
 
     /// The journal's row for a missing ROM of this name, which the new file brings back. Throws when the ROM is present
@@ -278,6 +358,11 @@ public struct AddROM: Sendable {
         let lines = discs.map { $0.standardizedFileURL.pathComponents.dropFirst(base).joined(separator: "/") }
         try Data((lines.joined(separator: "\n") + "\n").utf8)
             .write(to: subfolder.appending(path: "\(name).m3u", directoryHint: .notDirectory), options: .withoutOverwriting)
+    }
+
+    /// Sends the picked files to the Trash, once the ROM made of them is in.
+    private func trashOriginals(of source: ROMSource) {
+        for original in Self.originals(of: source) { try? moveToTrash(original) }
     }
 
     /// What was picked, with the cue sheets' tracks and the playlists' Discs it brought along.
