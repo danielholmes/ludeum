@@ -19,7 +19,7 @@ One specific edition of a Game, e.g. a region, a revision, or a fan translation 
 _Avoid_: Release, revision, dump
 
 **ROM**:
-A game file in a ROM folder. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand. Journal data never belongs to a ROM, so removing or replacing the file loses nothing. A ROM that has gone from the library is kept as missing, not forgotten. It is forgotten only when I forget it by hand (or Keep only another Version of its Game), when its Game is deleted, or when the move from OpenEmu, or the recovery of its renamed files after it, finds it duplicates a playlist's disc, and a Game can't be deleted while it has a present ROM.
+A game file in a ROM folder, and a Copy of the Game it's Matched to. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand; its Copy details (Regions, where and when it was acquired) belong to the ROM and go with it through any change of Match, so an unmatched ROM is a Copy of no Game. Removing or replacing the file loses nothing: the ROM is kept as missing, with its details, until I put a file back or Delete it. Deleting a ROM is the only way it leaves the journal: by hand (or by Keeping only another Version of its Game), which sends any files it still has to the Trash; the move from OpenEmu, and the recovery of its renamed files after it, also deleted a ROM found to duplicate a playlist's disc. Nothing deletes a ROM on its own, and a Game can't be deleted while it has any Copy.
 _Avoid_: File, image
 
 **ROM folder**:
@@ -41,6 +41,10 @@ _Avoid_: Extract, compress, decompress
 **Compact**:
 Packing a ROM into the archive its Platform's Emulator opens directly, so it takes less room and still Plays: a `.7z`, or a `.zip` on N64 and Mega Drive, whose Emulator (ares) can't open a `.7z`. An Archived `.7z` there is repacked as a `.zip`. Only one copy is kept, as with Archive. Only Platforms whose Emulator opens an archive can be Compacted: the cartridge ones (NES, SNES, the Game Boys, Master System, Game Gear, N64, Mega Drive) and DS. A present ROM there that isn't Compacted waits in the Review queue.
 _Avoid_: Compress, zip, Archive (that leaves it unplayable)
+
+**Rename**:
+Renaming a ROM after its Game, with its own tags kept (`Ōkami (USA).iso` becomes `Okami (USA).iso`), in every form it's kept in: its subfolder, its file, its `.7z` and its Compacted copy, and anything else of its name beside them. It stays the same ROM, with its Match. A name another ROM has, present or missing, is refused.
+_Avoid_: Move, retitle
 
 **Disc**:
 One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" are Discs too. On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version.
@@ -114,6 +118,24 @@ _Avoid_: Box art
 **Screenshot**:
 An image of a game being played, or its title screen. From IGDB (several per game) and libretro-thumbnails (one gameplay shot and one title screen).
 
+### Copies
+
+**Copy**:
+One instance of a Game that I have, or once had. A Copy is one of four Kinds: a ROM, or one I record by hand as Physical, Digital, or Physical + digital (a disc that came with a linked digital licence is one Copy, not two). A Game can have any number. Every Copy can say where, when (a Partial date) and for how much it was acquired, and which Regions it is for. A hand-recorded Copy is Owned until I mark it Gone. A ROM is a Copy with those same fields and more of its own (where its file is, whether it's Archived or Compacted), and is Owned for as long as it's in the journal, present or missing: a missing ROM is a problem to fix, never a Copy I've lost. Any Copy can be Deleted, which is different from Gone: it leaves the journal for good, and a ROM's files go to the Trash with it.
+_Avoid_: Ownership (that's the Game's status), purchase, edition, licence, forget (for a ROM)
+
+**Region**:
+Where a Copy was released for, e.g. Europe, USA, World, Australia or Japan: the usual ones are offered, but any is allowed. A Copy can have any number of Regions, or none. A ROM's Regions are read from its name's tags when it first appears, and can be edited after.
+_Avoid_: Territory, locale
+
+**Gone**:
+A hand-recorded Copy I no longer have, with (optionally) where it went and when, a Partial date that can't come before the Copy was acquired. A Gone Copy is kept, not deleted, and can be made Owned again. A ROM is never Gone: it leaves only by being Deleted.
+_Avoid_: Sold, disposed, lost, deleted
+
+**Owned**:
+A Game with at least one Copy that isn't Gone. Since every ROM is a Copy, a Game with a ROM is Owned whether the ROM is present or missing. A Game is Owned as a ROM (it has one), Owned only as a non-ROM Copy (hand-recorded Copies but no ROM), or Not owned (no Copy that isn't Gone). A Not owned Game is in the journal because I'm interested in it or have something to record about it; nothing about it needs fixing.
+_Avoid_: Have, in the collection, journal-only (for the status)
+
 ### Face-off
 
 **Face-off**:
@@ -175,7 +197,7 @@ Reading the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
 
 **Add ROM**:
-Putting a game from elsewhere (its file, an archive of it, its folder, or its Discs) into its Platform's ROM folder in the form that Platform keeps, then Matching it by hand: to an IGDB game I choose, or to a Game whose ROMs are all missing. A Compactable Platform's ROM goes in Compacted, a disc Platform's in a subfolder with a playlist for its Discs, and anything else as one Playable file; it's never left Archived. I choose whether the picked files are copied or moved (moved ones go to the Trash once the ROM is in). Several ROMs picked at once are Added one at a time, each Matched by hand the same way; one can instead go in without a Match, for the Import that follows to Match automatically or through the Review queue.
+Putting a game from elsewhere (its file, an archive of it, its folder, or its Discs) into its Platform's ROM folder in the form that Platform keeps, then Matching it by hand: to an IGDB game I choose, to a Game whose ROMs are all missing, or to a new Game I make by hand with no IGDB link, for a game IGDB doesn't have. A Compactable Platform's ROM goes in Compacted, a disc Platform's in a subfolder with a playlist for its Discs, and anything else as one Playable file; it's never left Archived. I choose whether the picked files are copied or moved (moved ones go to the Trash once the ROM is in). Several ROMs picked at once are Added one at a time, each Matched by hand the same way; one can instead go in without a Match, for the Import that follows to Match automatically or through the Review queue.
 _Avoid_: Import (that only reads the ROM folders), upload
 
 **Review queue**:
@@ -183,7 +205,7 @@ Things the journal won't decide on its own and waits for me to resolve: ROMs wit
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:
-Two or more present ROMs that belong to one Game but aren't Discs of the same Version. Missing ROMs never count. It's resolved by leaving the Game one Version: I Keep only one Version (the others' ROMs go to the Trash and are forgotten), Split a Version into its own Game (its ROMs lose their Match and wait in the Review queue to be Matched again, e.g. to a re-release IGDB lists apart), or remove ROMs from the ROM folder myself.
+Two or more present ROMs that belong to one Game but aren't Discs of the same Version. Missing ROMs never count. It's resolved by leaving the Game one Version: I Keep only one Version (the others' ROMs are Deleted: their files go to the Trash), Split a Version into its own Game (its ROMs lose their Match and wait in the Review queue to be Matched again, e.g. to a re-release IGDB lists apart), or remove ROMs from the ROM folder myself.
 _Avoid_: Duplicates, merge
 
 **Search**:

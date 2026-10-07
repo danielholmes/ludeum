@@ -515,6 +515,36 @@ enum LudeumSchema {
                 }
             }
         }
+        // Copies (ADR 0011): the ones I record by hand get their own table, and a ROM, being a Copy too, takes the same
+        // fields. Every ROM's Regions start as what its name's tags say.
+        migrator.registerMigration("v22 copies") { db in
+            try db.create(table: "copy") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("gameId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.column("kind", .text).notNull().check { ["physical", "digital", "physicalAndDigital"].contains($0) }
+                t.column("regions", .text)
+                t.column("acquiredOn", .text).check(sql: partialDateCheck("acquiredOn"))
+                t.column("acquiredFrom", .text)
+                t.column("price", .text)
+                t.column("currency", .text)
+                t.column("gone", .boolean).notNull().defaults(to: false)
+                t.column("goneOn", .text).check(sql: partialDateCheck("goneOn"))
+                t.column("goneTo", .text)
+                t.check(sql: "(price IS NULL) = (currency IS NULL)")
+                t.check(sql: "gone OR (goneOn IS NULL AND goneTo IS NULL)")
+            }
+            try db.alter(table: "rom") { t in
+                t.add(column: "regions", .text)
+                t.add(column: "acquiredOn", .text).check(sql: partialDateCheck("acquiredOn"))
+                t.add(column: "acquiredFrom", .text)
+                t.add(column: "price", .text)
+                t.add(column: "currency", .text)
+            }
+            for row in try Row.fetchAll(db, sql: "SELECT id, COALESCE(name, folderName) AS name FROM rom") {
+                let regions = Regions.encode(ROMName(row["name"]).regionNames)
+                if regions != nil { try db.execute(sql: "UPDATE rom SET regions = ? WHERE id = ?", arguments: [regions, row["id"]]) }
+            }
+        }
         return migrator
     }
 }

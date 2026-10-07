@@ -192,7 +192,7 @@ import Testing
         let game = try journal.addGame(platformId: 19, name: "Super Metroid")
         try journal.recordROM(game: game, fileName: "sm.sfc", missing: false)
 
-        #expect(throws: LudeumError.gameHasPresentROMs) { try journal.deleteGame(game) }
+        #expect(throws: LudeumError.gameHasCopies) { try journal.deleteGame(game) }
         #expect(try backups().all().isEmpty)
     }
 

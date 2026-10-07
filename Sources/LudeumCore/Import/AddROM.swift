@@ -10,7 +10,7 @@ public enum AddROMError: Error, Equatable {
     case platformWontReadIt(String)
     /// The ROM folder already has a ROM of that name.
     case alreadyInROMFolder(String)
-    /// The journal remembers a missing ROM of that name that's another Game's: forget it first.
+    /// The journal remembers a missing ROM of that name that's another Game's: delete it there first.
     case missingROMIsAnotherGames(String)
     /// Several files that could each be the game: which is isn't clear.
     case ambiguous([String])
@@ -30,7 +30,7 @@ extension AddROMError: LocalizedError {
         case .platformWontReadIt(let platform): "\(platform)'s ROM folder doesn't read that."
         case .alreadyInROMFolder(let name): "\(name) is already in its ROM folder."
         case .missingROMIsAnotherGames(let name):
-            "The journal remembers a missing ROM called \(name) on another Game. Forget it there first."
+            "The journal remembers a missing ROM called \(name) on another Game. Delete it there first."
         case .ambiguous(let images): "Which of these is the game isn't clear: \(images.joined(separator: ", "))."
         case .noImage: "Nothing in it is a game image."
         case .notReadAfterward(let name): "Its ROM folder didn't read \(name) as a Playable ROM, so it was taken out again."
@@ -148,9 +148,9 @@ public struct ROMSource: Sendable, Equatable {
 public enum AddROMMatch: Sendable, Equatable {
     /// The Game with this IGDB link on the Platform, made if the journal doesn't have it yet.
     case igdb(gameId: Int64, name: String, platform: IGDBPlatform)
-    /// A Game the journal has, e.g. one whose ROMs are all missing. `forgettingMissing` forgets its missing ROMs once the
+    /// A Game the journal has, e.g. one whose ROMs are all missing. `deletingMissing` deletes its missing ROMs once the
     /// new one is in.
-    case game(GameID, forgettingMissing: Bool)
+    case game(GameID, deletingMissing: Bool)
 }
 
 /// Add ROM: puts a game picked from elsewhere into its Platform's ROM folder in the form the Platform keeps, then records
@@ -393,12 +393,13 @@ extension LudeumStore {
                     sql: """
                         INSERT INTO rom
                             (folderName, md5, crc, archived, fileName, name, platformId, version, discNumber, discLabel, needsPlaylist,
-                             inBothForms)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             inBothForms, regions)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                     arguments: [
                         file.name, checksum?.md5, checksum?.crc, file.archived, file.fileName, file.name, platformId,
                         parsed.version, parsed.disc, parsed.discLabel, file.needsPlaylist, file.inBothForms,
+                        Regions.encode(parsed.regionNames),
                     ])
                 rom = db.lastInsertedRowID
             }
@@ -416,12 +417,12 @@ extension LudeumStore {
                         db, rom: rom, romName: file.name, igdbGameId: gameId, igdbName: name, platformId: platformId, kind: "manual",
                         day: day, now: now)
                 }
-            case .game(let target, let forgettingMissing):
+            case .game(let target, let deletingMissing):
                 guard try Int64.fetchOne(db, sql: "SELECT platformId FROM game WHERE id = ?", arguments: [target]) == platformId else {
                     throw LudeumError.gameNotFound
                 }
                 if matched == nil { try Self.match(db, rom: rom, to: target, kind: "manual", day: day, now: now) }
-                if forgettingMissing {
+                if deletingMissing {
                     try db.execute(sql: "DELETE FROM rom WHERE gameId = ? AND missing AND id <> ?", arguments: [target, rom])
                 }
                 game = target

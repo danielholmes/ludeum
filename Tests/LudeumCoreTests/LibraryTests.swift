@@ -41,7 +41,7 @@ import Testing
         #expect(doomRow.intent == .backlog)
         #expect(doomRow.isPlaying)
         #expect(rows[2].outcomes == [.finished])
-        #expect(rows.allSatisfy { $0.roms == .journalOnly })
+        #expect(rows.allSatisfy { $0.roms == .noROMs })
     }
 
     @Test func sortsByPlayedAndChildhood() throws {
@@ -111,7 +111,7 @@ import Testing
         #expect(try states()["Super Metroid"] == .playable)
 
         try h.journal.db.write { try $0.execute(sql: "DELETE FROM rom WHERE gameId = ?", arguments: [metroid]) }
-        #expect(try states()["Super Metroid"] == .journalOnly)
+        #expect(try states()["Super Metroid"] == .noROMs)
     }
 
     @Test func filtersByList() throws {
@@ -201,9 +201,13 @@ import Testing
 
         let summary = try h.journal.deletionSummary(game)
 
-        #expect(summary == DeletionSummary(ratingEntries: 1, playthroughs: 1, lists: 1, missingROMs: 1, presentROMs: 0))
-        #expect(summary.canDelete)
-        try rom("Resident Evil 2 (USA).chd")
+        #expect(summary == DeletionSummary(ratingEntries: 1, playthroughs: 1, lists: 1, roms: 1, copies: 0))
+        // A missing ROM is a Copy, so it blocks deletion like any other.
+        #expect(!summary.canDelete)
+        try h.journal.deleteMissingROMs(of: game)
+        #expect(try h.journal.deletionSummary(game).canDelete)
+        try h.journal.addCopy(game, CopyDraft(kind: .physical))
+        #expect(try h.journal.deletionSummary(game) == DeletionSummary(ratingEntries: 1, playthroughs: 1, lists: 1, roms: 0, copies: 1))
         #expect(try !h.journal.deletionSummary(game).canDelete)
     }
 }

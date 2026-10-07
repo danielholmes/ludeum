@@ -449,7 +449,7 @@ private struct ReviewItemDetail: View {
                 if item.suggestedIgdbGameId == nil {
                     Button("Delete ROM…", role: .destructive) { deleting = true }
                         .disabled(services.tasks.isActive(.rom(item.romId)))
-                        .help(item.missing ? "Forget it: its file is gone already" : "Send its files to the Trash, and forget it")
+                        .help(item.missing ? "Delete it: its file is gone already" : "Send its files to the Trash, and delete it")
                 }
             }
         }
@@ -492,8 +492,8 @@ private struct ReviewItemDetail: View {
         } message: {
             Text("It's still Matched, but the Game shows under Duplicate Versions until it's left with one Version.")
         }
-        .confirmationDialog(item.missing ? "Forget \(item.romName)?" : "Send \(item.romName) to the Trash?", isPresented: $deleting) {
-            Button(item.missing ? "Forget it" : "Delete ROM", role: .destructive, action: delete)
+        .confirmationDialog(item.missing ? "Delete \(item.romName)?" : "Send \(item.romName) to the Trash?", isPresented: $deleting) {
+            Button("Delete ROM", role: .destructive, action: delete)
         } message: {
             Text(item.missing ? "It leaves the Review queue." : "Its files go to the Trash and it leaves the Review queue.")
         }
@@ -790,7 +790,7 @@ private struct DuplicateVersionsDetail: View {
                     ForEach(version) { ROMRow(rom: $0) }
                     FlowLayout(spacing: 8) {
                         Button("Keep only this Version") { keeping = version }
-                            .help("Sends the other Versions' ROMs to the Trash, and forgets them")
+                            .help("Sends the other Versions' ROMs to the Trash, and deletes them")
                         Button("Split into its own Game") { split(version) }
                             .help("Takes it off this Game, to be Matched again from No suggestion")
                     }
@@ -877,7 +877,7 @@ private struct NoPlaylistDetail: View {
 }
 
 /// A Missing ROMs item: a Game whose ROMs are all gone from its ROM folder. I Add a ROM, put a file back and Check
-/// again, or delete the Game.
+/// again, or delete its missing ROMs (and then, if I like, the Game).
 private struct MissingROMsDetail: View {
     let services: Services
     let item: MissingROMsGame
@@ -900,13 +900,27 @@ private struct MissingROMsDetail: View {
                     }
                     .labelStyle(.iconOnly).buttonStyle(.hover).help("Copy the Game's name, to search for its ROM")
                 }
-                Text("Its ROMs are all missing from its ROM folder. Add a ROM, put one back then Check again, or delete the Game.")
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Its ROMs are all missing from its ROM folder. Add a ROM, put one back then Check again, or delete its missing "
+                        + "ROMs: the Game stays, as a journal entry I can delete too."
+                )
+                .foregroundStyle(.secondary)
             }
             Section("Missing ROMs") { ForEach(item.roms) { ROMRow(rom: $0) } }
             FlowLayout(spacing: 8) {
                 Button(picksFolder ? "Add ROM folder…" : "Add ROM file…", action: addROM)
                     .help("Choose a ROM for this Game: it goes into its ROM folder, ready to Play")
+                Button(item.roms.count == 1 ? "Delete its missing ROM" : "Delete its \(item.roms.count) missing ROMs") {
+                    guard let journal = services.journal else { return }
+                    do {
+                        try journal.deleteMissingROMs(of: item.game.id)
+                        failed(nil)
+                    } catch {
+                        failed(journalErrorText(error))
+                    }
+                    services.changes.changed()
+                }
+                .help("They leave the journal with their Copy details. If a file comes back, an Import finds it again.")
                 Button("Show Game", action: showGame)
                 Button("Check again", action: checkAgain)
             }
@@ -936,7 +950,7 @@ private struct MissingROMsDetail: View {
 }
 
 /// An Old missing ROMs item: a Game that still has a present ROM, with missing ones left over. Its files, present and
-/// missing, side by side, so I can Forget the old ones (one at a time, or all), or put a file back and Check again.
+/// missing, side by side, so I can Delete the old ones (one at a time, or all), or put a file back and Check again.
 private struct OldMissingROMsDetail: View {
     let services: Services
     let item: OldMissingROMsGame
@@ -950,7 +964,7 @@ private struct OldMissingROMsDetail: View {
                 Text(item.game.name).font(.title2).bold()
                 Text(
                     "It still has \(item.present.count == 1 ? "a ROM" : "ROMs") in its ROM folder, so these missing ones are "
-                        + "likely old: a file renamed or replaced. Forget them, or put one back, then Check again."
+                        + "likely old: a file renamed or replaced. Delete them, or put one back, then Check again."
                 )
                 .foregroundStyle(.secondary)
             }
@@ -960,16 +974,16 @@ private struct OldMissingROMsDetail: View {
                     HStack {
                         ROMRow(rom: rom)
                         Spacer()
-                        Button("Forget") { forget { try $0.forgetROM(rom.id) } }
-                            .help("Stop showing this missing ROM. If its file comes back, an Import finds it again.")
+                        Button("Delete") { delete { try $0.deleteROM(rom.id, romFolders: []) } }
+                            .help("Delete this missing ROM from the journal. If its file comes back, an Import finds it again.")
                     }
                 }
             }
             FlowLayout(spacing: 8) {
-                Button(item.missing.count == 1 ? "Forget it" : "Forget all \(item.missing.count)") {
-                    forget { try $0.forgetMissingROMs(of: item.game.id) }
+                Button(item.missing.count == 1 ? "Delete it" : "Delete all \(item.missing.count)") {
+                    delete { try $0.deleteMissingROMs(of: item.game.id) }
                 }
-                .help("Stop showing its missing ROMs. Its present ones stay.")
+                .help("Delete its missing ROMs from the journal. Its present ones stay.")
                 Button("Show Game", action: showGame)
                 Button("Check again", action: checkAgain)
             }
@@ -977,7 +991,7 @@ private struct OldMissingROMsDetail: View {
         .formStyle(.grouped)
     }
 
-    private func forget(_ write: (LudeumStore) throws -> Void) {
+    private func delete(_ write: (LudeumStore) throws -> Void) {
         guard let journal = services.journal else { return }
         do {
             try write(journal)

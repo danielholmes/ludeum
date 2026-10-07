@@ -278,12 +278,12 @@ struct AddROMTests {
         }
     }
 
-    @Test func aMissingROMsGameGainsTheNewROMAndForgetsItsMissingOnes() async throws {
+    @Test func aMissingROMsGameGainsTheNewROMAndDeletesItsMissingOnes() async throws {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         let game = try missingGame("Tetris (Japan)", on: 33)
         let original = try pick("Tetris (World) (Rev 1).gb", "GB")
 
-        try await adder.add(ROMSource([original]), to: gameBoy.folder, match: .game(game, forgettingMissing: true), keepingOriginals: true)
+        try await adder.add(ROMSource([original]), to: gameBoy.folder, match: .game(game, deletingMissing: true), keepingOriginals: true)
 
         #expect(try j.journal.roms(of: game).map(\.folderName) == ["Tetris (World) (Rev 1)"])
         #expect(try j.journal.reviewQueue().missingROMs.isEmpty)
@@ -295,7 +295,7 @@ struct AddROMTests {
         let id = try #require(try romRow("Tetris (World)")?["id"] as Int64?)
         let original = try pick("Tetris (World).gb", "GB")
 
-        try await adder.add(ROMSource([original]), to: gameBoy.folder, match: .game(game, forgettingMissing: true), keepingOriginals: true)
+        try await adder.add(ROMSource([original]), to: gameBoy.folder, match: .game(game, deletingMissing: true), keepingOriginals: true)
 
         let roms = try j.journal.roms(of: game)
         #expect(roms.map(\.id) == [id])

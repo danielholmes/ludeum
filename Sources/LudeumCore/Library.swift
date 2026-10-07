@@ -14,6 +14,7 @@ public struct LibraryFilter: Sendable, Equatable {
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
     public var roms: ROMFilter?
+    public var owned: OwnedFilter?
     /// An IGDB genre. Not applied by `library(_:sort:ascending:)`: genres live in the cache, so
     /// the caller narrows the rows with `having(genre:in:)`.
     public var genre: String?
@@ -29,7 +30,7 @@ public struct LibraryFilter: Sendable, Equatable {
     public init(
         platformId: Int64? = nil, archivablePlatforms: Bool = false, rating: RatingFilter? = nil, intent: Intent?? = nil,
         listId: Int64? = nil, player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
-        roms: ROMFilter? = nil, genre: String? = nil,
+        roms: ROMFilter? = nil, owned: OwnedFilter? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         name: String = ""
     ) {
@@ -48,6 +49,7 @@ public struct LibraryFilter: Sendable, Equatable {
         self.outcome = outcome
         self.childhood = childhood
         self.roms = roms
+        self.owned = owned
     }
 }
 
@@ -69,6 +71,7 @@ extension LibraryFilter {
         if let v = scope.outcome { f.outcome = v }
         if let v = scope.childhood { f.childhood = v }
         if let v = scope.roms { f.roms = v }
+        if let v = scope.owned { f.owned = v }
         if let v = scope.genre { f.genre = v }
         if let v = scope.theme { f.theme = v }
         if let v = scope.franchise { f.franchise = v }
@@ -105,6 +108,18 @@ public enum ROMFilter: Sendable {
     case playable
     /// Every present ROM is Archived: nothing to Play until one is Unarchived (or Compacted).
     case archived
+}
+
+/// Games by whether I have them: a Copy that isn't Gone. A ROM is a Copy, present or missing.
+public enum OwnedFilter: String, Sendable, CaseIterable {
+    /// Any Copy that isn't Gone.
+    case owned
+    /// At least one ROM.
+    case asROM
+    /// A hand-recorded Copy that isn't Gone, and no ROM.
+    case onlyNonROM
+    /// No Copy that isn't Gone: a plain journal entry.
+    case notOwned
 }
 
 public enum LibrarySort: String, Sendable, CaseIterable {
@@ -147,6 +162,8 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     /// The Outcomes of its finished and dropped Playthroughs, without repeats.
     public let outcomes: Set<Outcome>
     public let roms: LibraryROMState
+    /// Owned: it has a Copy that isn't Gone (a ROM, or a hand-recorded one).
+    public let owned: Bool
     /// IGDB's first release year, when the rows came with IGDB's facts (`withIGDBFacts(_:)`).
     public var releaseYear: Int? = nil
     /// IGDB players' average rating, with the same proviso.
@@ -161,11 +178,11 @@ public enum LibraryROMState: Sendable, Equatable {
     case archived
     /// At least one ROM is missing, whether or not another is present.
     case missing
-    /// No ROMs at all: the Game is only in the journal.
-    case journalOnly
+    /// No ROMs at all. Whether the Game is Owned some other way is the row's `owned`.
+    case noROMs
 
     init(hasROM: Bool, hasMissingROM: Bool, archived: Bool) {
-        self = !hasROM ? .journalOnly : hasMissingROM ? .missing : archived ? .archived : .playable
+        self = !hasROM ? .noROMs : hasMissingROM ? .missing : archived ? .archived : .playable
     }
 }
 
@@ -174,6 +191,10 @@ extension LudeumStore {
     static let playableSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing AND NOT archived)"
     /// Game `g` has present ROMs, and every one is Archived.
     static let archivedSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AND NOT \(playableSQL)"
+    /// Game `g` has a ROM, present or missing: a Copy either way.
+    static let hasROMSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id)"
+    /// Game `g` has a hand-recorded Copy that isn't Gone.
+    static let hasOwnedCopySQL = "EXISTS (SELECT 1 FROM copy WHERE gameId = g.id AND NOT gone)"
 
     /// The condition, on `game g`, that a Game goes by `word` under any of its names, so an override doesn't hide
     /// IGDB's or the No-Intro one.
@@ -258,6 +279,13 @@ extension LudeumStore {
         case .archived: conditions.append("(\(Self.archivedSQL))")
         case nil: break
         }
+        switch filter.owned {
+        case .owned: conditions.append("(\(Self.hasROMSQL) OR \(Self.hasOwnedCopySQL))")
+        case .asROM: conditions.append(Self.hasROMSQL)
+        case .onlyNonROM: conditions.append("(\(Self.hasOwnedCopySQL) AND NOT \(Self.hasROMSQL))")
+        case .notOwned: conditions.append("NOT (\(Self.hasROMSQL) OR \(Self.hasOwnedCopySQL))")
+        case nil: break
+        }
         for word in filter.searchWords {
             let goesBy = Self.goesBy(word)
             conditions.append(goesBy.sql)
@@ -284,9 +312,10 @@ extension LudeumStore {
                 EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playing,
                 (SELECT MAX(start) FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playingSince,
                 (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
-                EXISTS (SELECT 1 FROM rom WHERE gameId = g.id) AS hasROM,
+                \(Self.hasROMSQL) AS hasROM,
                 EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND missing) AS hasMissingROM,
-                \(Self.archivedSQL) AS archived
+                \(Self.archivedSQL) AS archived,
+                \(Self.hasROMSQL) OR \(Self.hasOwnedCopySQL) AS owned
             FROM game g
             JOIN platform pl ON pl.id = g.platformId
             LEFT JOIN ratingEntry r ON r.id = (SELECT id FROM ratingEntry WHERE gameId = g.id \(Self.ratingOrder) LIMIT 1)
@@ -302,7 +331,8 @@ extension LudeumStore {
                     childhood: row["childhood"], isPlaying: row["playing"],
                     playingSince: (row["playingSince"] as String?).flatMap(PartialDate.init),
                     outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }),
-                    roms: LibraryROMState(hasROM: row["hasROM"], hasMissingROM: row["hasMissingROM"], archived: row["archived"]))
+                    roms: LibraryROMState(hasROM: row["hasROM"], hasMissingROM: row["hasMissingROM"], archived: row["archived"]),
+                    owned: row["owned"])
             }
         }
     }

@@ -89,7 +89,7 @@ import Testing
         #expect(try j.journal.roms(of: item.game.id).map(\.fileName) == ["Tales of Symphonia (Europe).rvz"])
     }
 
-    @Test func keepingOneVersionTrashesTheOthersAndForgetsThem() async throws {
+    @Test func keepingOneVersionTrashesTheOthersAndDeletesThem() async throws {
         try snes.add("Double Dragon III (Japan).7z")
         try snes.add("Double Dragon III (USA).7z")
         try snes.add("Double Dragon III (Europe).sfc")

@@ -3,7 +3,7 @@ import Testing
 
 @testable import LudeumCore
 
-/// Delete ROM from the Review queue: an unmatched ROM's files go to the Trash and it's forgotten.
+/// Delete ROM from the Review queue: an unmatched ROM's files go to the Trash and it leaves the journal.
 @Suite struct DeleteROMTests {
     let h: Harness
     let j: LudeumHarness
@@ -35,7 +35,7 @@ import Testing
 
     func trashed() throws -> [String] { try FileManager.default.contentsOfDirectory(atPath: trash.path(percentEncoded: false)).sorted() }
 
-    @Test func deletingAROMTrashesItsFilesAndForgetsIt() async throws {
+    @Test func deletingAROMTrashesItsFilesAndDeletesIt() async throws {
         try snes.add("Bootleg Thing (USA).sfc")
         try snes.add("Other Thing (USA).sfc")
 
@@ -46,7 +46,7 @@ import Testing
         #expect(try j.journal.reviewQueue().noSuggestion.map(\.romName) == ["Other Thing (USA)"])
     }
 
-    @Test func aMissingROMIsJustForgotten() async throws {
+    @Test func aMissingROMJustLeavesTheJournal() async throws {
         try snes.add("Bootleg Thing (USA).sfc")
         let item = try await item("Bootleg Thing (USA)")
         try snes.remove("Bootleg Thing (USA).sfc")

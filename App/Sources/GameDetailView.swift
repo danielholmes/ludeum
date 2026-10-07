@@ -17,6 +17,11 @@ struct GameDetailView: View {
     @State private var playthroughs: [Playthrough] = []
     @State private var players: [Player] = []
     @State private var roms: [LudeumROM] = []
+    /// The hand-recorded Copies; the ROMs are Copies too.
+    @State private var copies: [Copy] = []
+    @State private var editingCopy: CopyEdit?
+    @State private var deletingCopy: Copy?
+    @State private var deletingROM: LudeumROM?
     @State private var emulatorSettings = EmulatorSettings()
     @State private var showingHistory = false
     /// Each present ROM file's created and modified dates, by ROM id, read from disk.
@@ -143,8 +148,13 @@ struct GameDetailView: View {
             }
             if !facts.keywords.isEmpty { KeywordsSection(keywords: facts.keywords) }
 
-            // Files: the ROMs, checked now and then.
-            Section("Files") { romRows }
+            // Copies: the ROMs (checked now and then), then the ones recorded by hand.
+            Section("Copies") {
+                romRows
+                copyRows
+                Button("Add Copy…", systemImage: "plus") { editingCopy = .new }
+                    .buttonStyle(.hover).help("A physical or digital Copy I own, or once owned")
+            }
 
             if let error { Text(error).foregroundStyle(.red) }
         }
@@ -198,6 +208,39 @@ struct GameDetailView: View {
                 services.changes.changed()
             }
         }
+        .sheet(item: $editingCopy) { edit in
+            CopySheet(services: services, game: id, edit: edit) {
+                editingCopy = nil
+                services.changes.changed()
+            }
+        }
+        .confirmationDialog(
+            "Delete this Copy?",
+            isPresented: Binding(get: { deletingCopy != nil }, set: { if !$0 { deletingCopy = nil } })
+        ) {
+            Button("Delete Copy", role: .destructive) {
+                if let c = deletingCopy { delete { try $0.deleteCopy(c.id) } }
+            }
+        } message: {
+            Text("It leaves the journal for good, unlike marking it no longer owned. There's no undo; a backup is taken first.")
+        }
+        .confirmationDialog(
+            deletingROM.map { $0.missing ? "Delete \($0.name)?" : "Send \($0.name) to the Trash?" } ?? "",
+            isPresented: Binding(get: { deletingROM != nil }, set: { if !$0 { deletingROM = nil } })
+        ) {
+            Button("Delete ROM", role: .destructive) {
+                if let rom = deletingROM {
+                    let folders = services.settings.romFolders
+                    delete { try $0.deleteROM(rom.id, romFolders: folders) }
+                }
+            }
+        } message: {
+            Text(
+                deletingROM?.missing == true
+                    ? "Its file is gone already. The ROM leaves the journal with its Copy details; if the file comes back, an Import finds it again."
+                    : "Its files go to the Trash, and the ROM leaves the journal with its Copy details. There's no undo; a backup is taken first."
+            )
+        }
         .sheet(isPresented: $linking) {
             if let search = services.gameSearch, let platform {
                 LinkGameSheet(search: search, game: game, platform: platform, canChangePlatform: roms.isEmpty) {
@@ -242,6 +285,7 @@ struct GameDetailView: View {
             playthroughs = try journal.playthroughs(id)
             players = try journal.players()
             roms = try journal.roms(of: id)
+            copies = try journal.copies(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
         } catch LudeumError.gameNotFound {
             self.game = nil
@@ -361,17 +405,53 @@ struct GameDetailView: View {
                         }
                         Spacer()
                         if ROMArchiving.action(for: rom) != nil { archiveButton(rom) }
-                        if rom.missing {
-                            // Gone from its ROM folder for good, e.g. replaced by a renamed file Import found as a new ROM.
-                            Button("Forget") { save { try $0.forgetROM(rom.id) } }
-                                .help("Stop showing this missing ROM. If its file comes back, an Import finds it again.")
-                        } else {
+                        if !rom.missing {
                             Button("Show in Finder", systemImage: "folder") { showInFinder(rom) }
                                 .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
                         }
+                        Button("Edit Copy details", systemImage: "pencil") { editingCopy = .rom(rom) }
+                            .labelStyle(.iconOnly).buttonStyle(.hover).help("Its Regions, and where, when and for how much it was acquired")
+                        // A missing ROM is one gone from its ROM folder for good, e.g. replaced by a renamed file Import
+                        // found as a new ROM; a present one's files go to the Trash.
+                        Button("Delete ROM", systemImage: "trash") { deletingROM = rom }
+                            .labelStyle(.iconOnly).buttonStyle(.hover).disabled(services.tasks.isActive(.rom(rom.id)))
+                            .help(rom.missing ? "Delete this missing ROM from the journal" : "Send its files to the Trash and delete it")
+                    }
+                    if let details = copyDetailsText(rom.details) {
+                        Text(details).font(.callout).foregroundStyle(.secondary)
                     }
                     if let files = romFiles[rom.id], !files.isEmpty { fileList(rom, files) }
                 }
+            }
+        }
+    }
+
+    /// The hand-recorded Copies, Owned before Gone. Click to edit; delete from the right-click menu or the edit sheet.
+    @ViewBuilder private var copyRows: some View {
+        ForEach(copies) { copy in
+            Button {
+                editingCopy = .copy(copy)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(copyKindText(copy.draft.kind)).strikethrough(copy.draft.gone != nil)
+                        if let details = [copyDetailsText(copy.draft.details), copy.draft.gone.map(goneText)].compactMap({ $0 })
+                            .joined(separator: " · ").nilIfEmpty
+                        {
+                            Text(details).font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(copy.draft.gone == nil ? .primary : .secondary)
+            .help(copy.draft.gone == nil ? "Edit this Copy" : "No longer owned. Edit this Copy")
+            .contextMenu {
+                Button("Edit…") { editingCopy = .copy(copy) }
+                Button("Delete…", role: .destructive) { deletingCopy = copy }
             }
         }
     }
@@ -573,13 +653,16 @@ func parseRating(_ text: String) -> Rating? {
 
 private func deletionMessage(_ s: DeletionSummary) -> String {
     guard s.canDelete else {
-        return "It has \(s.presentROMs) ROM\(s.presentROMs == 1 ? "" : "s") in its ROM folder. Move them out of the folder first."
+        let copies = [
+            s.roms > 0 ? "\(s.roms) ROM\(s.roms == 1 ? "" : "s")" : nil,
+            s.copies > 0 ? "\(s.copies) other Cop\(s.copies == 1 ? "y" : "ies")" : nil,
+        ].compactMap { $0 }.joined(separator: " and ")
+        return "It has \(copies). Only a Game with no Copies can be deleted: delete them first, under Copies."
     }
     var parts: [String] = []
     if s.ratingEntries > 0 { parts.append("its Rating history (\(s.ratingEntries))") }
     if s.playthroughs > 0 { parts.append("\(s.playthroughs) Playthrough\(s.playthroughs == 1 ? "" : "s")") }
     if s.lists > 0 { parts.append("its place in \(s.lists) List\(s.lists == 1 ? "" : "s")") }
-    if s.missingROMs > 0 { parts.append("\(s.missingROMs) missing ROM\(s.missingROMs == 1 ? "" : "s")") }
     parts.append("its Intent, Childhood, IGDB link and any uploaded Cover")
     return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
 }
@@ -603,8 +686,8 @@ func journalErrorText(_ error: Error) -> String {
     case .endBeforeStart: "The end date can't come before the start date."
     case .listNameTaken: "There's already a List with that name."
     case .playerNameTaken: "There's already a Player with that name."
-    case .gameHasPresentROMs: "This Game has ROMs in its ROM folder. Move them out first."
-    case .romIsPresent: "That ROM is in its ROM folder, so there's nothing to forget."
+    case .gameHasCopies: "This Game has Copies. Delete them first, under Copies."
+    case .goneBeforeAcquired: "A Copy can't be gone before it was acquired."
     case .igdbLinkTaken: "Another Game already has that IGDB link."
     case .alreadyLinked: "This Game already has an IGDB link. Use Change IGDB link… to replace it."
     case .gameHasROMs: "This Game has ROMs, so its Platform can't change."

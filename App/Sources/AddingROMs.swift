@@ -159,14 +159,14 @@ struct AddROMConfirmation: View {
     let gameName: String
     /// The Game it joins, when the journal has it already.
     let existing: GameID?
-    /// Offered when the Game has missing ROMs: forget them once the new one is in.
+    /// Offered when the Game has missing ROMs: delete them once the new one is in.
     var missingROMs = 0
     var back: (() -> Void)? = nil
-    /// Whether to keep the picked files, and to forget the Game's missing ROMs.
-    let add: (_ keepingOriginals: Bool, _ forgettingMissing: Bool) -> Void
+    /// Whether to keep the picked files, and to delete the Game's missing ROMs.
+    let add: (_ keepingOriginals: Bool, _ deletingMissing: Bool) -> Void
     @Environment(\.dismiss) private var dismiss
     @AppStorage("addROMKeepsOriginals") private var keepingOriginals = true
-    @State private var forgettingMissing = true
+    @State private var deletingMissing = true
 
     private var platform: ROMPlatform? { ROMPlatform.all[platformId] }
     private var folder: ROMFolder? { services.settings.romFolders.first { $0.platformId == platformId } }
@@ -194,7 +194,7 @@ struct AddROMConfirmation: View {
                 Text(keepingOriginals ? "They stay where they are." : "They go to the Trash once the ROM is in.")
                     .font(.caption).foregroundStyle(.secondary)
                 if missingROMs > 0 {
-                    Toggle("Forget its \(missingROMs == 1 ? "missing ROM" : "\(missingROMs) missing ROMs")", isOn: $forgettingMissing)
+                    Toggle("Delete its \(missingROMs == 1 ? "missing ROM" : "\(missingROMs) missing ROMs")", isOn: $deletingMissing)
                         .help("A missing ROM of the same name comes back instead, whatever this says.")
                 }
             }
@@ -202,7 +202,7 @@ struct AddROMConfirmation: View {
                 if let back { Button("Back", action: back) }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
-                Button("Add ROM") { add(keepingOriginals, missingROMs > 0 && forgettingMissing) }.keyboardShortcut(.defaultAction)
+                Button("Add ROM") { add(keepingOriginals, missingROMs > 0 && deletingMissing) }.keyboardShortcut(.defaultAction)
             }
         }
         .formStyle(.grouped)
@@ -236,9 +236,9 @@ struct AddROMToGameSheet: View {
         AddROMConfirmation(
             services: services, source: picked.source, platformId: game.platformId, gameName: game.name, existing: game.id,
             missingROMs: missingROMs
-        ) { keepingOriginals, forgetting in
+        ) { keepingOriginals, deleting in
             startAddingROM(
-                picked.source, on: game.platformId, match: .game(game.id, forgettingMissing: forgetting),
+                picked.source, on: game.platformId, match: .game(game.id, deletingMissing: deleting),
                 keepingOriginals: keepingOriginals, services: services)
             dismiss()
         }

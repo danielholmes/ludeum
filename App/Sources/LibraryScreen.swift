@@ -74,7 +74,7 @@ struct LibraryScreen: View {
                     TableColumn("Name", sortUsing: KeyPathComparator(\LibraryRow.name)) { row in
                         HStack(spacing: 4) {
                             Text(row.name)
-                            if let badge = ROMBadge(row.roms) {
+                            if let badge = ROMBadge(row) {
                                 Image(systemName: badge.symbol).foregroundStyle(badge.color).help(badge.help)
                             }
                         }
@@ -343,7 +343,7 @@ struct CoverTile: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 // The table's Name column shows the same symbol.
-                if let badge = ROMBadge(row.roms) {
+                if let badge = ROMBadge(row) {
                     RoundBadge(symbol: badge.symbol, color: badge.color, side: height)
                         .padding(margin)
                         .help(badge.help)
@@ -352,16 +352,19 @@ struct CoverTile: View {
     }
 }
 
-/// A Library row's ROM badge: Archived, a missing ROM, or no ROMs at all; none for a Playable Game.
+/// A Library row's ROM badge: Archived, a missing ROM, or Not owned (no ROM and no Copy that isn't Gone: a plain
+/// journal entry); none for a Playable Game, or one with no ROM that I own some other way.
 private enum ROMBadge {
-    case archived, missing, journalOnly
+    case archived, missing, notOwned
 
-    init?(_ state: LibraryROMState) {
-        switch state {
+    init?(_ row: LibraryRow) {
+        switch row.roms {
         case .playable: return nil
         case .archived: self = .archived
         case .missing: self = .missing
-        case .journalOnly: self = .journalOnly
+        case .noROMs:
+            guard !row.owned else { return nil }
+            self = .notOwned
         }
     }
 
@@ -369,13 +372,13 @@ private enum ROMBadge {
         switch self {
         case .archived: "archivebox"
         case .missing: "exclamationmark.triangle.fill"
-        case .journalOnly: "book.closed"
+        case .notOwned: "book.closed"
         }
     }
 
     var color: Color {
         switch self {
-        case .archived, .journalOnly: .secondary
+        case .archived, .notOwned: .secondary
         case .missing: .orange
         }
     }
@@ -384,7 +387,7 @@ private enum ROMBadge {
         switch self {
         case .archived: "Archived: unarchive to play"
         case .missing: "A ROM is missing from its ROM folder"
-        case .journalOnly: "Journal only: no ROM"
+        case .notOwned: "Not owned: no ROM, no Copy"
         }
     }
 }

@@ -18,6 +18,8 @@ public struct LudeumROM: Sendable, Equatable, Identifiable {
     public let archived: Bool
     /// Its subfolder holds its Discs but no playlist, so Play can't open them all.
     public var needsPlaylist = false
+    /// What it says as a Copy: its Regions, and where, when and for how much it was acquired.
+    public var details = CopyDetails()
 
     /// The subfolder it's kept in, named after it, when it's a ROM folder subfolder ROM; nil for a loose file
     /// or an archive.
@@ -29,17 +31,17 @@ public struct DeletionSummary: Sendable, Equatable {
     public let ratingEntries: Int
     public let playthroughs: Int
     public let lists: Int
-    public let missingROMs: Int
-    /// A Game with present ROMs can't be deleted: they're moved out of their ROM folder first.
-    public let presentROMs: Int
-    public var canDelete: Bool { presentROMs == 0 }
+    /// A Game with any Copy can't be deleted: its ROMs, present or missing, and its hand-recorded Copies are deleted first.
+    public let roms: Int
+    public let copies: Int
+    public var canDelete: Bool { roms == 0 && copies == 0 }
 
-    public init(ratingEntries: Int, playthroughs: Int, lists: Int, missingROMs: Int, presentROMs: Int) {
+    public init(ratingEntries: Int, playthroughs: Int, lists: Int, roms: Int, copies: Int) {
         self.ratingEntries = ratingEntries
         self.playthroughs = playthroughs
         self.lists = lists
-        self.missingROMs = missingROMs
-        self.presentROMs = presentROMs
+        self.roms = roms
+        self.copies = copies
     }
 }
 
@@ -66,7 +68,8 @@ extension LudeumStore {
                 sql: """
                     SELECT r.id, \(Self.folderNameSQL) AS folderName, r.platformId, r.archived, r.fileName,
                         COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
-                        \(try Self.hasNeedsPlaylist(db) ? "r.needsPlaylist" : "0") AS needsPlaylist
+                        \(try Self.hasNeedsPlaylist(db) ? "r.needsPlaylist" : "0") AS needsPlaylist,
+                        \(try Self.hasCopyDetails(db) ? "r.regions, r.acquiredOn, r.acquiredFrom, r.price, r.currency" : "NULL AS regions, NULL AS acquiredOn, NULL AS acquiredFrom, NULL AS price, NULL AS currency")
                     FROM rom r
                     WHERE \(condition)
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
@@ -78,7 +81,8 @@ extension LudeumStore {
                     id: row["id"], folderName: row["folderName"], platformId: row["platformId"],
                     fileName: fileName,
                     name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
-                    missing: row["missing"], archived: row["archived"], needsPlaylist: row["needsPlaylist"])
+                    missing: row["missing"], archived: row["archived"], needsPlaylist: row["needsPlaylist"],
+                    details: Self.details(row))
             }
         }
     }
@@ -87,6 +91,11 @@ extension LudeumStore {
     /// that could need a playlist.
     static func hasNeedsPlaylist(_ db: Database) throws -> Bool {
         try db.columns(in: "rom").contains { $0.name == "needsPlaylist" }
+    }
+
+    /// Whether the journal's ROMs have Copy details (`v22`), which one waiting for `migrate-openemu` doesn't yet.
+    static func hasCopyDetails(_ db: Database) throws -> Bool {
+        try db.columns(in: "rom").contains { $0.name == "regions" }
     }
 
     /// A ROM's folder name. Only an OpenEmu ROM waiting for `migrate-openemu` has none: its OpenEmu file name
@@ -120,8 +129,8 @@ extension LudeumStore {
                 ratingEntries: try count("SELECT COUNT(*) FROM ratingEntry WHERE gameId = ?"),
                 playthroughs: try count("SELECT COUNT(*) FROM playthrough WHERE gameId = ?"),
                 lists: try count("SELECT COUNT(*) FROM listGame WHERE gameId = ?"),
-                missingROMs: try count("SELECT COUNT(*) FROM rom WHERE gameId = ? AND missing"),
-                presentROMs: try count("SELECT COUNT(*) FROM rom WHERE gameId = ? AND NOT missing"))
+                roms: try count("SELECT COUNT(*) FROM rom WHERE gameId = ?"),
+                copies: try count("SELECT COUNT(*) FROM copy WHERE gameId = ?"))
         }
     }
 }

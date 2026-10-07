@@ -47,7 +47,7 @@ public struct MissingROMsGame: Sendable, Equatable, Identifiable {
 }
 
 /// A Game that still has a present ROM, with missing ones left over (a file renamed or replaced, which Import found
-/// as a new ROM): I forget them, or put a file back.
+/// as a new ROM): I delete them, or put a file back.
 public struct OldMissingROMsGame: Sendable, Equatable, Identifiable {
     public let game: Game
     public let missing: [LudeumROM]
@@ -270,7 +270,7 @@ extension LudeumStore {
         }
     }
 
-    /// Keep only this Version: sends the other Versions' ROMs to the Trash and forgets them, so the Game is left with this
+    /// Keep only this Version: sends the other Versions' ROMs to the Trash and deletes them, so the Game is left with this
     /// one. Everything is checked before anything moves: when the Game's Versions aren't the ones shown, or a ROM's files
     /// aren't in its ROM folder, it throws with nothing sent to the Trash.
     public func keepOnly(
@@ -296,7 +296,7 @@ extension LudeumStore {
                 // Whatever reached the Trash before the failure (a playlist's Discs among it), the journal sees what's left.
                 for (rom, folder, _) in trashing[i...] {
                     try? checkROMAgain(rom.id, in: folder)
-                    // One whose files all reached the Trash is forgotten, as it would have been.
+                    // One whose files all reached the Trash is deleted, as it would have been.
                     try? db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ? AND missing", arguments: [rom.id]) }
                 }
                 throw error
@@ -305,33 +305,17 @@ extension LudeumStore {
         }
     }
 
-    /// Delete ROM: sends an unmatched ROM's files to the Trash and forgets it. A missing one is just forgotten. Refused,
-    /// with nothing sent to the Trash, once it's Matched, or when it's present but its files aren't in its ROM folder.
+    /// Delete ROM: sends an unmatched ROM's files to the Trash and deletes it, as `deleteROM(_:romFolders:)` does any
+    /// ROM. Refused, with nothing sent to the Trash, once it's Matched: it's deleted from its Game then.
     public func deleteROM(
         _ item: ReviewItem, romFolders: [ROMFolder],
         moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
     ) throws {
-        guard
-            let row = try db.read({ db in
-                try Row.fetchOne(db, sql: "SELECT folderName, missing, gameId FROM rom WHERE id = ?", arguments: [item.romId])
-            })
-        else { return }
-        guard row["gameId"] as GameID? == nil else { throw ReviewError.alreadyMatched }
-        let forget = {
-            try self.db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ? AND gameId IS NULL", arguments: [item.romId]) }
+        let matched = try db.read { db in
+            try Bool.fetchOne(db, sql: "SELECT gameId IS NOT NULL FROM rom WHERE id = ?", arguments: [item.romId])
         }
-        if row["missing"] { return try forget() }
-        guard let folder = romFolders.first(where: { $0.platformId == item.platformId }) else { throw ReviewError.noROMFolder }
-        guard let file = try folder.rom(named: row["folderName"]) else { throw ReviewError.romFilesNotFound }
-        do {
-            for trashed in try folder.trashItems(of: file) { try moveToTrash(trashed) }
-        } catch {
-            // Whatever reached the Trash before the failure, the journal sees what's left; all of it there, it's forgotten.
-            try? checkROMAgain(item.romId, in: folder)
-            try? db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ? AND missing", arguments: [item.romId]) }
-            throw error
-        }
-        try forget()
+        guard matched != true else { throw ReviewError.alreadyMatched }
+        try deleteROM(item.romId, romFolders: romFolders, moveToTrash: moveToTrash)
     }
 
     /// Throws unless the Game's present ROMs are still the ones shown, and `version` is one of their Versions.

@@ -35,6 +35,14 @@ import Testing
         #expect(name.withoutDisc == "Snatcher (Japan)")
     }
 
+    @Test func regionNamesAreTheTagsAsNoIntroSpellsThem() {
+        #expect(ROMName("Super Metroid (Japan, USA) (En,Ja)").regionNames == ["Japan", "USA"])
+        #expect(ROMName("Zelda (UE) (V1.1) [!]").regionNames == ["USA", "Europe"])
+        #expect(ROMName("Soccer (F)").regionNames == ["France"])
+        #expect(ROMName("Snatcher (Japan) (Disc 2) (Japan)").regionNames == ["Japan"])
+        #expect(ROMName("Kirby's Dream Land").regionNames == [])
+    }
+
     @Test func regionsComeFromNoIntroAndGoodToolsTags() {
         #expect(ROMName("Holy Diver (Japan)").regions == [.japan])
         #expect(ROMName("Soccer (E) (M3) [S][!]").regions == [.europe])

@@ -300,7 +300,7 @@ struct FakeROMFolder {
     @Test func anArchivedROMIsPresentSoItsGameCantBeDeleted() async throws {
         let game = try await okamiInTheJournal()
 
-        #expect(throws: LudeumError.gameHasPresentROMs) { try j.journal.deleteGame(game) }
+        #expect(throws: LudeumError.gameHasCopies) { try j.journal.deleteGame(game) }
     }
 
     @Test func aFolderThatIsntThereLeavesItsROMsAlone() async throws {

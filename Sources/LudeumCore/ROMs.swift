@@ -3,16 +3,16 @@ import GRDB
 
 extension LudeumStore {
     /// Records a ROM in its Game's Platform's ROM folder, Matched by hand to `game`. It's known by its file
-    /// name without the extension. New ROMs otherwise arrive with an Import.
+    /// name without the extension, and its Regions are read from the name. New ROMs otherwise arrive with an Import.
     public func recordROM(game: GameID, fileName: String, missing: Bool) throws {
         let now = clock.now()
         let name = (fileName as NSString).deletingPathExtension
         try db.write { db in
             try db.execute(
                 sql: """
-                    INSERT INTO rom (folderName, fileName, name, platformId, missing, gameId, matchKind, matchedAt)
-                    SELECT ?, ?, ?, platformId, ?, id, 'manual', ? FROM game WHERE id = ?
-                    """, arguments: [name, fileName, name, missing, now, game])
+                    INSERT INTO rom (folderName, fileName, name, regions, platformId, missing, gameId, matchKind, matchedAt)
+                    SELECT ?, ?, ?, ?, platformId, ?, id, 'manual', ? FROM game WHERE id = ?
+                    """, arguments: [name, fileName, name, Regions.encode(ROMName(name).regionNames), missing, now, game])
         }
     }
 
@@ -21,33 +21,56 @@ extension LudeumStore {
         try db.read { db in try GameID.fetchOne(db, sql: "SELECT gameId FROM rom WHERE id = ?", arguments: [rom]) }
     }
 
-    /// Hard-deletes a Game with all its journal data and its missing ROMs.
-    /// Refused while it has a present ROM: those are moved out of their ROM folder first.
+    /// Hard-deletes a Game with all its journal data. Refused while it has any Copy, a ROM (present or missing) or a
+    /// hand-recorded one: those are deleted first, so only a plain journal entry can go.
     public func deleteGame(_ game: GameID) throws {
         // Refuse before backing up, so a refused deletion leaves no backup behind.
-        if try db.read({ try hasPresentROMs($0, game) }) { throw LudeumError.gameHasPresentROMs }
+        if try db.read({ try hasCopies($0, game) }) { throw LudeumError.gameHasCopies }
         try backups?.backUp(self, operation: .beforeDelete)
         try db.write { db in
-            if try hasPresentROMs(db, game) { throw LudeumError.gameHasPresentROMs }
+            if try hasCopies(db, game) { throw LudeumError.gameHasCopies }
             try db.execute(sql: "DELETE FROM game WHERE id = ?", arguments: [game])
         }
     }
 
-    /// Forgets a missing ROM, so its Game no longer shows it. Its Game and journal data stay; if its file comes back,
-    /// the next Import records it afresh. Refused for a present ROM, which an Import would only find again.
-    public func forgetROM(_ rom: Int64) throws {
-        try db.write { db in
-            try db.execute(sql: "DELETE FROM rom WHERE id = ? AND missing", arguments: [rom])
-            if db.changesCount == 0 { throw LudeumError.romIsPresent }
+    /// Deletes a ROM, Matched or not: a present one's files go to the Trash first (its subfolder whole, with any `.7z` or
+    /// Compacted copy), and a missing one just leaves the journal, with its Copy details either way. If its file comes
+    /// back, the next Import records it afresh. Refused, with nothing sent to the Trash, when it's present but its files
+    /// aren't in its ROM folder; if sending them fails part-way, the journal sees what's left, and the ROM goes only if
+    /// all of it reached the Trash.
+    public func deleteROM(
+        _ rom: Int64, romFolders: [ROMFolder],
+        moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+    ) throws {
+        guard
+            let row = try db.read({ db in
+                try Row.fetchOne(db, sql: "SELECT folderName, missing, platformId FROM rom WHERE id = ?", arguments: [rom])
+            })
+        else { return }
+        let delete = { try self.db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ?", arguments: [rom]) } }
+        if row["missing"] { return try delete() }
+        guard let folder = romFolders.first(where: { $0.platformId == row["platformId"] }) else { throw ReviewError.noROMFolder }
+        guard let file = try folder.rom(named: row["folderName"]) else { throw ReviewError.romFilesNotFound }
+        try backups?.backUp(self, operation: .beforeDelete)
+        do {
+            for trashed in try folder.trashItems(of: file) { try moveToTrash(trashed) }
+        } catch {
+            // Whatever reached the Trash before the failure, the journal sees what's left; all of it there, it's deleted.
+            try? checkROMAgain(rom, in: folder)
+            try? db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ? AND missing", arguments: [rom]) }
+            throw error
         }
+        try delete()
     }
 
-    /// Forgets every missing ROM of the Game at once, as `forgetROM(_:)` does each; its present ROMs stay.
-    public func forgetMissingROMs(of game: GameID) throws {
+    /// Deletes every missing ROM of the Game at once, as `deleteROM(_:romFolders:)` does each; its present ROMs stay.
+    public func deleteMissingROMs(of game: GameID) throws {
         try db.write { db in try db.execute(sql: "DELETE FROM rom WHERE gameId = ? AND missing", arguments: [game]) }
     }
 
-    private func hasPresentROMs(_ db: Database, _ game: GameID) throws -> Bool {
-        try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ? AND NOT missing)", arguments: [game])!
+    private func hasCopies(_ db: Database, _ game: GameID) throws -> Bool {
+        try Bool.fetchOne(
+            db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ?) OR EXISTS (SELECT 1 FROM copy WHERE gameId = ?)",
+            arguments: [game, game])!
     }
 }

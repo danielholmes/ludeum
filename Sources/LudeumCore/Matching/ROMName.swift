@@ -20,6 +20,9 @@ public struct ROMName: Sendable, Hashable {
     public private(set) var discLabel: String?
     /// The regions the name's tags say, or nil if it says none.
     public private(set) var regions: Set<NameRegion>?
+    /// The regions as the tags name them, in order and without repeats: No-Intro's names, with GoodTools codes
+    /// spelled out ("(UE)" is USA and Europe). A Copy's Regions, when the ROM first appears.
+    public private(set) var regionNames: [String] = []
 
     public init(_ raw: String) {
         self.raw = raw
@@ -66,6 +69,7 @@ public struct ROMName: Sendable, Hashable {
         version = parts.joined(separator: " · ")
         let found = Set(regionNames.flatMap { Self.regionsByName[$0] ?? [] })
         regions = found.isEmpty ? nil : found
+        for name in regionNames where !self.regionNames.contains(name) { self.regionNames.append(name) }
     }
 
     /// The name without its `(Disc N)` and the label after it: the Version's, e.g. "Resident Evil 2 (USA)" for

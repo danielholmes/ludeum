@@ -207,7 +207,7 @@ import Testing
         #expect(items.count == 2)
     }
 
-    @Test func forgettingAGamesOldMissingROMsKeepsItsPresentOnesAndClearsTheItem() throws {
+    @Test func deletingAGamesOldMissingROMsKeepsItsPresentOnesAndClearsTheItem() throws {
         try j.journal.addPlatform(id: 19, name: "SNES")
         let game = try j.journal.addGame(platformId: 19, name: "Streets of Rage", igdbGameId: 5, igdbName: "Streets of Rage")
         try unmatched(21, "Streets of Rage (Europe)", missing: true)
@@ -215,7 +215,7 @@ import Testing
         try unmatched(23, "Streets of Rage (World)")
         for item in try j.journal.reviewQueue().noSuggestion { try j.journal.assign(item, to: game) }
 
-        try j.journal.forgetMissingROMs(of: game)
+        try j.journal.deleteMissingROMs(of: game)
 
         #expect(try j.journal.reviewQueue().oldMissingROMs.isEmpty)
         #expect(try j.journal.roms(of: game).map(\.fileName) == ["Streets of Rage (World).7z"])

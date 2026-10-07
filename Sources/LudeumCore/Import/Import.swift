@@ -240,12 +240,13 @@ extension LudeumStore {
                     sql: """
                         INSERT INTO rom
                             (folderName, md5, crc, archived, fileName, name, platformId, version, discNumber, discLabel, needsPlaylist,
-                             inBothForms)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             inBothForms, regions)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                     arguments: [
                         file.name, rom.checksum?.md5, rom.checksum?.crc, file.archived, file.fileName, file.name, rom.platformId,
                         parsed.version, parsed.disc, parsed.discLabel, file.needsPlaylist, file.inBothForms,
+                        Regions.encode(parsed.regionNames),
                     ])
                 let id = db.lastInsertedRowID
                 if let game = try Self.apply(db, rom.match, to: id, named: file.name, on: rom.platformId, day: day, now: now) {
