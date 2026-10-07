@@ -42,6 +42,10 @@ _Avoid_: Extract, compress, decompress
 Packing a ROM into the archive its Platform's Emulator opens directly, so it takes less room and still Plays: a `.7z`, or a `.zip` on N64 and Mega Drive, whose Emulator (ares) can't open a `.7z`. An Archived `.7z` there is repacked as a `.zip`. Only one copy is kept, as with Archive. Only Platforms whose Emulator opens an archive can be Compacted: the cartridge ones (NES, SNES, the Game Boys, Master System, Game Gear, N64, Mega Drive) and DS. A present ROM there that isn't Compacted waits in the Review queue.
 _Avoid_: Compress, zip, Archive (that leaves it unplayable)
 
+**Rename**:
+Renaming a ROM after its Game, with its own tags kept (`Ōkami (USA).iso` becomes `Okami (USA).iso`), in every form it's kept in: its subfolder, its file, its `.7z` and its Compacted copy, and anything else of its name beside them. It stays the same ROM, with its Match. A name another ROM has, present or missing, is refused.
+_Avoid_: Move, retitle
+
 **Disc**:
 One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" are Discs too. On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version.
 _Avoid_: Part, volume, CD

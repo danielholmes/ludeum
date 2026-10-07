@@ -451,7 +451,8 @@ public enum ReviewError: Error, Equatable {
     case suggestionGone
     /// Confirm offers only the ROM's Platform and its siblings.
     case notASiblingPlatform
-    /// The sibling Platform already has a ROM by that name, or a file where one of its files would go.
+    /// The sibling Platform (or, for a Rename, the ROM's own) already has a ROM by that name, or a file where one of its
+    /// files would go.
     case alreadyInROMFolder
     /// The ROM is present, but its files aren't in its ROM folder (or the folder can't be read).
     case romFilesNotFound
