@@ -25,7 +25,7 @@ struct PlatformIcon: View {
         33: "gamicons-gb", 22: "gamicons-gbc", 24: "gamicons-gba", 20: "gamicons-ds", 18: "gamicons-nes", 99: "gamicons-nes",
         19: "gamicons-snes", 58: "gamicons-snes",
         4: "gamicons-n64", 21: "gamicons-gcn", 5: "gamicons-wii", 29: "gamicons-gen", 32: "gamicons-sat", 7: "gamicons-psx",
-        38: "gamicons-psp",
+        38: "gamicons-psp", 46: "ludeum-vita",
         9: "gamicons-ps3",
         130: "ludeum-switch", 86: "ludeum-pce", 150: "ludeum-pce", 64: "ludeum-sms", 35: "ludeum-gg", 78: "ludeum-scd",
         8: "ludeum-ps2", 48: "ludeum-ps4", 49: "ludeum-xone", 169: "ludeum-xseries", 11: "ludeum-xbox", 12: "ludeum-x360",
