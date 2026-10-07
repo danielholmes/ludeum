@@ -23,7 +23,7 @@ public struct ROMPlatform: Sendable, Equatable {
     public enum Archiving: Sendable, Equatable {
         /// Everything in the archive, into a folder named after the ROM (PS2 and the disc Platforms).
         case intoFolder
-        /// Its one file, named after the ROM, loose in the ROM folder (PSP, GameCube and Wii).
+        /// Its one file, named after the ROM, loose in the ROM folder (PSP, Vita, GameCube and Wii).
         case singleFile
     }
 
@@ -46,6 +46,7 @@ public struct ROMPlatform: Sendable, Equatable {
 
     public static let ps2: Int64 = 8
     public static let psp: Int64 = 38
+    public static let vita: Int64 = 46
 
     /// Every Platform with a ROM folder, by IGDB platform id. One folder per Platform: Game Boy and
     /// Game Boy Color, NES and Famicom, SNES and Super Famicom each have their own.
@@ -98,6 +99,11 @@ public struct ROMPlatform: Sendable, Equatable {
         38: .init(
             name: "PlayStation Portable", folderName: "PSP", readyExtensions: ["iso", "cso", "chd", "pbp"],
             libretroRepo: "Sony_-_PlayStation_Portable",
+            archiving: .singleFile),
+        // A `.vpk`, though no Emulator plays it yet. Not a `.zip` of the game's folder, which Vita3K also installs:
+        // a `.zip` is ares's.
+        46: .init(
+            name: "PlayStation Vita", folderName: "Vita", readyExtensions: ["vpk"], libretroRepo: "Sony_-_PlayStation_Vita",
             archiving: .singleFile),
         8: .init(
             name: "PlayStation 2", folderName: "PS2", readyExtensions: ["iso", "chd", "cso", "zso", "gz", "cue", "bin", "mdf"],

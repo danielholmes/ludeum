@@ -58,6 +58,16 @@ struct FakeROMFolder {
         #expect(Emulator.of(platformId: 53) == nil)
     }
 
+    @Test func vitaHasAROMFolderOfVpkFilesThoughNoEmulatorYet() throws {
+        let vita = try FakeROMFolder(in: directory, platform: ROMPlatform.vita)
+        let rom = try vita.add("Gravity Rush (USA).vpk")
+        try vita.add("Persona 4 Golden (USA).zip")
+
+        #expect(try vita.folder.scan() == [FolderROMFile(name: "Gravity Rush (USA)", ready: rom, archive: nil)])
+        #expect(ROMPlatform.all[ROMPlatform.vita]?.folderName == "Vita")
+        #expect(Emulator.of(platformId: ROMPlatform.vita) == nil)
+    }
+
     @Test func otherFilesAndSubfoldersAreIgnored() throws {
         let ps2 = try FakeROMFolder(in: directory)
         try ps2.add(".DS_Store")

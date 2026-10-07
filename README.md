@@ -59,7 +59,7 @@ Install the emulator for each platform you want to play:
 
 You can journal games on any other platform (PC, Xbox, and so on), but Ludeum can't launch them.
 
-Cartridge ROMs (and DS) can be kept in a `.7z`, or a `.zip` for N64 and Mega Drive, since their emulators open those directly; the Review queue lists loose ones and compacts them for you. A ROM packed in a format its emulator can't open (for example a `.7z` disc image) shows as archived. Unarchive it in Game detail (PS2, PSP) or extract it in its ROM folder to make it playable.
+Cartridge ROMs (and DS) can be kept in a `.7z`, or a `.zip` for N64 and Mega Drive, since their emulators open those directly; the Review queue lists loose ones and compacts them for you. A ROM packed in a format its emulator can't open (for example a `.7z` disc image) shows as archived. Unarchive it in Game detail (PS2, PSP, Vita) or extract it in its ROM folder to make it playable.
 
 ## License
 

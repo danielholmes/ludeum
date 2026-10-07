@@ -36,6 +36,13 @@ import Testing
         #expect(ROMArchiving.action(for: rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).7z", archived: true)) == .unarchive)
     }
 
+    @Test func aVitaROMCanBeArchivedAndUnarchivesToItsOneFile() {
+        #expect(ROMArchiving.action(for: rom("Gravity Rush (USA)", on: ROMPlatform.vita, "Gravity Rush (USA).vpk")) == .archive)
+        let archived = rom("Gravity Rush (USA)", on: ROMPlatform.vita, "Gravity Rush (USA).7z", archived: true)
+        #expect(ROMArchiving.action(for: archived) == .unarchive)
+        #expect(ROMArchiving.unarchivesToOneFile(archived))
+    }
+
     @Test(arguments: IntoFolders.platforms)
     func everyDiscPlatformArchivesIntoAFolder(platform: Int64) {
         #expect(ROMPlatform.all[platform]?.archiving == .intoFolder)

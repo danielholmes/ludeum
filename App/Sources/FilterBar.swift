@@ -127,7 +127,7 @@ private struct AddFilterMenu: View {
                         filter.platformId = nil
                         filter.archivablePlatforms = true
                     }
-                    .help("PS2, PSP, GameCube, Wii and the disc Platforms, whose ROMs can be Archived")
+                    .help("PS2, PSP, Vita, GameCube, Wii and the disc Platforms, whose ROMs can be Archived")
                     Divider()
                     ForEach(platforms) { p in
                         Button(p.name) {
