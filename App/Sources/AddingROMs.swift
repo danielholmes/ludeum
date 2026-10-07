@@ -22,7 +22,7 @@ struct PickedROM: Identifiable {
         case true?: "Choose the ROM's folder."
         case false?: "Choose the ROM's file, or an archive of it."
         case nil:
-            "Choose a ROM: its file, an archive of it, its folder, or each of its Discs. Choose several ROMs to add them all, for an Import to Match."
+            "Choose a ROM: its file, an archive of it, its folder, or each of its Discs. Choose several ROMs to add them one after another."
         }
     return panel.runModal() == .OK && !panel.urls.isEmpty ? panel.urls : nil
 }
@@ -60,9 +60,48 @@ struct AddROMSheet: View {
     let picked: PickedROM
     let added: (GameID) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var query = ""
+
+    var body: some View {
+        AddROMFlow(services: services, picked: picked) { chosen, platform, keepingOriginals in
+            let match = AddROMMatch.igdb(gameId: chosen.igdbGameId, name: chosen.name, platform: platform)
+            startAddingROM(
+                picked.source, on: platform.id, match: match, keepingOriginals: keepingOriginals, services: services, added: added)
+            dismiss()
+        } buttons: {
+            EmptyView()
+        }
+        .padding()
+        .frame(width: 640)
+    }
+}
+
+/// One ROM's Add ROM, as the toolbar's sheet and each step of Add ROMs show it: the IGDB search, already run on the ROM's
+/// name, its Platform filter limited to the Platforms that read it (set when one is clear); then where it goes, and
+/// whether the picked files are copied or moved. `buttons` go beside the search's Cancel.
+struct AddROMFlow<Buttons: View>: View {
+    let services: Services
+    let picked: PickedROM
+    /// Why the Platform can't take it, beyond its ROM folder not reading it: nil when it can.
+    let refused: (IGDBPlatform) -> String?
+    let add: (_ game: GameSearchResult, _ platform: IGDBPlatform, _ keepingOriginals: Bool) -> Void
+    @ViewBuilder let buttons: () -> Buttons
+    @Environment(\.dismiss) private var dismiss
+    @State private var query: String
     @State private var chosen: (result: GameSearchResult, platform: IGDBPlatform)?
     @State private var error: String?
+
+    init(
+        services: Services, picked: PickedROM, refused: @escaping (IGDBPlatform) -> String? = { _ in nil },
+        add: @escaping (_ game: GameSearchResult, _ platform: IGDBPlatform, _ keepingOriginals: Bool) -> Void,
+        @ViewBuilder buttons: @escaping () -> Buttons
+    ) {
+        self.services = services
+        self.picked = picked
+        self.refused = refused
+        self.add = add
+        self.buttons = buttons
+        _query = State(initialValue: cleanName(picked.source.romName))
+    }
 
     /// Only the Platforms whose ROM folders read it can be chosen.
     private var platforms: [IGDBPlatform] {
@@ -73,31 +112,28 @@ struct AddROMSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             if let chosen {
                 AddROMConfirmation(
-                    services: services, source: picked.source, platformId: chosen.platform.id,
-                    gameName: chosen.result.name,
-                    existing: try? services.journal?.gameID(
-                        igdbGameId: chosen.result.igdbGameId, platformId: chosen.platform.id),
+                    services: services, source: picked.source, platformId: chosen.platform.id, gameName: chosen.result.name,
+                    existing: try? services.journal?.gameID(igdbGameId: chosen.result.igdbGameId, platformId: chosen.platform.id),
                     back: { self.chosen = nil }
                 ) { keepingOriginals, _ in
-                    let match = AddROMMatch.igdb(gameId: chosen.result.igdbGameId, name: chosen.result.name, platform: chosen.platform)
-                    startAddingROM(
-                        picked.source, on: chosen.platform.id, match: match, keepingOriginals: keepingOriginals, services: services,
-                        added: added)
-                    dismiss()
+                    add(chosen.result, chosen.platform, keepingOriginals)
                 }
             } else {
                 Text("Add \(picked.source.romName)").font(.title2)
                 Text("Choose its game, and the Platform it goes on.").foregroundStyle(.secondary)
                 if let search = services.gameSearch {
+                    let likeliest = picked.source.likeliestPlatform(of: picked.platforms)
                     IGDBSearchView(
                         search: search, platforms: platforms, usedPlatforms: Set(picked.platforms), query: $query,
-                        platformFilter: platforms.count == 1 ? platforms[0] : nil
+                        platformFilter: platforms.first { $0.id == likeliest }
                     ) { result, platform in
-                        if picked.platforms.contains(platform.id) {
+                        if !picked.platforms.contains(platform.id) {
+                            error = AddROMError.platformWontReadIt(platform.name).localizedDescription
+                        } else if let refusal = refused(platform) {
+                            error = refusal
+                        } else {
                             error = nil
                             chosen = (result, platform)
-                        } else {
-                            error = AddROMError.platformWontReadIt(platform.name).localizedDescription
                         }
                     }
                 } else {
@@ -105,14 +141,13 @@ struct AddROMSheet: View {
                 }
                 if let error { Text(error).foregroundStyle(.red) }
                 HStack {
+                    buttons()
                     Spacer()
                     Button("Cancel", role: .cancel) { dismiss() }
                 }
             }
         }
-        .padding()
-        .frame(width: 640, height: chosen == nil ? 560 : nil)
-        .onAppear { query = cleanName(picked.source.romName) }
+        .frame(height: chosen == nil ? 540 : nil)
     }
 }
 
@@ -265,137 +300,251 @@ func romCount(_ count: Int) -> String { count == 1 ? "1 ROM" : "\(count) ROMs" }
     }
 }
 
-/// Add ROM with several ROMs picked: each goes into its Platform's ROM folder unmatched, then an Import Matches them,
-/// automatically where the checksum and name agree, else in the Review queue. Each needs a Platform, chosen for me
-/// where it's clear.
+/// Add ROM with several ROMs picked: each in turn, as Add ROM does one, with the IGDB search already run on its name.
+/// One whose game IGDB doesn't have can go in without a Match instead, for an Import to Match automatically or send to
+/// the Review queue, or be skipped. Those without a Match go in together from a last step, where I choose whether their
+/// files are copied or moved; cancelling leaves them out.
 struct AddROMsSheet: View {
     let services: Services
     let picked: PickedROMs
-    /// Runs the Import once they're in.
+    /// Runs the Import once those without a Match are in.
     let thenImport: () -> Void
     @Environment(\.dismiss) private var dismiss
     @AppStorage("addROMKeepsOriginals") private var keepingOriginals = true
-    /// Each ROM's Platform, by its row: nil until chosen.
-    @State private var platforms: [[URL]: Int64] = [:]
-    /// Rows I've left out.
-    @State private var skipped: Set<[URL]> = []
+    @State private var step = 0
+    /// What became of each ROM done with, by its place in `picked.rows`.
+    @State private var done: [Int: Fate] = [:]
+    /// Why Add without a Match was refused, until another ROM is shown.
+    @State private var clashMessage: String?
+    /// Every ROM is done with, and the last step adds those without a Match.
+    @State private var finishing = false
 
-    private var addable: [PickedROMsRow] { picked.rows.filter { $0.problem == nil && !skipped.contains($0.id) } }
-    private var undecided: [PickedROMsRow] { addable.filter { platforms[$0.id] == nil } }
-    /// Rows that would go in under the same name as another on the same Platform: only one of them could.
-    private var clashing: Set<[URL]> {
-        let chosen = addable.compactMap { row in platforms[row.id].map { (row.id, "\($0) \(row.source.romName)") } }
-        let counts = Dictionary(chosen.map { ($0.1, 1) }, uniquingKeysWith: +)
-        return Set(chosen.filter { counts[$0.1, default: 0] > 1 }.map(\.0))
+    enum Fate: Equatable {
+        /// Queued to be Added and Matched to this game, on this Platform.
+        case added(game: String, platform: Int64)
+        /// To go in without a Match on this Platform, from the last step.
+        case unmatched(platform: Int64)
+        case skipped
+
+        /// Queued already, so it can't be undone here.
+        var queued: Bool { if case .added = self { true } else { false } }
+
+        var platform: Int64? {
+            switch self {
+            case .added(_, let platform), .unmatched(let platform): platform
+            case .skipped: nil
+            }
+        }
     }
-    /// The Platforms some undecided ROM could go on, for Set Platform.
-    private var undecidedPlatforms: [Int64] {
-        Set(undecided.flatMap(\.platforms)).sorted { name(of: $0).localizedStandardCompare(name(of: $1)) == .orderedAscending }
-    }
+
+    private var row: PickedROMsRow { picked.rows[step] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Add \(picked.rows.count) ROMs").font(.title2).bold()
-            Text(
-                "Each goes into its Platform's ROM folder, ready to Play. Then an Import Matches them: automatically where the checksum and name agree, else they wait in the Review queue."
-            )
-            .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if services.igdb == nil || services.hasheous == nil {
-                Text("Set IGDB and Hasheous credentials in Settings: until then no Import can read them, so they won't be Matched.")
-                    .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
-            }
-            List(picked.rows) { row in
-                rowView(row)
-            }
-            .listStyle(.bordered(alternatesRowBackgrounds: true))
-            .frame(minHeight: 200)
-            HStack(alignment: .top) {
-                Picker("Picked files", selection: $keepingOriginals) {
-                    Text("Copy them").tag(true)
-                    Text("Move them").tag(false)
-                }
-                .pickerStyle(.radioGroup)
-                Text(keepingOriginals ? "They stay where they are." : "They go to the Trash once each ROM is in.")
-                    .font(.caption).foregroundStyle(.secondary)
+            stepper
+            Divider()
+            if finishing {
+                lastStep
+            } else if let fate = done[step] {
+                doneView(fate)
+            } else if let problem = row.problem {
+                Text("Add \(row.source.romName)").font(.title2)
+                Text(problem).foregroundStyle(.red)
                 Spacer()
-                if !undecided.isEmpty {
-                    Menu("Set Platform") {
-                        ForEach(undecidedPlatforms, id: \.self) { platform in
-                            Button(name(of: platform)) {
-                                for row in undecided where row.platforms.contains(platform) { platforms[row.id] = platform }
-                            }
-                        }
-                    }
-                    .fixedSize()
-                    .help("Choose the Platform of every ROM still without one that it can go on")
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { dismiss() }
+                    Button(nextLabel) { goOn() }.keyboardShortcut(.defaultAction)
                 }
-            }
-            HStack {
-                if !undecided.isEmpty {
-                    Text("Choose a Platform for each ROM, or leave it out.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                AddROMFlow(
+                    services: services, picked: PickedROM(source: row.source, platforms: row.platforms), refused: clash
+                ) { game, platform, keepingOriginals in
+                    let match = AddROMMatch.igdb(gameId: game.igdbGameId, name: game.name, platform: platform)
+                    startAddingROM(row.source, on: platform.id, match: match, keepingOriginals: keepingOriginals, services: services)
+                    finish(.added(game: game.name, platform: platform.id))
+                } buttons: {
+                    Button("Skip") { finish(.skipped) }.help("Leave this ROM out")
+                    withoutAMatch
                 }
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                Button("Add \(romCount(addable.count))", action: add)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(addable.isEmpty || !undecided.isEmpty || !clashing.isEmpty)
+                .id(step)
+                if let clashMessage { Text(clashMessage).foregroundStyle(.red) }
             }
         }
         .padding()
-        .frame(width: 720, height: 560)
-        .onAppear {
-            for row in picked.rows {
-                if let likeliest = row.source.likeliestPlatform(of: row.platforms) { platforms[row.id] = likeliest }
-            }
+        .frame(width: 640, height: 640, alignment: .top)
+        .onAppear { step = picked.rows.indices.first(where: isPending) ?? 0 }
+        .onChange(of: step) { clashMessage = nil }
+    }
+
+    /// The ROMs to go in without a Match, in order.
+    private var unmatchedROMs: [(source: ROMSource, platformId: Int64)] {
+        picked.rows.indices.compactMap { i in
+            guard case .unmatched(let platform) = done[i] else { return nil }
+            return (picked.rows[i].source, platform)
         }
     }
 
-    @ViewBuilder private func rowView(_ row: PickedROMsRow) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Toggle(
-                "Add",
-                isOn: Binding(
-                    get: { row.problem == nil && !skipped.contains(row.id) },
-                    set: { if $0 { skipped.remove(row.id) } else { skipped.insert(row.id) } })
-            )
-            .labelsHidden()
-            .disabled(row.problem != nil)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.source.romName).lineLimit(1).truncationMode(.middle)
-                if let problem = row.problem {
-                    Text(problem).font(.caption).foregroundStyle(.red)
-                } else if clashing.contains(row.id) {
-                    Text("Another ROM picked goes in under this name on this Platform: leave one out.")
-                        .font(.caption).foregroundStyle(.red)
-                } else if let platform = platforms[row.id],
-                    let folder = services.settings.romFolders.first(where: { $0.platformId == platform })
-                {
-                    Text("ROMs/\(folder.url.lastPathComponent)/\(AddROM.fileName(of: row.source, in: folder))")
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+    /// Once every ROM is done with: those without a Match, and whether their files are copied or moved.
+    @ViewBuilder private var lastStep: some View {
+        let roms = unmatchedROMs
+        Text("Add \(romCount(roms.count)) without a Match").font(.title2)
+        Text(
+            "Each goes into its Platform's ROM folder, ready to Play. Then an Import Matches them automatically where the checksum and name agree, else they wait in the Review queue."
+        )
+        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        List(roms, id: \.source.urls) { rom in
+            LabeledContent(rom.source.romName, value: platformName(rom.platformId))
+        }
+        .listStyle(.bordered(alternatesRowBackgrounds: true))
+        Picker("Picked files", selection: $keepingOriginals) {
+            Text("Copy them").tag(true)
+            Text("Move them").tag(false)
+        }
+        .pickerStyle(.radioGroup)
+        Text(keepingOriginals ? "They stay where they are." : "They go to the Trash once each ROM is in.")
+            .font(.caption).foregroundStyle(.secondary)
+        HStack {
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .help("Close without adding these: the ROMs already queued are still Added")
+            Button("Add \(romCount(roms.count))") {
+                startAddingROMs(roms, keepingOriginals: keepingOriginals, services: services, then: thenImport)
+                dismiss()
+            }
+            .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    /// Which ROM this is, a strip of every ROM showing what became of it, and the way between them.
+    private var stepper: some View {
+        HStack(spacing: 8) {
+            Button("Previous", systemImage: "chevron.left") { show(step - 1) }.disabled(step == 0)
+            Text("ROM \(step + 1) of \(picked.rows.count)").monospacedDigit()
+            Button("Next", systemImage: "chevron.right") { show(step + 1) }.disabled(step == picked.rows.count - 1)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(picked.rows.indices, id: \.self) { i in
+                            Button {
+                                show(i)
+                            } label: {
+                                stepMark(i)
+                            }
+                            .buttonStyle(.plain)
+                            .help(picked.rows[i].source.romName)
+                            .id(i)
+                        }
+                    }
+                    .padding(.vertical, 2)
                 }
+                .onChange(of: step) { withAnimation { proxy.scrollTo(step, anchor: .center) } }
+            }
+        }
+        .labelStyle(.iconOnly)
+    }
+
+    private func stepMark(_ i: Int) -> some View {
+        let (symbol, colour): (String, Color) =
+            switch done[i] {
+            case .added?: ("checkmark.circle.fill", .green)
+            case .unmatched?: ("tray.circle.fill", .blue)
+            case .skipped?: ("minus.circle.fill", .gray)
+            case nil: picked.rows[i].problem == nil ? ("\(i + 1).circle", .secondary) : ("exclamationmark.circle.fill", .red)
+            }
+        return Image(systemName: symbol).font(.title3).foregroundStyle(colour)
+            .padding(2)
+            .background(i == step ? Color.accentColor.opacity(0.25) : .clear, in: .circle)
+    }
+
+    /// A ROM already done with: what's to become of it, with Undo for one not yet queued.
+    @ViewBuilder private func doneView(_ fate: Fate) -> some View {
+        Text(row.source.romName).font(.title2)
+        switch fate {
+        case .added(let game, let platform):
+            Text("It's being Added to \(game) on \(platformName(platform)): see Background tasks.").foregroundStyle(.secondary)
+        case .unmatched(let platform):
+            Text(
+                "It goes into \(platformName(platform))'s ROM folder without a Match, from the last step once every ROM is done with. Then an Import Matches it automatically, or it waits in the Review queue."
+            )
+            .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        case .skipped:
+            Text("Skipped: it isn't added.").foregroundStyle(.secondary)
+        }
+        Spacer()
+        HStack {
+            if !fate.queued {
+                Button("Undo") { done[step] = nil }
             }
             Spacer()
-            if row.problem == nil {
-                if row.platforms.count == 1 {
-                    Text(name(of: row.platforms[0])).foregroundStyle(.secondary)
-                } else {
-                    Picker("Platform", selection: Binding(get: { platforms[row.id] }, set: { platforms[row.id] = $0 })) {
-                        Text("Choose…").tag(Int64?.none)
-                        ForEach(row.platforms, id: \.self) { Text(name(of: $0)).tag(Int64?.some($0)) }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
+            Button(nextLabel) { goOn() }.keyboardShortcut(.defaultAction)
+        }
+    }
+
+    /// Add without a Match: on its likeliest Platform, or the one chosen from those that read it.
+    @ViewBuilder private var withoutAMatch: some View {
+        let help = "It goes into its ROM folder, and an Import Matches it automatically or sends it to the Review queue"
+        if let platform = row.source.likeliestPlatform(of: row.platforms) {
+            Button("Add without a Match") { unmatched(on: platform) }.help(help)
+        } else {
+            Menu("Add without a Match") {
+                ForEach(row.platforms, id: \.self) { platform in
+                    Button(platformName(platform)) { unmatched(on: platform) }
                 }
             }
+            .fixedSize()
+            .help(help)
         }
-        .opacity(row.problem == nil && skipped.contains(row.id) ? 0.5 : 1)
     }
 
-    private func name(of platform: Int64) -> String { ROMPlatform.all[platform]?.name ?? "Platform \(platform)" }
-
-    private func add() {
-        let roms = addable.compactMap { row in platforms[row.id].map { (source: row.source, platformId: $0) } }
-        startAddingROMs(roms, keepingOriginals: keepingOriginals, services: services, then: thenImport)
-        dismiss()
+    private func unmatched(on platform: Int64) {
+        if let refusal = clash(IGDBPlatform(id: platform, name: platformName(platform))) {
+            clashMessage = refusal
+        } else {
+            finish(.unmatched(platform: platform))
+        }
     }
+
+    /// Two picked ROMs can't go in under one name on one Platform.
+    private func clash(_ platform: IGDBPlatform) -> String? {
+        let name = row.source.romName
+        let taken = done.contains { i, fate in i != step && fate.platform == platform.id && picked.rows[i].source.romName == name }
+        return taken ? "Another ROM picked goes in under this name on \(platform.name): skip one of them." : nil
+    }
+
+    private func finish(_ fate: Fate) {
+        done[step] = fate
+        goOn()
+    }
+
+    /// Still to be done with: not yet Added, put without a Match or skipped, and able to go in at all.
+    private func isPending(_ i: Int) -> Bool { done[i] == nil && picked.rows[i].problem == nil }
+
+    /// The next ROM still to be done with, after this one, else before it.
+    private var nextPending: Int? {
+        let order = Array(picked.rows.indices[(step + 1)...]) + Array(picked.rows.indices[..<step])
+        return order.first(where: isPending)
+    }
+
+    private var nextLabel: String { nextPending != nil ? "Next ROM" : unmatchedROMs.isEmpty ? "Done" : "Continue" }
+
+    /// On to the next ROM still to be done with; once there's none, the last step if any go in without a Match, else
+    /// closes.
+    private func goOn() {
+        if let next = nextPending {
+            step = next
+        } else if !unmatchedROMs.isEmpty {
+            finishing = true
+        } else {
+            dismiss()
+        }
+    }
+
+    /// Shows the `i`th ROM, leaving the last step.
+    private func show(_ i: Int) {
+        step = i
+        finishing = false
+    }
+
+    private func platformName(_ platform: Int64) -> String { ROMPlatform.all[platform]?.name ?? "Platform \(platform)" }
 }
