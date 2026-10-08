@@ -379,7 +379,8 @@ struct GameDetailView: View {
 
     @ViewBuilder private var romRows: some View {
         if roms.isEmpty {
-            Text("No ROMs").foregroundStyle(.secondary)
+            // Hand-recorded Copies have their own rows, so only a Game with none of either says so.
+            if copies.isEmpty { Text("No Copies").foregroundStyle(.secondary) }
         } else {
             if roms.allSatisfy(\.missing) {
                 Text("No ROM in its ROM folder").foregroundStyle(.orange)
