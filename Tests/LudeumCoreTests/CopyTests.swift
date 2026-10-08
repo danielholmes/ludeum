@@ -115,15 +115,17 @@ import Testing
         try h.journal.addCopy(goneOnly, CopyDraft(kind: .physical, gone: Gone()))
     }
 
-    private func names(_ owned: OwnedFilter?) throws -> [String] {
-        try h.journal.library(LibraryFilter(owned: owned), sort: .name, ascending: true).map(\.name)
+    private func names(_ copies: CopiesFilter?) throws -> [String] {
+        try h.journal.library(LibraryFilter(copies: copies), sort: .name, ascending: true).map(\.name)
     }
 
-    @Test func theOwnedFilter() throws {
+    @Test func theCopiesFilter() throws {
         #expect(try names(nil) == ["Both", "Copy only", "Gone only", "Nothing", "ROM only"])
-        #expect(try names(.owned) == ["Both", "Copy only", "ROM only"])
-        #expect(try names(.asROM) == ["Both", "ROM only"])
+        #expect(try names(.hasROM) == ["Both", "ROM only"])
+        #expect(try names(.onlyROM) == ["ROM only"])
+        #expect(try names(.hasNonROM) == ["Both", "Copy only"])
         #expect(try names(.onlyNonROM) == ["Copy only"])
+        #expect(try names(.noCopies) == ["Nothing"])
         #expect(try names(.notOwned) == ["Gone only", "Nothing"])
     }
 

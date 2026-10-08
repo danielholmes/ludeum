@@ -69,7 +69,7 @@ struct GameDetailView: View {
                         .frame(width: 150).frame(maxHeight: 200, alignment: .top)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(game.name).font(.title).bold()
+                            Text(game.name).font(.title).bold().textSelection(.enabled)
                             Spacer()
                             Button("Edit Game", systemImage: "pencil") { editingGame = true }
                                 .labelStyle(.iconOnly).buttonStyle(.hover).help("Name, Cover, IGDB link and deleting")

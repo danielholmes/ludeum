@@ -14,7 +14,7 @@ public struct LibraryFilter: Sendable, Equatable {
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
     public var roms: ROMFilter?
-    public var owned: OwnedFilter?
+    public var copies: CopiesFilter?
     /// An IGDB genre. Not applied by `library(_:sort:ascending:)`: genres live in the cache, so
     /// the caller narrows the rows with `having(genre:in:)`.
     public var genre: String?
@@ -30,7 +30,7 @@ public struct LibraryFilter: Sendable, Equatable {
     public init(
         platformId: Int64? = nil, archivablePlatforms: Bool = false, rating: RatingFilter? = nil, intent: Intent?? = nil,
         listId: Int64? = nil, player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
-        roms: ROMFilter? = nil, owned: OwnedFilter? = nil, genre: String? = nil,
+        roms: ROMFilter? = nil, copies: CopiesFilter? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         name: String = ""
     ) {
@@ -49,7 +49,7 @@ public struct LibraryFilter: Sendable, Equatable {
         self.outcome = outcome
         self.childhood = childhood
         self.roms = roms
-        self.owned = owned
+        self.copies = copies
     }
 }
 
@@ -71,7 +71,7 @@ extension LibraryFilter {
         if let v = scope.outcome { f.outcome = v }
         if let v = scope.childhood { f.childhood = v }
         if let v = scope.roms { f.roms = v }
-        if let v = scope.owned { f.owned = v }
+        if let v = scope.copies { f.copies = v }
         if let v = scope.genre { f.genre = v }
         if let v = scope.theme { f.theme = v }
         if let v = scope.franchise { f.franchise = v }
@@ -110,15 +110,19 @@ public enum ROMFilter: Sendable {
     case archived
 }
 
-/// Games by whether I have them: a Copy that isn't Gone. A ROM is a Copy, present or missing.
-public enum OwnedFilter: String, Sendable, CaseIterable {
-    /// Any Copy that isn't Gone.
-    case owned
+/// Games by the Copies I have: ones that aren't Gone. A ROM is a Copy, present or missing.
+public enum CopiesFilter: String, Sendable, CaseIterable {
     /// At least one ROM.
-    case asROM
+    case hasROM
+    /// At least one ROM, and no hand-recorded Copy that isn't Gone.
+    case onlyROM
+    /// A hand-recorded Copy that isn't Gone.
+    case hasNonROM
     /// A hand-recorded Copy that isn't Gone, and no ROM.
     case onlyNonROM
-    /// No Copy that isn't Gone: a plain journal entry.
+    /// No Copy at all, not even a Gone one: a plain journal entry.
+    case noCopies
+    /// No Copy that isn't Gone: Not owned, though I may once have had it.
     case notOwned
 }
 
@@ -198,6 +202,8 @@ extension LudeumStore {
     static let hasROMSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id)"
     /// Game `g` has a hand-recorded Copy that isn't Gone.
     static let hasOwnedCopySQL = "EXISTS (SELECT 1 FROM copy WHERE gameId = g.id AND NOT gone)"
+    /// Game `g` has a hand-recorded Copy, Gone or not.
+    static let hasCopySQL = "EXISTS (SELECT 1 FROM copy WHERE gameId = g.id)"
 
     /// The condition, on `game g`, that a Game goes by `word` under any of its names, so an override doesn't hide
     /// IGDB's or the No-Intro one.
@@ -282,10 +288,12 @@ extension LudeumStore {
         case .archived: conditions.append("(\(Self.archivedSQL))")
         case nil: break
         }
-        switch filter.owned {
-        case .owned: conditions.append("(\(Self.hasROMSQL) OR \(Self.hasOwnedCopySQL))")
-        case .asROM: conditions.append(Self.hasROMSQL)
+        switch filter.copies {
+        case .hasROM: conditions.append(Self.hasROMSQL)
+        case .onlyROM: conditions.append("(\(Self.hasROMSQL) AND NOT \(Self.hasOwnedCopySQL))")
+        case .hasNonROM: conditions.append(Self.hasOwnedCopySQL)
         case .onlyNonROM: conditions.append("(\(Self.hasOwnedCopySQL) AND NOT \(Self.hasROMSQL))")
+        case .noCopies: conditions.append("NOT (\(Self.hasROMSQL) OR \(Self.hasCopySQL))")
         case .notOwned: conditions.append("NOT (\(Self.hasROMSQL) OR \(Self.hasOwnedCopySQL))")
         case nil: break
         }

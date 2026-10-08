@@ -4,7 +4,7 @@ import SwiftUI
 /// The kinds of filter the Add filter menu offers. A screen offers the ones it applies, less the
 /// ones its scope already fixes.
 enum FilterKind: CaseIterable {
-    case platform, rating, intent, list, player, genre, theme, played, childhood, roms, owned
+    case platform, rating, intent, list, player, genre, theme, played, childhood, roms, copies
 
     /// What every Library-shaped screen offers.
     static let library = Set(allCases)
@@ -22,7 +22,7 @@ enum FilterKind: CaseIterable {
         if scope.outcome != nil { k.insert(.played) }
         if scope.childhood != nil { k.insert(.childhood) }
         if scope.roms != nil { k.insert(.roms) }
-        if scope.owned != nil { k.insert(.owned) }
+        if scope.copies != nil { k.insert(.copies) }
         return k
     }
 }
@@ -188,9 +188,9 @@ private struct AddFilterMenu: View {
                     Button("Archived") { filter.roms = .archived }
                 }
             }
-            if kinds.contains(.owned) {
-                Menu("Owned") {
-                    ForEach(OwnedFilter.allCases, id: \.self) { o in Button(ownedText(o)) { filter.owned = o } }
+            if kinds.contains(.copies) {
+                Menu("Copies") {
+                    ForEach(CopiesFilter.allCases, id: \.self) { c in Button(copiesText(c)) { filter.copies = c } }
                 }
             }
         }
@@ -286,7 +286,7 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
     case .archived: c.append(Chip(text: "Archived") { $0.roms = nil })
     case nil: break
     }
-    if let o = filter.owned { c.append(Chip(text: ownedText(o)) { $0.owned = nil }) }
+    if let o = filter.copies { c.append(Chip(text: copiesText(o)) { $0.copies = nil }) }
     if let genre = filter.genre { c.append(Chip(text: genre) { $0.genre = nil }) }
     if let theme = filter.theme { c.append(Chip(text: theme) { $0.theme = nil }) }
     if let franchise = filter.franchise { c.append(Chip(text: "Franchise: \(franchise)") { $0.franchise = nil }) }
@@ -295,13 +295,15 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
     return c
 }
 
-/// The Owned filter's choices, as the menu and its chip say them.
-func ownedText(_ o: OwnedFilter) -> String {
-    switch o {
-    case .owned: "Owned"
-    case .asROM: "Owned as a ROM"
-    case .onlyNonROM: "Owned only as a non-ROM Copy"
-    case .notOwned: "Not owned"
+/// The Copies filter's choices, as the menu and its chip say them.
+func copiesText(_ c: CopiesFilter) -> String {
+    switch c {
+    case .hasROM: "Has ROM"
+    case .onlyROM: "Has only ROM"
+    case .hasNonROM: "Has non-ROM"
+    case .onlyNonROM: "Has only non-ROM"
+    case .noCopies: "No Copies"
+    case .notOwned: "No currently owned Copies"
     }
 }
 
