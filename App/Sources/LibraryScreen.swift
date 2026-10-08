@@ -362,7 +362,7 @@ struct CoverTile: View {
                 // Not owned: dimmed, as only a journal entry, under its badge. One flat translucent layer over it: a lowered
                 // opacity would either let the Cover show through its badges or need them drawn offscreen as one.
                 if ROMBadge(row) == .notOwned {
-                    RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.2)).allowsHitTesting(false)
+                    RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.4)).allowsHitTesting(false)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
