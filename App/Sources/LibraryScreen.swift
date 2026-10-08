@@ -270,7 +270,8 @@ private struct CoversGrid: View {
     }
 }
 
-/// A Game in a covers grid: its Cover with badges and its name; clicking selects it.
+/// A Game in a covers grid: its Cover with badges and its name; clicking selects it, and double-clicking one that
+/// offers Play Plays it, as Game detail's Play does.
 struct CoverCell: View {
     let services: Services
     let row: LibraryRow
@@ -278,6 +279,8 @@ struct CoverCell: View {
     @Binding var selection: GameID?
     /// Top-rated's rank, shown before the name.
     var rank: Int? = nil
+    /// Why a double-click's Play didn't open, or a version check's warning.
+    @State private var playProblem: (title: String, message: String)?
 
     var body: some View {
         VStack(spacing: 4) {
@@ -286,6 +289,20 @@ struct CoverCell: View {
             Text(rank.map { "\($0). \(row.name)" } ?? row.name).font(.subheadline).lineLimit(2).multilineTextAlignment(.center)
         }
         .onTapGesture { selection = row.id }
+        // Simultaneous, so the first click still selects at once rather than waiting to see if a second follows.
+        .simultaneousGesture(TapGesture(count: 2).onEnded { play() }, isEnabled: row.offersPlay)
+        .alert(
+            playProblem?.title ?? "", isPresented: Binding(get: { playProblem != nil }, set: { if !$0 { playProblem = nil } })
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(playProblem?.message ?? "")
+        }
+    }
+
+    private func play() {
+        startPlay(
+            row, services: services, refused: { playProblem = ("Can't Play \(row.name)", $0) }, alert: { playProblem = ($0, $1) })
     }
 }
 
@@ -339,6 +356,13 @@ struct CoverTile: View {
                         .padding(margin)
                         .help(status.help)
                         .accessibilityLabel(status.help)
+                }
+            }
+            .overlay {
+                // Not owned: dimmed, as only a journal entry, under its badge. One flat translucent layer over it: a lowered
+                // opacity would either let the Cover show through its badges or need them drawn offscreen as one.
+                if ROMBadge(row) == .notOwned {
+                    RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.2)).allowsHitTesting(false)
                 }
             }
             .overlay(alignment: .bottomTrailing) {

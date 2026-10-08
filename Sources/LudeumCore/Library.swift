@@ -168,6 +168,9 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public var releaseYear: Int? = nil
     /// IGDB players' average rating, with the same proviso.
     public var playerScore: CommunityScore? = nil
+
+    /// It has a ROM, on a Platform with an Emulator: Play is offered, and says why if it can't open (Archived, missing).
+    public var offersPlay: Bool { roms != .noROMs && Emulator.of(platformId: platformId) != nil }
 }
 
 /// What a Library row says about its Game's ROMs.
