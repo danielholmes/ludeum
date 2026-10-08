@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// The libretro-thumbnails names found for one ROM, each a path on `thumbnails.libretro.com`
 /// such as "Nintendo - Game Boy Color/Named_Boxarts/Tetris DX (World).png".
@@ -24,6 +25,9 @@ public final class LibretroThumbnails: Sendable {
     let transport: HTTPTransport
     let api: Throttle
     let maxAge: TimeInterval
+    /// Each repo's Box art names by title key, for Games with no ROM: worked out the first time one's Cover is shown and
+    /// kept, as it's looked up again each time. One that fails isn't kept, so the next Cover tries again.
+    private let boxartTitles = Mutex<[String: Task<[String: [String]], any Error>]>([:])
 
     public init(
         cache: CacheStore, transport: HTTPTransport = URLSessionTransport(), clock: TimeSource = SystemTimeSource(),
@@ -50,6 +54,34 @@ public final class LibretroThumbnails: Sendable {
     func listing(platform: Int64) async throws -> LibretroListing {
         guard let repo = ROMPlatform.all[platform]?.libretroRepo else { return LibretroListing(repo: nil, folders: [:]) }
         return LibretroListing(repo: repo, folders: try await listing(repo).mapValues(LibretroFolder.init))
+    }
+
+    /// A Game with no ROM's Box art, which has no file name to look up: a title match on each of `titles` in turn,
+    /// `regions`' box first, else USA, Europe, Japan. Nil when nothing matches, or for a Platform with no ROM folder.
+    public func boxart(platform: Int64, titles: [String], regions: Set<NameRegion>) async throws -> String? {
+        guard let repo = ROMPlatform.all[platform]?.libretroRepo else { return nil }
+        let byTitle = try await boxartTitleIndex(repo)
+        return LibretroLookup.fuzzy(titles: titles, regions: regions, in: byTitle).map { Self.path(repo, "Named_Boxarts", $0) }
+    }
+
+    private func boxartTitleIndex(_ repo: String) async throws -> [String: [String]] {
+        let task = boxartTitles.withLock { tasks in
+            if let task = tasks[repo] { return task }
+            let task = Task { LibretroLookup.titleIndex(try await listing(repo)["Named_Boxarts"] ?? []) }
+            tasks[repo] = task
+            return task
+        }
+        do {
+            return try await task.value
+        } catch {
+            boxartTitles.withLock { if $0[repo] == task { $0[repo] = nil } }
+            throw error
+        }
+    }
+
+    /// An image's path on the CDN, e.g. "Nintendo - Game Boy/Named_Boxarts/Tetris (World).png".
+    static func path(_ repo: String, _ folder: String, _ name: String) -> String {
+        "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png"
     }
 
     /// An image by its path, from the cache or downloaded the first time. The CDN can lag behind the
@@ -120,7 +152,7 @@ struct LibretroListing: Sendable {
         var paths: [String: String] = [:]
         for folder in LibretroThumbnails.folders {
             guard let name = folders[folder]?.find(fileName: fileName, titles: titles) else { continue }
-            paths[folder] = "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/\(name).png"
+            paths[folder] = LibretroThumbnails.path(repo, folder, name)
         }
         return LibretroNames(boxart: paths["Named_Boxarts"], snap: paths["Named_Snaps"], title: paths["Named_Titles"])
     }

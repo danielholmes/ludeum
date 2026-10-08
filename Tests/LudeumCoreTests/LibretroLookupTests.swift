@@ -67,3 +67,31 @@ import Testing
         #expect(find("Hermano_1.1_jam.gb", titles: ["Hermano"], in: ["Hermie Hopperhead (Japan)"]) == nil)
     }
 }
+
+/// A Game with no ROM: titles alone, with its Copies' Regions for the region.
+@Suite struct LibretroTitleLookupTests {
+    let names: Set = ["Gran Turismo (USA)", "Gran Turismo (Europe) (En,Fr,De,Es,It)", "Gran Turismo (Japan) (Demo 1)"]
+
+    func find(_ titles: [String], regions: Set<NameRegion> = [], in names: Set<String>) -> String? {
+        LibretroLookup.fuzzy(titles: titles, regions: regions, in: LibretroLookup.titleIndex(names))
+    }
+
+    @Test func withNoRegionsUSAWins() {
+        #expect(find(["Gran Turismo"], in: names) == "Gran Turismo (USA)")
+    }
+
+    @Test func itsRegionsWin() {
+        #expect(find(["Gran Turismo"], regions: [.europe], in: names) == "Gran Turismo (Europe) (En,Fr,De,Es,It)")
+    }
+
+    @Test func eachTitleIsTriedInTurn() {
+        #expect(find(["GT", "Gran Turismo"], in: names) == "Gran Turismo (USA)")
+        #expect(find(["Gran Turismo 2"], in: names) == nil)
+    }
+
+    @Test func copyRegionsReadAsROMRegionsDo() {
+        #expect(ROMName.regions(named: ["Australia"]) == [.europe])
+        #expect(ROMName.regions(named: ["USA", "Japan"]) == [.usa, .japan])
+        #expect(ROMName.regions(named: ["Asia"]) == nil)
+    }
+}

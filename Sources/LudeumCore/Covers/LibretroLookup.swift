@@ -27,11 +27,17 @@ enum LibretroLookup {
 
     static func fuzzy(fileName: String, titles: [String], in byTitle: [String: [String]]) -> String? {
         let stem = substituted(Self.stem(fileName))
-        let regions = ROMName(stem).regions.map { preferredOrder.filter($0.contains) } ?? []
-        for title in [stem] + titles {
+        return fuzzy(titles: [stem] + titles, regions: ROMName(stem).regions ?? [], in: byTitle)
+    }
+
+    /// A title match on each of `titles` in turn, `regions`' release first, else USA, Europe, Japan: how a Game with no
+    /// ROM, which has no file name, finds its Box art.
+    static func fuzzy(titles: [String], regions: Set<NameRegion>, in byTitle: [String: [String]]) -> String? {
+        let own = preferredOrder.filter(regions.contains)
+        for title in titles {
             let key = titleKey(title)
             guard !key.isEmpty, let candidates = byTitle[key] else { continue }
-            return candidates.min { rank($0, regions) < rank($1, regions) }
+            return candidates.min { rank($0, own) < rank($1, own) }
         }
         return nil
     }

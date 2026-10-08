@@ -213,7 +213,8 @@ struct GameDetailView: View {
         .sheet(item: $editingCopy) { edit in
             CopySheet(services: services, game: id, edit: edit) {
                 editingCopy = nil
-                services.changes.changed()
+                // A Game with no ROM finds its Box art by its Copies' Regions.
+                if roms.isEmpty { services.changes.coverChanged() } else { services.changes.changed() }
             }
         }
         .confirmationDialog(
@@ -221,7 +222,9 @@ struct GameDetailView: View {
             isPresented: Binding(get: { deletingCopy != nil }, set: { if !$0 { deletingCopy = nil } })
         ) {
             Button("Delete Copy", role: .destructive) {
-                if let c = deletingCopy { delete { try $0.deleteCopy(c.id) } }
+                if let c = deletingCopy {
+                    delete({ try $0.deleteCopy(c.id) }, then: { if roms.isEmpty { services.changes.coverChanged() } })
+                }
             }
         } message: {
             Text("It leaves the journal for good, unlike marking it no longer owned. There's no undo; a backup is taken first.")
@@ -233,7 +236,8 @@ struct GameDetailView: View {
             Button("Delete ROM", role: .destructive) {
                 if let rom = deletingROM {
                     let folders = services.settings.romFolders
-                    delete { try $0.deleteROM(rom.id, romFolders: folders) }
+                    // Its Box art goes with it, and the last one's leaves its Game finding Box art by name.
+                    delete({ try $0.deleteROM(rom.id, romFolders: folders) }, then: { services.changes.coverChanged() })
                 }
             }
         } message: {

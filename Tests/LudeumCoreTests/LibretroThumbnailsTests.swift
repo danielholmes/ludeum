@@ -108,3 +108,35 @@ import Testing
         await #expect(throws: HTTPStatusError.self) { try await h.libretro.image("Sony - PlayStation/Named_Boxarts/Nope.png") }
     }
 }
+
+/// Box art for a Game with no ROM, looked up again each time its Cover shows.
+@Suite struct LibretroBoxartByTitleTests {
+    let h: Harness
+
+    init() throws { h = try Harness() }
+
+    @Test func itsPathIsInItsPlatformsBoxartFolder() async throws {
+        h.internet.addLibretro("Sony_-_PlayStation", ["Total Drivin (Europe) (En,Fr,De,Es,It,Pt)"])
+
+        let path = try await h.libretro.boxart(platform: 7, titles: ["Total Drivin"], regions: [])
+
+        #expect(path == "Sony - PlayStation/Named_Boxarts/Total Drivin (Europe) (En,Fr,De,Es,It,Pt).png")
+    }
+
+    @Test func itsListingIsReadOnceForEveryLookup() async throws {
+        h.internet.addLibretro("Sony_-_PlayStation", ["Gran Turismo (USA)", "Total Drivin (Europe)"])
+
+        let libretro = h.libretro
+        async let a = libretro.boxart(platform: 7, titles: ["Gran Turismo"], regions: [])
+        async let b = libretro.boxart(platform: 7, titles: ["Total Drivin"], regions: [])
+        _ = try await (a, b)
+        _ = try await h.libretro.boxart(platform: 7, titles: ["Nope"], regions: [])
+
+        #expect(h.internet.sent(to: FakeInternet.Hosts.github).count == 1)
+    }
+
+    @Test func aPlatformWithoutARepoFindsNothing() async throws {
+        #expect(try await h.libretro.boxart(platform: 6, titles: ["Half-Life"], regions: []) == nil)
+        #expect(h.internet.sent.isEmpty)
+    }
+}
