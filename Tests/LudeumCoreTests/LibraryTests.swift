@@ -177,36 +177,10 @@ import Testing
         #expect(roms[1].missing)
     }
 
-    @Test func versionSuggestionsComeFromTheGamesROMNames() throws {
-        try rom("Resident Evil 2 (USA) (Disc 1) (Leon).chd")
-        try rom("Resident Evil 2 (USA) (Disc 2) (Claire).chd")
-        try rom("Resident Evil 2 (Japan).chd")
-
-        #expect(try h.journal.versionSuggestions(for: game) == ["Japan", "USA"])
-    }
-
     @Test func theNameOverrideReadsBack() throws {
         #expect(try h.journal.nameOverride(game) == nil)
         try h.journal.setNameOverride(game, "RE2")
         #expect(try h.journal.nameOverride(game) == "RE2")
-    }
-
-    @Test func playedViaSuggestionsAreWhatIveUsedBefore() throws {
-        let other = try h.addGame("Doom")
-        try h.journal.addPlaythrough(other, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished, playedVia: "Steam Deck"))
-        try h.journal.addPlaythrough(other, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished, playedVia: "Switch Online"))
-
-        #expect(try h.journal.playedViaSuggestions(for: other) == ["Steam Deck", "Switch Online"])
-        try rom("Resident Evil 2 (USA).chd")
-        #expect(try h.journal.playedViaSuggestions(for: game) == ["MesenCE", "Steam Deck", "Switch Online"])
-    }
-
-    @Test func itsEmulatorIsSuggestedOnceEvenWhenUsedBefore() throws {
-        try rom("Resident Evil 2 (USA).sfc")
-        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished, playedVia: "MesenCE"))
-        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2021")!, outcome: .finished, playedVia: "Analogue Pocket"))
-
-        #expect(try h.journal.playedViaSuggestions(for: game) == ["MesenCE", "Analogue Pocket"])
     }
 
     @Test func aDeletionSaysWhatGoesWithIt() throws {

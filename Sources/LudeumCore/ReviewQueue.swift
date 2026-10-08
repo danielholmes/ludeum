@@ -257,10 +257,12 @@ extension LudeumStore {
 
     /// Split into its own Game: the Version's ROMs leave the Game unmatched, to be Matched again from the Review queue
     /// (e.g. to IGDB's own listing of an enhanced re-release). The Game keeps its journal data and its other Versions.
-    /// Throws, changing nothing, when the Game's Versions aren't the ones shown.
+    /// Throws, changing nothing, when the Game's Versions aren't the ones shown, or a Playthrough was played on one of the
+    /// Version's ROMs.
     public func splitOff(_ version: [LudeumROM], from item: DuplicateVersionsGame) throws {
         try checkVersionsUnchanged(version, of: item)
         try db.write { db in
+            try Self.checkNotPlayedOn(db, roms: version.map(\.id))
             for rom in version {
                 try db.execute(
                     sql: "UPDATE rom SET gameId = NULL, matchKind = NULL, matchedAt = NULL WHERE id = ? AND gameId = ?",
@@ -272,13 +274,14 @@ extension LudeumStore {
 
     /// Keep only this Version: sends the other Versions' ROMs to the Trash and deletes them, so the Game is left with this
     /// one. Everything is checked before anything moves: when the Game's Versions aren't the ones shown, or a ROM's files
-    /// aren't in its ROM folder, it throws with nothing sent to the Trash.
+    /// aren't in its ROM folder, or a Playthrough was played on one of them, it throws with nothing sent to the Trash.
     public func keepOnly(
         _ version: [LudeumROM], of item: DuplicateVersionsGame, romFolders: [ROMFolder],
         moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
     ) throws {
         try checkVersionsUnchanged(version, of: item)
         let kept = Set(version.map(\.id))
+        try db.read { db in try Self.checkNotPlayedOn(db, roms: item.roms.map(\.id).filter { !kept.contains($0) }) }
         let trashing = try item.roms.filter { !kept.contains($0.id) }.map { rom in
             guard let folder = romFolders.first(where: { $0.platformId == rom.platformId }) else { throw ReviewError.noROMFolder }
             guard let file = try folder.rom(named: rom.folderName) else { throw ReviewError.romFilesNotFound }

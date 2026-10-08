@@ -12,22 +12,21 @@ public struct PlaythroughDraft: Sendable, Equatable {
     public var end: PartialDate?
     public var outcome: Outcome?
     public var notes: String?
-    public var version: String?
-    public var playedVia: String?
+    /// The Copy it was played on: one of its Game's ROMs or hand-recorded Copies. While it's set, that Copy can't be
+    /// deleted or leave the Game.
+    public var copy: CopyID?
     /// The ids of who besides me took part; read back in name order. None is Solo.
     public var players: [Int64]
 
     public init(
-        start: PartialDate, end: PartialDate? = nil, outcome: Outcome? = nil,
-        notes: String? = nil, version: String? = nil, playedVia: String? = nil,
+        start: PartialDate, end: PartialDate? = nil, outcome: Outcome? = nil, notes: String? = nil, copy: CopyID? = nil,
         players: [Int64] = []
     ) {
         self.start = start
         self.end = end
         self.outcome = outcome
         self.notes = notes
-        self.version = version
-        self.playedVia = playedVia
+        self.copy = copy
         self.players = players
     }
 
@@ -53,9 +52,10 @@ extension LudeumStore {
     public func addPlaythrough(_ game: GameID, _ draft: PlaythroughDraft) throws -> Int64 {
         try draft.validate()
         return try db.write { db in
+            try Self.checkCopy(db, draft.copy, of: game)
             try db.execute(
                 sql: """
-                    INSERT INTO playthrough (gameId, start, end, outcome, notes, version, playedVia)
+                    INSERT INTO playthrough (gameId, start, end, outcome, notes, romId, copyId)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [game] + Self.arguments(draft))
@@ -68,9 +68,12 @@ extension LudeumStore {
     public func updatePlaythrough(_ id: Int64, _ draft: PlaythroughDraft) throws {
         try draft.validate()
         try db.write { db in
+            if let game = try GameID.fetchOne(db, sql: "SELECT gameId FROM playthrough WHERE id = ?", arguments: [id]) {
+                try Self.checkCopy(db, draft.copy, of: game)
+            }
             try db.execute(
                 sql: """
-                    UPDATE playthrough SET start = ?, end = ?, outcome = ?, notes = ?, version = ?, playedVia = ?
+                    UPDATE playthrough SET start = ?, end = ?, outcome = ?, notes = ?, romId = ?, copyId = ?
                     WHERE id = ?
                     """,
                 arguments: Self.arguments(draft) + [id])
@@ -117,7 +120,8 @@ extension LudeumStore {
                         start: PartialDate(row["start"])!,
                         end: (row["end"] as String?).flatMap(PartialDate.init),
                         outcome: (row["outcome"] as String?).flatMap(Outcome.init(rawValue:)),
-                        notes: row["notes"], version: row["version"], playedVia: row["playedVia"],
+                        notes: row["notes"],
+                        copy: (row["romId"] as Int64?).map(CopyID.rom) ?? (row["copyId"] as Int64?).map(CopyID.copy),
                         players: players[row["id"]] ?? []))
             )
         }
@@ -132,6 +136,32 @@ extension LudeumStore {
     }
 
     private static func arguments(_ d: PlaythroughDraft) -> StatementArguments {
-        [d.start.text, d.end?.text, d.outcome?.rawValue, d.notes, d.version, d.playedVia]
+        [d.start.text, d.end?.text, d.outcome?.rawValue, d.notes, d.copy?.romId, d.copy?.copyId]
+    }
+
+    /// A Playthrough's Copy has to be one of its own Game's.
+    private static func checkCopy(_ db: Database, _ copy: CopyID?, of game: GameID) throws {
+        guard let copy else { return }
+        let owner =
+            switch copy {
+            case .rom(let id): try GameID.fetchOne(db, sql: "SELECT gameId FROM rom WHERE id = ?", arguments: [id])
+            case .copy(let id): try GameID.fetchOne(db, sql: "SELECT gameId FROM copy WHERE id = ?", arguments: [id])
+            }
+        guard owner == game else { throw LudeumError.copyNotOfGame }
+    }
+
+    /// Refuses, changing nothing, when a Playthrough was played on any of these Copies: they can't be deleted, or leave
+    /// their Game, until each such Playthrough says another Copy or none.
+    static func checkNotPlayedOn(_ db: Database, roms: [Int64] = [], copies: [Int64] = []) throws {
+        guard !roms.isEmpty || !copies.isEmpty else { return }
+        let played = try Bool.fetchOne(
+            db,
+            sql: """
+                SELECT EXISTS (
+                    SELECT 1 FROM playthrough WHERE romId IN (\(databaseQuestionMarks(count: max(roms.count, 1))))
+                        OR copyId IN (\(databaseQuestionMarks(count: max(copies.count, 1)))))
+                """,
+            arguments: StatementArguments((roms.isEmpty ? [-1] : roms) + (copies.isEmpty ? [-1] : copies)))!
+        if played { throw LudeumError.copyPlayedOn }
     }
 }

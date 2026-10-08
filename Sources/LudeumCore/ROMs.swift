@@ -37,14 +37,15 @@ extension LudeumStore {
     /// Compacted copy), and a missing one just leaves the journal, with its Copy details either way. If its file comes
     /// back, the next Import records it afresh. Refused, with nothing sent to the Trash, when it's present but its files
     /// aren't in its ROM folder; if sending them fails part-way, the journal sees what's left, and the ROM goes only if
-    /// all of it reached the Trash.
+    /// all of it reached the Trash. Refused, with nothing sent to the Trash, while a Playthrough was played on it.
     public func deleteROM(
         _ rom: Int64, romFolders: [ROMFolder],
         moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
     ) throws {
         guard
             let row = try db.read({ db in
-                try Row.fetchOne(db, sql: "SELECT folderName, missing, platformId FROM rom WHERE id = ?", arguments: [rom])
+                try Self.checkNotPlayedOn(db, roms: [rom])
+                return try Row.fetchOne(db, sql: "SELECT folderName, missing, platformId FROM rom WHERE id = ?", arguments: [rom])
             })
         else { return }
         let delete = { try self.db.write { db in try db.execute(sql: "DELETE FROM rom WHERE id = ?", arguments: [rom]) } }
@@ -64,8 +65,18 @@ extension LudeumStore {
     }
 
     /// Deletes every missing ROM of the Game at once, as `deleteROM(_:romFolders:)` does each; its present ROMs stay.
+    /// Refused, deleting none, while a Playthrough was played on any of them.
     public func deleteMissingROMs(of game: GameID) throws {
-        try db.write { db in try db.execute(sql: "DELETE FROM rom WHERE gameId = ? AND missing", arguments: [game]) }
+        try db.write { db in
+            try Self.checkNotPlayedOn(db, roms: try Self.missingROMs(db, of: game))
+            try db.execute(sql: "DELETE FROM rom WHERE gameId = ? AND missing", arguments: [game])
+        }
+    }
+
+    /// The Game's missing ROMs, but `except`.
+    static func missingROMs(_ db: Database, of game: GameID, except: Int64? = nil) throws -> [Int64] {
+        try Int64.fetchAll(
+            db, sql: "SELECT id FROM rom WHERE gameId = ? AND missing AND id IS NOT ?", arguments: [game, except])
     }
 
     private func hasCopies(_ db: Database, _ game: GameID) throws -> Bool {

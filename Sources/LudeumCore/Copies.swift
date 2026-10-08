@@ -8,6 +8,15 @@ public enum CopyKind: String, Sendable, CaseIterable {
     case physicalAndDigital
 }
 
+/// One Copy, whichever kind: a ROM, or one I recorded by hand. They're kept apart, so each has its own ids.
+public enum CopyID: Sendable, Hashable {
+    case rom(Int64)
+    case copy(Int64)
+
+    var romId: Int64? { if case .rom(let id) = self { id } else { nil } }
+    var copyId: Int64? { if case .copy(let id) = self { id } else { nil } }
+}
+
 /// What a Copy cost: an amount in a currency, since a Japanese cart isn't bought in dollars.
 public struct Price: Sendable, Equatable {
     public var amount: Decimal
@@ -145,9 +154,14 @@ extension LudeumStore {
     }
 
     /// Deletes a hand-recorded Copy for good, unlike marking it Gone. A ROM is deleted with `deleteROM(_:romFolders:)`.
+    /// Refused while a Playthrough was played on it.
     public func deleteCopy(_ id: Int64) throws {
+        try db.read { db in try Self.checkNotPlayedOn(db, copies: [id]) }
         try backups?.backUp(self, operation: .beforeDelete)
-        try db.write { db in try db.execute(sql: "DELETE FROM copy WHERE id = ?", arguments: [id]) }
+        try db.write { db in
+            try Self.checkNotPlayedOn(db, copies: [id])
+            try db.execute(sql: "DELETE FROM copy WHERE id = ?", arguments: [id])
+        }
     }
 
     /// A Game's hand-recorded Copies: Owned before Gone, each by when acquired (undated last), then as added.

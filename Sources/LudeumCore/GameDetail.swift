@@ -102,26 +102,6 @@ extension LudeumStore {
     /// stands in, which no ROM folder ROM's name has (they have no extension).
     private static let folderNameSQL = "COALESCE(r.folderName, r.fileName)"
 
-    /// Version suggestions for a Playthrough: the Game's ROMs' Versions, without repeats.
-    public func versionSuggestions(for game: GameID) throws -> [String] {
-        var seen: [String] = []
-        for rom in try roms(of: game) where !rom.version.isEmpty && !seen.contains(rom.version) { seen.append(rom.version) }
-        return seen
-    }
-
-    /// "Played via" suggestions: its Platform's Emulator for a Game with ROMs, then every value I've used, alphabetically.
-    public func playedViaSuggestions(for game: GameID) throws -> [String] {
-        let emulator = try roms(of: game).isEmpty ? [] : [Emulator.of(platformId: try self.game(game).platformId)?.name].compactMap { $0 }
-        let used = try db.read { db in
-            try String.fetchAll(
-                db,
-                sql:
-                    "SELECT DISTINCT playedVia FROM playthrough WHERE playedVia IS NOT NULL AND playedVia != '' ORDER BY playedVia COLLATE NOCASE"
-            )
-        }
-        return emulator + used.filter { !emulator.contains($0) }
-    }
-
     public func deletionSummary(_ game: GameID) throws -> DeletionSummary {
         try db.read { db in
             func count(_ sql: String) throws -> Int { try Int.fetchOne(db, sql: sql, arguments: [game]) ?? 0 }

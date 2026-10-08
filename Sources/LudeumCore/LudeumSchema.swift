@@ -1,3 +1,4 @@
+import Foundation
 import GRDB
 
 /// The journal's migrations. Append-only since the first real Import into the production database.
@@ -543,6 +544,51 @@ enum LudeumSchema {
             for row in try Row.fetchAll(db, sql: "SELECT id, COALESCE(name, folderName) AS name FROM rom") {
                 let regions = Regions.encode(ROMName(row["name"]).regionNames)
                 if regions != nil { try db.execute(sql: "UPDATE rom SET regions = ? WHERE id = ?", arguments: [regions, row["id"]]) }
+            }
+        }
+        // A Playthrough says the Copy it was played on, which can't be deleted while it does, in place of its free-text
+        // Version and Played via. A Version that's one of its Game's ROMs' becomes that ROM (a playlist before its Discs);
+        // any other, and any Played via, goes into its notes, so nothing is lost.
+        migrator.registerMigration("v23 playthrough copy") { db in
+            try db.alter(table: "playthrough") { t in
+                t.add(column: "romId", .integer).indexed().references("rom", onDelete: .restrict)
+                t.add(column: "copyId", .integer).indexed().references("copy", onDelete: .restrict)
+            }
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT id, gameId, notes, NULLIF(TRIM(version), '') AS version, NULLIF(TRIM(playedVia), '') AS playedVia
+                    FROM playthrough WHERE NULLIF(TRIM(version), '') IS NOT NULL OR NULLIF(TRIM(playedVia), '') IS NOT NULL
+                    """)
+            for row in rows {
+                var rom: Int64?
+                if let version: String = row["version"] {
+                    let roms = try Row.fetchAll(
+                        db, sql: "SELECT id, fileName, version, discNumber FROM rom WHERE gameId = ?", arguments: [row["gameId"]])
+                    rom =
+                        roms.filter { r in
+                            let fileName: String = r["fileName"]
+                            return (r["version"] ?? ROMName((fileName as NSString).deletingPathExtension).version) == version
+                        }
+                        .min { a, b in
+                            func key(_ r: Row) -> (Int, Int, Int64) {
+                                ((r["fileName"] as String).lowercased().hasSuffix(".m3u") ? 0 : 1, r["discNumber"] ?? 0, r["id"])
+                            }
+                            return key(a) < key(b)
+                        }?["id"]
+                }
+                let kept = [
+                    row["notes"] as String?, rom == nil ? (row["version"] as String?).map { "Version: \($0)" } : nil,
+                    (row["playedVia"] as String?).map { "Played via \($0)" },
+                ]
+                .compactMap { $0 }.filter { !$0.isEmpty }
+                try db.execute(
+                    sql: "UPDATE playthrough SET romId = ?, notes = ? WHERE id = ?",
+                    arguments: [rom, kept.isEmpty ? nil : kept.joined(separator: "\n"), row["id"]])
+            }
+            try db.alter(table: "playthrough") { t in
+                t.drop(column: "version")
+                t.drop(column: "playedVia")
             }
         }
         return migrator

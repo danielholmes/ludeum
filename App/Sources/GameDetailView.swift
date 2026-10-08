@@ -118,7 +118,7 @@ struct GameDetailView: View {
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(playthroughTitle(p.draft))
-                                if let details = playthroughDetails(p.draft) {
+                                if let details = playthroughDetails(p.draft, roms: roms, copies: copies) {
                                     Text(details).font(.caption).foregroundStyle(.secondary)
                                 }
                             }
@@ -710,9 +710,23 @@ private func playthroughTitle(_ d: PlaythroughDraft) -> String {
     return dates.isEmpty ? outcome : "\(outcome), \(dates)"
 }
 
-private func playthroughDetails(_ d: PlaythroughDraft) -> String? {
-    let parts = [d.version, d.playedVia.map { "via \($0)" }, d.notes].compactMap { $0 }.filter { !$0.isEmpty }
+private func playthroughDetails(_ d: PlaythroughDraft, roms: [LudeumROM], copies: [Copy]) -> String? {
+    let parts = [d.copy.flatMap { copyLabel($0, roms: roms, copies: copies) }, d.notes].compactMap { $0 }.filter { !$0.isEmpty }
     return parts.isEmpty ? nil : parts.joined(separator: " · ")
+}
+
+/// A Copy in a line, to say which one a Playthrough was played on: a ROM by its name, one recorded by hand by its Kind
+/// and Regions. Nil for one the Game no longer shows.
+func copyLabel(_ copy: CopyID, roms: [LudeumROM], copies: [Copy]) -> String? {
+    switch copy {
+    case .rom(let id):
+        return roms.first { $0.id == id }.map { $0.missing ? "\($0.name) (missing)" : $0.name }
+    case .copy(let id):
+        guard let c = copies.first(where: { $0.id == id })?.draft else { return nil }
+        let regions = c.details.regions.isEmpty ? nil : c.details.regions.joined(separator: ", ")
+        return ([copyKindText(c.kind), regions].compactMap { $0 } + (c.gone == nil ? [] : ["no longer owned"]))
+            .joined(separator: " · ")
+    }
 }
 
 /// Messages for the journal's rules, as the UI says them.
@@ -730,6 +744,8 @@ func journalErrorText(_ error: Error) -> String {
     case .nameRequired: "A name is required."
     case .gameNotFound: "That Game no longer exists."
     case .runAheadOutOfRange: "Run-ahead is 0 to 10 frames."
+    case .copyPlayedOn: "A Playthrough was played on this Copy. Change that Playthrough's Copy first."
+    case .copyNotOfGame: "That Copy isn't one of this Game's."
     case nil: error.localizedDescription
     }
 }
@@ -770,10 +786,9 @@ struct PlaythroughSheet: View {
     @State private var end = ""
     @State private var outcome: Outcome?
     @State private var notes = ""
-    @State private var version = ""
-    @State private var playedVia = ""
-    @State private var versions: [String] = []
-    @State private var vias: [String] = []
+    @State private var copy: CopyID?
+    @State private var roms: [LudeumROM] = []
+    @State private var copies: [Copy] = []
     @State private var players: [Player] = []
     @State private var selectedPlayers: Set<Int64> = []
     @State private var error: String?
@@ -790,8 +805,14 @@ struct PlaythroughSheet: View {
                 Text("Dropped").tag(Outcome?.some(.dropped))
             }
             PlayerPicker(players: players, selected: $selectedPlayers)
-            suggestedField("Version", text: $version, suggestions: versions)
-            suggestedField("Played via", text: $playedVia, suggestions: vias)
+            if !roms.isEmpty || !copies.isEmpty {
+                Picker("Copy", selection: $copy) {
+                    Text("None").tag(CopyID?.none)
+                    ForEach(roms) { rom in Text(copyLabel(.rom(rom.id), roms: roms, copies: copies) ?? "").tag(CopyID?.some(.rom(rom.id))) }
+                    ForEach(copies) { c in Text(copyLabel(.copy(c.id), roms: roms, copies: copies) ?? "").tag(CopyID?.some(.copy(c.id))) }
+                }
+                .help("The Copy it was played on. While a Playthrough says it, that Copy can't be deleted.")
+            }
             TextField("Notes", text: $notes, axis: .vertical).lineLimit(3...8)
             if let error { Text(error).foregroundStyle(.red) }
             HStack {
@@ -815,23 +836,12 @@ struct PlaythroughSheet: View {
                 end = d.end?.text ?? ""
                 outcome = d.outcome
                 notes = d.notes ?? ""
-                version = d.version ?? ""
-                playedVia = d.playedVia ?? ""
+                copy = d.copy
                 selectedPlayers = Set(d.players)
             }
-            versions = (try? services.journal?.versionSuggestions(for: game)) ?? []
-            vias = (try? services.journal?.playedViaSuggestions(for: game)) ?? []
+            roms = (try? services.journal?.roms(of: game)) ?? []
+            copies = (try? services.journal?.copies(of: game)) ?? []
             players = (try? services.journal?.players()) ?? []
-        }
-    }
-
-    private func suggestedField(_ title: String, text: Binding<String>, suggestions: [String]) -> some View {
-        HStack {
-            TextField(title, text: text)
-            if !suggestions.isEmpty {
-                Menu("Suggestions") { ForEach(suggestions, id: \.self) { s in Button(s) { text.wrappedValue = s } } }
-                    .fixedSize()
-            }
         }
     }
 
@@ -849,8 +859,7 @@ struct PlaythroughSheet: View {
         do {
             let draft = PlaythroughDraft(
                 start: try date(start, "start")!, end: try date(end, "end"), outcome: outcome, notes: notes.trimmed.nilIfEmpty,
-                version: version.trimmed.nilIfEmpty, playedVia: playedVia.trimmed.nilIfEmpty,
-                players: selectedPlayers.sorted())
+                copy: copy, players: selectedPlayers.sorted())
             if let id = edit.id { try journal.updatePlaythrough(id, draft) } else { try journal.addPlaythrough(game, draft) }
             done()
         } catch let e as DateError {
