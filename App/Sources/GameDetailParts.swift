@@ -172,8 +172,9 @@ struct EditGameSheet: View {
         do {
             if name != ((try services.journal?.nameOverride(game.id)) ?? nil ?? "") {
                 try services.journal?.setNameOverride(game.id, name.isEmpty ? nil : name)
-                // A Game with no ROM finds its Box art by its name.
+                // A Game with no ROM finds its Box art by its name; its ROMs, if it has any, are looked up by the new name.
                 services.changes.coverChanged()
+                services.lookUpBoxArt(forROMsOf: game.id)
             }
             dismiss()
         } catch {

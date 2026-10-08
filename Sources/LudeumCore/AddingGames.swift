@@ -77,7 +77,7 @@ extension LudeumStore {
                 try db.execute(sql: "UPDATE game SET platformId = ? WHERE id = ?", arguments: [platform.id, id])
             }
             try db.execute(sql: "UPDATE game SET igdbGameId = ?, igdbName = ? WHERE id = ?", arguments: [igdbGameId, igdbName, id])
-            try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE gameId = ?", arguments: [id])
+            try Self.lookUpBoxArtAgain(db, romsOf: id)
         }
     }
 }

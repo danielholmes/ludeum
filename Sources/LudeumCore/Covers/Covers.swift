@@ -69,6 +69,15 @@ extension LudeumStore {
         try db.write { db in try db.execute(sql: "DELETE FROM cover WHERE gameId = ?", arguments: [game]) }
     }
 
+    /// Flags the Game's ROMs to be looked up in libretro again at the next Import, as its names have changed.
+    static func lookUpBoxArtAgain(_ db: Database, romsOf game: GameID) throws {
+        try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE gameId = ?", arguments: [game])
+    }
+
+    func romIDs(of game: GameID) throws -> [Int64] {
+        try db.read { try Int64.fetchAll($0, sql: "SELECT id FROM rom WHERE gameId = ?", arguments: [game]) }
+    }
+
     /// The ROMs whose Box art a Game shows, best first: its present ROMs (the playlist, then Disc 1),
     /// or when none is present, the most recently added missing one.
     func coverROMs(_ game: GameID) throws -> [String?] {
@@ -151,6 +160,13 @@ public struct Covers: Sendable {
         guard roms.isEmpty else { return roms.compactMap { $0 }.first }
         let lookup = try journal.boxArtLookup(game)
         return try? await libretro.boxart(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions)
+    }
+
+    /// Looks the Game's ROMs up in libretro again straight away, as after renaming it, rather than at the next Import.
+    /// One that can't be looked up now still is then.
+    public func lookUpBoxArt(forROMsOf game: GameID) async {
+        guard let roms = try? journal.romIDs(of: game) else { return }
+        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(roms)
     }
 
     /// Uploads win over everything, on any Game.

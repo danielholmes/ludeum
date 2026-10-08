@@ -17,8 +17,9 @@ struct BoxArtImport {
         return (try? await boxArtChanges(lookingUp: ids)) ?? true
     }
 
-    /// Looks up each ROM by its file name, then its name, then its Game's IGDB name. Found names replace the
-    /// ROM's; a name not found keeps the old one, so a ROM looked up again never loses its Box art to a miss.
+    /// Looks up each ROM by its file name, then its name, then the name I gave its Game, then its Game's IGDB name.
+    /// Found names replace the ROM's; a name not found keeps the old one, so a ROM looked up again never loses its Box
+    /// art to a miss.
     /// A Platform's listing is read once for all its ROMs; when it can't be, they're left as they were, not looked up,
     /// and the other Platforms' carry on.
     func lookUp(_ romIds: [Int64]) async throws { _ = try await boxArtChanges(lookingUp: romIds) }
@@ -30,7 +31,8 @@ struct BoxArtImport {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT rom.id, rom.fileName, rom.name, rom.platformId, rom.libretroBoxart, game.igdbName FROM rom
+                    SELECT rom.id, rom.fileName, rom.name, rom.platformId, rom.libretroBoxart, game.nameOverride, game.igdbName
+                    FROM rom
                     LEFT JOIN game ON game.id = rom.gameId WHERE rom.id IN (\(databaseQuestionMarks(count: romIds.count)))
                     ORDER BY rom.id
                     """, arguments: StatementArguments(romIds))
@@ -41,7 +43,8 @@ struct BoxArtImport {
             let found = rows.map { row in
                 (
                     id: row["id"] as Int64, boxArtBefore: row["libretroBoxart"] as String?,
-                    names: listing.names(fileName: row["fileName"], titles: [row["name"], row["igdbName"]].compactMap { $0 as String? })
+                    names: listing.names(
+                        fileName: row["fileName"], titles: [row["name"], row["nameOverride"], row["igdbName"]].compactMap { $0 as String? })
                 )
             }
             try await journal.db.write { db in

@@ -612,6 +612,15 @@ enum LudeumSchema {
         migrator.registerMigration("v26 relook up ROMs with no Box art without small words") { db in
             try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE libretroBoxart IS NULL")
         }
+        // A ROM is now also looked up by the name I gave its Game: look up again, at the next Import, each ROM with no Box
+        // art whose Game has one.
+        migrator.registerMigration("v27 relook up ROMs of renamed Games") { db in
+            try db.execute(
+                sql: """
+                    UPDATE rom SET libretroLookedUp = 0
+                    WHERE libretroBoxart IS NULL AND gameId IN (SELECT id FROM game WHERE nameOverride IS NOT NULL)
+                    """)
+        }
         return migrator
     }
 }

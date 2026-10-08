@@ -168,9 +168,11 @@ public final class LudeumStore: Sendable {
         }
     }
 
+    /// Its ROMs are looked up in libretro again at the next Import, by the new name.
     public func setNameOverride(_ id: GameID, _ name: String?) throws {
         try db.write { db in
             try db.execute(sql: "UPDATE game SET nameOverride = ? WHERE id = ?", arguments: [name, id])
+            try Self.lookUpBoxArtAgain(db, romsOf: id)
         }
     }
 

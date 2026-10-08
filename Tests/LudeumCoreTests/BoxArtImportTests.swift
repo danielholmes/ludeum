@@ -147,6 +147,73 @@ import Testing
 
         #expect(try roms()[0]["libretroBoxart"] as String? != nil)
     }
+
+    /// G. Darius, Matched to a Game whose IGDB name finds another game's box.
+    func gDariusLinkedToDariusTwin() async throws -> GameID {
+        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Darius Twin (USA)"])
+        let item = try await unmatchedGDarius()
+        let game = try j.journal.makeByHand(item, name: "G. Darius", platform: IGDBPlatform(id: 19, name: "SNES"))
+        try j.journal.link(game, igdbGameId: 51, igdbName: "Darius Twin")
+        try await importNow()
+        #expect(
+            try roms()[0]["libretroBoxart"] as String?
+                == "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Darius Twin (USA).png")
+        return game
+    }
+
+    @Test func aGameRenamedHasItsROMsLookedUpAgainByItsNameBeforeIGDBsAtTheNextImport() async throws {
+        let game = try await gDariusLinkedToDariusTwin()
+
+        try j.journal.setNameOverride(game, "Darius Gaiden")
+        try await importNow()
+
+        #expect(
+            try roms()[0]["libretroBoxart"] as String?
+                == "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Darius Gaiden (USA).png")
+    }
+
+    @Test func aGamesROMsCanBeLookedUpAgainStraightAway() async throws {
+        let game = try await gDariusLinkedToDariusTwin()
+        try j.journal.setNameOverride(game, "Darius Gaiden")
+
+        await h.covers(j.journal).lookUpBoxArt(forROMsOf: game)
+
+        #expect(
+            try roms()[0]["libretroBoxart"] as String?
+                == "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Darius Gaiden (USA).png")
+    }
+}
+
+/// The migration that looks up again each ROM with no Box art whose Game has a name of my own, once a ROM is looked up
+/// by it.
+@Suite struct RenamedGameLookupMigrationTests {
+    @Test func romsWithNoBoxArtWhoseGameIsRenamedAreLookedUpAgain() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: "v26 relook up ROMs with no Box art without small words")
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform VALUES (22, 'GBC');
+                    INSERT INTO game (id, platformId, name, nameOverride) VALUES
+                        (1, 22, 'Daikatana', 'John Romero''s Daikatana'), (2, 22, 'Tetris', NULL), (3, 22, 'Zelda', 'Link');
+                    INSERT INTO rom (id, folderName, fileName, platformId, gameId, matchKind, matchedAt, libretroLookedUp, libretroBoxart)
+                    VALUES
+                        (1, 'Daikatana', 'Daikatana.7z', 22, 1, 'manual', 0, 1, NULL),
+                        (2, 'Tetris', 'Tetris.7z', 22, 2, 'manual', 0, 1, NULL),
+                        (3, 'Zelda', 'Zelda.7z', 22, 3, 'manual', 0, 1, 'Zelda.png');
+                    """)
+        }
+        try db.close()
+
+        let journal = try LudeumStore(directory: directory)
+
+        let lookedUp = try journal.db.read { try Bool.fetchAll($0, sql: "SELECT libretroLookedUp FROM rom ORDER BY id") }
+        #expect(lookedUp == [false, true, true])
+    }
 }
 
 /// The migration that looks up again every ROM with no Box art, once a ROM is looked up again when it's Matched and a

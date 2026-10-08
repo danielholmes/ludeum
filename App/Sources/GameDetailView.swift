@@ -250,8 +250,9 @@ struct GameDetailView: View {
         .sheet(isPresented: $linking) {
             if let search = services.gameSearch, let platform {
                 LinkGameSheet(search: search, game: game, platform: platform, canChangePlatform: roms.isEmpty) {
-                    // The new link can bring IGDB's Cover art.
+                    // The new link can bring IGDB's Cover art, and its ROMs Box art found by the new IGDB name.
                     services.changes.coverChanged()
+                    services.lookUpBoxArt(forROMsOf: game.id)
                 }
             }
         }

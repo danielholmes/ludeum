@@ -80,6 +80,17 @@ import SwiftUI
     }
 
     var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb, libretro: libretro) } }
+
+    /// Looks the Game's ROMs up in libretro again in the background, as after renaming or relinking it, then shows any
+    /// Box art they find.
+    func lookUpBoxArt(forROMsOf game: GameID) {
+        let covers = covers
+        let changes = changes
+        Task {
+            await covers?.lookUpBoxArt(forROMsOf: game)
+            changes.coverChanged()
+        }
+    }
 }
 
 /// The IGDB and Hasheous clients last made, kept while their settings stay the same. A client holds its service's rate
