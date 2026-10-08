@@ -33,7 +33,6 @@ struct CopySheet: View {
     @State private var goneOn = ""
     @State private var goneTo = ""
     @State private var regionSuggestions: [String] = []
-    @State private var fromSuggestions: [String] = []
     @State private var error: String?
     @State private var confirmingDelete = false
     @State private var deleteRunning = false
@@ -57,7 +56,7 @@ struct CopySheet: View {
             }
             RegionsEditor(regions: $regions, suggestions: regionSuggestions)
             TextField("Acquired on", text: $acquiredOn, prompt: Self.datePrompt)
-            suggestedField("Acquired from", text: $acquiredFrom, suggestions: fromSuggestions)
+            TextField("Acquired from", text: $acquiredFrom)
             LabeledContent("Price") {
                 HStack {
                     TextField("Price", text: $price, prompt: Text("0.00")).labelsHidden()
@@ -106,17 +105,6 @@ struct CopySheet: View {
             price = details.price.map { "\($0.amount)" } ?? ""
             currency = details.price?.currency ?? Price.homeCurrency
             regionSuggestions = (try? services.journal?.regionSuggestions()) ?? Regions.suggested
-            fromSuggestions = (try? services.journal?.acquiredFromSuggestions()) ?? []
-        }
-    }
-
-    private func suggestedField(_ title: String, text: Binding<String>, suggestions: [String]) -> some View {
-        HStack {
-            TextField(title, text: text)
-            if !suggestions.isEmpty {
-                Menu("Suggestions") { ForEach(suggestions, id: \.self) { s in Button(s) { text.wrappedValue = s } } }
-                    .fixedSize()
-            }
         }
     }
 

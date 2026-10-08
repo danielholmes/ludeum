@@ -89,15 +89,6 @@ import Testing
 
         #expect(try h.journal.regionSuggestions() == Regions.suggested + ["Brazil", "Korea"])
     }
-
-    @Test func acquiredFromSuggestionsAreMostUsedFirst() throws {
-        for from in ["eBay", "Cash Converters", "eBay"] {
-            try h.journal.addCopy(game, CopyDraft(kind: .physical, details: CopyDetails(acquiredFrom: from)))
-        }
-        try h.journal.addCopy(game, CopyDraft(kind: .physical))
-
-        #expect(try h.journal.acquiredFromSuggestions() == ["eBay", "Cash Converters"])
-    }
 }
 
 /// Owned, Owned as a ROM, Owned only as a non-ROM Copy and Not owned, in the Library.

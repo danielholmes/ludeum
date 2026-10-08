@@ -187,20 +187,6 @@ extension LudeumStore {
         return Regions.suggested + others.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    /// Where I've acquired Copies from, most used first.
-    public func acquiredFromSuggestions() throws -> [String] {
-        try db.read { db in
-            try String.fetchAll(
-                db,
-                sql: """
-                    SELECT acquiredFrom FROM (
-                        SELECT acquiredFrom FROM copy WHERE acquiredFrom IS NOT NULL
-                        UNION ALL SELECT acquiredFrom FROM rom WHERE acquiredFrom IS NOT NULL)
-                    GROUP BY acquiredFrom ORDER BY COUNT(*) DESC, acquiredFrom COLLATE NOCASE
-                    """)
-        }
-    }
-
     static func details(_ row: Row) -> CopyDetails {
         CopyDetails(
             regions: Regions.decode(row["regions"]),
