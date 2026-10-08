@@ -360,3 +360,25 @@ enum FactStyle {
         }
     }
 }
+
+/// Plays a Library row's Game as Game detail's Play does, reading its ROMs and Emulator settings first: a double-click
+/// on its Cover. `refused` and `alert` as `startPlay(_:in:services:refused:alert:)`.
+@MainActor func startPlay(
+    _ row: LibraryRow, services: Services, refused: @escaping @MainActor (String) -> Void,
+    alert: (_ title: String, _ message: String) -> Void
+) {
+    guard let journal = services.journal, let emulator = Emulator.of(platformId: row.platformId) else { return }
+    let roms: [LudeumROM]
+    let settings: EmulatorSettings
+    do {
+        roms = try journal.roms(of: row.id)
+        settings = try journal.emulatorSettings(row.id)
+    } catch {
+        refused("Couldn't read its ROMs and Emulator settings: \(error.localizedDescription)")
+        return
+    }
+    let play = Play(
+        platformId: row.platformId, platformName: row.platformName, roms: roms, settings: settings,
+        busyROMs: Set(roms.map(\.id).filter { services.tasks.isActive(.rom($0)) }))
+    startPlay(play, in: emulator, services: services, refused: refused, alert: alert)
+}

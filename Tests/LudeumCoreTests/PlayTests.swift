@@ -21,6 +21,16 @@ import Testing
         #expect(play.availability.refusal?.message == "Archived: unarchive to play")
     }
 
+    @Test func aGameWhoseROMsAreAllMissingHasNothingToPlay() {
+        let play = Play(
+            platformId: 8, platformName: "PlayStation 2",
+            roms: [folderROM("Okami (USA)", missing: true), folderROM("Okami (Japan)", missing: true, id: 2)], settings: EmulatorSettings()
+        )
+
+        #expect(play.availability == .refused(.noROM))
+        #expect(play.availability.refusal?.message == "No ROM in its ROM folder")
+    }
+
     @Test func aGameWaitsWhileABackgroundTaskWorksOnOneOfItsROMs() {
         let play = Play(
             platformId: 8, platformName: "PlayStation 2", roms: [folderROM("Okami (USA)", id: 4)], settings: EmulatorSettings(),

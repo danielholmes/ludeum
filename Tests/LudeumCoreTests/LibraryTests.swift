@@ -114,6 +114,22 @@ import Testing
         #expect(try states()["Super Metroid"] == .noROMs)
     }
 
+    @Test func aRowOffersPlayWhenItHasAROMOnAPlatformWithAnEmulator() throws {
+        try h.journal.recordROM(game: metroid, fileName: "Super Metroid (USA).sfc", missing: false)
+        // Missing (or Archived), Play is still offered: it says why it can't open.
+        try h.journal.recordROM(game: zelda, fileName: "A Link to the Past (USA).sfc", missing: true)
+        // PC has no Emulator.
+        try h.journal.recordROM(game: doom, fileName: "Doom.zip", missing: false)
+        // No ROM.
+        try h.journal.addGame(platformId: 19, name: "Chrono Trigger")
+
+        let rows = try h.journal.library(LibraryFilter(), sort: .name, ascending: true)
+
+        #expect(
+            Dictionary(uniqueKeysWithValues: rows.map { ($0.name, $0.offersPlay) })
+                == ["Super Metroid": true, "A Link to the Past": true, "Doom": false, "Chrono Trigger": false])
+    }
+
     @Test func filtersByList() throws {
         let list = try h.journal.createList("Favourites")
         try h.journal.addToList(list, doom)

@@ -15,6 +15,8 @@ public struct Play: Sendable {
     /// Why a Game can't be Played.
     public enum Refusal: Sendable, Equatable {
         case noEmulator(String)
+        /// No present ROM: none, or every one missing.
+        case noROM
         case archived
         /// Archived in a `.7z` its Emulator can't open, on a Platform whose ROMs Compact into one it can (ares's `.zip`).
         case archivedNeedsCompacting
@@ -29,6 +31,7 @@ public struct Play: Sendable {
         public var message: String {
             switch self {
             case .noEmulator(let platform): "No \(platform) emulator yet"
+            case .noROM: "No ROM in its ROM folder"
             case .archived: "Archived: unarchive to play"
             case .archivedNeedsCompacting: "Archived: compact to play"
             case .needsPlaylist: "Its Discs have no playlist: make one in the Review queue"
@@ -67,7 +70,8 @@ public struct Play: Sendable {
     public var availability: Availability {
         guard let emulator = Emulator.of(platformId: platformId) else { return .refused(.noEmulator(platformName)) }
         let present = roms.filter { !$0.missing }
-        if !present.isEmpty, present.allSatisfy(\.archived) {
+        if present.isEmpty { return .refused(.noROM) }
+        if present.allSatisfy(\.archived) {
             return .refused(ROMPlatform.all[platformId]?.compactExtension == nil ? .archived : .archivedNeedsCompacting)
         }
         if roms.contains(where: { busyROMs.contains($0.id) }) { return .refused(.busy) }
