@@ -18,6 +18,8 @@ public struct ROMPlatform: Sendable, Equatable {
     public let compactExtension: String?
     /// How its ROMs are Archived, when they can be: nil for the rest.
     public let archiving: Archiving?
+    /// Whose names its ROMs are given by Rename: Redump's for the disc Platforms it catalogues, No-Intro's for the rest.
+    let naming: Naming
 
     /// How an Archived ROM unpacks.
     public enum Archiving: Sendable, Equatable {
@@ -27,9 +29,14 @@ public struct ROMPlatform: Sendable, Equatable {
         case singleFile
     }
 
+    /// The group whose names a Platform's ROMs follow (ADR 0012).
+    public enum Naming: Sendable, Equatable {
+        case noIntro, redump
+    }
+
     init(
         name: String, folderName: String, readyExtensions: [String], libretroRepo: String, compactExtension: String? = nil,
-        archiving: Archiving? = nil
+        archiving: Archiving? = nil, naming: Naming = .noIntro
     ) {
         self.name = name
         self.folderName = folderName
@@ -37,6 +44,7 @@ public struct ROMPlatform: Sendable, Equatable {
         self.libretroRepo = libretroRepo
         self.compactExtension = compactExtension
         self.archiving = archiving
+        self.naming = naming
     }
 
     /// Whether a ROM whose file is `fileName` can still be Compacted: its Emulator opens an archive the file isn't yet.
@@ -86,20 +94,20 @@ public struct ROMPlatform: Sendable, Equatable {
         21: .init(
             name: "Nintendo GameCube", folderName: "GameCube", readyExtensions: ["rvz", "iso", "gcm", "ciso", "gcz", "wbfs"],
             libretroRepo: "Nintendo_-_GameCube",
-            archiving: .singleFile),
+            archiving: .singleFile, naming: .redump),
         // Not `.nfs`: a Wii U eShop Wii game is a folder with a key file.
         5: .init(
             name: "Wii", folderName: "Wii", readyExtensions: ["wad", "rvz", "wbfs", "iso", "wia", "gcz", "ciso"],
             libretroRepo: "Nintendo_-_Wii",
-            archiving: .singleFile),
+            archiving: .singleFile, naming: .redump),
         7: .init(
             name: "PlayStation", folderName: "PS1", readyExtensions: ["m3u", "chd", "cue", "pbp", "iso", "bin", "img"],
             libretroRepo: "Sony_-_PlayStation",
-            archiving: .intoFolder),
+            archiving: .intoFolder, naming: .redump),
         38: .init(
             name: "PlayStation Portable", folderName: "PSP", readyExtensions: ["iso", "cso", "chd", "pbp"],
             libretroRepo: "Sony_-_PlayStation_Portable",
-            archiving: .singleFile),
+            archiving: .singleFile, naming: .redump),
         // A `.vpk`, though no Emulator plays it yet. Not a `.zip` of the game's folder, which Vita3K also installs:
         // a `.zip` is ares's.
         46: .init(
@@ -108,7 +116,7 @@ public struct ROMPlatform: Sendable, Equatable {
         8: .init(
             name: "PlayStation 2", folderName: "PS2", readyExtensions: ["iso", "chd", "cso", "zso", "gz", "cue", "bin", "mdf"],
             libretroRepo: "Sony_-_PlayStation_2",
-            archiving: .intoFolder),
+            archiving: .intoFolder, naming: .redump),
         29: .init(
             name: "Sega Mega Drive/Genesis", folderName: "Mega Drive", readyExtensions: ["md", "gen", "smd", "bin"],
             libretroRepo: "Sega_-_Mega_Drive_-_Genesis",
@@ -123,14 +131,14 @@ public struct ROMPlatform: Sendable, Equatable {
         78: .init(
             name: "Sega CD", folderName: "Sega CD", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"],
             libretroRepo: "Sega_-_Mega-CD_-_Sega_CD",
-            archiving: .intoFolder),
+            archiving: .intoFolder, naming: .redump),
         32: .init(
             name: "Sega Saturn", folderName: "Saturn", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"], libretroRepo: "Sega_-_Saturn",
-            archiving: .intoFolder),
+            archiving: .intoFolder, naming: .redump),
         150: .init(
             name: "Turbografx-16/PC Engine CD", folderName: "PC Engine CD", readyExtensions: ["m3u", "chd", "cue", "bin"],
             libretroRepo: "NEC_-_PC_Engine_CD_-_TurboGrafx-CD",
-            archiving: .intoFolder),
+            archiving: .intoFolder, naming: .redump),
         // No Emulator yet, so nothing to Compact into.
         53: .init(
             name: "MSX2", folderName: "MSX2", readyExtensions: ["rom", "mx2", "mx1", "dsk", "cas"], libretroRepo: "Microsoft_-_MSX2"),

@@ -155,6 +155,14 @@ public enum AddROMMatch: Sendable, Equatable {
     case byHand(name: String)
 }
 
+/// What Add ROM names the new ROM.
+public enum AddROMNaming: Sendable, Equatable {
+    /// The picked file's name.
+    case picked
+    /// The name a Rename would give it, without the tags it can't place that are in `dropping`.
+    case standard(dropping: Set<String> = [])
+}
+
 /// Add ROM: puts a game picked from elsewhere into its Platform's ROM folder in the form the Platform keeps, then records
 /// it and Matches it by hand. A Compactable Platform's ROM is Compacted; a Platform whose ROMs are kept in subfolders
 /// gets one named after the ROM, with a playlist for its Discs; anything else is one Playable file named after the ROM.
@@ -179,8 +187,8 @@ public struct AddROM: Sendable {
 
     /// What Add ROM will make of it in the ROM folder, e.g. `Tetris (World).7z` or `Fear Effect 2 (Europe)/`, for the
     /// sheet to show before it starts.
-    public static func fileName(of source: ROMSource, in folder: ROMFolder) -> String {
-        let name = source.romName
+    public static func fileName(of source: ROMSource, named name: String? = nil, in folder: ROMFolder) -> String {
+        let name = name ?? source.romName
         if source.isFolder || source.urls.count > 1 || folder.archiving == .intoFolder { return "\(name)/" }
         if let compact = folder.compactExtension { return "\(name).\(compact)" }
         let ext = source.archive == nil ? source.urls.first?.pathExtension.lowercased() ?? "" : "…"
@@ -191,30 +199,80 @@ public struct AddROM: Sendable {
     /// untouched, when anything goes wrong before the ROM is in the journal.
     @discardableResult
     public func add(
-        _ source: ROMSource, to folder: ROMFolder, match: AddROMMatch, keepingOriginals: Bool,
+        _ source: ROMSource, to folder: ROMFolder, match: AddROMMatch, keepingOriginals: Bool, naming: AddROMNaming = .picked,
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> GameID {
-        let name = source.romName
         if case .byHand(let gameName) = match, gameName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw LudeumError.nameRequired
         }
-        try await check(source, fits: folder)
-        let missingRow = try missingROM(named: name, on: folder.platformId, for: match)
-        let (destination, file) = try await put(source, in: folder, progress: progress)
+        let named = try name(of: source, matching: match, in: folder, naming: naming)
+        try await check(source, fits: folder, named: named.name)
+        let (destination, file) = try await put(source, named: named.name, in: folder, progress: progress)
         let game: GameID
         do {
             let checksum = await ROMChecksum.of(file, platformId: folder.platformId, sevenZip: sevenZip)
-            (game, _) = try journal.recordAddedROM(file, checksum: checksum, on: folder.platformId, reusing: missingRow, match: match)
+            (game, _) = try journal.recordAddedROM(
+                file, checksum: checksum, on: folder.platformId, reusing: named.missingRow, regions: named.regions, match: match)
         } catch {
             // Never in the journal: what was put in place goes again, and the picked files were never touched.
             try? FileManager.default.removeItem(at: destination)
             throw error
         }
         if !keepingOriginals { trashOriginals(of: source) }
-        if let rom = try journal.romID(named: name, on: folder.platformId) {
+        if let rom = try journal.romID(named: named.name, on: folder.platformId) {
             try? await BoxArtImport(journal: journal, libretro: libretro).lookUp([rom])
         }
         return game
+    }
+
+    /// The name a Rename would give the ROM once it's Matched, before choosing which tags it can't place to drop: nil
+    /// when its ROM folder couldn't read the Game's name. Throws when another ROM has it, as `add` would.
+    public func standardName(of source: ROMSource, matching match: AddROMMatch, in folder: ROMFolder) throws -> ROMRename.Proposal? {
+        try name(of: source, matching: match, in: folder, naming: .standard()).proposal
+    }
+
+    /// The ROM's name, the missing ROM it brings back, and its Regions. A missing ROM of the picked name comes back, and
+    /// with a standard name so does one of that name: either way it keeps its own Regions, and is named from them.
+    private func name(
+        of source: ROMSource, matching match: AddROMMatch, in folder: ROMFolder, naming: AddROMNaming
+    ) throws -> (name: String, missingRow: Int64?, regions: [String], proposal: ROMRename.Proposal?) {
+        let picked = source.romName
+        let pickedRow = try missingROM(named: picked, on: folder.platformId, for: match)
+        guard case .standard(let dropping) = naming, let gameName = try gameName(of: match) else {
+            return (picked, pickedRow, try regions(ofROM: pickedRow) ?? ROMName(picked).regionNames, nil)
+        }
+        func proposal(_ regions: [String]) -> ROMRename.Proposal? {
+            ROMRename.proposal(forROM: picked, gameName: gameName, regions: regions, platformId: folder.platformId)
+        }
+        var row = pickedRow
+        var regions = try regions(ofROM: row) ?? ROMName(picked).regionNames
+        guard var standard = proposal(regions) else { return (picked, pickedRow, regions, nil) }
+        if row == nil, let named = try missingROM(named: standard.name(dropping: dropping), on: folder.platformId, for: match) {
+            row = named
+            regions = try self.regions(ofROM: named) ?? regions
+            standard = proposal(regions) ?? standard
+        }
+        let name = standard.name(dropping: dropping)
+        if name != picked, let other = try missingROM(named: name, on: folder.platformId, for: match), other != row {
+            throw AddROMError.alreadyInROMFolder(name)
+        }
+        return (name, row, regions, standard)
+    }
+
+    /// The Game's name the ROM is Matched to.
+    private func gameName(of match: AddROMMatch) throws -> String? {
+        switch match {
+        case .igdb(_, let name, _): name
+        case .game(let game, _): try journal.game(game).name
+        case .byHand(let name): name.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private func regions(ofROM row: Int64?) throws -> [String]? {
+        guard let row else { return nil }
+        return try journal.db.read { db in
+            Regions.decode(try String.fetchOne(db, sql: "SELECT regions FROM rom WHERE id = ?", arguments: [row]))
+        }
     }
 
     /// Adds several ROMs at once, one after another, without Matching them: each goes into its ROM folder as `add` puts
@@ -229,8 +287,8 @@ public struct AddROM: Sendable {
             try Task.checkCancellation()
             let done = Double(i) / Double(roms.count)
             do {
-                try await check(rom.source, fits: rom.folder)
-                _ = try await put(rom.source, in: rom.folder) { progress(done + $0 / Double(roms.count)) }
+                try await check(rom.source, fits: rom.folder, named: rom.source.romName)
+                _ = try await put(rom.source, named: rom.source.romName, in: rom.folder) { progress(done + $0 / Double(roms.count)) }
             } catch {
                 // Cancelled, not failed, even when 7-Zip was stopped with an error of its own.
                 if error is CancellationError || Task.isCancelled { throw CancellationError() }
@@ -243,21 +301,20 @@ public struct AddROM: Sendable {
     }
 
     /// Throws, touching nothing, when the ROM folder won't read it or already has a ROM of its name.
-    private func check(_ source: ROMSource, fits folder: ROMFolder) async throws {
+    private func check(_ source: ROMSource, fits folder: ROMFolder, named name: String) async throws {
         let platformName = ROMPlatform.all[folder.platformId]?.name ?? "Platform \(folder.platformId)"
         guard try await source.platforms(sevenZip: sevenZip).contains(folder.platformId) else {
             throw AddROMError.platformWontReadIt(platformName)
         }
         try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: true)
-        if try folder.scan().contains(where: { $0.name == source.romName }) { throw AddROMError.alreadyInROMFolder(source.romName) }
+        if try folder.scan().contains(where: { $0.name == name }) { throw AddROMError.alreadyInROMFolder(name) }
     }
 
     /// Makes the ROM in a work folder and moves it into place, then checks the ROM folder reads it as a Playable ROM in
     /// one form, taking it out again if not.
     private func put(
-        _ source: ROMSource, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void
+        _ source: ROMSource, named name: String, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void
     ) async throws -> (destination: URL, file: FolderROMFile) {
-        let name = source.romName
         let work = folder.url.appending(path: ROMArchiver.workFolderName, directoryHint: .isDirectory)
             .appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -383,7 +440,8 @@ public struct AddROM: Sendable {
 extension LudeumStore {
     /// Records an Added ROM and Matches it by hand, in one transaction: a new row, or the missing one it brings back.
     func recordAddedROM(
-        _ file: FolderROMFile, checksum: ROMChecksum?, on platformId: Int64, reusing missingRow: Int64?, match: AddROMMatch
+        _ file: FolderROMFile, checksum: ROMChecksum?, on platformId: Int64, reusing missingRow: Int64?, regions: [String],
+        match: AddROMMatch
     ) throws -> (game: GameID, rom: Int64) {
         let now = clock.now()
         let day = today()
@@ -392,6 +450,7 @@ extension LudeumStore {
             let rom: Int64
             if let missingRow {
                 rom = missingRow
+                try db.execute(sql: "UPDATE rom SET folderName = ?, name = ? WHERE id = ?", arguments: [file.name, file.name, rom])
                 try Self.setFolderROM(db, rom, to: file)
             } else {
                 let parsed = ROMName(file.name)
@@ -405,7 +464,7 @@ extension LudeumStore {
                     arguments: [
                         file.name, checksum?.md5, checksum?.crc, file.archived, file.fileName, file.name, platformId,
                         parsed.version, parsed.disc, parsed.discLabel, file.needsPlaylist, file.inBothForms,
-                        Regions.encode(parsed.regionNames),
+                        Regions.encode(regions),
                     ])
                 rom = db.lastInsertedRowID
             }

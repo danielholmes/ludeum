@@ -313,6 +313,88 @@ struct AddROMTests {
         #expect(try gameBoy.folder.scan().isEmpty)
     }
 
+    func setRegions(_ regions: [String], ofROM name: String) throws {
+        let id = try #require(try romRow(name)?["id"] as Int64?)
+        try j.journal.setROMDetails(id, CopyDetails(regions: regions))
+    }
+
+    @Test func itCanBeGivenTheNameARenameWouldGiveIt() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let original = try pick("Tetris (JUE) [!].gb", "GB")
+
+        try await adder.add(
+            ROMSource([original]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true, naming: .standard())
+
+        #expect(try gameBoy.folder.scan().map(\.fileName) == ["Tetris (World).7z"])
+        let row = try #require(try romRow("Tetris (World)"))
+        #expect(Regions.decode(row["regions"]) == ["Europe", "USA", "Japan"])
+    }
+
+    @Test func aTagItCantPlaceCanBeDroppedFromTheName() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let original = try pick("Tetris (E)(Trashman).gb", "GB")
+        let source = ROMSource([original])
+        let match = igdb(1, "Tetris", on: 33)
+
+        let proposal = try #require(try adder.standardName(of: source, matching: match, in: gameBoy.folder))
+        #expect(proposal.unplacedTags == ["(Trashman)"])
+        try await adder.add(source, to: gameBoy.folder, match: match, keepingOriginals: true, naming: .standard(dropping: ["(Trashman)"]))
+
+        #expect(try gameBoy.folder.scan().map(\.name) == ["Tetris (Europe)"])
+    }
+
+    /// The missing ROM comes back with its own Regions, and is named from them.
+    @Test func aMissingROMOfThePickedNameComesBackNamedFromItsOwnRegions() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let game = try missingGame("Tetris (U) [!]", on: 33)
+        try setRegions(["Europe"], ofROM: "Tetris (U) [!]")
+        let id = try #require(try romRow("Tetris (U) [!]")?["id"] as Int64?)
+        let original = try pick("Tetris (U) [!].gb", "GB")
+
+        try await adder.add(
+            ROMSource([original]), to: gameBoy.folder, match: .game(game, deletingMissing: false), keepingOriginals: true,
+            naming: .standard())
+
+        let roms = try j.journal.roms(of: game)
+        #expect(roms.map(\.id) == [id])
+        #expect(roms.map(\.folderName) == ["Tetris (Europe)"])
+        #expect(roms.map(\.missing) == [false])
+        #expect(try gameBoy.folder.scan().map(\.name) == ["Tetris (Europe)"])
+    }
+
+    /// Renamed before its file was lost, it comes back from a file of its old name.
+    @Test func aMissingROMOfTheNameARenameWouldGiveComesBack() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let game = try missingGame("Tetris (USA)", on: 33)
+        try setRegions(["USA"], ofROM: "Tetris (USA)")
+        let id = try #require(try romRow("Tetris (USA)")?["id"] as Int64?)
+        let original = try pick("Tetris (U) [!].gb", "GB")
+
+        try await adder.add(
+            ROMSource([original]), to: gameBoy.folder, match: .game(game, deletingMissing: false), keepingOriginals: true,
+            naming: .standard())
+
+        let roms = try j.journal.roms(of: game)
+        #expect(roms.map(\.id) == [id])
+        #expect(roms.map(\.missing) == [false])
+        #expect(try gameBoy.folder.scan().map(\.name) == ["Tetris (USA)"])
+    }
+
+    @Test func aMissingROMOfTheNameARenameWouldGiveOnAnotherGameIsRefused() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        _ = try missingGame("Tetris (USA)", on: 33)
+        let original = try pick("Tetris (U) [!].gb", "GB")
+
+        #expect(throws: AddROMError.missingROMIsAnotherGames("Tetris (USA)")) {
+            try adder.standardName(of: ROMSource([original]), matching: igdb(1, "Tetris", on: 33), in: gameBoy.folder)
+        }
+        await #expect(throws: AddROMError.missingROMIsAnotherGames("Tetris (USA)")) {
+            try await adder.add(
+                ROMSource([original]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true, naming: .standard())
+        }
+        #expect(try gameBoy.folder.scan().isEmpty)
+    }
+
     @Test func aGameMadeByHandHasNoIGDBLinkAndTheROMIsMatchedToIt() async throws {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         let original = try pick("Hermano (World) (Homebrew).gb", "GB")

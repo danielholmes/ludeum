@@ -43,7 +43,7 @@ Packing a ROM into the archive its Platform's Emulator opens directly, so it tak
 _Avoid_: Compress, zip, Archive (that leaves it unplayable)
 
 **Rename**:
-Renaming a ROM after its Game, with its own tags kept (`Ōkami (USA).iso` becomes `Okami (USA).iso`), in every form it's kept in: its subfolder, its file, its `.7z` and its Compacted copy, and anything else of its name beside them. It stays the same ROM, with its Match. A name another ROM has, present or missing, is refused.
+Renaming a ROM to the name No-Intro would give it (Redump, on disc Platforms): its Game's name written their way, its Regions as its region tag, and the rest of what its name says about its Version and Disc in their form, without what says nothing about them. So `Super Mario World (U) [!]` with Regions USA becomes `Super Mario World (USA)`, and `The Legend of Zelda: Spirit Tracks`' ROM becomes `Legend of Zelda, The - Spirit Tracks (…)`. A ROM with no Regions gets no region tag. A tag it can't place, such as a scene group's or an edition's, is kept unless I choose to drop it. It's renamed in every form it's kept in: its subfolder, its file, its `.7z` and its Compacted copy, and anything else of its name beside them. It stays the same ROM, with its Match. Changing a ROM's Regions never renames it; it only makes Rename offered. A name another ROM has, present or missing, is refused.
 _Avoid_: Move, retitle
 
 **Disc**:
@@ -197,7 +197,7 @@ Reading the ROM folders into the journal. Import never changes them.
 _Avoid_: Scan, pull
 
 **Add ROM**:
-Putting a game from elsewhere (its file, an archive of it, its folder, or its Discs) into its Platform's ROM folder in the form that Platform keeps, then Matching it by hand: to an IGDB game I choose, to a Game whose ROMs are all missing, or to a new Game I make by hand with no IGDB link, for a game IGDB doesn't have. A Compactable Platform's ROM goes in Compacted, a disc Platform's in a subfolder with a playlist for its Discs, and anything else as one Playable file; it's never left Archived. I choose whether the picked files are copied or moved (moved ones go to the Trash once the ROM is in). Several ROMs picked at once are Added one at a time, each Matched by hand the same way; one can instead go in without a Match, for the Import that follows to Match automatically or through the Review queue.
+Putting a game from elsewhere (its file, an archive of it, its folder, or its Discs) into its Platform's ROM folder in the form that Platform keeps, then Matching it by hand: to an IGDB game I choose, to a Game whose ROMs are all missing, or to a new Game I make by hand with no IGDB link, for a game IGDB doesn't have. A Compactable Platform's ROM goes in Compacted, a disc Platform's in a subfolder with a playlist for its Discs, and anything else as one Playable file; it's never left Archived. Once it's Matched it can be given the name a Rename would give it (on unless I turn it off), and a missing ROM of that Game with either name, the picked one or that one, comes back, named from its own Regions. I choose whether the picked files are copied or moved (moved ones go to the Trash once the ROM is in). Several ROMs picked at once are Added one at a time, each Matched by hand the same way; one can instead go in without a Match, for the Import that follows to Match automatically or through the Review queue.
 _Avoid_: Import (that only reads the ROM folders), upload
 
 **Review queue**:

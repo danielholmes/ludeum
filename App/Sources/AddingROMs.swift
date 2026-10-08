@@ -37,16 +37,22 @@ func readPicked(_ urls: [URL]) async throws -> PickedROM {
 
 /// Adds the ROM as a Background task. Once it has run, the screens see what it did, and `added` gets its Game if it's in.
 @MainActor func startAddingROM(
-    _ source: ROMSource, on platformId: Int64, match: AddROMMatch, keepingOriginals: Bool, services: Services,
-    added: @escaping (GameID) -> Void = { _ in }
+    _ source: ROMSource, on platformId: Int64, match: AddROMMatch, keepingOriginals: Bool, naming: AddROMNaming = .picked,
+    services: Services, added: @escaping (GameID) -> Void = { _ in }
 ) {
     guard let journal = services.journal,
         let folder = services.settings.romFolders.first(where: { $0.platformId == platformId })
     else { return }
     let adder = AddROM(journal: journal, libretro: services.libretro)
-    let name = source.romName
+    // The name it'll have, by which it's found once it's in.
+    let name: String =
+        if case .standard(let dropping) = naming, let standard = try? adder.standardName(of: source, matching: match, in: folder) {
+            standard.name(dropping: dropping)
+        } else {
+            source.romName
+        }
     services.tasks.enqueue("Adding \(name)") { progress in
-        try await adder.add(source, to: folder, match: match, keepingOriginals: keepingOriginals, progress: progress)
+        try await adder.add(source, to: folder, match: match, keepingOriginals: keepingOriginals, naming: naming, progress: progress)
     } ended: { [changes = services.changes] in
         // Recorded only once it's all in place, so a ROM of its name Matched to a Game means it worked.
         if let rom = try? journal.romID(named: name, on: platformId), let game = try? journal.game(ofROM: rom) { added(game) }
@@ -62,9 +68,10 @@ struct AddROMSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        AddROMFlow(services: services, picked: picked) { match, _, platform, keepingOriginals in
+        AddROMFlow(services: services, picked: picked) { match, _, platform, keepingOriginals, naming in
             startAddingROM(
-                picked.source, on: platform.id, match: match, keepingOriginals: keepingOriginals, services: services, added: added)
+                picked.source, on: platform.id, match: match, keepingOriginals: keepingOriginals, naming: naming, services: services,
+                added: added)
             dismiss()
         } buttons: {
             EmptyView()
@@ -83,7 +90,7 @@ struct AddROMFlow<Buttons: View>: View {
     let picked: PickedROM
     /// Why the Platform can't take it, beyond its ROM folder not reading it: nil when it can.
     let refused: (IGDBPlatform) -> String?
-    let add: (_ match: AddROMMatch, _ gameName: String, _ platform: IGDBPlatform, _ keepingOriginals: Bool) -> Void
+    let add: (_ match: AddROMMatch, _ gameName: String, _ platform: IGDBPlatform, _ keepingOriginals: Bool, _ naming: AddROMNaming) -> Void
     @ViewBuilder let buttons: () -> Buttons
     @Environment(\.dismiss) private var dismiss
     @State private var query: String
@@ -93,7 +100,10 @@ struct AddROMFlow<Buttons: View>: View {
 
     init(
         services: Services, picked: PickedROM, refused: @escaping (IGDBPlatform) -> String? = { _ in nil },
-        add: @escaping (_ match: AddROMMatch, _ gameName: String, _ platform: IGDBPlatform, _ keepingOriginals: Bool) -> Void,
+        add:
+            @escaping (
+                _ match: AddROMMatch, _ gameName: String, _ platform: IGDBPlatform, _ keepingOriginals: Bool, _ naming: AddROMNaming
+            ) -> Void,
         @ViewBuilder buttons: @escaping () -> Buttons
     ) {
         self.services = services
@@ -118,10 +128,10 @@ struct AddROMFlow<Buttons: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             if let chosen {
                 AddROMConfirmation(
-                    services: services, source: picked.source, platformId: chosen.platform.id, gameName: chosen.gameName,
-                    existing: chosen.existing, back: { self.chosen = nil }
-                ) { keepingOriginals, _ in
-                    add(chosen.match, chosen.gameName, chosen.platform, keepingOriginals)
+                    services: services, source: picked.source, platformId: chosen.platform.id, match: chosen.match,
+                    gameName: chosen.gameName, existing: chosen.existing, back: { self.chosen = nil }
+                ) { keepingOriginals, _, naming in
+                    add(chosen.match, chosen.gameName, chosen.platform, keepingOriginals, naming)
                 }
             } else if makingByHand {
                 AddROMByHand(
@@ -257,17 +267,34 @@ struct AddROMConfirmation: View {
     let services: Services
     let source: ROMSource
     let platformId: Int64
+    /// What it's Matched to: the name it can be given depends on it.
+    let match: AddROMMatch
     let gameName: String
     /// The Game it joins, when the journal has it already.
     let existing: GameID?
     /// Offered when the Game has missing ROMs: delete them once the new one is in.
     var missingROMs = 0
     var back: (() -> Void)? = nil
-    /// Whether to keep the picked files, and to delete the Game's missing ROMs.
-    let add: (_ keepingOriginals: Bool, _ deletingMissing: Bool) -> Void
+    /// Whether to keep the picked files, to delete the Game's missing ROMs, and what to name it.
+    let add: (_ keepingOriginals: Bool, _ deletingMissing: Bool, _ naming: AddROMNaming) -> Void
     @Environment(\.dismiss) private var dismiss
     @AppStorage("addROMKeepsOriginals") private var keepingOriginals = true
     @State private var deletingMissing = true
+    /// The name a Rename would give it, or why it can't have it.
+    @State private var standard: Result<ROMRename.Proposal?, any Error> = .success(nil)
+    @State private var givingStandardName = true
+    @State private var dropping: Set<String> = []
+
+    /// The name it's given: its standard one, when it can have it and that's chosen.
+    private var name: String {
+        guard givingStandardName, case .success(let proposal?) = standard else { return source.romName }
+        return proposal.name(dropping: dropping)
+    }
+
+    private var naming: AddROMNaming {
+        guard givingStandardName, case .success(.some) = standard else { return .picked }
+        return .standard(dropping: dropping)
+    }
 
     private var platform: ROMPlatform? { ROMPlatform.all[platformId] }
     private var folder: ROMFolder? { services.settings.romFolders.first { $0.platformId == platformId } }
@@ -279,13 +306,15 @@ struct AddROMConfirmation: View {
                 LabeledContent("Game", value: gameName)
                 LabeledContent("Platform", value: platform?.name ?? "Platform \(platformId)")
                 if let folder {
-                    LabeledContent("Goes in", value: "ROMs/\(folder.url.lastPathComponent)/\(AddROM.fileName(of: source, in: folder))")
+                    LabeledContent(
+                        "Goes in", value: "ROMs/\(folder.url.lastPathComponent)/\(AddROM.fileName(of: source, named: name, in: folder))")
                 }
                 Text(what).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if existing != nil, missingROMs == 0 {
                     Text("It's already in the Library, so the ROM joins that Game.").foregroundStyle(.secondary)
                 }
             }
+            standardNameSection
             Section {
                 Picker("Picked files", selection: $keepingOriginals) {
                     Text("Copy them").tag(true)
@@ -303,10 +332,37 @@ struct AddROMConfirmation: View {
                 if let back { Button("Back", action: back) }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
-                Button("Add ROM") { add(keepingOriginals, missingROMs > 0 && deletingMissing) }.keyboardShortcut(.defaultAction)
+                Button("Add ROM") { add(keepingOriginals, missingROMs > 0 && deletingMissing, naming) }.keyboardShortcut(.defaultAction)
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            guard let journal = services.journal, let folder else { return }
+            standard = Result { try AddROM(journal: journal).standardName(of: source, matching: match, in: folder) }
+        }
+    }
+
+    /// Giving it the name a Rename would, with its preview, when the picked name isn't that already.
+    @ViewBuilder private var standardNameSection: some View {
+        switch standard {
+        case .success(let proposal?) where proposal.name() != source.romName:
+            Section {
+                Toggle("Give it its standard name", isOn: $givingStandardName)
+                Text("→ \(proposal.name(dropping: dropping))").font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            } footer: {
+                Text("As No-Intro (or Redump, on disc Platforms) would name it, with its Regions.")
+            }
+            if givingStandardName, !proposal.unplacedTags.isEmpty {
+                UnplacedTagsChoice(tags: proposal.unplacedTags, dropping: $dropping)
+            }
+        case .failure(let error):
+            Section {
+                Toggle("Give it its standard name", isOn: .constant(false)).disabled(true)
+                Text(journalErrorText(error)).font(.callout).foregroundStyle(.secondary)
+            }
+        default:
+            EmptyView()
+        }
     }
 
     private var what: String {
@@ -335,12 +391,12 @@ struct AddROMToGameSheet: View {
 
     var body: some View {
         AddROMConfirmation(
-            services: services, source: picked.source, platformId: game.platformId, gameName: game.name, existing: game.id,
-            missingROMs: missingROMs
-        ) { keepingOriginals, deleting in
+            services: services, source: picked.source, platformId: game.platformId, match: .game(game.id, deletingMissing: false),
+            gameName: game.name, existing: game.id, missingROMs: missingROMs
+        ) { keepingOriginals, deleting, naming in
             startAddingROM(
                 picked.source, on: game.platformId, match: .game(game.id, deletingMissing: deleting),
-                keepingOriginals: keepingOriginals, services: services)
+                keepingOriginals: keepingOriginals, naming: naming, services: services)
             dismiss()
         }
         .padding()
@@ -460,8 +516,9 @@ struct AddROMsSheet: View {
             } else {
                 AddROMFlow(
                     services: services, picked: PickedROM(source: row.source, platforms: row.platforms), refused: clash
-                ) { match, gameName, platform, keepingOriginals in
-                    startAddingROM(row.source, on: platform.id, match: match, keepingOriginals: keepingOriginals, services: services)
+                ) { match, gameName, platform, keepingOriginals, naming in
+                    startAddingROM(
+                        row.source, on: platform.id, match: match, keepingOriginals: keepingOriginals, naming: naming, services: services)
                     finish(.added(game: gameName, platform: platform.id))
                 } buttons: {
                     Button("Skip") { finish(.skipped) }.help("Leave this ROM out")

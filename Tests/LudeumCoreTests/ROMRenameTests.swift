@@ -3,40 +3,166 @@ import Testing
 
 @testable import LudeumCore
 
-/// Renaming a ROM after its Game: the Game's name, keeping the ROM's tags.
+/// The name Rename offers: No-Intro's (Redump's on disc Platforms), from the Game's name, the ROM's Regions and what
+/// else its name says about its Version and Disc.
 @Suite struct ROMRenameNameTests {
-    @Test func aROMNamedOtherwiseIsOfferedTheGamesNameWithItsTags() {
-        #expect(ROMRename.newName(forROM: "Ōkami (USA)", gameName: "Okami") == "Okami (USA)")
-        #expect(ROMRename.newName(forROM: "okami_usa_final", gameName: "Okami") == "Okami")
-        #expect(ROMRename.newName(forROM: "MP2 (USA) (Disc 2) [!]", gameName: "Metroid Prime 2") == "Metroid Prime 2 (USA) (Disc 2) [!]")
+    func offered(_ rom: String, _ game: String, _ regions: [String] = [], on platform: Int64 = 19) -> String? {
+        ROMRename.newName(forROM: rom, gameName: game, regions: regions, platformId: platform)
     }
 
-    @Test func aROMAlreadyNamedAfterItsGameBeforeItsTagsIsntOffered() {
-        #expect(ROMRename.newName(forROM: "Okami (USA)", gameName: "Okami") == nil)
-        #expect(ROMRename.newName(forROM: "Okami", gameName: "Okami") == nil)
-        #expect(ROMRename.newName(forROM: "Okami  (USA)", gameName: "Okami") == nil)
+    @Test func theRegionTagIsTheROMsRegionsNotItsNames() {
+        #expect(offered("Super Mario World (U)", "Super Mario World", ["USA"]) == "Super Mario World (USA)")
+        #expect(offered("Tanglewood", "Tanglewood", ["Europe"]) == "Tanglewood (Europe)")
+        #expect(offered("Tony Hawk's Underground (UE)", "Tony Hawk's Underground", ["Europe"]) == "Tony Hawk's Underground (Europe)")
     }
 
-    @Test func aROMWhoseTitleOnlyStartsWithTheGamesNameIsOffered() {
-        #expect(ROMRename.newName(forROM: "Okami HD (USA)", gameName: "Okami") == "Okami (USA)")
+    @Test func aROMWithNoRegionsHasNoRegionTag() {
+        #expect(offered("Gods (E)", "Gods") == "Gods")
+        #expect(offered("Gods", "Gods") == nil)
+    }
+
+    @Test func aROMAlreadyWithItsNameIsntOffered() {
+        #expect(offered("Okami (USA)", "Okami", ["USA"]) == nil)
+        #expect(offered("Legend of Zelda, The - Spirit Tracks (USA)", "The Legend of Zelda: Spirit Tracks", ["USA"]) == nil)
     }
 
     /// Once renamed, it isn't offered again, though the Game's name has a tag of its own.
     @Test func aGameNameWithItsOwnTagIsOfferedOnce() {
-        #expect(ROMRename.newName(forROM: "Bar (USA)", gameName: "Foo (2008)") == "Foo (2008) (USA)")
-        #expect(ROMRename.newName(forROM: "Foo (2008) (USA)", gameName: "Foo (2008)") == nil)
+        #expect(offered("Bar (USA)", "Foo (2008)", ["USA"]) == "Foo (2008) (USA)")
+        #expect(offered("Foo (2008) (USA)", "Foo (2008)", ["USA"]) == nil)
+    }
+
+    /// A leading article moves to the end of the main title, before any subtitle; one starting a subtitle stays.
+    @Test func aLeadingArticleMovesToTheEndOfTheMainTitle() {
+        #expect(offered("Zelda ST", "The Legend of Zelda: Spirit Tracks") == "Legend of Zelda, The - Spirit Tracks")
+        #expect(offered("Zelda", "Zelda: A Link to the Past") == "Zelda - A Link to the Past")
+        #expect(offered("Fievel", "An American Tail: Fievel Goes West") == "American Tail, An - Fievel Goes West")
+        #expect(offered("Blob", "A Boy and His Blob") == "Boy and His Blob, A")
+        #expect(offered("Theme", "Theme Park") == "Theme Park")
+    }
+
+    /// No-Intro's names are ASCII: accents go, and so do symbols, though a letter of another script stays.
+    @Test func aGameNameIsWrittenInASCIIWhereItCanBe() {
+        #expect(offered("Okami HD", "Ōkami") == "Okami")
+        #expect(offered("Snap", "Pokémon Snap") == "Pokemon Snap")
+        #expect(offered("THPS", "Tony Hawk’s Pro Skater™") == "Tony Hawk's Pro Skater")
+        #expect(offered("Ranma", "Ranma ½: Hard Battle") == "Ranma 1-2 - Hard Battle")
+        #expect(offered("Zelda", "ゼルダの伝説") == "ゼルダの伝説")
+    }
+
+    /// A colon is " - "; the characters No-Intro forbids are dropped, though one joining two words is a "-".
+    @Test func charactersNoIntroForbidsAreDropped() {
+        #expect(offered("MP2", "Metroid Prime 2: Echoes") == "Metroid Prime 2 - Echoes")
+        #expect(offered("Roger", "Who Framed Roger Rabbit?") == "Who Framed Roger Rabbit")
+        #expect(offered("Qbert", "Q*bert") == "Q-bert")
+        #expect(offered("DQ", "Dragon Quest I/II") == "Dragon Quest I-II")
+        #expect(offered("Ys", #"Ys "Book" <I>"#) == "Ys Book I")
     }
 
     /// A ROM folder doesn't read a name starting with a dot: the file would be hidden.
     @Test func aGameNameStartingWithADotIsntOffered() {
-        #expect(ROMRename.newName(forROM: "Hack Infection (USA)", gameName: ".hack//Infection") == nil)
+        #expect(offered("Hack Infection (USA)", ".hack//Infection", ["USA"]) == nil)
     }
 
-    /// A colon is No-Intro's " - "; a slash, which no file name can hold, is a "-".
-    @Test func aGameNameIsMadeFitForAFileName() {
-        #expect(ROMRename.newName(forROM: "MP2 (USA)", gameName: "Metroid Prime 2: Echoes") == "Metroid Prime 2 - Echoes (USA)")
-        #expect(ROMRename.newName(forROM: "Metroid Prime 2 - Echoes (USA)", gameName: "Metroid Prime 2: Echoes") == nil)
-        #expect(ROMRename.newName(forROM: "DQ (Japan)", gameName: "Dragon Quest I/II") == "Dragon Quest I-II (Japan)")
+    /// Dump flags and scene language counts go; a bad dump, a hack, a trainer and a translation stay, last.
+    @Test func dumpFlagsGoButWhatSaysWhatsInTheFileStays() {
+        #expect(offered("Super Mario World (U) [!]", "Super Mario World", ["USA"]) == "Super Mario World (USA)")
+        #expect(offered("Zelda (U) [a1][o2][f1][p1][!]", "Zelda", ["USA"]) == "Zelda (USA)")
+        #expect(offered("Zelda (U) [T+Eng1.0][h1C][b1][t2]", "Zelda", ["USA"]) == "Zelda (USA) [h1C] [b1] [t2] [T+Eng1.0]")
+        #expect(offered("Soccer (E) (M3) [S][!]", "Soccer", ["Europe"]) == "Soccer (Europe)")
+        #expect(offered("Ape Escape (U) [SCUS-94423]", "Ape Escape", ["USA"], on: 7) == "Ape Escape (USA)")
+    }
+
+    @Test func languagesAreKeptInNoIntrosOrder() {
+        #expect(offered("Godzilla (USA) (De,En,Fr)", "Godzilla", ["USA"]) == "Godzilla (USA) (En,Fr,De)")
+        #expect(offered("Q-bert (Japan, USA) (En)", "Q-bert", ["Japan", "USA"]) == nil)
+    }
+
+    /// GoodTools' V1.1 is No-Intro's Rev 1; its V1.0, the first release, isn't written.
+    @Test func goodToolsVersionsAreRevisions() {
+        #expect(offered("Mortal Kombat II (U) (V1.1)", "Mortal Kombat II", ["USA"]) == "Mortal Kombat II (USA) (Rev 1)")
+        #expect(offered("Jurassic Park (V1.0) (U)", "Jurassic Park", ["USA"]) == "Jurassic Park (USA)")
+        #expect(offered("Pac-Man (USA) (v1.1)", "Pac-Man", ["USA"]) == nil)
+    }
+
+    /// GoodTools' PRG1 on NES is No-Intro's Rev 1, and its region codes can be in square brackets or in any order.
+    @Test func moreGoodToolsTagsAreRead() {
+        #expect(
+            offered("Legend of Zelda, The (U) (PRG1) [!]", "The Legend of Zelda", ["USA"], on: 18) == "Legend of Zelda, The (USA) (Rev 1)")
+        #expect(offered("Point Blank [SLUS-00481] [U] [bin+cue]", "Point Blank", ["USA"], on: 7) == "Point Blank (USA) [bin+cue]")
+        #expect(offered("Urban Strike (UEJ) [!]", "Urban Strike", ["USA", "Europe", "Japan"]) == "Urban Strike (World)")
+    }
+
+    @Test func noIntrosOwnEditionTagsArePlaced() throws {
+        let proposal = try #require(
+            ROMRename.proposal(
+                forROM: "Assassin's Creed II - Discovery (DSi Enhanced) (US)(M3)(XenoPhobia)", gameName: "Assassin's Creed II: Discovery",
+                regions: ["USA"], platformId: 20))
+        #expect(proposal.name() == "Assassin's Creed II - Discovery (USA) (DSi Enhanced) (XenoPhobia)")
+        #expect(proposal.unplacedTags == ["(XenoPhobia)"])
+        #expect(offered("Pong (USA) (WiiWare)", "Pong", ["USA"], on: 5) == nil)
+        #expect(offered("Pong (USA) (PSN)", "Pong", ["USA"], on: 38) == nil)
+    }
+
+    /// Region, Languages, Disc and its label, Version, development status, then the rest.
+    @Test func tagsAreInTheirOrder() {
+        #expect(
+            offered("Tetris (Beta) (SGB Enhanced) (Rev A) (W)", "Tetris", ["World"]) == "Tetris (World) (Rev A) (Beta) (SGB Enhanced)")
+        #expect(
+            offered("GT2 (USA) (Rev 1) (Disc 1) (Arcade Mode)", "Gran Turismo 2", ["USA"], on: 7)
+                == "Gran Turismo 2 (USA) (Disc 1) (Arcade Mode) (Rev 1)")
+        #expect(offered("FF (Disc 2) (Europe) (Fr,En)", "Final Fantasy", ["Europe"], on: 7) == "Final Fantasy (Europe) (En,Fr) (Disc 2)")
+        #expect(
+            offered("Resident Evil 2 (Disc 2) (Claire) (USA)", "Resident Evil 2", ["USA"], on: 7)
+                == "Resident Evil 2 (USA) (Disc 2) (Claire)")
+    }
+
+    /// A translation patch named after the tags stays; a copy number or other file artefact goes.
+    @Test func whatFollowsTheTagsStaysOnlyWhenItsATranslation() {
+        #expect(offered("Sweet Home (J) - English patch", "Sweet Home", ["Japan"]) == "Sweet Home (Japan) - English patch")
+        #expect(offered("Metroid II (USA) 2", "Metroid II", ["USA"]) == "Metroid II (USA)")
+    }
+
+    /// A scene group's tag and an edition's can't be told apart, so they're kept unless dropped.
+    @Test func aTagItCantPlaceIsKeptUnlessDropped() throws {
+        let proposal = try #require(
+            ROMRename.proposal(
+                forROM: "Broken Sword - Director's Cut (US)(M5)(BAHAMUT)", gameName: "Broken Sword: Director's Cut", regions: ["USA"],
+                platformId: 20))
+        #expect(proposal.unplacedTags == ["(BAHAMUT)"])
+        #expect(proposal.name() == "Broken Sword - Director's Cut (USA) (BAHAMUT)")
+        #expect(proposal.name(dropping: ["(BAHAMUT)"]) == "Broken Sword - Director's Cut (USA)")
+        #expect(offered("Broken Sword - Director's Cut (USA)", "Broken Sword: Director's Cut", ["USA"], on: 20) == nil)
+        #expect(offered("Broken Sword - Director's Cut (USA) (BAHAMUT)", "Broken Sword: Director's Cut", ["USA"], on: 20) == nil)
+    }
+
+    /// No-Intro's order, as its names have it: Japan, USA, Europe, then the rest alphabetically; all three are World.
+    @Test func regionsAreInNoIntrosOrderAndSpelling() {
+        #expect(offered("Kirby", "Kirby", ["Europe", "USA"]) == "Kirby (USA, Europe)")
+        #expect(offered("Kirby", "Kirby", ["USA", "Japan"]) == "Kirby (Japan, USA)")
+        #expect(offered("Kirby", "Kirby", ["Europe", "USA", "Japan"]) == "Kirby (World)")
+        #expect(offered("Kirby", "Kirby", ["Korea", "World"]) == "Kirby (World, Korea)")
+        #expect(offered("Kirby", "Kirby", ["Europe", "Australia"]) == "Kirby (Europe, Australia)")
+        #expect(offered("Kirby", "Kirby", ["Spain", "PAL", "Europe"]) == "Kirby (Europe, PAL, Spain)")
+        #expect(offered("Kirby", "Kirby", ["USA", "Canada"]) == "Kirby (USA)")
+        #expect(offered("Kirby", "Kirby", ["UK"]) == "Kirby (United Kingdom)")
+    }
+
+    /// The region tag it wrote is read back as one, whatever Regions it names, so it isn't offered again.
+    @Test func aNameWithItsRegionTagIsntOfferedAgain() {
+        #expect(offered("Kirby (United Kingdom)", "Kirby", ["UK"]) == nil)
+        #expect(offered("Kirby (Europe, PAL)", "Kirby", ["Europe", "PAL"]) == nil)
+        #expect(offered("Kirby (World, Korea)", "Kirby", ["Korea", "World"]) == nil)
+        #expect(offered("Tekken 3 (UK, Australia)", "Tekken 3", ["UK", "Australia"], on: 7) == nil)
+        #expect(offered("Kirby (Greece)", "Kirby", ["Europe"]) == "Kirby (Europe)")
+    }
+
+    /// Redump's: USA before Japan, Canada beside USA, and the UK as "UK".
+    @Test func aDiscPlatformsRegionsAreInRedumpsOrderAndSpelling() {
+        #expect(offered("Tekken 3", "Tekken 3", ["Japan", "USA"], on: 7) == "Tekken 3 (USA, Japan)")
+        #expect(offered("Tekken 3", "Tekken 3", ["USA", "Canada"], on: 7) == "Tekken 3 (USA, Canada)")
+        #expect(offered("Tekken 3", "Tekken 3", ["Australia", "United Kingdom"], on: 7) == "Tekken 3 (UK, Australia)")
+        #expect(offered("Tekken 3", "Tekken 3", ["Europe", "USA", "Japan"], on: 7) == "Tekken 3 (World)")
     }
 }
 

@@ -50,8 +50,8 @@ public struct ROMName: Sendable, Hashable {
             }
             let listed = t.components(separatedBy: ", ")
             if listed.allSatisfy(Self.noIntroRegions.contains) {
-                regionNames += listed
-            } else if let codes = Self.goodToolsRegions[t] {
+                regionNames += listed.map { $0 == "United Kingdom" ? "UK" : $0 }
+            } else if let codes = Self.goodToolsRegionNames(t) {
                 regionNames += codes
             } else if wasAfterDisc && !Self.isRecognised(t) {
                 discLabel = t
@@ -93,21 +93,34 @@ public struct ROMName: Sendable, Hashable {
             || matches(t, #"^\d{4}-\d{2}-\d{2}$"#) || matches(t, #"(?i)^(english|eng\b|t-?eng|translat)"#)
     }
 
-    private static let noIntroRegions: Set<String> = [
+    /// The regions No-Intro's and Redump's names use, as they spell them.
+    static let noIntroRegions: Set<String> = [
         "USA", "Europe", "Japan", "World", "Asia", "Australia", "Brazil", "Canada", "China", "France", "Germany",
-        "Hong Kong", "Italy", "Korea", "Netherlands", "Spain", "Sweden", "Taiwan", "UK", "Russia", "Scandinavia",
-        "Latin America", "Unknown",
+        "Hong Kong", "Italy", "Korea", "Netherlands", "Spain", "Sweden", "Taiwan", "UK", "United Kingdom", "Russia", "Scandinavia",
+        "Latin America", "Unknown", "Argentina", "Austria", "Belgium", "Denmark", "Finland", "Greece", "India", "Ireland",
+        "Mexico", "New Zealand", "Norway", "Poland", "Portugal", "Switzerland", "Turkey",
     ]
-    private static let goodToolsRegions: [String: [String]] = [
+    static let goodToolsRegions: [String: [String]] = [
         "U": ["USA"], "E": ["Europe"], "J": ["Japan"], "UE": ["USA", "Europe"], "JU": ["Japan", "USA"],
         "JUE": ["Japan", "USA", "Europe"], "JE": ["Japan", "Europe"], "B": ["Brazil"], "4": ["USA", "Brazil"],
         "W": ["World"], "US": ["USA"], "EU": ["Europe"], "F": ["France"], "G": ["Germany"], "K": ["Korea"],
     ]
+    /// A GoodTools region code's regions: one it lists, or Japan, USA and Europe's letters in any order, e.g. "UEJ".
+    static func goodToolsRegionNames(_ code: String) -> [String]? {
+        if let names = goodToolsRegions[code] { return names }
+        let letters: [Character: String] = ["J": "Japan", "U": "USA", "E": "Europe"]
+        guard code.count > 1, Set(code).count == code.count, code.allSatisfy({ letters[$0] != nil }) else { return nil }
+        return code.map { letters[$0]! }
+    }
+
     private static let regionsByName: [String: Set<NameRegion>] = {
         var out: [String: Set<NameRegion>] = [
             "Japan": [.japan], "USA": [.usa], "Canada": [.usa], "Korea": [.korea], "World": [.japan, .usa, .europe],
         ]
-        for e in ["Europe", "UK", "Australia", "France", "Germany", "Spain", "Italy", "Netherlands", "Sweden", "Scandinavia"] {
+        for e in [
+            "Europe", "UK", "Australia", "Austria", "Belgium", "Denmark", "Finland", "Greece", "Ireland", "Norway", "Poland",
+            "Portugal", "Switzerland", "France", "Germany", "Spain", "Italy", "Netherlands", "Sweden", "Scandinavia",
+        ] {
             out[e] = [.europe]
         }
         return out
