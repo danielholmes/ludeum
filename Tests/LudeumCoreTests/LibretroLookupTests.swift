@@ -66,6 +66,23 @@ import Testing
                 == "Lord of the Rings, The - The Two Towers (USA)")
     }
 
+    @Test func smallWordsNoIntroLeavesOutDontStopAFuzzyMatch() {
+        #expect(
+            find("Spider-Man and the X-Men in Arcade's Revenge (USA).7z", in: ["Spider-Man - X-Men - Arcade's Revenge (USA, Europe)"])
+                == "Spider-Man - X-Men - Arcade's Revenge (USA, Europe)")
+        let itchy = "Simpsons, The - Itchy _ Scratchy - Miniature Golf Madness (USA, Europe)"
+        #expect(find("Simpsons, The - Itchy & Scratchy in Miniature Golf Madness (USA).7z", in: [itchy]) == itchy)
+    }
+
+    @Test func aTitleMatchKeepingItsSmallWordsWinsOverOneDroppingThem() {
+        // USA's box would win, but only Japan's keeps the "and".
+        #expect(find("Batman and Robin.sfc", in: ["Batman Robin (USA)", "Batman _ Robin (Japan)"]) == "Batman _ Robin (Japan)")
+        // Every title is tried keeping them before any is tried dropping them.
+        #expect(
+            find("bnr.sfc", titles: ["Batman in Robin", "Batman and Robin"], in: ["Batman Robin (USA)", "Batman _ Robin (Japan)"])
+                == "Batman _ Robin (Japan)")
+    }
+
     @Test func otherTitlesAreTriedLast() {
         let names: Set = ["Final Fantasy III (USA)", "Final Fantasy VI (Japan)"]
         #expect(find("ff3us.smc", titles: ["Final Fantasy III"], in: names) == "Final Fantasy III (USA)")

@@ -16,7 +16,7 @@ public struct LibretroNames: Sendable, Equatable {
 }
 
 /// libretro-thumbnails: box scans, snaps and title screens named by No-Intro and Redump names.
-/// Each Platform's file listing comes from GitHub (one request per repo, cached); images come from
+/// Each Platform's file listing comes from GitHub (one request per repo, cached), else from the CDN; images come from
 /// `thumbnails.libretro.com`, which follows the repos' per-disc symlinks, else from GitHub when the CDN lags.
 /// Made once and shared, as it holds GitHub's rate limiter; the CDN's images don't wait their turn at it, so a
 /// screenful of Covers loads together.
@@ -27,7 +27,7 @@ public final class LibretroThumbnails: Sendable {
     let maxAge: TimeInterval
     /// Each repo's Box art names by title key, for Games with no ROM: worked out the first time one's Cover is shown and
     /// kept, as it's looked up again each time. One that fails isn't kept, so the next Cover tries again.
-    private let boxartTitles = Mutex<[String: Task<[String: [String]], any Error>]>([:])
+    private let boxartTitles = Mutex<[String: Task<LibretroLookup.TitleIndex, any Error>]>([:])
 
     public init(
         cache: CacheStore, transport: HTTPTransport = URLSessionTransport(), clock: TimeSource = SystemTimeSource(),
@@ -94,7 +94,7 @@ public final class LibretroThumbnails: Sendable {
         return LibretroLookup.fuzzy(titles: titles, regions: regions, in: byTitle).map { Self.path(repo, "Named_Boxarts", $0) }
     }
 
-    private func boxartTitleIndex(_ repo: String) async throws -> [String: [String]] {
+    private func boxartTitleIndex(_ repo: String) async throws -> LibretroLookup.TitleIndex {
         let task = boxartTitles.withLock { tasks in
             if let task = tasks[repo] { return task }
             let task = Task { LibretroLookup.titleIndex(try await listing(repo)["Named_Boxarts"] ?? []) }
@@ -150,7 +150,40 @@ public final class LibretroThumbnails: Sendable {
         return decoded.mapValues(Set.init)
     }
 
+    /// From GitHub, else, when GitHub refuses, from the CDN's own folder indexes. GitHub allows 60 requests an hour without
+    /// an account, shared by everything on the connection, so it can refuse for an hour at a time.
     private func fetchListing(_ repo: String) async throws -> Data {
+        let folders: [String: [String]]
+        do {
+            folders = try await gitHubListing(repo)
+        } catch {
+            folders = try await cdnListing(repo)
+        }
+        return try JSONEncoder().encode(folders)
+    }
+
+    /// Each folder's index page on the CDN, whose links are its images' names, percent-encoded. A folder the CDN hasn't
+    /// got is empty, but a repo it has none of throws, as GitHub's refusal did, rather than be kept as empty.
+    private func cdnListing(_ repo: String) async throws -> [String: [String]] {
+        var folders: [String: [String]] = [:]
+        var missing: URL?
+        for folder in Self.folders {
+            let url = URL(string: "https://thumbnails.libretro.com")!
+                .appending(path: "\(repo.replacingOccurrences(of: "_", with: " "))/\(folder)/")
+            let (data, response) = try await transport.send(URLRequest(url: url))
+            if response.statusCode == 404 {
+                missing = url
+                continue
+            }
+            guard response.statusCode == 200 else { throw HTTPStatusError(status: response.statusCode, url: url) }
+            folders[folder] = String(decoding: data, as: UTF8.self).matches(of: #/href="([^"/?]+)\.png"/#)
+                .compactMap { String($0.1).removingPercentEncoding }
+        }
+        if folders.isEmpty, let missing { throw HTTPStatusError(status: 404, url: missing) }
+        return folders
+    }
+
+    private func gitHubListing(_ repo: String) async throws -> [String: [String]] {
         let url = URL(string: "https://api.github.com/repos/libretro-thumbnails/\(repo)/git/trees/master?recursive=1")!
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -166,7 +199,7 @@ public final class LibretroThumbnails: Sendable {
             guard parts.count == 2, Self.folders.contains(parts[0]), parts[1].hasSuffix(".png") else { continue }
             folders[parts[0], default: []].append(String(parts[1].dropLast(4)))
         }
-        return try JSONEncoder().encode(folders)
+        return folders
     }
 }
 

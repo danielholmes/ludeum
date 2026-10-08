@@ -426,14 +426,14 @@ import Testing
     @Test func aLookupThatFailsIsLeftForTheNextImportWhichStillKeepsTheOldBoxArtOnAMiss() async throws {
         h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Mario World (USA)"])
         try lookedUpMetroid(old: "old.png")
-        h.internet.setDown(FakeInternet.Hosts.github, true)
+        h.internet.setLibretroDown(true)
 
         try await migration().run()
 
         #expect(try !lookedUp())
         #expect(try boxArt() == "old.png")
 
-        h.internet.setDown(FakeInternet.Hosts.github, false)
+        h.internet.setLibretroDown(false)
         _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
             .run(romFolders: [])
 

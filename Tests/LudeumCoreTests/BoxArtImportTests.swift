@@ -82,11 +82,11 @@ import Testing
 
     @Test func whenLibretroIsUnreachableTheImportStillCommitsAndTheNextOneLooksItUp() async throws {
         try snes.add("Super Metroid (USA).sfc")
-        h.internet.setDown(FakeInternet.Hosts.github, true)
+        h.internet.setLibretroDown(true)
         try await importNow()
         #expect(try roms()[0]["libretroLookedUp"] as Bool == false)
 
-        h.internet.setDown(FakeInternet.Hosts.github, false)
+        h.internet.setLibretroDown(false)
         try await importNow()
 
         #expect(try roms()[0]["libretroBoxart"] as String? != nil)
@@ -152,13 +152,15 @@ import Testing
 /// The migration that looks up again every ROM with no Box art, once a ROM is looked up again when it's Matched and a
 /// title match understands an article before the subtitle.
 @Suite struct NoBoxArtLookupMigrationTests {
-    @Test func romsWithNoBoxArtAreLookedUpAgain() throws {
+    /// Again once small words are dropped as a last try (v26), even after v25 looked them up.
+    @Test(arguments: ["v24 relook up spelled-out titles", "v25 relook up ROMs with no Box art"])
+    func romsWithNoBoxArtAreLookedUpAgain(from migration: String) throws {
         let directory = FileManager.default.temporaryDirectory.appending(
             path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
-        try LudeumSchema.migrator.migrate(db, upTo: "v24 relook up spelled-out titles")
+        try LudeumSchema.migrator.migrate(db, upTo: migration)
         try db.write { db in
             try db.execute(
                 sql: """

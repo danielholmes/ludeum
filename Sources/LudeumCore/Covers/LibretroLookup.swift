@@ -20,27 +20,38 @@ enum LibretroLookup {
         fuzzy(fileName: fileName, titles: titles, in: titleIndex(names))
     }
 
-    /// A folder's released names by title key: what a fuzzy match looks in.
-    static func titleIndex(_ names: Set<String>) -> [String: [String]] {
-        Dictionary(grouping: names.filter { !isPrerelease($0) }, by: { titleKey($0) })
+    /// A folder's released names by title key, and by loose title key: what a fuzzy match looks in.
+    struct TitleIndex: Sendable {
+        let byKey: [String: [String]]
+        let byLooseKey: [String: [String]]
     }
 
-    static func fuzzy(fileName: String, titles: [String], in byTitle: [String: [String]]) -> String? {
+    static func titleIndex(_ names: Set<String>) -> TitleIndex {
+        let released = names.filter { !isPrerelease($0) }
+        return TitleIndex(
+            byKey: Dictionary(grouping: released, by: { titleKey($0) }),
+            byLooseKey: Dictionary(grouping: released, by: { looseTitleKey($0) }))
+    }
+
+    static func fuzzy(fileName: String, titles: [String], in index: TitleIndex) -> String? {
         let stem = substituted(Self.stem(fileName))
-        return fuzzy(titles: [stem] + titles, regions: ROMName(stem).regions ?? [], in: byTitle)
+        return fuzzy(titles: [stem] + titles, regions: ROMName(stem).regions ?? [], in: index)
     }
 
     /// A title match on each of `titles` in turn, `regions`' release first, else USA, Europe, Japan: how a Game with no
     /// ROM, which has no file name, finds its Box art. Accents are dropped; only once no title matches that way are the
     /// ones with umlauts or macrons tried spelled out, as Redump sometimes writes them (Einhänder is `Einhaender`, Ōkami
-    /// is `Ookami`).
-    static func fuzzy(titles: [String], regions: Set<NameRegion>, in byTitle: [String: [String]]) -> String? {
+    /// is `Ookami`). Only once none of those matches is each tried by its loose title key.
+    static func fuzzy(titles: [String], regions: Set<NameRegion>, in index: TitleIndex) -> String? {
         let own = preferredOrder.filter(regions.contains)
         let spelled = titles.map(spelledOut).filter { !titles.contains($0) }
-        for title in titles + spelled {
-            let key = titleKey(title)
-            guard !key.isEmpty, let candidates = byTitle[key] else { continue }
-            return candidates.min { rank($0, own) < rank($1, own) }
+        let tiers: [((String) -> String, [String: [String]])] = [(titleKey, index.byKey), (looseTitleKey, index.byLooseKey)]
+        for (key, names) in tiers {
+            for title in titles + spelled {
+                let key = key(title)
+                guard !key.isEmpty, let candidates = names[key] else { continue }
+                return candidates.min { rank($0, own) < rank($1, own) }
+            }
         }
         return nil
     }
@@ -104,6 +115,20 @@ enum LibretroLookup {
         return String(title.lowercased().folding(options: .diacriticInsensitive, locale: nil).filter { $0.isLetter || $0.isNumber })
     }
 
+    /// The text before the first tag with "a", "an", "the", "and" and "in" dropped wherever they are, for the last try: a
+    /// Standard name or IGDB's can keep small words No-Intro leaves out (`Spider-Man and the X-Men in Arcade's Revenge`
+    /// is `Spider-Man - X-Men - Arcade's Revenge`).
+    static func looseTitleKey(_ name: String) -> String {
+        let title = String(name.prefix { $0 != "(" && $0 != "[" })
+            .replacingOccurrences(of: "&", with: " and ").replacingOccurrences(of: "_", with: " and ")
+        return title.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+            .split { !($0.isLetter || $0.isNumber) }
+            .filter { !smallWords.contains($0) }
+            .joined()
+    }
+
+    private static let smallWords: Set<Substring> = ["a", "an", "the", "and", "in"]
+
     private static func isPrerelease(_ name: String) -> Bool {
         name.range(of: #"\((Beta|Proto|Prototype|Demo|Sample|Kiosk)( \d+)?\)"#, options: .regularExpression) != nil
     }
@@ -123,7 +148,7 @@ enum LibretroLookup {
 /// fuzzy match needs is worked out once, the first time an exact name misses, not for every ROM.
 struct LibretroFolder: Sendable {
     let names: Set<String>
-    private var byTitle: [String: [String]]?
+    private var byTitle: LibretroLookup.TitleIndex?
 
     init(_ names: Set<String>) { self.names = names }
 

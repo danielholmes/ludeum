@@ -55,6 +55,21 @@ import Testing
         #expect(h.internet.sent(to: FakeInternet.Hosts.github).count == 1)
     }
 
+    @Test func aListingGitHubRefusesComesFromLibretrosOwnServerInstead() async throws {
+        h.internet.addLibretro("Nintendo_-_Nintendo_Entertainment_System", ["Metroid (USA)", "Mario _ Yoshi (Europe)"])
+        h.internet.addLibretro("Nintendo_-_Nintendo_Entertainment_System", ["Tetris (USA)"], folders: ["Named_Boxarts"])
+        h.internet.setDown(FakeInternet.Hosts.github, true)
+
+        let metroid = try await h.libretro.names(platform: 18, fileName: "Metroid (USA).nes", titles: [])
+        let yoshi = try await h.libretro.names(platform: 18, fileName: "Mario & Yoshi (Europe).nes", titles: [])
+        let tetris = try await h.libretro.names(platform: 18, fileName: "Tetris (USA).nes", titles: [])
+
+        let repo = "Nintendo - Nintendo Entertainment System"
+        #expect(metroid?.title == "\(repo)/Named_Titles/Metroid (USA).png")
+        #expect(yoshi?.boxart == "\(repo)/Named_Boxarts/Mario _ Yoshi (Europe).png")
+        #expect(tetris == LibretroNames(boxart: "\(repo)/Named_Boxarts/Tetris (USA).png"))
+    }
+
     @Test func aPlatformWithoutARepoHasNoNames() async throws {
         #expect(try await h.libretro.names(platform: 9999, fileName: "x.bin", titles: []) == nil)
         #expect(h.internet.sent.isEmpty)

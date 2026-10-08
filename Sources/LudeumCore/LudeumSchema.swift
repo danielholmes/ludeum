@@ -607,6 +607,11 @@ enum LudeumSchema {
         migrator.registerMigration("v25 relook up ROMs with no Box art") { db in
             try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE libretroBoxart IS NULL")
         }
+        // A title match now tries, last, with small words No-Intro leaves out dropped (`Spider-Man and the X-Men in
+        // Arcade's Revenge`): look up again, at the next Import, each ROM with no Box art.
+        migrator.registerMigration("v26 relook up ROMs with no Box art without small words") { db in
+            try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE libretroBoxart IS NULL")
+        }
         return migrator
     }
 }

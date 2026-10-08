@@ -96,6 +96,12 @@ final class FakeInternet: HTTPTransport, Sendable {
         state.withLock { s in s.libretro[repo, default: []] += folders.flatMap { f in names.map { "\(f)/\($0).png" } } }
     }
 
+    /// GitHub and libretro's own server together, so no listing can be read from either.
+    func setLibretroDown(_ isDown: Bool) {
+        setDown(Hosts.github, isDown)
+        setDown(Hosts.libretro, isDown)
+    }
+
     func setDown(_ host: String, _ isDown: Bool) {
         state.withLock { if isDown { $0.down.insert(host) } else { $0.down.remove(host) } }
     }
@@ -268,6 +274,7 @@ final class FakeInternet: HTTPTransport, Sendable {
 
     private static func libretroImage(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
         let path = request.url!.path(percentEncoded: false).dropFirst()
+        if path.hasSuffix("/") { return libretroFolderIndex(path.split(separator: "/").map(String.init), s) }
         let parts = path.split(separator: "/", maxSplits: 1).map(String.init)
         guard parts.count == 2, s.libretro[parts[0].replacingOccurrences(of: " ", with: "_")]?.contains(parts[1]) == true,
             !s.libretroCDNMissing.contains(String(path))
@@ -275,6 +282,18 @@ final class FakeInternet: HTTPTransport, Sendable {
             return (404, [:], Data())
         }
         return (200, [:], boxartPNG)
+    }
+
+    /// The server's index of one folder, `[repo, folder]`, as Apache writes it: sorting links, the parent, then each
+    /// image, percent-encoded.
+    private static func libretroFolderIndex(_ parts: [String], _ s: State) -> (Int, [String: String], Data) {
+        guard parts.count == 2, let paths = s.libretro[parts[0].replacingOccurrences(of: " ", with: "_")] else {
+            return (404, [:], Data())
+        }
+        let images = paths.filter { $0.hasPrefix("\(parts[1])/") }.map { $0.dropFirst(parts[1].count + 1) }
+        let links = ["?C=N;O=D", "/\(parts[0])/"] + images.map { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)! }
+        let html = "<html><body><pre>" + links.map { #"<a href="\#($0)">x</a>"# }.joined(separator: "\n") + "</pre></body></html>"
+        return (200, [:], Data(html.utf8))
     }
 
     /// GitHub's raw files: `/libretro-thumbnails/<repo>/master/<folder>/<name>.png`.

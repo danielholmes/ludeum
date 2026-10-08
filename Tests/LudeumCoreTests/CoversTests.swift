@@ -272,14 +272,14 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     @Test func aGameWithNoROMWhoseListingCantBeReadShowsIGDBsCoverArtAndTriesAgainNextTime() async throws {
         h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
         let game = try await superMetroid([])
-        h.internet.setDown(FakeInternet.Hosts.github, true)
+        h.internet.setLibretroDown(true)
 
         guard case .igdb = try await covers.cover(for: game) else {
             Issue.record("expected IGDB's Cover art")
             return
         }
 
-        h.internet.setDown(FakeInternet.Hosts.github, false)
+        h.internet.setLibretroDown(false)
         guard case .libretro = try await covers.cover(for: game) else {
             Issue.record("expected libretro's Box art")
             return
