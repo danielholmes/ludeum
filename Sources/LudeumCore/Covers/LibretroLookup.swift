@@ -31,16 +31,29 @@ enum LibretroLookup {
     }
 
     /// A title match on each of `titles` in turn, `regions`' release first, else USA, Europe, Japan: how a Game with no
-    /// ROM, which has no file name, finds its Box art.
+    /// ROM, which has no file name, finds its Box art. Accents are dropped; only once no title matches that way are the
+    /// ones with umlauts or macrons tried spelled out, as Redump sometimes writes them (Einhänder is `Einhaender`, Ōkami
+    /// is `Ookami`).
     static func fuzzy(titles: [String], regions: Set<NameRegion>, in byTitle: [String: [String]]) -> String? {
         let own = preferredOrder.filter(regions.contains)
-        for title in titles {
+        let spelled = titles.map(spelledOut).filter { !titles.contains($0) }
+        for title in titles + spelled {
             let key = titleKey(title)
             guard !key.isEmpty, let candidates = byTitle[key] else { continue }
             return candidates.min { rank($0, own) < rank($1, own) }
         }
         return nil
     }
+
+    /// Umlauts as a trailing `e` (ä → ae) and macrons as a doubled vowel (ō → oo).
+    static func spelledOut(_ title: String) -> String {
+        title.reduce(into: "") { s, c in s += spelledOutLetters[c] ?? String(c) }
+    }
+
+    private static let spelledOutLetters: [Character: String] = [
+        "ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue",
+        "ā": "aa", "ē": "ee", "ī": "ii", "ō": "oo", "ū": "uu", "Ā": "Aa", "Ē": "Ee", "Ī": "Ii", "Ō": "Oo", "Ū": "Uu",
+    ]
 
     /// The file name minus its extension (`.nkit.iso` counts as one).
     static func stem(_ fileName: String) -> String {

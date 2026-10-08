@@ -132,3 +132,35 @@ import Testing
         #expect(try journal.uploadedCover(2) == NormalisedCover(jpeg: Data([1]), width: 2, height: 3, sha256: "b"))
     }
 }
+
+/// The migration that looks ROMs up again once umlauts and macrons can be spelled out.
+@Suite struct SpelledOutLookupMigrationTests {
+    @Test func romsWithANonASCIITitleAreLookedUpAgain() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: "v23 playthrough copy")
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform VALUES (7, 'PS1');
+                    INSERT INTO game (id, platformId, name, igdbName) VALUES
+                        (1, 7, 'Einhander', 'Einhänder'), (2, 7, 'Gran Turismo', 'Gran Turismo'), (3, 7, 'Pokemon', NULL);
+                    INSERT INTO rom (id, folderName, fileName, name, platformId, gameId, matchKind, matchedAt, libretroLookedUp)
+                    VALUES
+                        (1, 'Einhander', 'Einhander.7z', 'Einhander', 7, 1, 'manual', 0, 1),
+                        (2, 'Gran Turismo', 'Gran Turismo.7z', 'Gran Turismo', 7, 2, 'manual', 0, 1),
+                        (3, 'Pokémon', 'Pokémon.7z', 'Pokémon', 7, 3, 'manual', 0, 1),
+                        (4, 'Unmatched', 'Unmatched.7z', NULL, 7, NULL, NULL, NULL, 1);
+                    """)
+        }
+        try db.close()
+
+        let journal = try LudeumStore(directory: directory)
+
+        let lookedUp = try journal.db.read { try Bool.fetchAll($0, sql: "SELECT libretroLookedUp FROM rom ORDER BY id") }
+        #expect(lookedUp == [false, true, false, true])
+    }
+}

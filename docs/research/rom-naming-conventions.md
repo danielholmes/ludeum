@@ -128,6 +128,7 @@ All from wiki §2.1, the same as PDF §2.1 except where marked:
 - **Where the disc tag goes (DATs):** after Languages and before Version: `Assassin's Creed III (Europe) (En,…) (Disc 1) (Rev 1)`. That order appears 364 times and the reverse never. The disc title follows the number: `Alien - Isolation (USA, Europe) (En,…) (Disc 1) (Installation Disc)`. Letters are used where the disc says so: `(Disc A)`.
 - **Other moderation rules:** Betas get a `YYYY-MM-DD` date. "Proto is used in datname instead of Beta if the game is unreleased at retail for that system (including unreleased for a specific console region)". Compilations are separated by `/` in the database, which becomes ` + ` in names. Region is "where a disc was meant to be sold".
 - The submission form keeps a separate "Foreign Title (Non-Latin)" field, so names stay romanised ASCII, as in No-Intro: 0 non-ASCII names **(DATs)**.
+- **Umlauts and macrons are sometimes spelled out, not stripped:** Einhänder is `Einhaender (USA)` on PlayStation and Ōkami is `Ookami (USA)` on PlayStation 2, as libretro-thumbnails' listings name them (seen 2026-10-08), where No-Intro's Ōkami is `Okami HD`. Box art's title match tries both spellings; Rename still strips them.
 
 ## 6. TOSEC (for comparison)
 

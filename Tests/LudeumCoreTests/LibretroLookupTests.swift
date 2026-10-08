@@ -63,6 +63,22 @@ import Testing
         #expect(find("ff3us.smc", titles: ["Nope", "Final Fantasy III"], in: names) == "Final Fantasy III (USA)")
     }
 
+    @Test func aTitleWithUmlautsOrMacronsMatchesTheirSpelledOutForm() {
+        #expect(
+            find("Einhander.7z", titles: ["Einhander", "Einhänder"], in: ["Einhaender (USA)", "Einhaender (Japan)"])
+                == "Einhaender (USA)")
+        #expect(find("Okami (USA).7z", titles: ["Okami", "Ōkami"], in: ["Ookami (USA)"]) == "Ookami (USA)")
+        #expect(find("Munchen.7z", titles: ["München"], in: ["Muenchen (Germany)"]) == "Muenchen (Germany)")
+    }
+
+    @Test func aTitlesAccentsDroppedStillWinsOverTheirSpelledOutForm() {
+        #expect(find("x.7z", titles: ["Ōkami"], in: ["Okami HD (USA)", "Okami (USA)", "Ookami (Japan)"]) == "Okami (USA)")
+    }
+
+    @Test func everyTitleIsTriedWithItsAccentsDroppedBeforeAnyIsSpelledOut() {
+        #expect(find("Ökö.7z", titles: ["Eco"], in: ["Oekoe (Germany)", "Eco (USA)"]) == "Eco (USA)")
+    }
+
     @Test func homebrewFindsNothing() {
         #expect(find("Hermano_1.1_jam.gb", titles: ["Hermano"], in: ["Hermie Hopperhead (Japan)"]) == nil)
     }
@@ -87,6 +103,10 @@ import Testing
     @Test func eachTitleIsTriedInTurn() {
         #expect(find(["GT", "Gran Turismo"], in: names) == "Gran Turismo (USA)")
         #expect(find(["Gran Turismo 2"], in: names) == nil)
+    }
+
+    @Test func umlautsMatchTheirSpelledOutForm() {
+        #expect(find(["Einhänder"], regions: [.japan], in: ["Einhaender (USA)", "Einhaender (Japan)"]) == "Einhaender (Japan)")
     }
 
     @Test func copyRegionsReadAsROMRegionsDo() {

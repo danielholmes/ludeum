@@ -591,6 +591,16 @@ enum LudeumSchema {
                 t.drop(column: "playedVia")
             }
         }
+        // A title match now also tries umlauts and macrons spelled out, as Redump writes them (Einhaender, Ookami): look
+        // up again, at the next Import, each ROM whose file name, name or Game's IGDB name isn't all ASCII.
+        migrator.registerMigration("v24 relook up spelled-out titles") { db in
+            try db.execute(
+                sql: """
+                    UPDATE rom SET libretroLookedUp = 0
+                    WHERE fileName GLOB '*[^ -~]*' OR name GLOB '*[^ -~]*'
+                        OR gameId IN (SELECT id FROM game WHERE igdbName GLOB '*[^ -~]*')
+                    """)
+        }
         return migrator
     }
 }
