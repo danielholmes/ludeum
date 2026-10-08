@@ -12,6 +12,8 @@ public enum AddROMError: Error, Equatable {
     case alreadyInROMFolder(String)
     /// The journal remembers a missing ROM of that name that's another Game's: delete it there first.
     case missingROMIsAnotherGames(String)
+    /// Another ROM, present or missing, has the Standard name it would be given.
+    case standardNameTaken(String)
     /// Several files that could each be the game: which is isn't clear.
     case ambiguous([String])
     /// Nothing picked is a file the Emulator opens.
@@ -31,6 +33,7 @@ extension AddROMError: LocalizedError {
         case .alreadyInROMFolder(let name): "\(name) is already in its ROM folder."
         case .missingROMIsAnotherGames(let name):
             "The journal remembers a missing ROM called \(name) on another Game. Delete it there first."
+        case .standardNameTaken(let name): "Another ROM has \(name), the name it would be given."
         case .ambiguous(let images): "Which of these is the game isn't clear: \(images.joined(separator: ", "))."
         case .noImage: "Nothing in it is a game image."
         case .notReadAfterward(let name): "Its ROM folder didn't read \(name) as a Playable ROM, so it was taken out again."
@@ -206,6 +209,7 @@ public struct AddROM: Sendable {
             throw LudeumError.nameRequired
         }
         let named = try name(of: source, matching: match, in: folder, naming: naming)
+        if named.taken { throw AddROMError.standardNameTaken(named.name) }
         try await check(source, fits: folder, named: named.name)
         let (destination, file) = try await put(source, named: named.name, in: folder, progress: progress)
         let game: GameID
@@ -225,38 +229,51 @@ public struct AddROM: Sendable {
         return game
     }
 
-    /// The name a Rename would give the ROM once it's Matched, before choosing which tags it can't place to drop: nil
-    /// when its ROM folder couldn't read the Game's name. Throws when another ROM has it, as `add` would.
-    public func standardName(of source: ROMSource, matching match: AddROMMatch, in folder: ROMFolder) throws -> ROMRename.Proposal? {
-        try name(of: source, matching: match, in: folder, naming: .standard()).proposal
+    /// The ROM's Standard name once it's Matched, before choosing which tags it can't place to drop, and whether another
+    /// ROM has it: nil when its ROM folder couldn't read the Game's name.
+    public func standardName(
+        of source: ROMSource, matching match: AddROMMatch, in folder: ROMFolder
+    ) throws -> (standard: ROMRename.StandardName, taken: Bool)? {
+        let named = try name(of: source, matching: match, in: folder, naming: .standard())
+        return named.standard.map { ($0, named.taken) }
+    }
+
+    /// What Add ROM names the ROM, and what comes with the name.
+    private struct Named {
+        let name: String
+        /// The missing ROM it brings back.
+        let missingRow: Int64?
+        let regions: [String]
+        let standard: ROMRename.StandardName?
+        /// Whether another ROM has its Standard name.
+        var taken = false
     }
 
     /// The ROM's name, the missing ROM it brings back, and its Regions. A missing ROM of the picked name comes back, and
-    /// with a standard name so does one of that name: either way it keeps its own Regions, and is named from them.
-    private func name(
-        of source: ROMSource, matching match: AddROMMatch, in folder: ROMFolder, naming: AddROMNaming
-    ) throws -> (name: String, missingRow: Int64?, regions: [String], proposal: ROMRename.Proposal?) {
+    /// with a Standard name so does one of that name: either way it keeps its own Regions, and is named from them.
+    private func name(of source: ROMSource, matching match: AddROMMatch, in folder: ROMFolder, naming: AddROMNaming) throws -> Named {
         let picked = source.romName
-        let pickedRow = try missingROM(named: picked, on: folder.platformId, for: match)
-        guard case .standard(let dropping) = naming, let gameName = try gameName(of: match) else {
-            return (picked, pickedRow, try regions(ofROM: pickedRow) ?? ROMName(picked).regionNames, nil)
+        func asPicked() throws -> Named {
+            let row = try missingROM(named: picked, on: folder.platformId, for: match)
+            return Named(name: picked, missingRow: row, regions: try self.regions(ofROM: row) ?? ROMName(picked).regionNames, standard: nil)
         }
-        func proposal(_ regions: [String]) -> ROMRename.Proposal? {
-            ROMRename.proposal(forROM: picked, gameName: gameName, regions: regions, platformId: folder.platformId)
+        guard case .standard(let dropping) = naming, let gameName = try gameName(of: match) else { return try asPicked() }
+        func standardName(_ regions: [String]) -> ROMRename.StandardName? {
+            ROMRename.standardName(forROM: picked, gameName: gameName, regions: regions, platformId: folder.platformId)
         }
-        var row = pickedRow
-        var regions = try regions(ofROM: row) ?? ROMName(picked).regionNames
-        guard var standard = proposal(regions) else { return (picked, pickedRow, regions, nil) }
-        if row == nil, let named = try missingROM(named: standard.name(dropping: dropping), on: folder.platformId, for: match) {
+        // Another ROM having the picked name doesn't matter when it won't keep it.
+        var row = (try? missingROM(named: picked, on: folder.platformId, for: match)) ?? nil
+        var regions = try self.regions(ofROM: row) ?? ROMName(picked).regionNames
+        guard var standard = standardName(regions) else { return try asPicked() }
+        if row == nil, let named = try? missingROM(named: standard.name(dropping: dropping), on: folder.platformId, for: match) {
             row = named
             regions = try self.regions(ofROM: named) ?? regions
-            standard = proposal(regions) ?? standard
+            standard = standardName(regions) ?? standard
         }
         let name = standard.name(dropping: dropping)
-        if name != picked, let other = try missingROM(named: name, on: folder.platformId, for: match), other != row {
-            throw AddROMError.alreadyInROMFolder(name)
-        }
-        return (name, row, regions, standard)
+        var named = Named(name: name, missingRow: row, regions: regions, standard: standard)
+        named.taken = try journal.romNameIsTaken(name, besides: row ?? -1, on: folder.platformId)
+        return named
     }
 
     /// The Game's name the ROM is Matched to.
@@ -269,10 +286,7 @@ public struct AddROM: Sendable {
     }
 
     private func regions(ofROM row: Int64?) throws -> [String]? {
-        guard let row else { return nil }
-        return try journal.db.read { db in
-            Regions.decode(try String.fetchOne(db, sql: "SELECT regions FROM rom WHERE id = ?", arguments: [row]))
-        }
+        try row.flatMap { try journal.rom($0)?.details.regions }
     }
 
     /// Adds several ROMs at once, one after another, without Matching them: each goes into its ROM folder as `add` puts

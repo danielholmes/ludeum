@@ -6,15 +6,15 @@ public enum ROMRename {
     /// The name to offer a ROM named `romName` (a file's without its extension, or a subfolder's), keeping every tag it
     /// can't place, or nil when it already has that name, or when its ROM folder couldn't read the Game's name.
     public static func newName(forROM romName: String, gameName: String, regions: [String], platformId: Int64) -> String? {
-        guard let name = proposal(forROM: romName, gameName: gameName, regions: regions, platformId: platformId)?.name() else {
+        guard let name = standardName(forROM: romName, gameName: gameName, regions: regions, platformId: platformId)?.name() else {
             return nil
         }
         return name == romName ? nil : name
     }
 
-    /// The name Rename would give a ROM, before choosing which of the tags it can't place to drop: nil when its ROM
-    /// folder couldn't read the Game's name.
-    public static func proposal(forROM romName: String, gameName: String, regions: [String], platformId: Int64) -> Proposal? {
+    /// A ROM's Standard name, before choosing which of the tags it can't place to drop: nil when its ROM folder couldn't
+    /// read the Game's name.
+    public static func standardName(forROM romName: String, gameName: String, regions: [String], platformId: Int64) -> StandardName? {
         let fileTitle = fitForAFileName(gameName)
         guard !fileTitle.isEmpty, !fileTitle.hasPrefix(".") else { return nil }
         // Its tags follow its title. Checked against the Game's whole name first, as it can have tags of its own: "Foo
@@ -54,10 +54,10 @@ public enum ROMRename {
                 disc.append(tag.written)
                 afterDisc = true
             } else if let prg = t.wholeMatch(of: /PRG(\d+)/) {
-                // GoodTools' NES revision: PRG0 is the release itself.
+                // GoodTools' NES PRG1 is No-Intro's Rev 1; PRG0 has no tag.
                 if let n = Int(prg.output.1), n > 0 { version.append("(Rev \(n))") }
             } else if let v = t.wholeMatch(of: /V(\d+)\.(\d+)/) {
-                // GoodTools' version: V1.1 is the first revision, and V1.0 the release itself.
+                // GoodTools' V1.1 is No-Intro's Rev 1; V1.0 has no tag.
                 if v.output.1 == "1", let minor = Int(v.output.2) {
                     if minor > 0 { version.append("(Rev \(minor))") }
                 } else {
@@ -75,7 +75,7 @@ public enum ROMRename {
                 unplaced.append(tag.written)
             }
         }
-        var tags: [Proposal.Tag] = []
+        var tags: [StandardName.Tag] = []
         let region = regionTag(regions, naming: naming)
         if !region.isEmpty { tags.append(.init(text: "(\(region))", unplaced: false)) }
         tags += (languages.map { "(\($0))" } + disc + version + status + additional).map { .init(text: $0, unplaced: false) }
@@ -86,10 +86,10 @@ public enum ROMRename {
             let suffix = afterTitle[last].dropFirst().trimmingCharacters(in: .whitespaces)
             if matches(suffix, #"(?i)patch|english|translat"#) { tags.append(.init(text: suffix, unplaced: false)) }
         }
-        return Proposal(title: fileTitle, tags: tags)
+        return StandardName(title: fileTitle, tags: tags)
     }
 
-    public struct Proposal: Sendable, Equatable {
+    public struct StandardName: Sendable, Equatable {
         struct Tag: Sendable, Equatable {
             let text: String
             let unplaced: Bool
@@ -116,11 +116,11 @@ public enum ROMRename {
             let spelt = region == "UK" || region == "United Kingdom" ? uk : region
             if !all.contains(spelt) { all.append(spelt) }
         }
+        if naming == .noIntro, all.contains("USA") { all.removeAll { $0 == "Canada" } }
         if ["Japan", "USA", "Europe"].allSatisfy(all.contains) {
             all.removeAll { ["Japan", "USA", "Europe", "World"].contains($0) }
             all.insert("World", at: 0)
         }
-        if naming == .noIntro, all.contains("USA") { all.removeAll { $0 == "Canada" } }
         let first = naming == .noIntro ? ["World", "Japan", "USA", "Europe"] : ["World", "USA", "Japan", "Europe", "UK"]
         return all.sorted { a, b in
             switch (first.firstIndex(of: a), first.firstIndex(of: b)) {

@@ -78,8 +78,8 @@ import Testing
         #expect(offered("Q-bert (Japan, USA) (En)", "Q-bert", ["Japan", "USA"]) == nil)
     }
 
-    /// GoodTools' V1.1 is No-Intro's Rev 1; its V1.0, the first release, isn't written.
-    @Test func goodToolsVersionsAreRevisions() {
+    /// GoodTools' V1.1 is No-Intro's Rev 1; its V1.0 has no tag.
+    @Test func goodToolsVersionsAreNoIntrosRevs() {
         #expect(offered("Mortal Kombat II (U) (V1.1)", "Mortal Kombat II", ["USA"]) == "Mortal Kombat II (USA) (Rev 1)")
         #expect(offered("Jurassic Park (V1.0) (U)", "Jurassic Park", ["USA"]) == "Jurassic Park (USA)")
         #expect(offered("Pac-Man (USA) (v1.1)", "Pac-Man", ["USA"]) == nil)
@@ -91,15 +91,17 @@ import Testing
             offered("Legend of Zelda, The (U) (PRG1) [!]", "The Legend of Zelda", ["USA"], on: 18) == "Legend of Zelda, The (USA) (Rev 1)")
         #expect(offered("Point Blank [SLUS-00481] [U] [bin+cue]", "Point Blank", ["USA"], on: 7) == "Point Blank (USA) [bin+cue]")
         #expect(offered("Urban Strike (UEJ) [!]", "Urban Strike", ["USA", "Europe", "Japan"]) == "Urban Strike (World)")
+        #expect(offered("Pang (A)", "Pang", ["Australia"]) == "Pang (Australia)")
+        #expect(offered("Pang (HK) (C)", "Pang", ["Hong Kong"]) == "Pang (Hong Kong)")
     }
 
     @Test func noIntrosOwnEditionTagsArePlaced() throws {
-        let proposal = try #require(
-            ROMRename.proposal(
+        let standard = try #require(
+            ROMRename.standardName(
                 forROM: "Assassin's Creed II - Discovery (DSi Enhanced) (US)(M3)(XenoPhobia)", gameName: "Assassin's Creed II: Discovery",
                 regions: ["USA"], platformId: 20))
-        #expect(proposal.name() == "Assassin's Creed II - Discovery (USA) (DSi Enhanced) (XenoPhobia)")
-        #expect(proposal.unplacedTags == ["(XenoPhobia)"])
+        #expect(standard.name() == "Assassin's Creed II - Discovery (USA) (DSi Enhanced) (XenoPhobia)")
+        #expect(standard.unplacedTags == ["(XenoPhobia)"])
         #expect(offered("Pong (USA) (WiiWare)", "Pong", ["USA"], on: 5) == nil)
         #expect(offered("Pong (USA) (PSN)", "Pong", ["USA"], on: 38) == nil)
     }
@@ -125,13 +127,13 @@ import Testing
 
     /// A scene group's tag and an edition's can't be told apart, so they're kept unless dropped.
     @Test func aTagItCantPlaceIsKeptUnlessDropped() throws {
-        let proposal = try #require(
-            ROMRename.proposal(
+        let standard = try #require(
+            ROMRename.standardName(
                 forROM: "Broken Sword - Director's Cut (US)(M5)(BAHAMUT)", gameName: "Broken Sword: Director's Cut", regions: ["USA"],
                 platformId: 20))
-        #expect(proposal.unplacedTags == ["(BAHAMUT)"])
-        #expect(proposal.name() == "Broken Sword - Director's Cut (USA) (BAHAMUT)")
-        #expect(proposal.name(dropping: ["(BAHAMUT)"]) == "Broken Sword - Director's Cut (USA)")
+        #expect(standard.unplacedTags == ["(BAHAMUT)"])
+        #expect(standard.name() == "Broken Sword - Director's Cut (USA) (BAHAMUT)")
+        #expect(standard.name(dropping: ["(BAHAMUT)"]) == "Broken Sword - Director's Cut (USA)")
         #expect(offered("Broken Sword - Director's Cut (USA)", "Broken Sword: Director's Cut", ["USA"], on: 20) == nil)
         #expect(offered("Broken Sword - Director's Cut (USA) (BAHAMUT)", "Broken Sword: Director's Cut", ["USA"], on: 20) == nil)
     }
@@ -145,6 +147,7 @@ import Testing
         #expect(offered("Kirby", "Kirby", ["Europe", "Australia"]) == "Kirby (Europe, Australia)")
         #expect(offered("Kirby", "Kirby", ["Spain", "PAL", "Europe"]) == "Kirby (Europe, PAL, Spain)")
         #expect(offered("Kirby", "Kirby", ["USA", "Canada"]) == "Kirby (USA)")
+        #expect(offered("Kirby", "Kirby", ["Japan", "USA", "Europe", "Canada"]) == "Kirby (World)")
         #expect(offered("Kirby", "Kirby", ["UK"]) == "Kirby (United Kingdom)")
     }
 

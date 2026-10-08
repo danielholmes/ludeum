@@ -46,8 +46,8 @@ func readPicked(_ urls: [URL]) async throws -> PickedROM {
     let adder = AddROM(journal: journal, libretro: services.libretro)
     // The name it'll have, by which it's found once it's in.
     let name: String =
-        if case .standard(let dropping) = naming, let standard = try? adder.standardName(of: source, matching: match, in: folder) {
-            standard.name(dropping: dropping)
+        if case .standard(let dropping) = naming, let offer = try? adder.standardName(of: source, matching: match, in: folder) {
+            offer.standard.name(dropping: dropping)
         } else {
             source.romName
         }
@@ -280,20 +280,20 @@ struct AddROMConfirmation: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("addROMKeepsOriginals") private var keepingOriginals = true
     @State private var deletingMissing = true
-    /// The name a Rename would give it, or why it can't have it.
-    @State private var standard: Result<ROMRename.Proposal?, any Error> = .success(nil)
+    /// Its Standard name, when it differs from the picked one, and whether another ROM has it.
+    @State private var standard: (standard: ROMRename.StandardName, taken: Bool)?
     @State private var givingStandardName = true
     @State private var dropping: Set<String> = []
 
-    /// The name it's given: its standard one, when it can have it and that's chosen.
-    private var name: String {
-        guard givingStandardName, case .success(let proposal?) = standard else { return source.romName }
-        return proposal.name(dropping: dropping)
+    /// What it's named: its Standard name, when it can have it and that's chosen.
+    private var naming: AddROMNaming {
+        guard givingStandardName, let standard, !standard.taken else { return .picked }
+        return .standard(dropping: dropping)
     }
 
-    private var naming: AddROMNaming {
-        guard givingStandardName, case .success(.some) = standard else { return .picked }
-        return .standard(dropping: dropping)
+    private var name: String {
+        guard case .standard(let dropping) = naming, let standard else { return source.romName }
+        return standard.standard.name(dropping: dropping)
     }
 
     private var platform: ROMPlatform? { ROMPlatform.all[platformId] }
@@ -338,30 +338,25 @@ struct AddROMConfirmation: View {
         .formStyle(.grouped)
         .onAppear {
             guard let journal = services.journal, let folder else { return }
-            standard = Result { try AddROM(journal: journal).standardName(of: source, matching: match, in: folder) }
+            standard = (try? AddROM(journal: journal).standardName(of: source, matching: match, in: folder))
+                .flatMap { $0.standard.name() == source.romName ? nil : $0 }
         }
     }
 
-    /// Giving it the name a Rename would, with its preview, when the picked name isn't that already.
+    /// Giving it its Standard name, with a preview, when that isn't the picked name already.
     @ViewBuilder private var standardNameSection: some View {
-        switch standard {
-        case .success(let proposal?) where proposal.name() != source.romName:
+        if let standard {
             Section {
-                Toggle("Give it its standard name", isOn: $givingStandardName)
-                Text("→ \(proposal.name(dropping: dropping))").font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                Toggle("Give it its Standard name", isOn: standard.taken ? .constant(false) : $givingStandardName)
+                    .disabled(standard.taken)
+                Text("→ \(standard.standard.name(dropping: dropping))\(standard.taken ? " · another ROM has this name" : "")")
+                    .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             } footer: {
                 Text("As No-Intro (or Redump, on disc Platforms) would name it, with its Regions.")
             }
-            if givingStandardName, !proposal.unplacedTags.isEmpty {
-                UnplacedTagsChoice(tags: proposal.unplacedTags, dropping: $dropping)
+            if givingStandardName, !standard.taken, !standard.standard.unplacedTags.isEmpty {
+                UnplacedTagsChoice(tags: standard.standard.unplacedTags, dropping: $dropping)
             }
-        case .failure(let error):
-            Section {
-                Toggle("Give it its standard name", isOn: .constant(false)).disabled(true)
-                Text(journalErrorText(error)).font(.callout).foregroundStyle(.secondary)
-            }
-        default:
-            EmptyView()
         }
     }
 

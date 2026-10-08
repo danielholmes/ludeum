@@ -336,8 +336,8 @@ struct AddROMTests {
         let source = ROMSource([original])
         let match = igdb(1, "Tetris", on: 33)
 
-        let proposal = try #require(try adder.standardName(of: source, matching: match, in: gameBoy.folder))
-        #expect(proposal.unplacedTags == ["(Trashman)"])
+        let offer = try #require(try adder.standardName(of: source, matching: match, in: gameBoy.folder))
+        #expect(offer.standard.unplacedTags == ["(Trashman)"])
         try await adder.add(source, to: gameBoy.folder, match: match, keepingOriginals: true, naming: .standard(dropping: ["(Trashman)"]))
 
         #expect(try gameBoy.folder.scan().map(\.name) == ["Tetris (Europe)"])
@@ -380,15 +380,28 @@ struct AddROMTests {
         #expect(try gameBoy.folder.scan().map(\.name) == ["Tetris (USA)"])
     }
 
+    /// The picked name being another ROM's doesn't matter when it goes in under its Standard name.
+    @Test func aPickedNameAnotherROMHasIsFineWhenItsGivenItsStandardName() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        _ = try missingGame("Tetris (U) [!]", on: 33)
+        let original = try pick("Tetris (U) [!].gb", "GB")
+
+        try await adder.add(
+            ROMSource([original]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true, naming: .standard())
+
+        #expect(try gameBoy.folder.scan().map(\.name) == ["Tetris (USA)"])
+    }
+
     @Test func aMissingROMOfTheNameARenameWouldGiveOnAnotherGameIsRefused() async throws {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         _ = try missingGame("Tetris (USA)", on: 33)
         let original = try pick("Tetris (U) [!].gb", "GB")
 
-        #expect(throws: AddROMError.missingROMIsAnotherGames("Tetris (USA)")) {
-            try adder.standardName(of: ROMSource([original]), matching: igdb(1, "Tetris", on: 33), in: gameBoy.folder)
-        }
-        await #expect(throws: AddROMError.missingROMIsAnotherGames("Tetris (USA)")) {
+        let offer = try #require(
+            try adder.standardName(of: ROMSource([original]), matching: igdb(1, "Tetris", on: 33), in: gameBoy.folder))
+        #expect(offer.taken)
+        #expect(offer.standard.name() == "Tetris (USA)")
+        await #expect(throws: AddROMError.standardNameTaken("Tetris (USA)")) {
             try await adder.add(
                 ROMSource([original]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true, naming: .standard())
         }

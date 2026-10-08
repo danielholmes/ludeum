@@ -100,10 +100,12 @@ public struct ROMName: Sendable, Hashable {
         "Latin America", "Unknown", "Argentina", "Austria", "Belgium", "Denmark", "Finland", "Greece", "India", "Ireland",
         "Mexico", "New Zealand", "Norway", "Poland", "Portugal", "Switzerland", "Turkey",
     ]
-    static let goodToolsRegions: [String: [String]] = [
+    private static let goodToolsRegions: [String: [String]] = [
         "U": ["USA"], "E": ["Europe"], "J": ["Japan"], "UE": ["USA", "Europe"], "JU": ["Japan", "USA"],
         "JUE": ["Japan", "USA", "Europe"], "JE": ["Japan", "Europe"], "B": ["Brazil"], "4": ["USA", "Brazil"],
         "W": ["World"], "US": ["USA"], "EU": ["Europe"], "F": ["France"], "G": ["Germany"], "K": ["Korea"],
+        "A": ["Australia"], "S": ["Spain"], "I": ["Italy"], "C": ["China"], "HK": ["Hong Kong"], "SW": ["Sweden"],
+        "FN": ["Finland"], "GR": ["Greece"], "H": ["Netherlands"], "NL": ["Netherlands"], "1": ["Japan", "Korea"],
     ]
     /// A GoodTools region code's regions: one it lists, or Japan, USA and Europe's letters in any order, e.g. "UEJ".
     static func goodToolsRegionNames(_ code: String) -> [String]? {

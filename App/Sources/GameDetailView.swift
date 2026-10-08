@@ -252,7 +252,11 @@ struct GameDetailView: View {
             }
         }
         .sheet(item: $renaming) { offer in
-            RenameROMSheet(offer: offer) { name in rename(offer.rom, to: name) }
+            RenameROMSheet(offer: offer) { name in
+                (try? services.journal?.romNameIsTaken(name, besides: offer.rom.id, on: offer.rom.platformId)) ?? false
+            } rename: { name in
+                rename(offer.rom, to: name)
+            }
         }
         .confirmationDialog(
             "Delete this Playthrough?",
@@ -379,6 +383,7 @@ struct GameDetailView: View {
                 Text("No ROM in its ROM folder").foregroundStyle(.orange)
             }
             ForEach(roms) { rom in
+                let offer = renameOffer(for: rom)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         VStack(alignment: .leading) {
@@ -399,7 +404,7 @@ struct GameDetailView: View {
                                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                             )
                             .font(.callout).foregroundStyle(.secondary)
-                            if let offer = renameOffer(for: rom) {
+                            if let offer {
                                 Text("→ \(offer.name)\(offer.taken ? " · another ROM has this name" : "")")
                                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                                     .help("The name Rename would give it")
@@ -415,7 +420,7 @@ struct GameDetailView: View {
                             }
                         }
                         Spacer()
-                        if let offer = renameOffer(for: rom) {
+                        if let offer {
                             Button("Rename…", systemImage: "character.cursor.ibeam") { renaming = offer }
                                 .disabled(offer.taken)
                                 .help(offer.taken ? "Another ROM has the name it would be given" : "Rename it “\(offer.name)”")
@@ -564,12 +569,12 @@ struct GameDetailView: View {
     /// Rename's offer for a present ROM not yet named as it would name it, while no Background task is working on it.
     private func renameOffer(for rom: LudeumROM) -> RenameOffer? {
         guard let game, !rom.missing, !services.tasks.isActive(.rom(rom.id)),
-            let proposal = ROMRename.proposal(
+            let standard = ROMRename.standardName(
                 forROM: rom.folderName, gameName: game.name, regions: rom.details.regions, platformId: game.platformId),
-            proposal.name() != rom.folderName
+            standard.name() != rom.folderName
         else { return nil }
-        let taken = (try? services.journal?.romNameIsTaken(proposal.name(), besides: rom.id, on: game.platformId)) ?? false
-        return RenameOffer(rom: rom, proposal: proposal, taken: taken)
+        let taken = (try? services.journal?.romNameIsTaken(standard.name(), besides: rom.id, on: game.platformId)) ?? false
+        return RenameOffer(rom: rom, standard: standard, taken: taken)
     }
 
     /// Renames the ROM in its ROM folder and the journal.
