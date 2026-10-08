@@ -41,6 +41,36 @@ public final class LibretroThumbnails: Sendable {
 
     static let folders = ["Named_Boxarts", "Named_Snaps", "Named_Titles"]
 
+    /// The repo a Game with no ROM looks for its Box art in, by title: its Platform's ROM folder's, else the one for a
+    /// Platform with no ROM folder. Nil for a Platform libretro has none for.
+    static func boxartRepo(platform: Int64) -> String? {
+        ROMPlatform.all[platform]?.libretroRepo ?? reposForPlatformsWithNoROMFolder[platform]
+    }
+
+    /// The repos for Platforms with no ROM folder (`ROMPlatform.libretroRepo` has the rest), by IGDB platform id. Some
+    /// are thin (PS3, PS4 and the Xbox 360 have a few dozen boxes); PC, Mac, the Switch and the Xbox One and later have
+    /// none. IGDB splits some Platforms libretro doesn't: the Neo Geo MVS and AES (79, 80) share one repo, as do the 3DS
+    /// and New 3DS (37, 137).
+    static let reposForPlatformsWithNoROMFolder: [Int64: String] = [
+        9: "Sony_-_PlayStation_3", 11: "Microsoft_-_Xbox", 12: "Microsoft_-_Xbox_360", 13: "DOS", 15: "Commodore_-_64",
+        16: "Commodore_-_Amiga", 23: "Sega_-_Dreamcast", 25: "Amstrad_-_CPC", 26: "Sinclair_-_ZX_Spectrum", 27: "Microsoft_-_MSX",
+        30: "Sega_-_32X", 37: "Nintendo_-_Nintendo_3DS", 41: "Nintendo_-_Wii_U", 48: "Sony_-_PlayStation_4",
+        50: "The_3DO_Company_-_3DO", 51: "Nintendo_-_Family_Computer_Disk_System", 57: "Bandai_-_WonderSwan", 59: "Atari_-_2600",
+        60: "Atari_-_7800", 61: "Atari_-_Lynx", 62: "Atari_-_Jaguar", 63: "Atari_-_ST", 65: "Atari_-_8-bit_Family",
+        66: "Atari_-_5200", 67: "Mattel_-_Intellivision", 68: "Coleco_-_ColecoVision", 70: "GCE_-_Vectrex",
+        71: "Commodore_-_VIC-20", 77: "Sharp_-_X1", 79: "SNK_-_Neo_Geo", 80: "SNK_-_Neo_Geo", 84: "Sega_-_SG-1000",
+        86: "NEC_-_PC_Engine_-_TurboGrafx_16", 87: "Nintendo_-_Virtual_Boy", 90: "Commodore_-_PET", 94: "Commodore_-_Plus-4",
+        114: "Commodore_-_CD32", 117: "Philips_-_CD-i", 119: "SNK_-_Neo_Geo_Pocket", 120: "SNK_-_Neo_Geo_Pocket_Color",
+        121: "Sharp_-_X68000", 123: "Bandai_-_WonderSwan_Color", 125: "NEC_-_PC-88", 127: "Fairchild_-_Channel_F",
+        128: "NEC_-_PC_Engine_SuperGrafx", 133: "Magnavox_-_Odyssey2", 136: "SNK_-_Neo_Geo_CD", 137: "Nintendo_-_Nintendo_3DS",
+        149: "NEC_-_PC-98", 156: "Thomson_-_MOTO", 158: "Commodore_-_CDTV", 159: "Nintendo_-_Nintendo_DSi",
+        166: "Nintendo_-_Pokemon_Mini", 274: "NEC_-_PC-FX", 306: "Nintendo_-_Satellaview", 339: "Sega_-_PICO",
+        373: "Sinclair_-_ZX_81", 376: "Epoch_-_Super_Cassette_Vision", 379: "Tiger_-_Game.com", 380: "Casio_-_Loopy",
+        412: "LeapFrog_-_Leapster_Learning_Game_System", 415: "Watara_-_Supervision", 416: "Nintendo_-_Nintendo_64DD",
+        438: "Arduboy_Inc_-_Arduboy", 439: "VTech_-_V.Smile", 473: "Emerson_-_Arcadia_2001", 480: "Funtech_-_Super_Acan",
+        506: "Amstrad_-_GX4000",
+    ]
+
     /// Looks a ROM up in its Platform's listings (`ROMPlatform.libretroRepo`). Nil for a Platform with no ROM folder,
     /// whose ROMs libretro isn't asked about.
     public func names(platform: Int64, fileName: String, titles: [String]) async throws -> LibretroNames? {
@@ -57,9 +87,9 @@ public final class LibretroThumbnails: Sendable {
     }
 
     /// A Game with no ROM's Box art, which has no file name to look up: a title match on each of `titles` in turn,
-    /// `regions`' box first, else USA, Europe, Japan. Nil when nothing matches, or for a Platform with no ROM folder.
+    /// `regions`' box first, else USA, Europe, Japan. Nil when nothing matches, or for a Platform libretro has no repo for.
     public func boxart(platform: Int64, titles: [String], regions: Set<NameRegion>) async throws -> String? {
-        guard let repo = ROMPlatform.all[platform]?.libretroRepo else { return nil }
+        guard let repo = Self.boxartRepo(platform: platform) else { return nil }
         let byTitle = try await boxartTitleIndex(repo)
         return LibretroLookup.fuzzy(titles: titles, regions: regions, in: byTitle).map { Self.path(repo, "Named_Boxarts", $0) }
     }

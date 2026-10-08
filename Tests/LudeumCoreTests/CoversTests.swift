@@ -286,7 +286,20 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
-    @Test func aGameWithNoROMOnAPlatformWithNoROMFolderNeverAsksLibretro() async throws {
+    @Test func aGameOnAPlatformWithNoROMFolderShowsBoxArtFoundByItsName() async throws {
+        h.internet.addGame(2001, "Max Payne", fields: ["cover": ["image_id": "co8"]])
+        h.internet.addLibretro("Microsoft_-_Xbox", ["Max Payne (USA)"])
+        try j.journal.addPlatform(id: 11, name: "Xbox")
+        let game = try j.journal.addGame(platformId: 11, name: "Max Payne", igdbGameId: 2001, igdbName: "Max Payne")
+
+        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        #expect(path == "Microsoft - Xbox/Named_Boxarts/Max Payne (USA).png")
+    }
+
+    @Test func aGameOnAPlatformLibretroHasNoBoxesForNeverAsksLibretro() async throws {
         h.internet.addGame(2000, "Half-Life", fields: ["cover": ["image_id": "co9"]])
         try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
         let game = try j.journal.addGame(platformId: 6, name: "Half-Life", igdbGameId: 2000, igdbName: "Half-Life")

@@ -256,7 +256,7 @@ struct ReviewQueueScreen: View {
             } catch {
                 self.error = "Confirm all stopped: \(error.localizedDescription)"
             }
-            services.changes.changed()
+            services.changes.coverChanged()
         }
     }
 }
@@ -615,7 +615,7 @@ private struct ReviewItemDetail: View {
         services.changes.changed()
     }
 
-    /// Runs an answer, then shows the Game the ROM went to.
+    /// Runs an answer, then shows the Game the ROM went to, whose Cover can now be the ROM's Box art.
     private func act(_ answer: @escaping () async throws -> GameID?) {
         Task {
             do {
@@ -625,7 +625,7 @@ private struct ReviewItemDetail: View {
             } catch {
                 failed(journalErrorText(error))
             }
-            services.changes.changed()
+            services.changes.coverChanged()
         }
     }
 }

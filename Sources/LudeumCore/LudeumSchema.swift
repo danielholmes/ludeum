@@ -601,6 +601,12 @@ enum LudeumSchema {
                         OR gameId IN (SELECT id FROM game WHERE igdbName GLOB '*[^ -~]*')
                     """)
         }
+        // A ROM Matched after its Import was never looked up by its Game's IGDB name, and a title match missed No-Intro's
+        // article before a subtitle (`Legend of Zelda, The - Spirit Tracks`): look up again, at the next Import, each ROM
+        // with no Box art.
+        migrator.registerMigration("v25 relook up ROMs with no Box art") { db in
+            try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE libretroBoxart IS NULL")
+        }
         return migrator
     }
 }

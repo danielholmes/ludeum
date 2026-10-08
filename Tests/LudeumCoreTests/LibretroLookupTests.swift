@@ -57,6 +57,15 @@ import Testing
         #expect(find("Banjo and Kazooie.z64", in: ["Banjo _ Kazooie (USA)"]) == "Banjo _ Kazooie (USA)")
     }
 
+    @Test func anArticleBeforeTheSubtitleDoesntStopAFuzzyMatch() {
+        let names: Set = ["Legend of Zelda, The - Phantom Hourglass (USA) (En,Fr,Es)"]
+        #expect(find("Legend of Zelda - Phantom Hourglass, The (U).nds", in: names) == names.first)
+        #expect(find("zeldaph.nds", titles: ["The Legend of Zelda: Phantom Hourglass"], in: names) == names.first)
+        #expect(
+            find("Lord of the Rings, The - Two Towers, The (U).gba", in: ["Lord of the Rings, The - The Two Towers (USA)"])
+                == "Lord of the Rings, The - The Two Towers (USA)")
+    }
+
     @Test func otherTitlesAreTriedLast() {
         let names: Set = ["Final Fantasy III (USA)", "Final Fantasy VI (Japan)"]
         #expect(find("ff3us.smc", titles: ["Final Fantasy III"], in: names) == "Final Fantasy III (USA)")

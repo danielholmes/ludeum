@@ -87,13 +87,19 @@ enum LibretroLookup {
         return s.trimmingCharacters(in: .whitespaces)
     }
 
-    /// The text before the first tag, normalised: articles moved to the front, `&` and `_` read as "and",
-    /// only letters and digits kept.
+    /// The text before the first tag, normalised: the article dropped from the start or end of the title and of its
+    /// subtitle, wherever No-Intro (`Legend of Zelda, The - Spirit Tracks`), GoodTools (`Legend of Zelda - Spirit Tracks,
+    /// The`) or IGDB (`The Legend of Zelda: Spirit Tracks`) puts it, `&` and `_` read as "and", only letters and digits
+    /// kept.
     static func titleKey(_ name: String) -> String {
-        var title = String(name.prefix { $0 != "(" && $0 != "[" }).trimmingCharacters(in: .whitespaces)
-        if let r = title.range(of: #", (The|A|An)$"#, options: .regularExpression) {
-            title = "\(title[r].dropFirst(2)) " + title[..<r.lowerBound]
-        }
+        let beforeTags = String(name.prefix { $0 != "(" && $0 != "[" })
+        var title = beforeTags.replacingOccurrences(of: #"\s+-\s+|:\s+"#, with: "\n", options: .regularExpression)
+            .split(separator: "\n")
+            .map {
+                $0.trimmingCharacters(in: .whitespaces)
+                    .replacingOccurrences(of: #"^(The|A|An) |, (The|A|An)$"#, with: "", options: .regularExpression)
+            }
+            .joined(separator: " ")
         title = title.replacingOccurrences(of: "&", with: " and ").replacingOccurrences(of: "_", with: " and ")
         return String(title.lowercased().folding(options: .diacriticInsensitive, locale: nil).filter { $0.isLetter || $0.isNumber })
     }

@@ -71,7 +71,7 @@ import SwiftUI
 
     var reviewQueue: ReviewQueue? {
         guard let igdb, let journal else { return nil }
-        return ReviewQueue(journal: journal, igdb: igdb, romFolders: settings.romFolders)
+        return ReviewQueue(journal: journal, igdb: igdb, romFolders: settings.romFolders, libretro: libretro)
     }
 
     var gameSearch: GameSearch? {

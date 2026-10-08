@@ -112,7 +112,7 @@ The one image a Game shows. In order: an image I uploaded, else its libretro Box
 _Avoid_: Artwork, box image, thumbnail
 
 **Box art**:
-A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe). It comes from libretro-thumbnails, and only exists for emulated platforms.
+A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe). It comes from libretro-thumbnails, and only exists for Platforms it has a repo for, whether or not they have a ROM folder.
 _Avoid_: Cover (that's what's shown, whatever its source)
 
 **Cover art**:

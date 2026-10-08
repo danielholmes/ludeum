@@ -114,6 +114,18 @@ import Testing
         #expect(left.nameSuggestions.count == 1)
     }
 
+    @Test func confirmAllLooksUpEveryROMItMatchesInLibretro() async throws {
+        h.internet.addLibretro(
+            "Nintendo_-_Super_Nintendo_Entertainment_System", ["Kirby Super Star (USA)", "Super Return of the Jedi (USA)"])
+        try unmatched(1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
+        try unmatched(2, "Super Return of the Jedi (USA)", suggestion: 9, kind: "checksum", namesAgree: true)
+
+        _ = try await ReviewQueue(journal: j.journal, igdb: h.igdb, libretro: h.libretro).confirmAll()
+
+        let boxArt = try await j.journal.db.read { try String?.fetchAll($0, sql: "SELECT libretroBoxart FROM rom ORDER BY id") }
+        #expect(boxArt.allSatisfy { $0 != nil })
+    }
+
     @Test func choosingASearchResultIsAManualMatch() async throws {
         let rom = try unmatched(4, "Unknown Homebrew")
         let item = try #require(try j.journal.reviewQueue().noSuggestion.first)

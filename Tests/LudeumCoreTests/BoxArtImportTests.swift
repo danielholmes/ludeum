@@ -105,6 +105,75 @@ import Testing
         #expect(rows.map { $0["libretroLookedUp"] as Bool } == [false, true])
         #expect(rows[1]["libretroBoxart"] as String? != nil)
     }
+
+    /// An unmatched ROM whose file name libretro doesn't know, waiting in the Review queue.
+    func unmatchedGDarius() async throws -> ReviewItem {
+        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Darius Gaiden (Europe)", "Darius Gaiden (USA)"])
+        try snes.add("G. Darius (USA).sfc")
+        try await importNow()
+        #expect(try roms()[0]["libretroBoxart"] as String? == nil)
+        return try #require(try j.journal.reviewQueue().noSuggestion.first)
+    }
+
+    @Test func aROMMatchedInTheReviewQueueIsLookedUpAgainByItsGamesIGDBName() async throws {
+        let item = try await unmatchedGDarius()
+
+        try await ReviewQueue(journal: j.journal, igdb: h.igdb, libretro: h.libretro)
+            .choose(item, igdbGameId: 50, name: "Darius Gaiden", platform: IGDBPlatform(id: 19, name: "SNES"))
+
+        #expect(
+            try roms()[0]["libretroBoxart"] as String?
+                == "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Darius Gaiden (USA).png")
+    }
+
+    @Test func aROMAssignedToAGameIsLookedUpAgainAtTheNextImport() async throws {
+        let item = try await unmatchedGDarius()
+        let game = try j.journal.addGame(platformId: 19, name: "Darius Gaiden", igdbGameId: 50, igdbName: "Darius Gaiden")
+
+        try j.journal.assign(item, to: game)
+        try await importNow()
+
+        #expect(try roms()[0]["libretroBoxart"] as String? != nil)
+    }
+
+    @Test func aGameLinkedAgainHasItsROMsLookedUpAgainAtTheNextImport() async throws {
+        let item = try await unmatchedGDarius()
+        let game = try j.journal.makeByHand(item, name: "G. Darius", platform: IGDBPlatform(id: 19, name: "SNES"))
+        try await importNow()
+        #expect(try roms()[0]["libretroBoxart"] as String? == nil)
+
+        try j.journal.link(game, igdbGameId: 50, igdbName: "Darius Gaiden")
+        try await importNow()
+
+        #expect(try roms()[0]["libretroBoxart"] as String? != nil)
+    }
+}
+
+/// The migration that looks up again every ROM with no Box art, once a ROM is looked up again when it's Matched and a
+/// title match understands an article before the subtitle.
+@Suite struct NoBoxArtLookupMigrationTests {
+    @Test func romsWithNoBoxArtAreLookedUpAgain() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: "v24 relook up spelled-out titles")
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform VALUES (20, 'DS');
+                    INSERT INTO rom (id, folderName, fileName, platformId, libretroLookedUp, libretroBoxart) VALUES
+                        (1, 'Zelda', 'Zelda.7z', 20, 1, NULL), (2, 'Mario', 'Mario.7z', 20, 1, 'Nintendo - Nintendo DS/Named_Boxarts/Mario.png');
+                    """)
+        }
+        try db.close()
+
+        let journal = try LudeumStore(directory: directory)
+
+        let lookedUp = try journal.db.read { try Bool.fetchAll($0, sql: "SELECT libretroLookedUp FROM rom ORDER BY id") }
+        #expect(lookedUp == [false, true])
+    }
 }
 
 /// The migration that ships box-art Covers, on a journal written by the first spec.
@@ -148,12 +217,13 @@ import Testing
                     INSERT INTO platform VALUES (7, 'PS1');
                     INSERT INTO game (id, platformId, name, igdbName) VALUES
                         (1, 7, 'Einhander', 'Einhänder'), (2, 7, 'Gran Turismo', 'Gran Turismo'), (3, 7, 'Pokemon', NULL);
-                    INSERT INTO rom (id, folderName, fileName, name, platformId, gameId, matchKind, matchedAt, libretroLookedUp)
+                    INSERT INTO rom (
+                        id, folderName, fileName, name, platformId, gameId, matchKind, matchedAt, libretroLookedUp, libretroBoxart)
                     VALUES
-                        (1, 'Einhander', 'Einhander.7z', 'Einhander', 7, 1, 'manual', 0, 1),
-                        (2, 'Gran Turismo', 'Gran Turismo.7z', 'Gran Turismo', 7, 2, 'manual', 0, 1),
-                        (3, 'Pokémon', 'Pokémon.7z', 'Pokémon', 7, 3, 'manual', 0, 1),
-                        (4, 'Unmatched', 'Unmatched.7z', NULL, 7, NULL, NULL, NULL, 1);
+                        (1, 'Einhander', 'Einhander.7z', 'Einhander', 7, 1, 'manual', 0, 1, 'Einhander.png'),
+                        (2, 'Gran Turismo', 'Gran Turismo.7z', 'Gran Turismo', 7, 2, 'manual', 0, 1, 'Gran Turismo.png'),
+                        (3, 'Pokémon', 'Pokémon.7z', 'Pokémon', 7, 3, 'manual', 0, 1, 'Pokemon.png'),
+                        (4, 'Unmatched', 'Unmatched.7z', NULL, 7, NULL, NULL, NULL, 1, 'Unmatched.png');
                     """)
         }
         try db.close()

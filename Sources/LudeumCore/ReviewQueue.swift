@@ -412,11 +412,12 @@ extension LudeumStore {
         return try ROMMove.plan(name, from: from, to: to)
     }
 
-    /// Sets the ROM's Match, clears its suggestion, and applies any OpenEmu data held for it since the first Import.
+    /// Sets the ROM's Match, clears its suggestion, and applies any OpenEmu data held for it since the first Import. The
+    /// ROM is looked up in libretro again, as its Game's IGDB name may now find Box art its file name didn't.
     static func match(_ db: Database, rom: Int64, to game: GameID, kind: String, day: String, now: Date) throws {
         try db.execute(
             sql: """
-                UPDATE rom SET gameId = ?, matchKind = ?, matchedAt = ?,
+                UPDATE rom SET gameId = ?, matchKind = ?, matchedAt = ?, libretroLookedUp = 0,
                     suggestedIgdbGameId = NULL, suggestionKind = NULL, checksumIgdbGameId = NULL, namesAgree = NULL
                 WHERE id = ? AND gameId IS NULL
                 """, arguments: [game, kind, now, rom])
@@ -466,12 +467,15 @@ public struct ReviewQueue: Sendable {
     let journal: LudeumStore
     let igdb: IGDBClient
     let romFolders: [ROMFolder]
+    let libretro: LibretroThumbnails?
 
-    /// `romFolders` are where Confirm on a sibling Platform moves a ROM's files from and to.
-    public init(journal: LudeumStore, igdb: IGDBClient, romFolders: [ROMFolder] = []) {
+    /// `romFolders` are where Confirm on a sibling Platform moves a ROM's files from and to. With `libretro`, a Matched
+    /// ROM is looked up there again by its Game's IGDB name straight away; without, at the next Import.
+    public init(journal: LudeumStore, igdb: IGDBClient, romFolders: [ROMFolder] = [], libretro: LibretroThumbnails? = nil) {
         self.journal = journal
         self.igdb = igdb
         self.romFolders = romFolders
+        self.libretro = libretro
     }
 
     /// Confirm: Matches the ROM to its suggestion, on the ROM's Platform or one of its siblings (`platformChoices`).
@@ -479,6 +483,13 @@ public struct ReviewQueue: Sendable {
     /// still OpenEmu's.
     @discardableResult
     public func confirm(_ item: ReviewItem, on platformId: Int64? = nil) async throws -> GameID {
+        let game = try await match(item, on: platformId)
+        await lookUpBoxArt([item])
+        return game
+    }
+
+    /// Confirm without the Box art lookup, which Confirm all does once for every ROM it Matches.
+    private func match(_ item: ReviewItem, on platformId: Int64?) async throws -> GameID {
         let platformId = platformId ?? item.platformId
         guard item.platformChoices.contains(platformId) else { throw ReviewError.notASiblingPlatform }
         guard let suggested = item.suggestedIgdbGameId else { throw ReviewError.suggestionGone }
@@ -502,22 +513,31 @@ public struct ReviewQueue: Sendable {
     public func confirmAll() async throws -> Int {
         let items = try journal.reviewQueue().namesAgree
         _ = try await igdb.games(ids: items.compactMap(\.suggestedIgdbGameId).map(Int.init))  // one batch, then cached
-        var confirmed = 0
+        var confirmed: [ReviewItem] = []
         for item in items {
             do {
-                try await confirm(item)
-                confirmed += 1
+                try await match(item, on: nil)
+                confirmed.append(item)
             } catch ReviewError.alreadyMatched {
                 // Answered on its own meanwhile.
             }
         }
-        return confirmed
+        await lookUpBoxArt(confirmed)
+        return confirmed.count
     }
 
     /// A result from Search IGDB…: a manual Match.
     @discardableResult
     public func choose(_ item: ReviewItem, igdbGameId: Int64, name: String, platform: IGDBPlatform) async throws -> GameID {
-        try journal.match(item, igdbGameId: igdbGameId, igdbName: name, platform: platform, kind: "manual")
+        let game = try journal.match(item, igdbGameId: igdbGameId, igdbName: name, platform: platform, kind: "manual")
+        await lookUpBoxArt([item])
+        return game
+    }
+
+    /// The Matched ROMs looked up in libretro again, each Platform's listing read once; if they can't be, the next
+    /// Import does it.
+    private func lookUpBoxArt(_ items: [ReviewItem]) async {
+        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(items.map(\.romId))
     }
 
     private func platform(_ id: Int64) async throws -> IGDBPlatform {
