@@ -289,6 +289,23 @@ struct AddROMTests {
         #expect(try j.journal.reviewQueue().missingROMs.isEmpty)
     }
 
+    @Test func itsMissingROMsArentDeletedWhileAPlaythroughWasPlayedOnOne() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let game = try missingGame("Tetris (Japan)", on: 33)
+        let missing = try #require(try romRow("Tetris (Japan)")?["id"] as Int64?)
+        try j.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2026")!, copy: .rom(missing)))
+        let original = try pick("Tetris (World) (Rev 1).gb", "GB")
+
+        await #expect(throws: AddROMError.missingROMPlayedOn) {
+            try await adder.add(
+                ROMSource([original]), to: gameBoy.folder, match: .game(game, deletingMissing: true), keepingOriginals: false)
+        }
+
+        #expect(try j.journal.roms(of: game).map(\.id) == [missing])
+        #expect(try gameBoy.folder.scan().isEmpty)
+        #expect(FileManager.default.fileExists(atPath: original.path(percentEncoded: false)))
+    }
+
     @Test func aFileOfTheMissingROMsNameBringsItBack() async throws {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         let game = try missingGame("Tetris (World)", on: 33)

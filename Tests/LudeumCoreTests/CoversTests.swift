@@ -129,7 +129,7 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
             Issue.record("expected IGDB's Cover art")
             return
         }
-        #expect(h.internet.sent.isEmpty)
+        #expect(h.internet.sent(to: FakeInternet.Hosts.igdb).isEmpty)
     }
 
     @Test func aRecordFetchedAgainGivesItsNewCoverArt() async throws {
@@ -216,6 +216,86 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         h.internet.setDown(FakeInternet.Hosts.libretro, true)
 
         await #expect(throws: (any Error).self) { try await covers.cover(for: game) }
+    }
+
+    @Test func aGameWithNoROMShowsBoxArtFoundByItsName() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan, USA) (En)"])
+        let game = try await superMetroid([])
+
+        guard case .libretro(let file, let path) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        #expect(path == "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (Japan, USA) (En).png")
+        #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
+    }
+
+    @Test func aGameWithNoROMGetsTheBoxForItsCopysRegionsElseUSAs() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan)", "Super Metroid (Europe)", "Super Metroid (USA)"])
+        let game = try await superMetroid([])
+
+        guard case .libretro(_, let usa) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        #expect(usa.hasSuffix("/Super Metroid (USA).png"))
+
+        try j.journal.addCopy(game, CopyDraft(kind: .physical, details: CopyDetails(regions: ["Australia"]), gone: Gone()))
+        guard case .libretro(_, let pal) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        #expect(pal.hasSuffix("/Super Metroid (Europe).png"))
+    }
+
+    @Test func aGameWithNoROMIsFoundByIGDBsNameWhenItsShownNameDiffers() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        let game = try await superMetroid([])
+        try j.journal.setNameOverride(game, "Metroid 3")
+
+        guard case .libretro = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+    }
+
+    @Test func aGameWithNoROMAndNoMatchShowsIGDBsCoverArt() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Mario World (USA)"])
+        let game = try await superMetroid([])
+
+        guard case .igdb(_, "co1") = try await covers.cover(for: game) else {
+            Issue.record("expected IGDB's Cover art")
+            return
+        }
+    }
+
+    @Test func aGameWithNoROMWhoseListingCantBeReadShowsIGDBsCoverArtAndTriesAgainNextTime() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        let game = try await superMetroid([])
+        h.internet.setDown(FakeInternet.Hosts.github, true)
+
+        guard case .igdb = try await covers.cover(for: game) else {
+            Issue.record("expected IGDB's Cover art")
+            return
+        }
+
+        h.internet.setDown(FakeInternet.Hosts.github, false)
+        guard case .libretro = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+    }
+
+    @Test func aGameWithNoROMOnAPlatformWithNoROMFolderNeverAsksLibretro() async throws {
+        h.internet.addGame(2000, "Half-Life", fields: ["cover": ["image_id": "co9"]])
+        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
+        let game = try j.journal.addGame(platformId: 6, name: "Half-Life", igdbGameId: 2000, igdbName: "Half-Life")
+
+        guard case .igdb(_, "co9") = try await covers.cover(for: game) else {
+            Issue.record("expected IGDB's Cover art")
+            return
+        }
+        #expect(h.internet.sent(to: FakeInternet.Hosts.github).isEmpty)
     }
 
     @Test func aCoverGoesWithItsGame() async throws {

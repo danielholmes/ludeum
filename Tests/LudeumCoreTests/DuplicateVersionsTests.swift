@@ -166,4 +166,21 @@ import Testing
         #expect(try trashed().isEmpty)
         #expect(try j.journal.roms(of: item.game.id).count == 2)
     }
+
+    @Test func bothAreRefusedForAVersionAPlaythroughWasPlayedOn() async throws {
+        try snes.add("Double Dragon III (Japan).7z")
+        try snes.add("Double Dragon III (USA).7z")
+        let item = try await duplicates(on: 19, "Double Dragon III")
+        let usa = try version(item, containing: "USA")
+        try j.journal.addPlaythrough(item.game.id, PlaythroughDraft(start: PartialDate("2026")!, copy: .rom(usa[0].id)))
+
+        #expect(throws: LudeumError.copyPlayedOn) { try j.journal.splitOff(usa, from: item) }
+        #expect(throws: LudeumError.copyPlayedOn) { try keepOnly(try version(item, containing: "Japan"), of: item) }
+
+        #expect(try trashed().isEmpty)
+        #expect(try j.journal.roms(of: item.game.id).count == 2)
+        // The Version played on can still be the one kept.
+        try keepOnly(usa, of: item)
+        #expect(try j.journal.roms(of: item.game.id).map(\.fileName) == ["Double Dragon III (USA).7z"])
+    }
 }

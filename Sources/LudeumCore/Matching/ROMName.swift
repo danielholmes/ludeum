@@ -67,8 +67,7 @@ public struct ROMName: Sendable, Hashable {
             // Anything else after the last tag is a file artefact: a copy number, ".nkit", …
         }
         version = parts.joined(separator: " · ")
-        let found = Set(regionNames.flatMap { Self.regionsByName[$0] ?? [] })
-        regions = found.isEmpty ? nil : found
+        regions = Self.regions(named: regionNames)
         for name in regionNames where !self.regionNames.contains(name) { self.regionNames.append(name) }
     }
 
@@ -113,6 +112,13 @@ public struct ROMName: Sendable, Hashable {
         let letters: [Character: String] = ["J": "Japan", "U": "USA", "E": "Europe"]
         guard code.count > 1, Set(code).count == code.count, code.allSatisfy({ letters[$0] != nil }) else { return nil }
         return code.map { letters[$0]! }
+    }
+
+    /// The regions these names say ("Australia" is Europe, "World" all three), or nil if they say none: a ROM's
+    /// region tags, or a Copy's Regions.
+    static func regions(named names: [String]) -> Set<NameRegion>? {
+        let found = Set(names.flatMap { regionsByName[$0] ?? [] })
+        return found.isEmpty ? nil : found
     }
 
     private static let regionsByName: [String: Set<NameRegion>] = {

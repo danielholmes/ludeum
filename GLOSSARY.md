@@ -73,7 +73,7 @@ Every Rating a Game has had, each with the date it was set, including being clea
 _Avoid_: Rating log, previous ratings
 
 **Playthrough**:
-One time I played a Game. Every Playthrough has a start date; the rest is optional (end date, Outcome, notes, and the Version I played). Its end date can't come before its start date. A Game can have any number.
+One time I played a Game. Every Playthrough has a start date; the rest is optional (end date, Outcome, notes, and the Copy I played it on: one of the Game's ROMs or hand-recorded Copies). Its end date can't come before its start date. A Game can have any number. A Copy a Playthrough was played on can't be deleted, or Split off into another Game, until that Playthrough says another Copy or none.
 _Avoid_: Completion, run, session
 
 **Outcome**:

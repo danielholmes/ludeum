@@ -89,6 +89,22 @@ extension LudeumStore {
             return chosen.map { $0["libretroBoxart"] }
         }
     }
+
+    /// What a Game with no ROM looks its Box art up by: its Platform, its names (the one shown, then IGDB's, then its
+    /// own) and its Copies' Regions, Gone ones included, as the box is the one I had.
+    func boxArtLookup(_ game: GameID) throws -> (platform: Int64, titles: [String], regions: Set<NameRegion>) {
+        try db.read { db in
+            let row = try Row.fetchOne(
+                db, sql: "SELECT platformId, name, nameOverride, igdbName FROM game WHERE id = ?", arguments: [game])!
+            var titles: [String] = []
+            for title in [row["nameOverride"], row["igdbName"], row["name"]] as [String?] {
+                if let title, !titles.contains(title) { titles.append(title) }
+            }
+            let regions = try String?.fetchAll(db, sql: "SELECT regions FROM copy WHERE gameId = ?", arguments: [game])
+                .flatMap(Regions.decode)
+            return (row["platformId"], titles, ROMName.regions(named: regions) ?? [])
+        }
+    }
 }
 
 /// What a Game shows as its Cover.
@@ -120,13 +136,21 @@ public struct Covers: Sendable {
     public func cover(for game: GameID) async throws -> CoverSource {
         if let upload = try journal.uploadedCover(game) { return .upload(upload) }
         let roms = try journal.coverROMs(game)
-        if let libretro, let path = roms.compactMap({ $0 }).first {
+        if let libretro, let path = try await boxArt(game, roms: roms, libretro) {
             return .libretro(try await libretro.image(path), path: path)
         }
         if let igdb, let id = try journal.game(game).igdbGameId.map(Int.init), let imageID = try await igdb.coverImageID(game: id) {
             return .igdb(try await igdb.cover(imageID: imageID), imageID: imageID)
         }
         return .placeholder
+    }
+
+    /// Its ROMs' Box art, or for a Game with no ROM, a title match on its Platform's libretro listing. A listing that
+    /// can't be read finds nothing, as for a ROM not yet looked up: IGDB's Cover art shows until it can be.
+    private func boxArt(_ game: GameID, roms: [String?], _ libretro: LibretroThumbnails) async throws -> String? {
+        guard roms.isEmpty else { return roms.compactMap { $0 }.first }
+        let lookup = try journal.boxArtLookup(game)
+        return try? await libretro.boxart(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions)
     }
 
     /// Uploads win over everything, on any Game.

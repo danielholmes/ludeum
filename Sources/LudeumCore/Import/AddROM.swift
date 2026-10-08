@@ -22,6 +22,8 @@ public enum AddROMError: Error, Equatable {
     case notReadAfterward(String)
     /// Of several ROMs Added at once, these couldn't go in (each "name: why"); the rest did.
     case notAllAdded([String], of: Int)
+    /// Its Game's missing ROMs can't be deleted as it goes in: a Playthrough was played on one of them.
+    case missingROMPlayedOn
 }
 
 extension AddROMError: LocalizedError {
@@ -39,6 +41,8 @@ extension AddROMError: LocalizedError {
         case .notReadAfterward(let name): "Its ROM folder didn't read \(name) as a Playable ROM, so it was taken out again."
         case .notAllAdded(let failures, let total):
             "\(failures.count) of \(total) ROMs couldn't be added, and the rest were. " + failures.joined(separator: " ")
+        case .missingROMPlayedOn:
+            "A Playthrough was played on one of its missing ROMs, so they can't be deleted. Add it keeping them, or change that Playthrough's Copy first."
         }
     }
 }
@@ -211,6 +215,16 @@ public struct AddROM: Sendable {
         let named = try name(of: source, matching: match, in: folder, naming: naming)
         if named.taken { throw AddROMError.standardNameTaken(named.name) }
         try await check(source, fits: folder, named: named.name)
+        if case .game(let target, deletingMissing: true) = match {
+            // Before anything moves: the missing ROMs can't go while a Playthrough was played on one.
+            do {
+                try await journal.db.read { db in
+                    try LudeumStore.checkNotPlayedOn(db, roms: try LudeumStore.missingROMs(db, of: target, except: named.missingRow))
+                }
+            } catch LudeumError.copyPlayedOn {
+                throw AddROMError.missingROMPlayedOn
+            }
+        }
         let (destination, file) = try await put(source, named: named.name, in: folder, progress: progress)
         let game: GameID
         do {
@@ -502,6 +516,7 @@ extension LudeumStore {
                 }
                 if matched == nil { try Self.match(db, rom: rom, to: target, kind: "manual", day: day, now: now) }
                 if deletingMissing {
+                    try LudeumStore.checkNotPlayedOn(db, roms: try LudeumStore.missingROMs(db, of: target, except: rom))
                     try db.execute(sql: "DELETE FROM rom WHERE gameId = ? AND missing AND id <> ?", arguments: [target, rom])
                 }
                 game = target
