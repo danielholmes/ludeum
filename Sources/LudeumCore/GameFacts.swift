@@ -32,6 +32,10 @@ public struct GameFacts: Sendable, Equatable {
     public var keywords: [String] = []
     /// The first of IGDB's videos called a trailer, on YouTube.
     public var trailer: URL? = nil
+    /// What it expands, when it's an Expansion.
+    public var expansion: ExpansionOf? = nil
+    /// IGDB's Expansions of it, by IGDB id.
+    public var expansionIDs: [Int] = []
 
     public init(
         genres: [String], themes: [String], franchises: [String] = [], series: [String] = [], credits: [CompanyCredit] = [],
@@ -168,6 +172,8 @@ extension IGDBGame {
         facts.trailer = (record["videos"]?.array ?? [])
             .first { ($0["name"]?.string ?? "").localizedCaseInsensitiveContains("trailer") }?["video_id"]?.string
             .flatMap { URL(string: "https://www.youtube.com/watch?v=\($0)") }
+        facts.expansion = expansionOf
+        facts.expansionIDs = expansionIDs
         return facts
     }
 }

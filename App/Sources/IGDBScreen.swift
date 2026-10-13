@@ -90,6 +90,7 @@ struct IGDBGameDetailView: View {
                                 Text(type).font(.caption).padding(.horizontal, 4).background(.quaternary, in: .capsule)
                             }
                         }
+                        if let base = result.baseGameName { Text("Expansion of \(base)").foregroundStyle(.secondary) }
                         FlowLayout(spacing: 6) {
                             ForEach(chips, id: \.platform.id) { chip in
                                 if let game = chip.game {

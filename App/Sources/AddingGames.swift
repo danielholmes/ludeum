@@ -100,8 +100,8 @@ import SwiftUI
     var hasheous: (key: String?, client: HasheousClient)?
 }
 
-/// The one IGDB search component: a search box, an optional Platform filter, genre, theme and company
-/// filters (shown as removable pills), and results with their platforms as chips. What a chip does is up to the caller (add a Game, or link one).
+/// The one IGDB search component: a search box, a Base games / Expansions toggle, an optional Platform filter, genre,
+/// theme and company filters (shown as removable pills), and results with their platforms as chips. What a chip does is up to the caller (add a Game, or link one).
 struct IGDBSearchView: View {
     let search: GameSearch
     let platforms: [IGDBPlatform]
@@ -133,6 +133,8 @@ struct IGDBSearchView: View {
     @State private var sort = GameSearchSort.name
     @State private var ascending = true
     @State private var filters = GameSearchFilters()
+    /// Searching for Expansions instead of base games; back to base games each time the search appears.
+    @State private var expansions = false
     @State private var genres: [IGDBNamed] = []
     @State private var themes: [IGDBNamed] = []
     @State private var choosingCompany = false
@@ -147,6 +149,11 @@ struct IGDBSearchView: View {
                     .task(id: focusRequest) { if focusRequest > 0 { queryFocused = true } }
                 Button("Search", action: run).disabled(searching || (query.trimmed.isEmpty && filters.isEmpty))
                 if searching { ProgressView().controlSize(.small) }
+                Picker("Find", selection: $expansions) {
+                    Text("Base games").tag(false)
+                    Text("Expansions").tag(true)
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
                 if linking {
                     Text(platformFilter?.name ?? "").foregroundStyle(.secondary)
                 } else {
@@ -196,6 +203,9 @@ struct IGDBSearchView: View {
                                 Text(type).font(.caption).padding(.horizontal, 4).background(.quaternary, in: .capsule)
                             }
                         }
+                        if let base = result.baseGameName {
+                            Text("Expansion of \(base)").font(.caption).foregroundStyle(.secondary)
+                        }
                         if linking, let platform = platformFilter {
                             Button("Link") { choose(result, platform) }.controlSize(.small)
                         } else if browse != nil {
@@ -235,6 +245,7 @@ struct IGDBSearchView: View {
         .onAppear { if !query.isEmpty || !filters.isEmpty { run() } }
         // Each filter added or removed searches again; with no text and no filters, the results clear.
         .onChange(of: filters) { run() }
+        .onChange(of: expansions) { run() }
         .task {
             genres = (try? await search.genres()) ?? []
             themes = (try? await search.themes()) ?? []
@@ -250,12 +261,13 @@ struct IGDBSearchView: View {
         let query = query
         let platform = platformFilter?.id
         let filters = filters
+        let expansions = expansions
         generation += 1
         let mine = generation
         searching = true
         Task {
             do {
-                let found = try await search.search(query, platform: platform, filters: filters)
+                let found = try await search.search(query, platform: platform, filters: filters, expansions: expansions)
                 guard mine == generation else { return }
                 results = found
                 searched = !query.trimmed.isEmpty || !filters.isEmpty

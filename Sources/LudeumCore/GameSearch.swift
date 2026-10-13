@@ -36,6 +36,10 @@ public struct GameSearchResult: Sendable, Hashable, Identifiable {
     public var releaseDate: Date? = nil
     /// IGDB's `game_type` label when it isn't a main game, e.g. "Mod" or "Remaster".
     public let gameType: String?
+    /// An Expansion or Standalone Expansion, which says what it expands.
+    public var isExpansion = false
+    /// An Expansion's Base game, by IGDB's name; nil for any other game, or when IGDB doesn't say.
+    public var baseGameName: String? = nil
     public let coverImageID: String?
     public let chips: [PlatformChip]
     public var id: Int64 { igdbGameId }
@@ -99,18 +103,18 @@ public struct GameSearch: Sendable {
 
     /// IGDB games matching `query` and `filters`, optionally on one platform, best match first (most
     /// rated first with no query). DLC, Expansions, Seasons, Packs and Updates are left out; Mods are
-    /// shown and labelled.
-    public func search(_ query: String, platform: Int64? = nil, filters: GameSearchFilters = .init()) async throws
-        -> [GameSearchResult]
-    {
+    /// shown and labelled. With `expansions` it finds only Expansions and Standalone Expansions instead.
+    public func search(
+        _ query: String, platform: Int64? = nil, filters: GameSearchFilters = .init(), expansions: Bool = false
+    ) async throws -> [GameSearchResult] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty || !filters.isEmpty else { return [] }
         let search = IGDBSearch(
             name: query, platformID: platform.map(Int.init), genreIDs: filters.genres.map(\.id),
-            themeIDs: filters.themes.map(\.id), companyID: filters.company?.id)
+            themeIDs: filters.themes.map(\.id), companyID: filters.company?.id, expansions: expansions)
         let ids = try await igdb.search([search])[search] ?? []
         let games = try await igdb.games(ids: ids)
-        return try ids.compactMap { games[$0] }.filter { !isAddOn($0) }.map(result)
+        return try ids.compactMap { games[$0] }.filter { expansions ? $0.isExpansion : !isAddOn($0) }.map(result)
     }
 
     /// Every IGDB genre and theme, for filtering the search.
@@ -178,14 +182,18 @@ public struct GameSearch: Sendable {
         let released = game.record["first_release_date"]?.number.map { Date(timeIntervalSince1970: $0) }
         let year = released.map { Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: $0).year! }
         let type = game.record["game_type"]?.int ?? 0
-        return GameSearchResult(
+        var out = GameSearchResult(
             igdbGameId: Int64(game.id), name: game.name ?? "Game \(game.id)", year: year, releaseDate: released,
             gameType: type == 0 ? nil : gameTypeNames[type] ?? "Other", coverImageID: game.record["cover"]?["image_id"]?.string,
             chips: chips)
+        out.isExpansion = game.isExpansion
+        out.baseGameName = game.expansionOf?.baseGame?.name
+        return out
     }
 }
 
-/// DLC (1), Expansion (2), Season (7), Pack/Addon (13) and Update (14) are never a Game. Mods (5) can be.
+/// DLC (1), Expansion (2), Season (7), Pack/Addon (13) and Update (14) are left out of the search for base games,
+/// and only Expansions are found by the search for them. Mods (5) can be a Game.
 private func isAddOn(_ game: IGDBGame) -> Bool { [1, 2, 7, 13, 14].contains(game.record["game_type"]?.int ?? 0) }
 
 private let gameTypeNames = [

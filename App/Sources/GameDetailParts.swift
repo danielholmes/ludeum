@@ -442,3 +442,38 @@ enum FactStyle {
         busyROMs: Set(roms.map(\.id).filter { services.tasks.isActive(.rom($0)) }))
     startPlay(play, in: emulator, services: services, refused: refused, alert: alert)
 }
+
+/// Under an Expansion's name: "Expansion of" its Base game, a link when it's my Game on the same Platform,
+/// or just "Expansion" when IGDB doesn't say what it expands.
+struct ExpansionOfLine: View {
+    let line: BaseGameLine
+    let open: (GameID) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(line.name == nil ? "Expansion" : "Expansion of").foregroundStyle(.secondary)
+            if let name = line.name {
+                if let game = line.game {
+                    Button(name) { open(game) }.buttonStyle(.link).help("Open the Base game")
+                } else {
+                    Text(name).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+/// Under a Base game's name: its Expansions on the same Platform in the journal, each a link.
+struct ExpansionsLine: View {
+    let games: [Game]
+    let open: (GameID) -> Void
+
+    var body: some View {
+        FlowLayout(spacing: 4) {
+            Text("Expansions:").foregroundStyle(.secondary)
+            ForEach(games, id: \.id) { game in
+                Button(game.name) { open(game.id) }.buttonStyle(.link).help("Open this Expansion")
+            }
+        }
+    }
+}

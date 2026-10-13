@@ -8,6 +8,8 @@ struct GameDetailView: View {
     let id: GameID
     /// Opens the Library with a filter, e.g. every Game in this one's series.
     let browse: (LibraryFilter) -> Void
+    /// Opens another Game, e.g. an Expansion's Base game.
+    let open: (GameID) -> Void
     /// Called after the Game is deleted.
     let deleted: () -> Void
 
@@ -32,6 +34,9 @@ struct GameDetailView: View {
     /// ROMs whose files are shown.
     @State private var expandedROMs: Set<Int64> = []
     @State private var facts = GameFacts.none
+    /// What it's an Expansion of, if it's one; and its Expansions in the journal, if it has any.
+    @State private var baseGame: BaseGameLine?
+    @State private var expansions: [Game] = []
     @State private var editing: PlaythroughEdit?
     @State private var linking = false
     @State private var editingGame = false
@@ -78,6 +83,8 @@ struct GameDetailView: View {
                             Text([platform.name, facts.releaseYear.map(String.init)].compactMap { $0 }.joined(separator: " · "))
                                 .foregroundStyle(.secondary)
                         }
+                        if let baseGame { ExpansionOfLine(line: baseGame, open: open) }
+                        if !expansions.isEmpty { ExpansionsLine(games: expansions, open: open) }
                         if !roms.isEmpty, !roms.allSatisfy(\.missing) {
                             playControls
                             if let message = playError ?? emulator.flatMap(services.versions.tooOldMessage) {
@@ -191,6 +198,7 @@ struct GameDetailView: View {
         .task(id: game.igdbGameId) {
             facts = .none
             if let link = game.igdbGameId, let igdb = services.igdb { facts = (try? await igdb.facts(igdbGameId: link)) ?? .none }
+            readExpansions()
         }
         .sheet(isPresented: $editingGame) {
             EditGameSheet(
@@ -301,11 +309,19 @@ struct GameDetailView: View {
             roms = try journal.roms(of: id)
             copies = try journal.copies(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
+            readExpansions()
         } catch LudeumError.gameNotFound {
             self.game = nil
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// The Expansion lines, from IGDB's facts and the journal as they are now.
+    private func readExpansions() {
+        guard let journal = services.journal, let game else { return }
+        baseGame = try? journal.baseGame(of: game, facts: facts)
+        expansions = (try? journal.expansions(of: game, facts: facts)) ?? []
     }
 
     /// Runs a journal change, then reloads every screen showing the journal.

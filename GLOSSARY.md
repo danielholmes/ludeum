@@ -10,6 +10,14 @@ A personal record of the games I play across every platform (retro via per-Platf
 A title as played on one Platform. Regional releases, revisions and fan translations of that title on the same Platform are the same Game. A port to a different Platform is a different Game, and so is an enhanced re-release that IGDB lists separately (e.g. Link's Awakening vs Link's Awakening DX).
 _Avoid_: Title, entry, ROM
 
+**Expansion**:
+A Game whose IGDB link is to an expansion, or a standalone expansion, of another IGDB game: its Base game. In every other way it is a Game like any other. A Game with no IGDB link is never an Expansion. DLC, packs, seasons and updates are never Games at all.
+_Avoid_: DLC, add-on, expansion pack
+
+**Base game**:
+The IGDB game an Expansion expands. It may or may not be a Game in the journal.
+_Avoid_: Parent game, main game
+
 **Platform**:
 The hardware or ecosystem a Game was made for, e.g. SNES, Game Boy, PC, Xbox 360. It is never the device or service the Game was actually played on. The Platforms are exactly IGDB's platforms. Every Game has one, including a Game with no IGDB link.
 _Avoid_: System, console

@@ -134,7 +134,7 @@ struct MainWindow: View {
                         .id(igdbResult.id)
                 } else if let selectedGame {
                     // A delete finishes off the main thread, and by then another Game may be the one selected.
-                    GameDetailView(services: services, id: selectedGame, browse: showInLibrary) {
+                    GameDetailView(services: services, id: selectedGame, browse: showInLibrary, open: openGame) {
                         if self.selectedGame == selectedGame { self.selectedGame = nil }
                     }
                     .id(selectedGame)

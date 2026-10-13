@@ -13,29 +13,35 @@ public struct IGDBCredentials: Sendable, Equatable {
 
 /// A search for games: by name, filters, or both, on one IGDB platform or on every platform.
 /// Several genres or themes match a game with any of them; a company matches any involvement
-/// (developer, publisher, porting or supporting).
+/// (developer, publisher, porting or supporting). It finds base games, or with `expansions` only Expansions.
 public struct IGDBSearch: Sendable, Hashable {
     public let name: String
     public let platformID: Int?
     public let genreIDs: [Int]
     public let themeIDs: [Int]
     public let companyID: Int?
+    public let expansions: Bool
 
-    public init(name: String, platformID: Int? = nil, genreIDs: [Int] = [], themeIDs: [Int] = [], companyID: Int? = nil) {
+    public init(
+        name: String, platformID: Int? = nil, genreIDs: [Int] = [], themeIDs: [Int] = [], companyID: Int? = nil,
+        expansions: Bool = false
+    ) {
         self.name = name
         self.platformID = platformID
         self.genreIDs = Array(Set(genreIDs)).sorted()
         self.themeIDs = Array(Set(themeIDs)).sorted()
         self.companyID = companyID
+        self.expansions = expansions
     }
 
-    /// `igdb:search:<platform>:<name>`, with any filters after the platform: `any|g12,31|t19|c70`.
+    /// `igdb:search:<platform>:<name>`, with any filters after the platform and `x` for Expansions: `any|g12,31|t19|c70|x`.
     var cacheKey: String {
         let normalised = name.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
         var scope = platformID.map(String.init) ?? "any"
         if !genreIDs.isEmpty { scope += "|g" + genreIDs.map(String.init).joined(separator: ",") }
         if !themeIDs.isEmpty { scope += "|t" + themeIDs.map(String.init).joined(separator: ",") }
         if let companyID { scope += "|c\(companyID)" }
+        if expansions { scope += "|x" }
         return "igdb:search:\(scope):\(normalised)"
     }
 
@@ -49,12 +55,13 @@ public struct IGDBSearch: Sendable, Hashable {
             scope.dropFirst().first { $0.first == tag }.map { $0.dropFirst().split(separator: ",").compactMap { Int($0) } } ?? []
         }
         self.init(
-            name: String(parts[3]), platformID: Int(platform), genreIDs: ids("g"), themeIDs: ids("t"), companyID: ids("c").first)
+            name: String(parts[3]), platformID: Int(platform), genreIDs: ids("g"), themeIDs: ids("t"), companyID: ids("c").first,
+            expansions: scope.dropFirst().contains("x"))
     }
 
-    /// The `where` conditions besides the name: add-ons left out, then the platform and filters.
+    /// The `where` conditions besides the name: add-ons left out (or only Expansions), then the platform and filters.
     var conditions: String {
-        var c = ["game_type != (1,2,7,13,14)"]
+        var c = [expansions ? "game_type = (2,4)" : "game_type != (1,2,7,13,14)"]
         if let platformID { c.append("platforms = (\(platformID))") }
         if !genreIDs.isEmpty { c.append("genres = (\(genreIDs.map(String.init).joined(separator: ",")))") }
         if !themeIDs.isEmpty { c.append("themes = (\(themeIDs.map(String.init).joined(separator: ",")))") }
