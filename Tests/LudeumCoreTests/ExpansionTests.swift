@@ -16,11 +16,13 @@ import Testing
             2, "Diablo II: Lord of Destruction",
             fields: ["game_type": 2, "platforms": [pc], "parent_game": ["id": 1, "name": "Diablo II"]])
         h.internet.addGame(
-            3, "Diablo II Soundtrack", fields: ["game_type": 1, "platforms": [pc], "parent_game": ["id": 1, "name": "Diablo II"]])
+            3, "Diablo II: The Delicious Last Course",
+            fields: ["game_type": 1, "platforms": [pc], "parent_game": ["id": 1, "name": "Diablo II"]])
         h.internet.addGame(
             4, "Diablo II: Blood Dragon", fields: ["game_type": 4, "platforms": [pc], "parent_game": ["id": 1, "name": "Diablo II"]])
         h.internet.addGame(5, "Diablo II: Mystery", fields: ["game_type": 2, "platforms": [pc]])
-        h.internet.addSearch("diablo ii", platform: nil, results: [1, 2, 3, 4, 5])
+        h.internet.addGame(6, "Diablo II Soundtrack Pack", fields: ["game_type": 13, "platforms": [pc]])
+        h.internet.addSearch("diablo ii", platform: nil, results: [1, 2, 3, 4, 5, 6])
     }
 
     var search: GameSearch { GameSearch(igdb: h.igdb, journal: j.journal) }
@@ -32,12 +34,12 @@ import Testing
         #expect(h.internet.sent(to: FakeInternet.Hosts.igdb).contains { $0.body.contains("game_type != (1,2,7,13,14)") })
     }
 
-    @Test func expansionsAreOnlyExpansionsAndStandaloneExpansionsSayingWhatTheyExpand() async throws {
+    @Test func expansionsAreExpansionsStandaloneExpansionsAndDLCSayingWhatTheyExpand() async throws {
         let results = try await search.search("diablo ii", expansions: true)
 
-        #expect(results.map(\.igdbGameId) == [2, 4, 5])
-        #expect(results.map(\.baseGameName) == ["Diablo II", "Diablo II", nil])
-        #expect(h.internet.sent(to: FakeInternet.Hosts.igdb).contains { $0.body.contains("game_type = (2,4)") })
+        #expect(results.map(\.igdbGameId) == [2, 3, 4, 5])
+        #expect(results.map(\.baseGameName) == ["Diablo II", "Diablo II", "Diablo II", nil])
+        #expect(h.internet.sent(to: FakeInternet.Hosts.igdb).contains { $0.body.contains("game_type = (1,2,4)") })
     }
 
     @Test func aBaseGameIsNoExpansion() async throws {
@@ -72,11 +74,14 @@ import Testing
             fields: [
                 "expansions": [["id": 2, "name": "Diablo II: Lord of Destruction"], ["id": 5, "name": "Diablo II: Mystery"]],
                 "standalone_expansions": [["id": 4, "name": "Diablo II: Blood Dragon"]],
+                "dlcs": [["id": 6, "name": "Diablo II: The Delicious Last Course"]],
             ])
         h.internet.addGame(2, "Diablo II: Lord of Destruction", fields: ["game_type": 2, "parent_game": ["id": 1, "name": "Diablo II"]])
         h.internet.addGame(4, "Diablo II: Blood Dragon", fields: ["game_type": 4, "parent_game": ["id": 1, "name": "Diablo II"]])
         h.internet.addGame(5, "Diablo II: Mystery", fields: ["game_type": 2])
-        h.internet.addGame(6, "Diablo II Soundtrack", fields: ["game_type": 1, "parent_game": ["id": 1, "name": "Diablo II"]])
+        h.internet.addGame(
+            6, "Diablo II: The Delicious Last Course", fields: ["game_type": 1, "parent_game": ["id": 1, "name": "Diablo II"]])
+        h.internet.addGame(7, "Diablo II Soundtrack Pack", fields: ["game_type": 13, "parent_game": ["id": 1, "name": "Diablo II"]])
     }
 
     func facts(_ id: Int64) async throws -> GameFacts { try await h.igdb.facts(igdbGameId: id) }
@@ -84,10 +89,11 @@ import Testing
     @Test func anExpansionsFactsNameItsBaseGame() async throws {
         #expect(try await facts(2).expansion == ExpansionOf(baseGame: IGDBNamed(id: 1, name: "Diablo II")))
         #expect(try await facts(4).expansion == ExpansionOf(baseGame: IGDBNamed(id: 1, name: "Diablo II")))
+        #expect(try await facts(6).expansion == ExpansionOf(baseGame: IGDBNamed(id: 1, name: "Diablo II")))
         #expect(try await facts(5).expansion == ExpansionOf(baseGame: nil))
         #expect(try await facts(1).expansion == nil)
-        #expect(try await facts(6).expansion == nil)
-        #expect(try await facts(1).expansionIDs == [2, 5, 4])
+        #expect(try await facts(7).expansion == nil)
+        #expect(try await facts(1).expansionIDs == [2, 5, 4, 6])
     }
 
     @Test func theBaseGameIsMyGameOnTheSamePlatformByMyName() async throws {

@@ -61,7 +61,7 @@ public struct IGDBSearch: Sendable, Hashable {
 
     /// The `where` conditions besides the name: add-ons left out (or only Expansions), then the platform and filters.
     var conditions: String {
-        var c = [expansions ? "game_type = (2,4)" : "game_type != (1,2,7,13,14)"]
+        var c = [expansions ? "game_type = (1,2,4)" : "game_type != (1,2,7,13,14)"]
         if let platformID { c.append("platforms = (\(platformID))") }
         if !genreIDs.isEmpty { c.append("genres = (\(genreIDs.map(String.init).joined(separator: ",")))") }
         if !themeIDs.isEmpty { c.append("themes = (\(themeIDs.map(String.init).joined(separator: ",")))") }

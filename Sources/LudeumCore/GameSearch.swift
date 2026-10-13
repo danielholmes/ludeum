@@ -101,7 +101,7 @@ public struct GameSearch: Sendable {
 
     /// IGDB games matching `query` and `filters`, optionally on one platform, best match first (most
     /// rated first with no query). DLC, Expansions, Seasons, Packs and Updates are left out; Mods are
-    /// shown and labelled. With `expansions` it finds only Expansions and Standalone Expansions instead.
+    /// shown and labelled. With `expansions` it finds only Expansions, Standalone Expansions and DLC instead.
     public func search(
         _ query: String, platform: Int64? = nil, filters: GameSearchFilters = .init(), expansions: Bool = false
     ) async throws -> [GameSearchResult] {

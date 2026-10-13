@@ -21,8 +21,9 @@ public struct BaseGameLine: Sendable, Equatable {
 }
 
 extension IGDBGame {
-    /// An Expansion (2) or Standalone Expansion (4): a Game linked to it is an Expansion.
-    public var isExpansion: Bool { [2, 4].contains(record["game_type"]?.int ?? 0) }
+    /// DLC (1), an Expansion (2) or a Standalone Expansion (4): a Game linked to it is an Expansion. IGDB's line between
+    /// DLC and Expansion is fuzzy (Cuphead's The Delicious Last Course is DLC), so DLC counts too.
+    public var isExpansion: Bool { [1, 2, 4].contains(record["game_type"]?.int ?? 0) }
 
     /// Its Base game, from IGDB's `parent_game`, when it's an Expansion.
     var expansionOf: ExpansionOf? {
@@ -31,9 +32,9 @@ extension IGDBGame {
         return ExpansionOf(baseGame: base?["id"]?.int.map { IGDBNamed(id: $0, name: base?["name"]?.string ?? "Game \($0)") })
     }
 
-    /// IGDB's Expansions of it, Standalone Expansions after the others.
+    /// IGDB's Expansions of it: Expansions, then Standalone Expansions, then DLC.
     var expansionIDs: [Int] {
-        ["expansions", "standalone_expansions"].flatMap { field in
+        ["expansions", "standalone_expansions", "dlcs"].flatMap { field in
             (record[field]?.array ?? []).compactMap { $0["id"]?.int ?? $0.int }
         }
     }

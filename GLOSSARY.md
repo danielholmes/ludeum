@@ -11,8 +11,8 @@ A title as played on one Platform. Regional releases, revisions and fan translat
 _Avoid_: Title, entry, ROM
 
 **Expansion**:
-A Game whose IGDB link is to an expansion, or a standalone expansion, of another IGDB game: its Base game. In every other way it is a Game like any other. A Game with no IGDB link is never an Expansion. DLC, packs, seasons and updates are never Games at all.
-_Avoid_: DLC, add-on, expansion pack
+A Game whose IGDB link is to an expansion, a standalone expansion or a DLC of another IGDB game: its Base game. IGDB's line between DLC and expansion is fuzzy (The Delicious Last Course is DLC), so both count. In every other way it is a Game like any other. A Game with no IGDB link is never an Expansion. Packs, seasons and updates are never Games at all.
+_Avoid_: DLC (that's one of IGDB's kinds of Expansion), add-on, expansion pack
 
 **Base game**:
 The IGDB game an Expansion expands. It may or may not be a Game in the journal.
