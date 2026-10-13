@@ -37,14 +37,12 @@ import Testing
 
         #expect(results.map(\.igdbGameId) == [2, 4, 5])
         #expect(results.map(\.baseGameName) == ["Diablo II", "Diablo II", nil])
-        #expect(results.map(\.isExpansion) == [true, true, true])
         #expect(h.internet.sent(to: FakeInternet.Hosts.igdb).contains { $0.body.contains("game_type = (2,4)") })
     }
 
     @Test func aBaseGameIsNoExpansion() async throws {
         let base = try await search.search("diablo ii")[0]
 
-        #expect(!base.isExpansion)
         #expect(base.baseGameName == nil)
     }
 

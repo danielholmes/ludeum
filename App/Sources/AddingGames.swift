@@ -133,7 +133,7 @@ struct IGDBSearchView: View {
     @State private var sort = GameSearchSort.name
     @State private var ascending = true
     @State private var filters = GameSearchFilters()
-    /// Searching for Expansions instead of base games; back to base games each time the search appears.
+    /// Searching for Expansions instead of Base games; back to Base games each time the search appears.
     @State private var expansions = false
     @State private var genres: [IGDBNamed] = []
     @State private var themes: [IGDBNamed] = []

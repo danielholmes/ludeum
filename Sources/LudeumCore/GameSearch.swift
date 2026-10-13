@@ -36,8 +36,6 @@ public struct GameSearchResult: Sendable, Hashable, Identifiable {
     public var releaseDate: Date? = nil
     /// IGDB's `game_type` label when it isn't a main game, e.g. "Mod" or "Remaster".
     public let gameType: String?
-    /// An Expansion or Standalone Expansion, which says what it expands.
-    public var isExpansion = false
     /// An Expansion's Base game, by IGDB's name; nil for any other game, or when IGDB doesn't say.
     public var baseGameName: String? = nil
     public let coverImageID: String?
@@ -186,14 +184,13 @@ public struct GameSearch: Sendable {
             igdbGameId: Int64(game.id), name: game.name ?? "Game \(game.id)", year: year, releaseDate: released,
             gameType: type == 0 ? nil : gameTypeNames[type] ?? "Other", coverImageID: game.record["cover"]?["image_id"]?.string,
             chips: chips)
-        out.isExpansion = game.isExpansion
         out.baseGameName = game.expansionOf?.baseGame?.name
         return out
     }
 }
 
-/// DLC (1), Expansion (2), Season (7), Pack/Addon (13) and Update (14) are left out of the search for base games,
-/// and only Expansions are found by the search for them. Mods (5) can be a Game.
+/// DLC (1), Expansion (2), Season (7), Pack/Addon (13) and Update (14) are left out of the search for Base games;
+/// the search for Expansions finds only Expansions. Mods (5) can be a Game.
 private func isAddOn(_ game: IGDBGame) -> Bool { [1, 2, 7, 13, 14].contains(game.record["game_type"]?.int ?? 0) }
 
 private let gameTypeNames = [

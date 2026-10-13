@@ -13,7 +13,7 @@ public struct IGDBCredentials: Sendable, Equatable {
 
 /// A search for games: by name, filters, or both, on one IGDB platform or on every platform.
 /// Several genres or themes match a game with any of them; a company matches any involvement
-/// (developer, publisher, porting or supporting). It finds base games, or with `expansions` only Expansions.
+/// (developer, publisher, porting or supporting). It finds Base games, or with `expansions` only Expansions.
 public struct IGDBSearch: Sendable, Hashable {
     public let name: String
     public let platformID: Int?

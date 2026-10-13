@@ -27,8 +27,8 @@ extension IGDBGame {
     /// Its Base game, from IGDB's `parent_game`, when it's an Expansion.
     var expansionOf: ExpansionOf? {
         guard isExpansion else { return nil }
-        let parent = record["parent_game"]
-        return ExpansionOf(baseGame: parent?["id"]?.int.map { IGDBNamed(id: $0, name: parent?["name"]?.string ?? "Game \($0)") })
+        let base = record["parent_game"]
+        return ExpansionOf(baseGame: base?["id"]?.int.map { IGDBNamed(id: $0, name: base?["name"]?.string ?? "Game \($0)") })
     }
 
     /// IGDB's Expansions of it, Standalone Expansions after the others.
