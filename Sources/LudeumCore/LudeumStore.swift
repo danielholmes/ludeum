@@ -33,6 +33,8 @@ public struct Game: Sendable, Equatable {
     public let igdbGameId: Int64?
     /// The display name: the override, else IGDB's name, else the Game's own name.
     public let name: String
+    /// What I want to see first on its page; nil when there's none.
+    public let highlightNote: String?
     public let childhood: Bool
     public let intent: Intent?
     /// When the Intent was set; nil for undated Intent (from the first Import).
@@ -176,6 +178,15 @@ public final class LudeumStore: Sendable {
         }
     }
 
+    /// Trimmed; a blank one clears it.
+    public func setHighlightNote(_ id: GameID, _ note: String?) throws {
+        let note = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        try db.write { db in
+            try db.execute(
+                sql: "UPDATE game SET highlightNote = ? WHERE id = ?", arguments: [note?.isEmpty == false ? note : nil, id])
+        }
+    }
+
     public func game(_ id: GameID) throws -> Game {
         try db.read { db in
             let row = try Row.fetchOne(
@@ -191,7 +202,7 @@ public final class LudeumStore: Sendable {
             guard let row else { throw LudeumError.gameNotFound }
             return Game(
                 id: row["id"], platformId: row["platformId"], igdbGameId: row["igdbGameId"],
-                name: row["displayName"], childhood: row["childhood"],
+                name: row["displayName"], highlightNote: row["highlightNote"], childhood: row["childhood"],
                 intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)),
                 intentSetAt: row["intentSetAt"],
                 rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) })

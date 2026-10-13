@@ -117,6 +117,23 @@ struct ScreenshotImage: View {
 }
 
 /// The Game's rarely-changed details: name override, Cover upload, IGDB link, and deleting it.
+/// A Game's Highlight note: yellow, under its name, so it's the first thing I read.
+struct HighlightNote: View {
+    let text: String
+
+    var body: some View {
+        Label {
+            Text(text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "highlighter").foregroundStyle(.yellow)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.yellow.opacity(0.15), in: .rect(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.yellow.opacity(0.5)))
+    }
+}
+
 struct EditGameSheet: View {
     let services: Services
     let game: Game
@@ -125,12 +142,15 @@ struct EditGameSheet: View {
     let delete: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var nameOverride = ""
+    @State private var highlightNote = ""
     @State private var error: String?
 
     var body: some View {
         Form {
             Section {
                 TextField("Name override", text: $nameOverride, prompt: Text("Use IGDB's name"))
+                TextField("Highlight note", text: $highlightNote, prompt: Text("Shown at the top of its page"), axis: .vertical)
+                    .lineLimit(3...8)
             }
             Section("Cover") {
                 CoverEditor(services: services, game: game.id, name: game.name)
@@ -158,7 +178,10 @@ struct EditGameSheet: View {
         }
         .formStyle(.grouped)
         .frame(width: 420)
-        .onAppear { nameOverride = (try? services.journal?.nameOverride(game.id)) ?? nil ?? "" }
+        .onAppear {
+            nameOverride = (try? services.journal?.nameOverride(game.id)) ?? nil ?? ""
+            highlightNote = game.highlightNote ?? ""
+        }
     }
 
     private func close(then action: @escaping () -> Void) {
@@ -175,6 +198,10 @@ struct EditGameSheet: View {
                 // A Game with no ROM finds its Box art by its name; its ROMs, if it has any, are looked up by the new name.
                 services.changes.coverChanged()
                 services.lookUpBoxArt(forROMsOf: game.id)
+            }
+            if highlightNote.trimmed != (game.highlightNote ?? "") {
+                try services.journal?.setHighlightNote(game.id, highlightNote)
+                services.changes.changed()
             }
             dismiss()
         } catch {

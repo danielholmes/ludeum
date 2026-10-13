@@ -626,6 +626,10 @@ enum LudeumSchema {
         migrator.registerMigration("v28 relook up ROMs with no Box art by initialed names") { db in
             try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE libretroBoxart IS NULL")
         }
+        // A Game can have a Highlight note, shown at the top of its page.
+        migrator.registerMigration("v29 highlight notes") { db in
+            try db.alter(table: "game") { t in t.add(column: "highlightNote", .text) }
+        }
         return migrator
     }
 }

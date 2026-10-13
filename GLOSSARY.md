@@ -103,6 +103,10 @@ _Avoid_: Current, in progress (for a Game)
 A flag on a Game meaning I played it as a child, at some unknown time.
 _Avoid_: Childhood Played
 
+**Highlight note**:
+A note on a Game that I want to see first whenever I open it (a tip, a warning, where I got to), shown at the top of its page. A Game has at most one; clearing its text removes it.
+_Avoid_: Pinned note, comment
+
 **List**:
 A named, unordered group of Games that I curate, e.g. "Castlevania" or "Light Gun Games". A Game can be in many Lists.
 _Avoid_: Tag

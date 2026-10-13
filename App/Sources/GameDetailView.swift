@@ -72,7 +72,7 @@ struct GameDetailView: View {
                             Text(game.name).font(.title).bold().textSelection(.enabled)
                             Spacer()
                             Button("Edit Game", systemImage: "pencil") { editingGame = true }
-                                .labelStyle(.iconOnly).buttonStyle(.hover).help("Name, Cover, IGDB link and deleting")
+                                .labelStyle(.iconOnly).buttonStyle(.hover).help("Name, Highlight note, Cover, IGDB link and deleting")
                         }
                         if let platform {
                             Text([platform.name, facts.releaseYear.map(String.init)].compactMap { $0 }.joined(separator: " · "))
@@ -86,6 +86,7 @@ struct GameDetailView: View {
                         }
                     }
                 }
+                if let note = game.highlightNote { HighlightNote(text: note) }
             }
 
             // My journal: what I think of it and when I played it.

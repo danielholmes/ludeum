@@ -28,6 +28,21 @@ import Testing
         #expect(try h.journal.game(linked).name == "Metroid 3")
     }
 
+    @Test func keepsAHighlightNoteUntilItIsCleared() throws {
+        let h = try LudeumHarness()
+        let id = try h.addGame("Super Metroid")
+        #expect(try h.journal.game(id).highlightNote == nil)
+
+        try h.journal.setHighlightNote(id, "  Press Select for the map.\nThe X-ray scope finds hidden blocks.  ")
+        try h.reopen()
+
+        #expect(try h.journal.game(id).highlightNote == "Press Select for the map.\nThe X-ray scope finds hidden blocks.")
+
+        try h.journal.setHighlightNote(id, " \n ")
+
+        #expect(try h.journal.game(id).highlightNote == nil)
+    }
+
     @Test func refusesASecondGameWithTheSameIGDBLinkOnOnePlatform() throws {
         let h = try LudeumHarness()
         try h.journal.addPlatform(id: 19, name: "Super Nintendo Entertainment System")
