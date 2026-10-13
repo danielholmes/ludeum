@@ -25,7 +25,7 @@ public struct ROMPlatform: Sendable, Equatable {
     public enum Archiving: Sendable, Equatable {
         /// Everything in the archive, into a folder named after the ROM (PS2 and the disc Platforms).
         case intoFolder
-        /// Its one file, named after the ROM, loose in the ROM folder (PSP, Vita, GameCube and Wii).
+        /// Its one file, named after the ROM, loose in the ROM folder (PSP, Vita, GameCube, Wii and Xbox).
         case singleFile
     }
 
@@ -55,6 +55,7 @@ public struct ROMPlatform: Sendable, Equatable {
     public static let ps2: Int64 = 8
     public static let psp: Int64 = 38
     public static let vita: Int64 = 46
+    public static let xbox: Int64 = 11
 
     /// Every Platform with a ROM folder, by IGDB platform id. One folder per Platform: Game Boy and
     /// Game Boy Color, NES and Famicom, SNES and Super Famicom each have their own.
@@ -139,6 +140,11 @@ public struct ROMPlatform: Sendable, Equatable {
             name: "Turbografx-16/PC Engine CD", folderName: "PC Engine CD", readyExtensions: ["m3u", "chd", "cue", "bin"],
             libretroRepo: "NEC_-_PC_Engine_CD_-_TurboGrafx-CD",
             archiving: .intoFolder, naming: .redump),
+        // An `.iso`, though no Emulator plays it yet. xemu opens only an XISO (the game partition alone), not a full
+        // Redump image, and nothing here tells the two apart.
+        11: .init(
+            name: "Xbox", folderName: "Xbox", readyExtensions: ["iso"], libretroRepo: "Microsoft_-_Xbox",
+            archiving: .singleFile, naming: .redump),
         // No Emulator yet, so nothing to Compact into.
         53: .init(
             name: "MSX2", folderName: "MSX2", readyExtensions: ["rom", "mx2", "mx1", "dsk", "cas"], libretroRepo: "Microsoft_-_MSX2"),

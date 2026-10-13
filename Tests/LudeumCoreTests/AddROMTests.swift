@@ -241,6 +241,20 @@ struct AddROMTests {
         #expect(try psp.folder.scan().map(\.fileName) == ["Lumines (USA).iso"])
     }
 
+    @Test func anXboxISOIn7zWithAReadmeGoesInLooseLeavingTheReadmeBehind() async throws {
+        let xbox = try FakeROMFolder(in: directory, platform: ROMPlatform.xbox)
+        let name = "Dino Crisis 3 (Europe) (En,Fr,De,Es,It)"
+        try pick("work/\(name).iso", "XBOX")
+        try pick("work/readme.txt", "hi")
+        let archive = picked.appending(path: "\(name).7z")
+        try await sevenZip.create(archive, format: "7z", files: ["\(name).iso", "readme.txt"], in: picked.appending(path: "work")) { _ in }
+
+        #expect(try await ROMSource([archive]).platforms(sevenZip: sevenZip).contains(ROMPlatform.xbox))
+        try await adder.add(ROMSource([archive]), to: xbox.folder, match: igdb(6, "Dino Crisis 3", on: 11), keepingOriginals: true)
+
+        #expect(try xbox.folder.scan().map(\.fileName) == ["\(name).iso"])
+    }
+
     @Test func aROMAlreadyInTheROMFolderIsRefusedWithNothingTouched() async throws {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         try gameBoy.add("Tetris (World).7z")

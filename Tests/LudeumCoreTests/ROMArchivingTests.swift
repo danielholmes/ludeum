@@ -43,6 +43,13 @@ import Testing
         #expect(ROMArchiving.unarchivesToOneFile(archived))
     }
 
+    @Test func anXboxROMCanBeArchivedAndUnarchivesToItsOneFile() {
+        #expect(ROMArchiving.action(for: rom("Halo (USA)", on: ROMPlatform.xbox, "Halo (USA).iso")) == .archive)
+        let archived = rom("Halo (USA)", on: ROMPlatform.xbox, "Halo (USA).7z", archived: true)
+        #expect(ROMArchiving.action(for: archived) == .unarchive)
+        #expect(ROMArchiving.unarchivesToOneFile(archived))
+    }
+
     @Test(arguments: IntoFolders.platforms)
     func everyDiscPlatformArchivesIntoAFolder(platform: Int64) {
         #expect(ROMPlatform.all[platform]?.archiving == .intoFolder)
