@@ -516,7 +516,7 @@ public struct ReviewQueue: Sendable {
         var confirmed: [ReviewItem] = []
         for item in items {
             do {
-                try await match(item, on: nil)
+                _ = try await match(item, on: nil)
                 confirmed.append(item)
             } catch ReviewError.alreadyMatched {
                 // Answered on its own meanwhile.
