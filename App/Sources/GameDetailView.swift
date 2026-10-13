@@ -148,7 +148,6 @@ struct GameDetailView: View {
             if !facts.screenshots.isEmpty, let igdb = services.igdb {
                 ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots)
             }
-            if !facts.keywords.isEmpty { KeywordsSection(keywords: facts.keywords) }
 
             // Copies: the ROMs (checked now and then), then the ones recorded by hand.
             Section("Copies") {
@@ -157,6 +156,7 @@ struct GameDetailView: View {
                 Button("Add Copy…", systemImage: "plus") { editingCopy = .new }
                     .buttonStyle(.hover).help("A physical or digital Copy I own, or once owned")
             }
+            if !facts.keywords.isEmpty { KeywordsSection(keywords: facts.keywords) }
 
             if let error { Text(error).foregroundStyle(.red) }
         }
