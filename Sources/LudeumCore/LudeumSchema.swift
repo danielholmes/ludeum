@@ -621,6 +621,11 @@ enum LudeumSchema {
                     WHERE libretroBoxart IS NULL AND gameId IN (SELECT id FROM game WHERE nameOverride IS NOT NULL)
                     """)
         }
+        // A name led by its title's initials (`CTR - Crash Team Racing`) is now found by the title: look up again, at the
+        // next Import, each ROM with no Box art.
+        migrator.registerMigration("v28 relook up ROMs with no Box art by initialed names") { db in
+            try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE libretroBoxart IS NULL")
+        }
         return migrator
     }
 }

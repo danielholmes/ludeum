@@ -83,6 +83,18 @@ import Testing
                 == "Batman _ Robin (Japan)")
     }
 
+    @Test func aNameLedByItsTitlesInitialsIsAFuzzyMatchForTheTitle() {
+        #expect(find("Crash Team Racing (USA).cue", in: ["CTR - Crash Team Racing (USA)"]) == "CTR - Crash Team Racing (USA)")
+        #expect(find("Intelligent Qube.7z", in: ["I.Q - Intelligent Qube (USA)"]) == "I.Q - Intelligent Qube (USA)")
+        let kknd = "KKND - Krush, Kill 'N' Destroy (1997)"
+        #expect(find("KKND.7z", titles: ["Krush Kill n Destroy"], in: [kknd]) == kknd)
+    }
+
+    @Test func aNameLedByAnythingElseIsntAMatchForWhatFollows() {
+        #expect(find("Enter the Gecko (USA).cue", in: ["Gex - Enter the Gecko (USA)"]) == nil)
+        #expect(find("Air Strike Patrol.sfc", in: ["Asp - Air Strike Patrol (USA)"]) == nil)
+    }
+
     @Test func otherTitlesAreTriedLast() {
         let names: Set = ["Final Fantasy III (USA)", "Final Fantasy VI (Japan)"]
         #expect(find("ff3us.smc", titles: ["Final Fantasy III"], in: names) == "Final Fantasy III (USA)")
@@ -129,6 +141,22 @@ import Testing
     @Test func eachTitleIsTriedInTurn() {
         #expect(find(["GT", "Gran Turismo"], in: names) == "Gran Turismo (USA)")
         #expect(find(["Gran Turismo 2"], in: names) == nil)
+    }
+
+    @Test func aNameLedByItsTitlesInitialsMatchesTheTitle() {
+        let wcr = "WCR - World Championship Rugby (Europe, Australia) (En,Fr)"
+        #expect(find(["World Championship Rugby"], in: [wcr, "Rugby 08 (Europe, Australia)"]) == wcr)
+    }
+
+    @Test func initialsOfTheTitleBeforeItsSubtitleCountToo() {
+        let t2 = "T2 - Terminator 2 - Judgment Day (USA, Europe)"
+        #expect(find(["Terminator 2: Judgment Day"], in: [t2]) == t2)
+    }
+
+    @Test func aNameWithoutTheInitialsWinsInItsRegion() {
+        let names: Set = ["CTR - Crash Team Racing (USA)", "Crash Team Racing (USA)", "Crash Team Racing (Europe)"]
+        #expect(find(["Crash Team Racing"], in: names) == "Crash Team Racing (USA)")
+        #expect(find(["Crash Team Racing"], in: names.subtracting(["Crash Team Racing (USA)"])) == "CTR - Crash Team Racing (USA)")
     }
 
     @Test func umlautsMatchTheirSpelledOutForm() {

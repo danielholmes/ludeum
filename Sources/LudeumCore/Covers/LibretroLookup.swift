@@ -20,17 +20,44 @@ enum LibretroLookup {
         fuzzy(fileName: fileName, titles: titles, in: titleIndex(names))
     }
 
-    /// A folder's released names by title key, and by loose title key: what a fuzzy match looks in.
+    /// A folder's released names by title key, and by loose title key, a name led by its title's initials under its
+    /// title's keys too: what a fuzzy match looks in.
     struct TitleIndex: Sendable {
         let byKey: [String: [String]]
         let byLooseKey: [String: [String]]
     }
 
+    /// The index of `names`, leaving out prereleases. A name led by its title's initials (`WCR - World Championship
+    /// Rugby`, `I.Q - Intelligent Qube`) is also found by the title after them.
     static func titleIndex(_ names: Set<String>) -> TitleIndex {
         let released = names.filter { !isPrerelease($0) }
-        return TitleIndex(
-            byKey: Dictionary(grouping: released, by: { titleKey($0) }),
-            byLooseKey: Dictionary(grouping: released, by: { looseTitleKey($0) }))
+        func index(by keyOf: (String) -> String) -> [String: [String]] {
+            var index: [String: [String]] = [:]
+            for name in released {
+                for key in Set([name, withoutInitials(name)].compactMap { $0 }.map(keyOf)) { index[key, default: []].append(name) }
+            }
+            return index
+        }
+        return TitleIndex(byKey: index(by: titleKey), byLooseKey: index(by: looseTitleKey))
+    }
+
+    /// The name after a leading initialism of the title that follows it, with or without its subtitle, the initialism's
+    /// dots dropped: `CTR - Crash Team Racing (USA)` is `Crash Team Racing (USA)`, `KKND - Krush, Kill 'N' Destroy` is
+    /// `Krush, Kill 'N' Destroy`, `T2 - Terminator 2 - Judgment Day` is `Terminator 2 - Judgment Day`. Nil for a name not
+    /// led that way (`Gex - Enter the Gecko`).
+    static func withoutInitials(_ name: String) -> String? {
+        guard let dash = name.range(of: " - ") else { return nil }
+        let initials = name[..<dash.lowerBound].filter { $0 != "." }
+        let rest = name[dash.upperBound...]
+        let title = beforeTags(rest)
+        let mainTitle = title.range(of: " - ").map { title[..<$0.lowerBound] } ?? title
+        func wordInitials(_ words: Substring) -> String {
+            String(words.split { $0 == " " || $0 == "-" }.compactMap { $0.first { $0.isLetter || $0.isNumber } }).uppercased()
+        }
+        guard initials.count > 1, initials.allSatisfy({ $0.isUppercase || $0.isNumber }),
+            initials == wordInitials(title) || initials == wordInitials(mainTitle)
+        else { return nil }
+        return String(rest)
     }
 
     static func fuzzy(fileName: String, titles: [String], in index: TitleIndex) -> String? {
@@ -103,8 +130,7 @@ enum LibretroLookup {
     /// The`) or IGDB (`The Legend of Zelda: Spirit Tracks`) puts it, `&` and `_` read as "and", only letters and digits
     /// kept.
     static func titleKey(_ name: String) -> String {
-        let beforeTags = String(name.prefix { $0 != "(" && $0 != "[" })
-        var title = beforeTags.replacingOccurrences(of: #"\s+-\s+|:\s+"#, with: "\n", options: .regularExpression)
+        var title = beforeTags(name).replacingOccurrences(of: #"\s+-\s+|:\s+"#, with: "\n", options: .regularExpression)
             .split(separator: "\n")
             .map {
                 $0.trimmingCharacters(in: .whitespaces)
@@ -115,11 +141,14 @@ enum LibretroLookup {
         return String(title.lowercased().folding(options: .diacriticInsensitive, locale: nil).filter { $0.isLetter || $0.isNumber })
     }
 
+    /// The text before the first tag (`(` or `[`).
+    static func beforeTags<S: StringProtocol>(_ name: S) -> S.SubSequence { name.prefix { $0 != "(" && $0 != "[" } }
+
     /// The text before the first tag with "a", "an", "the", "and" and "in" dropped wherever they are, for the last try: a
     /// Standard name or IGDB's can keep small words No-Intro leaves out (`Spider-Man and the X-Men in Arcade's Revenge`
     /// is `Spider-Man - X-Men - Arcade's Revenge`).
     static func looseTitleKey(_ name: String) -> String {
-        let title = String(name.prefix { $0 != "(" && $0 != "[" })
+        let title = String(beforeTags(name))
             .replacingOccurrences(of: "&", with: " and ").replacingOccurrences(of: "_", with: " and ")
         return title.lowercased().folding(options: .diacriticInsensitive, locale: nil)
             .split { !($0.isLetter || $0.isNumber) }

@@ -207,20 +207,22 @@ import Testing
                         (3, 'Zelda', 'Zelda.7z', 22, 3, 'manual', 0, 1, 'Zelda.png');
                     """)
         }
-        try db.close()
+        // Up to v27 only: v28 looks up again every ROM with no Box art.
+        try LudeumSchema.migrator.migrate(db, upTo: "v27 relook up ROMs of renamed Games")
 
-        let journal = try LudeumStore(directory: directory)
-
-        let lookedUp = try journal.db.read { try Bool.fetchAll($0, sql: "SELECT libretroLookedUp FROM rom ORDER BY id") }
+        let lookedUp = try db.read { try Bool.fetchAll($0, sql: "SELECT libretroLookedUp FROM rom ORDER BY id") }
         #expect(lookedUp == [false, true, true])
     }
 }
 
-/// The migration that looks up again every ROM with no Box art, once a ROM is looked up again when it's Matched and a
-/// title match understands an article before the subtitle.
+/// The migrations that look up again every ROM with no Box art whenever a title match learns something new: an article
+/// before the subtitle (v25), small words dropped (v26), a name led by its title's initials (v28).
 @Suite struct NoBoxArtLookupMigrationTests {
-    /// Again once small words are dropped as a last try (v26), even after v25 looked them up.
-    @Test(arguments: ["v24 relook up spelled-out titles", "v25 relook up ROMs with no Box art"])
+    /// Again once small words are dropped as a last try (v26), even after v25 looked them up, and again once a name led by
+    /// its title's initials is found by the title (v28).
+    @Test(arguments: [
+        "v24 relook up spelled-out titles", "v25 relook up ROMs with no Box art", "v27 relook up ROMs of renamed Games",
+    ])
     func romsWithNoBoxArtAreLookedUpAgain(from migration: String) throws {
         let directory = FileManager.default.temporaryDirectory.appending(
             path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
