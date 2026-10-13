@@ -2,7 +2,7 @@ import LudeumCore
 import SwiftUI
 
 /// What IGDB says about a game, as rows of pills: community scores, genres, themes, franchises,
-/// series, companies and links. Shared by Game detail and the IGDB screen's game detail.
+/// series, companies, links and keywords. Shared by Game detail and the IGDB screen's game detail.
 struct IGDBFactsRows: View {
     let services: Services
     let facts: GameFacts
@@ -45,6 +45,7 @@ struct IGDBFactsRows: View {
                     }
                 }
             }
+            if !facts.keywords.isEmpty { KeywordsRow(keywords: facts.keywords) }
             if let error { Text(error).foregroundStyle(.red) }
         }
         .task(id: services.changes.revision) { pins = Set((try? services.journal?.pins()) ?? []) }
@@ -180,25 +181,49 @@ func timeToBeatText(_ t: TimeToBeat) -> String? {
     return parts.isEmpty ? nil : parts.joined(separator: " · ")
 }
 
-/// IGDB's keywords, at the foot of a game's page.
-struct KeywordsSection: View {
+/// IGDB's keywords: one row of pills, then "+N more" for the ones that wouldn't fit.
+private struct KeywordsRow: View {
     let keywords: [String]
+    @State private var width: CGFloat = 0
     @State private var showingAll = false
 
+    /// PillRow's, between its pills.
+    private static let spacing: CGFloat = 4
+
     var body: some View {
-        Section("Keywords") {
-            FlowLayout(spacing: 4) {
-                let limit = 10
-                let collapsed = !showingAll && keywords.count > limit
-                ForEach(collapsed ? Array(keywords.prefix(limit)) : keywords, id: \.self) { k in
-                    Text(k).font(FactStyle.value).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
-                }
-                if collapsed {
-                    Button("+\(keywords.count - limit) more") { showingAll = true }
-                        .buttonStyle(.plain).font(FactStyle.value).foregroundStyle(.secondary)
-                        .padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
-                }
-            }
+        // The pills get the row less the label column and the gap after it.
+        let shown = showingAll ? keywords.count : Self.fitting(keywords, in: width - FactStyle.labelWidth - 6)
+        PillRow(
+            title: "Keywords", items: Array(keywords.prefix(shown)),
+            more: shown < keywords.count ? (keywords.count - shown, { showingAll = true }) : nil
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.width
+        } action: {
+            width = $0
         }
+        .onChange(of: keywords) { showingAll = false }
+    }
+
+    /// How many of the keywords' pills fit in `width`, leaving room for "+N more" after them when not all do.
+    private static func fitting(_ keywords: [String], in width: CGFloat) -> Int {
+        let widths = keywords.map(pillWidth)
+        if widths.reduce(0, +) + spacing * CGFloat(widths.count - 1) <= width { return keywords.count }
+        var x: CGFloat = 0
+        var count = 0
+        for w in widths {
+            let more = pillWidth("+\(keywords.count - count - 1) more")
+            guard x + w + spacing + more <= width else { break }
+            x += w + spacing
+            count += 1
+        }
+        return count
+    }
+
+    /// A pill's width: its text in the body font, and 8 points either side.
+    private static func pillWidth(_ text: String) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        return (text as NSString).size(withAttributes: [.font: font]).width.rounded(.up) + 16
     }
 }
