@@ -38,10 +38,14 @@ struct PillRow: View {
     var pinned: Set<String> = []
     var togglePin: ((String) -> Void)? = nil
 
+    /// Between the label and the pills, and between the pills.
+    private static let labelGap: CGFloat = 6
+    private static let spacing: CGFloat = 4
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: Self.labelGap) {
             Text(title).font(FactStyle.label).foregroundStyle(.secondary).frame(width: FactStyle.labelWidth, alignment: .leading)
-            FlowLayout(spacing: 4) {
+            FlowLayout(spacing: Self.spacing) {
                 ForEach(items, id: \.self) { item in
                     if let open {
                         LinkPill(text: label(item), pinned: pinned.contains(item)) { open(item) }
@@ -84,12 +88,39 @@ private struct LinkPill: View {
     }
 }
 
+extension PillRow {
+    /// How many of `items`' plain pills fit on one line of a row `rowWidth` wide, leaving room for "+N more" after them
+    /// when not all do.
+    static func fittingOneLine(_ items: [String], rowWidth: CGFloat) -> Int {
+        let width = rowWidth - FactStyle.labelWidth - labelGap
+        let widths = items.map(pillWidth)
+        if widths.reduce(0, +) + spacing * CGFloat(widths.count - 1) <= width { return items.count }
+        var x: CGFloat = 0
+        var count = 0
+        for w in widths {
+            let more = pillWidth("+\(items.count - count - 1) more")
+            guard x + w + spacing + more <= width else { break }
+            x += w + spacing
+            count += 1
+        }
+        return count
+    }
+}
+
+private let pillPadding: CGFloat = 8
+
 private func pill(_ text: String, systemImage: String?) -> some View {
     HStack(spacing: 3) {
         Text(text)
         if let systemImage { Image(systemName: systemImage).imageScale(.small).foregroundStyle(.secondary) }
     }
-    .font(FactStyle.value).padding(.horizontal, 8).padding(.vertical, 2).background(.quaternary, in: .capsule)
+    .font(FactStyle.value).padding(.horizontal, pillPadding).padding(.vertical, 2).background(.quaternary, in: .capsule)
+}
+
+/// A plain pill's width: its text in FactStyle.value (the body font, 13 points) and its padding.
+private func pillWidth(_ text: String) -> CGFloat {
+    let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    return (text as NSString).size(withAttributes: [.font: font]).width.rounded(.up) + 2 * pillPadding
 }
 
 struct Screenshot: Identifiable {
@@ -116,7 +147,6 @@ struct ScreenshotImage: View {
     }
 }
 
-/// The Game's rarely-changed details: name override, Cover upload, IGDB link, and deleting it.
 /// A Game's Highlight note: yellow, under its name, so it's the first thing I read.
 struct HighlightNote: View {
     let text: String
@@ -134,6 +164,7 @@ struct HighlightNote: View {
     }
 }
 
+/// The Game's rarely-changed details: name override, Highlight note, Cover upload, IGDB link, and deleting it.
 struct EditGameSheet: View {
     let services: Services
     let game: Game

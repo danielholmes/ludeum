@@ -187,12 +187,8 @@ private struct KeywordsRow: View {
     @State private var width: CGFloat = 0
     @State private var showingAll = false
 
-    /// PillRow's, between its pills.
-    private static let spacing: CGFloat = 4
-
     var body: some View {
-        // The pills get the row less the label column and the gap after it.
-        let shown = showingAll ? keywords.count : Self.fitting(keywords, in: width - FactStyle.labelWidth - 6)
+        let shown = showingAll ? keywords.count : PillRow.fittingOneLine(keywords, rowWidth: width)
         PillRow(
             title: "Keywords", items: Array(keywords.prefix(shown)),
             more: shown < keywords.count ? (keywords.count - shown, { showingAll = true }) : nil
@@ -204,26 +200,5 @@ private struct KeywordsRow: View {
             width = $0
         }
         .onChange(of: keywords) { showingAll = false }
-    }
-
-    /// How many of the keywords' pills fit in `width`, leaving room for "+N more" after them when not all do.
-    private static func fitting(_ keywords: [String], in width: CGFloat) -> Int {
-        let widths = keywords.map(pillWidth)
-        if widths.reduce(0, +) + spacing * CGFloat(widths.count - 1) <= width { return keywords.count }
-        var x: CGFloat = 0
-        var count = 0
-        for w in widths {
-            let more = pillWidth("+\(keywords.count - count - 1) more")
-            guard x + w + spacing + more <= width else { break }
-            x += w + spacing
-            count += 1
-        }
-        return count
-    }
-
-    /// A pill's width: its text in the body font, and 8 points either side.
-    private static func pillWidth(_ text: String) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        return (text as NSString).size(withAttributes: [.font: font]).width.rounded(.up) + 16
     }
 }
