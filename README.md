@@ -11,6 +11,7 @@ A macOS game journal and launcher. Keep a record of every game you play, on any 
 - **ROM folders**: point Ludeum at a folder of ROMs for each platform. It identifies them by checksum (via Hasheous) and name, and anything it isn't sure about goes into a review queue.
 - **Metadata and covers** from IGDB, using box art first.
 - **One-click play** in the right emulator, with per-game emulator settings such as the Game Boy model.
+- **Attachments**: keep manuals, maps and other files with a game, in a folder per game, and open them in the app your Mac uses for them.
 
 ## Requirements to build
 

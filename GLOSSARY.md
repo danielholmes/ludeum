@@ -152,6 +152,16 @@ _Avoid_: Sold, disposed, lost, deleted
 A Game with at least one Copy that isn't Gone. Since every ROM is a Copy, a Game with a ROM is Owned whether the ROM is present or missing. A Game is Owned as a ROM (it has one), Owned only as a non-ROM Copy (hand-recorded Copies but no ROM), or Not owned (no Copy that isn't Gone). A Not owned Game is in the journal because I'm interested in it or have something to record about it; nothing about it needs fixing.
 _Avoid_: Have, in the collection, journal-only (for the status)
 
+### Attachments
+
+**Attachment**:
+A file about a Game that I keep with it, such as its manual, a map or a guide, opened in whatever app the system uses for it. A Game can have any number, Owned or not. An Attachment is never a copy of the Game itself: an image of the game, even one no Emulator can Play yet, is a Copy.
+_Avoid_: Additional file, extra, document
+
+**Manual**:
+An Attachment I've marked as a Game's instruction manual, whichever Version or Copy it came from. A Game can have any number, and any Attachment can be marked or unmarked.
+_Avoid_: Booklet, instructions
+
 ### Face-off
 
 **Face-off**:
@@ -199,7 +209,7 @@ The one place on this Mac where Ludeum keeps everything it owns: the live journa
 _Avoid_: App folder, library
 
 **Data folder**:
-The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Backups, and the battery saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
+The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, and the battery saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
 _Avoid_: Kept folder, backup-worthy, Library folder
 
 **Backup**:
@@ -217,7 +227,7 @@ Putting a game from elsewhere (its file, an archive of it, its folder, or its Di
 _Avoid_: Import (that only reads the ROM folders), upload
 
 **Review queue**:
-Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, Games whose ROMs are all missing, old missing ROMs of Games that still have a present one, ROMs whose Discs have no playlist, ROMs kept in both forms, and ROMs that could be Compacted but aren't.
+Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, Games whose ROMs are all missing, old missing ROMs of Games that still have a present one, ROMs whose Discs have no playlist, ROMs kept in both forms, ROMs that could be Compacted but aren't, and Attachments whose file is missing.
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:

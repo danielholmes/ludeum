@@ -21,6 +21,7 @@ struct ReviewQueueScreen: View {
         case oldMissingROMs = "Old missing ROMs"
         case bothForms = "In both forms"
         case notCompacted = "Not compacted"
+        case missingAttachments = "Missing Attachments"
         var id: Self { self }
     }
 
@@ -102,6 +103,14 @@ struct ReviewQueueScreen: View {
                             }
                             .tag(m.id)
                         }
+                    } else if kind == .missingAttachments {
+                        ForEach(items.missingAttachments) { item in
+                            VStack(alignment: .leading) {
+                                Text(item.fileName)
+                                Text(item.game.name).font(.caption).foregroundStyle(.secondary)
+                            }
+                            .tag(item.id)
+                        }
                     } else if kind == .oldMissingROMs {
                         ForEach(items.oldMissingROMs) { m in
                             VStack(alignment: .leading) {
@@ -143,6 +152,8 @@ struct ReviewQueueScreen: View {
                 } else if kind == .oldMissingROMs, let m = items.oldMissingROMs.first(where: { $0.id == selection }) {
                     OldMissingROMsDetail(
                         services: services, item: m, checkAgain: checkAgain, showGame: { shownGame = m.id }, failed: { error = $0 })
+                } else if kind == .missingAttachments, let item = items.missingAttachments.first(where: { $0.id == selection }) {
+                    MissingAttachmentDetail(services: services, item: item, showGame: { shownGame = item.game.id }, failed: { error = $0 })
                 } else if kind == .noPlaylist, let item = items.noPlaylist.first(where: { $0.id == selection }) {
                     NoPlaylistDetail(services: services, item: item, failed: { error = $0 })
                 } else if kind == .bothForms, let item = items.bothForms.first(where: { $0.id == selection }) {
@@ -195,7 +206,7 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions
         case .name: items.nameSuggestions
         case .noSuggestion: items.noSuggestion
-        case .duplicateVersions, .noPlaylist, .missingROMs, .oldMissingROMs, .bothForms, .notCompacted, nil: []
+        case .duplicateVersions, .noPlaylist, .missingROMs, .oldMissingROMs, .bothForms, .notCompacted, .missingAttachments, nil: []
         }
     }
 
@@ -211,6 +222,7 @@ struct ReviewQueueScreen: View {
         case .oldMissingROMs: items.oldMissingROMs.count
         case .bothForms: items.bothForms.count
         case .notCompacted: items.notCompacted.count
+        case .missingAttachments: items.missingAttachments.count
         }
     }
 
@@ -223,6 +235,7 @@ struct ReviewQueueScreen: View {
         case .oldMissingROMs: items.oldMissingROMs.map(\.id)
         case .bothForms: items.bothForms.map(\.id)
         case .notCompacted: items.notCompacted.map(\.id)
+        case .missingAttachments: items.missingAttachments.map(\.id)
         default: romItems.map(\.romId)
         }
     }
@@ -1134,4 +1147,46 @@ private struct NotCompactedDetail: View {
 @MainActor private func compact(_ item: NotCompactedROM, services: Services) {
     ROMArchiving(locator: ROMLocator(romFolders: services.settings.romFolders), journal: services.journal, tasks: services.tasks)
         .start(item.rom) { [changes = services.changes] in changes.changed() }
+}
+
+/// An Attachment whose file isn't in its Game's folder: Locate its file, wherever it is now, or Delete it. A file put back
+/// by hand clears it once the Game's page is opened or an Import runs.
+private struct MissingAttachmentDetail: View {
+    let services: Services
+    let item: MissingAttachment
+    let showGame: () -> Void
+    let failed: (String?) -> Void
+    @State private var locating: LocatedFile?
+
+    var body: some View {
+        Form {
+            Section {
+                Text(item.fileName).font(.title2).bold()
+                Text("An Attachment of \(item.game.name) whose file isn't in its folder. Locate it, or delete it.")
+                    .foregroundStyle(.secondary)
+            }
+            FlowLayout(spacing: 8) {
+                Button("Locate…") { locating = pickLocated(for: item.id, named: item.fileName) }
+                    .help("Choose its file, wherever it is now, to put back under its name")
+                Button("Delete Attachment") { run { try $0.delete(item.id) } }
+                    .help("It leaves the journal; there's no file to send to the Trash")
+                Button("Show Game", action: showGame)
+            }
+        }
+        .formStyle(.grouped)
+        .locateAttachment($locating) { located, moving in
+            run { try $0.locate(located.attachment, file: located.file, moving: moving) }
+        }
+    }
+
+    private func run(_ change: (Attachments) throws -> Void) {
+        guard let attachments = services.attachments else { return }
+        do {
+            try change(attachments)
+            failed(nil)
+        } catch {
+            failed(attachmentErrorText(error))
+        }
+        services.changes.changed()
+    }
 }

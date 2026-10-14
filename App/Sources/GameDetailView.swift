@@ -85,6 +85,7 @@ struct GameDetailView: View {
                         }
                         if let baseGame { ExpansionOfLine(line: baseGame, open: open) }
                         if !expansions.isEmpty { ExpansionsLine(games: expansions, open: open) }
+                        OpenManualButton(services: services, game: id)
                         if !roms.isEmpty, !roms.allSatisfy(\.missing) {
                             playControls
                             if let message = playError ?? emulator.flatMap(services.versions.tooOldMessage) {
@@ -164,6 +165,9 @@ struct GameDetailView: View {
                 Button("Add Copy…", systemImage: "plus") { editingCopy = .new }
                     .buttonStyle(.hover).help("A physical or digital Copy I own, or once owned")
             }
+
+            // Attachments: files about it, Manuals first.
+            AttachmentsSection(services: services, game: id)
 
             if let error { Text(error).foregroundStyle(.red) }
         }
@@ -639,8 +643,10 @@ struct GameDetailView: View {
         }
     }
 
+    /// Its Attachments' files go to the Trash with it.
     private func deleteGame() {
-        delete({ [id] in try $0.deleteGame(id) }, then: deleted)
+        guard let attachments = services.attachments else { return }
+        delete({ [id] _ in try attachments.deleteGame(id) }, then: deleted)
     }
 }
 
@@ -725,6 +731,7 @@ private func deletionMessage(_ s: DeletionSummary) -> String {
     if s.ratingEntries > 0 { parts.append("its Rating history (\(s.ratingEntries))") }
     if s.playthroughs > 0 { parts.append("\(s.playthroughs) Playthrough\(s.playthroughs == 1 ? "" : "s")") }
     if s.lists > 0 { parts.append("its place in \(s.lists) List\(s.lists == 1 ? "" : "s")") }
+    if s.attachments > 0 { parts.append("\(s.attachments) Attachment\(s.attachments == 1 ? "" : "s"), whose files go to the Trash") }
     parts.append("its Intent, Childhood, IGDB link and any uploaded Cover")
     return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
 }

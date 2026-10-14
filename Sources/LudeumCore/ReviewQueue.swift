@@ -99,6 +99,8 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var bothForms: [BothFormsROM] = []
     /// Bulk-compactable.
     public var notCompacted: [NotCompactedROM] = []
+    /// Attachments whose files are missing: Locate or Delete each.
+    public var missingAttachments: [MissingAttachment] = []
 
     public init() {}
 
@@ -106,6 +108,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var count: Int {
         namesAgree.count + checksumSuggestions.count + nameSuggestions.count + noSuggestion.count + duplicateVersions.count
             + noPlaylist.count + missingROMs.count + oldMissingROMs.count + bothForms.count + notCompacted.count
+            + missingAttachments.count
     }
 }
 
@@ -169,6 +172,7 @@ extension LudeumStore {
         }
         items.bothForms = try bothForms()
         items.notCompacted = try notCompacted()
+        items.missingAttachments = try missingAttachments()
         return items
     }
 

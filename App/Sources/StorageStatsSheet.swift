@@ -74,6 +74,7 @@ struct StorageStatsSheet: View {
                         }
                     }
                 }
+                totalRow(Text("Attachments"), stats.attachments)
                 totalRow(Text("Backups"), stats.backups)
                 totalRow(Text("Battery saves"), stats.batterySaves)
                 Divider()

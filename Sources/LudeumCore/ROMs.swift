@@ -79,7 +79,7 @@ extension LudeumStore {
             db, sql: "SELECT id FROM rom WHERE gameId = ? AND missing AND id IS NOT ?", arguments: [game, except])
     }
 
-    private func hasCopies(_ db: Database, _ game: GameID) throws -> Bool {
+    func hasCopies(_ db: Database, _ game: GameID) throws -> Bool {
         try Bool.fetchOne(
             db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ?) OR EXISTS (SELECT 1 FROM copy WHERE gameId = ?)",
             arguments: [game, game])!

@@ -41,6 +41,13 @@ import SwiftUI
                 } wrote: {
                     await MainActor.run { work.lockJournal(false) }
                 }
+                // Attachments too: a Game's folder follows its name, and a file gone from it waits in the Review queue.
+                if let attachments = services.attachments {
+                    try await offMain {
+                        try attachments.followAll()
+                        try attachments.check()
+                    }
+                }
                 var shown = result
                 if !showingMatched {
                     shown.matched = []

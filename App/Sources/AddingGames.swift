@@ -81,6 +81,8 @@ import SwiftUI
 
     var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb, libretro: libretro) } }
 
+    var attachments: Attachments? { journal.map { Attachments(journal: $0, root: settings.folder.attachments) } }
+
     /// Looks the Game's ROMs up in libretro again in the background, as after renaming or relinking it, then shows any
     /// Box art they find.
     func lookUpBoxArt(forROMsOf game: GameID) {

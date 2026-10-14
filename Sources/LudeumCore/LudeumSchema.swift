@@ -630,6 +630,20 @@ enum LudeumSchema {
         migrator.registerMigration("v29 highlight notes") { db in
             try db.alter(table: "game") { t in t.add(column: "highlightNote", .text) }
         }
+        // A Game can have Attachments (ADR 0014): files about it, kept in its own folder in the Data folder's `Attachments/`,
+        // which the journal names and remembers by its path there.
+        migrator.registerMigration("v30 attachments") { db in
+            try db.alter(table: "game") { t in t.add(column: "attachmentFolder", .text) }
+            try db.execute(sql: "CREATE UNIQUE INDEX gameAttachmentFolder ON game (attachmentFolder COLLATE NOCASE)")
+            try db.create(table: "attachment") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("gameId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.column("fileName", .text).notNull().collate(.nocase)
+                t.column("manual", .boolean).notNull().defaults(to: false)
+                t.column("missing", .boolean).notNull().defaults(to: false)
+                t.uniqueKey(["gameId", "fileName"])
+            }
+        }
         return migrator
     }
 }
