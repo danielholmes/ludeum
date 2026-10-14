@@ -170,6 +170,7 @@ private actor Gate {
 
         #expect(tasks.overallProgress == nil)
         #expect(tasks.queuedCount == 0)
+        #expect(tasks.activeCount == 0)
     }
 
     @Test func eachTaskIsAnEqualShareAndTheRunningOneCountsAsFarAsItHasGot() async {
@@ -186,11 +187,13 @@ private actor Gate {
         while tasks.items.first?.progress == nil { await Task.yield() }
         #expect(tasks.overallProgress == 0.25)
         #expect(tasks.queuedCount == 1)
+        #expect(tasks.activeCount == 2)
 
         await gates[0].release()
         while tasks.items.count == 2 { await Task.yield() }
         #expect(tasks.overallProgress == 0.5)
         #expect(tasks.queuedCount == 0)
+        #expect(tasks.activeCount == 1)
 
         await gates[1].release()
         await untilIdle(tasks)

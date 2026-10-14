@@ -3,14 +3,14 @@ import LudeumCore
 import Observation
 
 /// While Background tasks are queued or running, the Dock icon shows a bar of how far they've got across all of them,
-/// and a badge of how many are waiting. Once none are, the plain icon is back. Watched from launch, not from a window,
-/// as the window can be closed while they run.
+/// and a badge of how many are queued or running. Once none are, the plain icon is back. Watched from launch, not from
+/// a window, as the window can be closed while they run.
 @MainActor enum DockTileProgress {
     /// Shows the tasks as they are now, then again each time that changes: observation tracking fires once, so each
     /// change watches afresh.
     static func watch(_ tasks: BackgroundTasks) {
         let shown = withObservationTracking {
-            Shown(progress: tasks.overallProgress, queued: tasks.queuedCount)
+            Shown(progress: tasks.overallProgress, active: tasks.activeCount)
         } onChange: {
             Task { @MainActor in watch(tasks) }
         }
@@ -19,11 +19,12 @@ import Observation
 
     private struct Shown: Equatable {
         let progress: Double?
-        let queued: Int
+        let active: Int
     }
 
-    /// What the icon shows now, so a change it wouldn't show (a queued task's title) doesn't redraw it.
-    private static var last: Shown?
+    /// What the icon shows now, so a change it wouldn't show (a queued task's title) doesn't redraw it. The plain icon to
+    /// start with: watching starts while the app is still launching, before NSApp exists, and nothing's queued then.
+    private static var last = Shown(progress: nil, active: 0)
 
     private static func show(_ shown: Shown) {
         guard shown != last else { return }
@@ -36,7 +37,7 @@ import Observation
         } else {
             tile.contentView = nil
         }
-        tile.badgeLabel = shown.queued > 0 ? "\(shown.queued)" : nil
+        tile.badgeLabel = shown.active > 0 ? "\(shown.active)" : nil
         tile.display()
     }
 }

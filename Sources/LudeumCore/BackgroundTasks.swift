@@ -45,6 +45,9 @@ public enum TaskSubject: Hashable, Sendable {
     /// How many tasks are waiting their turn.
     public var queuedCount: Int { items.filter { $0.state == .queued }.count }
 
+    /// How many tasks are queued or running.
+    public var activeCount: Int { items.filter { $0.state.isActive }.count }
+
     /// 0–1 across every task since nothing was last queued or running, each an equal share: those that have run count
     /// in full, the running one as far as it has got and the queued ones not at all. Nil when nothing is queued or running.
     public var overallProgress: Double? {
