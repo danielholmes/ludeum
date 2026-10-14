@@ -80,7 +80,10 @@ struct SystemToolsOnLaunch: ViewModifier {
             .task {
                 guard !Self.started else { return }
                 Self.started = true
-                warning = SystemTool.warning(missing: SystemTool.missing())
+                warning = SystemTool.warning(
+                    missing: SystemTool.missing(emulatorInstalled: {
+                        NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleIdentifier) != nil
+                    }))
             }
             .alert(
                 warning?.title ?? "", isPresented: Binding(get: { warning != nil }, set: { if !$0 { warning = nil } })
