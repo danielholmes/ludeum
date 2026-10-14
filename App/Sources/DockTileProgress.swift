@@ -6,6 +6,8 @@ import Observation
 /// and a badge of how many are waiting. Once none are, the plain icon is back. Watched from launch, not from a window,
 /// as the window can be closed while they run.
 @MainActor enum DockTileProgress {
+    /// Shows the tasks as they are now, then again each time that changes: observation tracking fires once, so each
+    /// change watches afresh.
     static func watch(_ tasks: BackgroundTasks) {
         let shown = withObservationTracking {
             Shown(progress: tasks.overallProgress, queued: tasks.queuedCount)
@@ -20,6 +22,7 @@ import Observation
         let queued: Int
     }
 
+    /// What the icon shows now, so a change it wouldn't show (a queued task's title) doesn't redraw it.
     private static var last: Shown?
 
     private static func show(_ shown: Shown) {
@@ -29,7 +32,6 @@ import Observation
         if let progress = shown.progress {
             let view = tile.contentView as? IconWithBar ?? IconWithBar(frame: NSRect(origin: .zero, size: tile.size))
             view.progress = progress
-            view.needsDisplay = true
             tile.contentView = view
         } else {
             tile.contentView = nil
@@ -51,6 +53,7 @@ private final class IconWithBar: NSView {
         NSBezierPath(roundedRect: track, xRadius: radius, yRadius: radius).fill()
         let inset = track.insetBy(dx: track.height * 0.15, dy: track.height * 0.15)
         var filled = inset
+        // Never narrower than it is tall, so at 0% it's a dot rather than nothing.
         filled.size.width = max(inset.height, inset.width * min(max(progress, 0), 1))
         NSColor.controlAccentColor.setFill()
         NSBezierPath(roundedRect: filled, xRadius: inset.height / 2, yRadius: inset.height / 2).fill()

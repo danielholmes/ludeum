@@ -13,6 +13,9 @@ public enum TaskSubject: Hashable, Sendable {
         public enum State: Equatable, Sendable {
             case queued, running
             case failed(String)
+
+            /// Queued or running, rather than failed.
+            public var isActive: Bool { self == .queued || self == .running }
         }
 
         public let id = UUID()
@@ -37,15 +40,15 @@ public enum TaskSubject: Hashable, Sendable {
 
     public init() {}
 
-    public var isBusy: Bool { items.contains { $0.state == .queued || $0.state == .running } }
+    public var isBusy: Bool { items.contains { $0.state.isActive } }
 
-    /// The tasks waiting their turn.
+    /// How many tasks are waiting their turn.
     public var queuedCount: Int { items.filter { $0.state == .queued }.count }
 
     /// 0–1 across every task since nothing was last queued or running, each an equal share: those that have run count
     /// in full, the running one as far as it has got and the queued ones not at all. Nil when nothing is queued or running.
     public var overallProgress: Double? {
-        let active = items.filter { $0.state == .queued || $0.state == .running }
+        let active = items.filter { $0.state.isActive }
         guard !active.isEmpty else { return nil }
         let running = active.first { $0.state == .running }?.progress ?? 0
         return (Double(finished) + running) / Double(finished + active.count)
@@ -118,7 +121,7 @@ public enum TaskSubject: Hashable, Sendable {
         Self.isBusy = isBusy
         if !isBusy, finished != 0 { finished = 0 }
         var active: [TaskSubject: Int] = [:]
-        for (i, item) in items.enumerated() where item.state == .queued || item.state == .running {
+        for (i, item) in items.enumerated() where item.state.isActive {
             if let subject = item.subject, active[subject] == nil { active[subject] = i }
         }
         if activeItems != active { activeItems = active }

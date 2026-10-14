@@ -21,7 +21,7 @@ private actor Gate {
 }
 
 @MainActor func untilIdle(_ tasks: BackgroundTasks) async {
-    while tasks.items.contains(where: { $0.state == .queued || $0.state == .running }) { await Task.yield() }
+    while tasks.isBusy { await Task.yield() }
 }
 
 @MainActor @Suite struct BackgroundTasksTests {
@@ -197,7 +197,7 @@ private actor Gate {
         #expect(tasks.overallProgress == nil)
     }
 
-    @Test func aFailedOrCancelledTaskIsDoneWithSoProgressDoesNotGoBack() async {
+    @Test func aFailedOrCancelledTaskCountsInFullAsItIsDoneWith() async {
         let tasks = BackgroundTasks()
         let gate = Gate()
         tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in throw ArchiveError.noSevenZip })
