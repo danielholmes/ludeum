@@ -6,12 +6,16 @@ A macOS game journal and launcher. Keep a record of every game you play, on any 
 
 ## Capabilities
 
-- **Journal any game** on any IGDB platform (retro consoles, PC, Xbox, and more), with ratings from 0.0 to 10.0, a rating history, and playthroughs marked finished or dropped.
-- **Plan and look back** with a Play Next list, Top Rated, and a Year in Review.
-- **ROM folders**: point Ludeum at a folder of ROMs for each platform. It identifies them by checksum (via Hasheous) and name, and anything it isn't sure about goes into a review queue.
-- **Metadata and covers** from IGDB, using box art first.
-- **One-click play** in the right emulator, with per-game emulator settings such as the Game Boy model.
+- **Journal any game** on any IGDB platform (retro consoles, PC, Xbox, and more), with ratings from 0.0 to 10.0, a rating history, playthroughs marked finished or dropped (with who played along and which copy you played), and a highlight note at the top of a game's page for a tip or where you got to. Expansions and DLC are games too, linked to their base game.
+- **Plan and look back** with Backlog, Up next and Want to buy, a What to play next screen, Top-rated, Year in review, and your own lists.
+- **Face-off** checks your ratings against each other: pick the better of two games at a time, and Ludeum points out ratings your picks disagree with.
+- **Copies**: record every copy you have or once had, physical or digital, with its regions and where and when you got it. ROMs count as copies too.
+- **ROM folders**: Ludeum keeps a folder of ROMs for each platform. It identifies them by checksum (via Hasheous) and name, and anything it isn't sure about goes into a Review queue. Add ROM brings in a ROM from anywhere, and Rename gives it its No-Intro (or Redump) name.
+- **Archive and Compact**: pack ROMs you aren't playing into `.7z` to save room, and unpack them again in the background when you want to play. Cartridge ROMs can be compacted into an archive their emulator opens directly, so they still play.
+- **Metadata and covers** from IGDB, using box art from [libretro-thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails) first.
+- **One-click play** in the right emulator, with per-game emulator settings such as run-ahead and the Game Boy model.
 - **Attachments**: keep manuals, maps and other files with a game, in a folder per game, and open them in the app your Mac uses for them.
+- **Backups** of the journal, taken routinely and before any big change, and Storage Stats to see where the space goes.
 
 ## Requirements to build
 
@@ -42,25 +46,44 @@ Run the tests with `swift test`.
 
 **IGDB credentials.** `scripts/setup-igdb.sh` walks you through creating a Twitch application and tests the credentials against IGDB. Enter the Client ID and Client Secret, plus your Hasheous key if you have one, in Ludeum ▸ Settings (⌘,).
 
+## Where Ludeum keeps things
+
+Ludeum keeps everything in `~/Library/Application Support/Ludeum/`: the journal, and a `Data` folder holding what must survive losing your Mac (the ROM folders, attachments and backups). Ludeum won't start until the `Data` folder exists. Ludeum never creates it, so a missing link can't be silently replaced by an empty folder. Create it yourself, or link it to a synced folder so it's kept safe:
+
+```sh
+ln -s ~/Dropbox/games/Ludeum ~/Library/Application\ Support/Ludeum/Data
+```
+
+Each platform's ROMs go in `Data/ROMs/<Platform>/`, for example `Data/ROMs/SNES/`. The cache lives in `~/Library/Caches/Ludeum/` and can always be rebuilt.
+
 ## Requirements to play ROMs
 
-Ludeum doesn't include any games, BIOS files or emulators. Supply your own legally obtained ROMs and BIOS files, and set up BIOS, controllers and video in each emulator. Ludeum copies those settings and applies each game's settings on top.
+Ludeum doesn't include any games, BIOS files or emulators. Supply your own legally obtained ROMs and BIOS files, and set up BIOS, controllers and video in each emulator. Ludeum keeps those settings, and sets each game's own settings for that Play only.
 
-Install the emulator for each platform you want to play:
+Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found.
 
-| Platform | Emulator |
-| --- | --- |
-| NES / Famicom, SNES / Super Famicom, Game Boy, Game Boy Color, Game Boy Advance, Master System, Game Gear, PC Engine, PC Engine CD | [Mesen](https://www.mesen.ca) |
-| PlayStation | [DuckStation](https://www.duckstation.org) |
-| PlayStation Portable | [PPSSPP](https://www.ppsspp.org) |
-| Nintendo 64, Mega Drive / Genesis, Sega CD | [ares](https://ares-emu.net) |
-| GameCube, Wii | [Dolphin](https://dolphin-emu.org) |
-| Nintendo DS | [melonDS](https://melonds.kuribo64.net) |
-| Saturn | [Ymir](https://github.com/StrikerX3/Ymir) |
+| Platform | Emulator | Version |
+| --- | --- | --- |
+| NES / Famicom, SNES / Super Famicom, Game Boy, Game Boy Color, Game Boy Advance, Master System, Game Gear, PC Engine CD | [MesenCE](https://github.com/nesdev-org/MesenCE) | 2.2.1 |
+| PlayStation | [DuckStation](https://www.duckstation.org) | build 12070 |
+| PlayStation 2 | [PCSX2](https://pcsx2.net) | 2.9.103 |
+| PlayStation Portable | [PPSSPP](https://www.ppsspp.org) | 1.20.4 |
+| Nintendo 64, Mega Drive / Genesis, Sega CD | [ares](https://ares-emu.net) | v148 |
+| GameCube, Wii | [Dolphin](https://dolphin-emu.org) | 2609 |
+| Nintendo DS | [melonDS](https://melonds.kuribo64.net) | 1.1 |
+| Saturn | [Ymir](https://github.com/StrikerX3/Ymir) | 0.3.3 |
+| Xbox | [xemu](https://xemu.app) | 0.8.136 |
 
-You can journal games on any other platform (PC, Xbox, and so on), but Ludeum can't launch them.
+PS Vita and MSX2 have ROM folders, but no emulator plays them yet. You can journal games on any other platform (PC, Xbox 360, and so on), but Ludeum can't launch them.
 
-Cartridge ROMs (and DS) can be kept in a `.7z`, or a `.zip` for N64 and Mega Drive, since their emulators open those directly; the Review queue lists loose ones and compacts them for you. A ROM packed in a format its emulator can't open (for example a `.7z` disc image) shows as archived. Unarchive it in Game detail (PS2, PSP, Vita) or extract it in its ROM folder to make it playable.
+Ludeum also uses these command-line tools, and warns at launch if one is missing:
+
+- [7-Zip](https://www.7-zip.org) (`brew install sevenzip`) to Archive, Unarchive and Compact ROMs, and to list what's inside an archived one.
+- [xdvdfs](https://github.com/antangelo/xdvdfs) (`cargo install xdvdfs-cli`), only if you have xemu. xemu boots only an XISO, so Play refuses a full Redump Xbox image; make an XISO from it with `xdvdfs pack`.
+
+Cartridge ROMs (and DS) can be kept in a `.7z`, or a `.zip` for N64 and Mega Drive, since their emulators open those directly; the Review queue lists loose ones and compacts them for you. A ROM packed in a format its emulator can't open (for example a `.7z` disc image) shows as archived. Unarchive it in Game detail (PS1, PS2, PSP, Vita, GameCube, Wii, Xbox, Sega CD, Saturn and PC Engine CD) or extract it in its ROM folder to make it playable.
+
+On the disc platforms (PS1, Sega CD, Saturn and PC Engine CD), each ROM is a subfolder named after it. A multi-disc game's subfolder holds its discs and an `.m3u` playlist that loads them. If the playlist is missing, the Review queue makes one.
 
 ## License
 
