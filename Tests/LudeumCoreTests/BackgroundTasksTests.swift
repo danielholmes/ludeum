@@ -161,3 +161,87 @@ private actor Gate {
         await untilIdle(tasks)
     }
 }
+
+/// How far the Dock icon says the tasks have got: every task since the queue was last empty counts the same, those
+/// not yet started at nothing.
+@MainActor @Suite struct BackgroundTaskOverallProgressTests {
+    @Test func withNothingQueuedOrRunningThereIsNoProgress() {
+        let tasks = BackgroundTasks()
+
+        #expect(tasks.overallProgress == nil)
+        #expect(tasks.queuedCount == 0)
+    }
+
+    @Test func eachTaskIsAnEqualShareAndTheRunningOneCountsAsFarAsItHasGot() async {
+        let tasks = BackgroundTasks()
+        let gates = [Gate(), Gate()]
+        tasks.enqueue(
+            "Archiving Okami", subject: .rom(1),
+            work: { progress in
+                progress(0.5)
+                await gates[0].wait()
+            })
+        tasks.enqueue("Archiving ICO", subject: .rom(2), work: { _ in await gates[1].wait() })
+
+        while tasks.items.first?.progress == nil { await Task.yield() }
+        #expect(tasks.overallProgress == 0.25)
+        #expect(tasks.queuedCount == 1)
+
+        await gates[0].release()
+        while tasks.items.count == 2 { await Task.yield() }
+        #expect(tasks.overallProgress == 0.5)
+        #expect(tasks.queuedCount == 0)
+
+        await gates[1].release()
+        await untilIdle(tasks)
+        #expect(tasks.overallProgress == nil)
+    }
+
+    @Test func aFailedOrCancelledTaskIsDoneWithSoProgressDoesNotGoBack() async {
+        let tasks = BackgroundTasks()
+        let gate = Gate()
+        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in throw ArchiveError.noSevenZip })
+        tasks.enqueue(
+            "Archiving ICO", subject: .rom(2),
+            work: { _ in
+                while true { try await Task.sleep(for: .milliseconds(1)) }
+            })
+        tasks.enqueue("Archiving Bully", subject: .rom(3), work: { _ in await gate.wait() })
+
+        while tasks.active(.rom(2))?.state != .running { await Task.yield() }
+        tasks.cancel(tasks.active(.rom(2))!.id)
+        while tasks.active(.rom(3))?.state != .running { await Task.yield() }
+
+        #expect(tasks.overallProgress == 2.0 / 3)
+        await gate.release()
+        await untilIdle(tasks)
+    }
+
+    @Test func aTaskTakenOffTheQueueLeavesTheShares() async {
+        let tasks = BackgroundTasks()
+        let gate = Gate()
+        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in })
+        tasks.enqueue("Archiving ICO", subject: .rom(2), work: { _ in await gate.wait() })
+        tasks.enqueue("Archiving Bully", subject: .rom(3), work: { _ in })
+
+        while tasks.active(.rom(2))?.state != .running { await Task.yield() }
+        tasks.cancel(tasks.active(.rom(3))!.id)
+
+        #expect(tasks.overallProgress == 0.5)
+        await gate.release()
+        await untilIdle(tasks)
+    }
+
+    @Test func onceTheQueueEmptiesTheNextTaskStartsAfresh() async {
+        let tasks = BackgroundTasks()
+        let gate = Gate()
+        tasks.enqueue("Archiving Okami", subject: .rom(1), work: { _ in throw ArchiveError.noSevenZip })
+        await untilIdle(tasks)
+
+        tasks.enqueue("Archiving ICO", subject: .rom(2), work: { _ in await gate.wait() })
+
+        #expect(tasks.overallProgress == 0)
+        await gate.release()
+        await untilIdle(tasks)
+    }
+}

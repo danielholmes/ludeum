@@ -109,6 +109,7 @@ struct LudeumApp: App {
             return
         }
         let services = Services(settings: settings, journal: journal)
+        DockTileProgress.watch(services.tasks)
         running = Running(services: services, importModel: ImportModel(services: services))
     }
 
