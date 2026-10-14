@@ -13,6 +13,9 @@ public enum TaskSubject: Hashable, Sendable {
         public enum State: Equatable, Sendable {
             case queued, running
             case failed(String)
+
+            /// Queued or running, rather than failed.
+            public var isActive: Bool { self == .queued || self == .running }
         }
 
         public let id = UUID()
@@ -29,13 +32,27 @@ public enum TaskSubject: Hashable, Sendable {
     /// Where each queued or running task is in `items`, by what it works on: a list of ROMs asks about every row.
     private var activeItems: [TaskSubject: Int] = [:]
     private var running: Task<Void, Never>?
+    /// The tasks that have run, however they ended, since nothing was last queued or running.
+    private var finished = 0
 
     /// Whether anything is queued or running, for the quit check.
     public static var isBusy = false
 
     public init() {}
 
-    public var isBusy: Bool { items.contains { $0.state == .queued || $0.state == .running } }
+    public var isBusy: Bool { items.contains { $0.state.isActive } }
+
+    /// How many tasks are waiting their turn.
+    public var queuedCount: Int { items.filter { $0.state == .queued }.count }
+
+    /// 0–1 across every task since nothing was last queued or running, each an equal share: those that have run count
+    /// in full, the running one as far as it has got and the queued ones not at all. Nil when nothing is queued or running.
+    public var overallProgress: Double? {
+        let active = items.filter { $0.state.isActive }
+        guard !active.isEmpty else { return nil }
+        let running = active.first { $0.state == .running }?.progress ?? 0
+        return (Double(finished) + running) / Double(finished + active.count)
+    }
 
     /// The queued or running task working on `subject`, if any.
     public func active(_ subject: TaskSubject) -> Item? { activeItems[subject].map { items[$0] } }
@@ -84,6 +101,7 @@ public enum TaskSubject: Hashable, Sendable {
             } catch {
                 if let i = items.firstIndex(where: { $0.id == id }) { items[i].state = .failed(error.localizedDescription) }
             }
+            finished += 1
             update()
             item.ended()
             running = nil
@@ -101,8 +119,9 @@ public enum TaskSubject: Hashable, Sendable {
     /// After every change to which tasks there are or what state they're in.
     private func update() {
         Self.isBusy = isBusy
+        if !isBusy, finished != 0 { finished = 0 }
         var active: [TaskSubject: Int] = [:]
-        for (i, item) in items.enumerated() where item.state == .queued || item.state == .running {
+        for (i, item) in items.enumerated() where item.state.isActive {
             if let subject = item.subject, active[subject] == nil { active[subject] = i }
         }
         if activeItems != active { activeItems = active }

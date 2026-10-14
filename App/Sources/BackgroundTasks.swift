@@ -66,7 +66,7 @@ struct BackgroundTasksPanel: View {
 
     private var summary: String {
         let failed = tasks.items.filter { if case .failed = $0.state { true } else { false } }.count
-        let waiting = tasks.items.filter { $0.state == .queued }.count
+        let waiting = tasks.queuedCount
         var parts: [String] = []
         if let running = tasks.items.first(where: { $0.state == .running }) {
             parts.append(running.title + (running.progress.map { " · \(Int(($0 * 100).rounded()))%" } ?? ""))
