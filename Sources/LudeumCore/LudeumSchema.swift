@@ -634,7 +634,7 @@ enum LudeumSchema {
         // which the journal names and remembers by its path there.
         migrator.registerMigration("v30 attachments") { db in
             try db.alter(table: "game") { t in t.add(column: "attachmentFolder", .text) }
-            try db.execute(sql: "CREATE UNIQUE INDEX gameAttachmentFolder ON game (attachmentFolder COLLATE NOCASE)")
+            try db.execute(sql: "CREATE UNIQUE INDEX game_on_attachmentFolder ON game(attachmentFolder COLLATE NOCASE)")
             try db.create(table: "attachment") { t in
                 t.autoIncrementedPrimaryKey("id")
                 t.column("gameId", .integer).notNull().indexed().references("game", onDelete: .cascade)

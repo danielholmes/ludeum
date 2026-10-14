@@ -1157,6 +1157,8 @@ private struct MissingAttachmentDetail: View {
     let showGame: () -> Void
     let failed: (String?) -> Void
     @State private var locating: LocatedFile?
+    @State private var deleting = false
+    @State private var working = false
 
     var body: some View {
         Form {
@@ -1168,25 +1170,36 @@ private struct MissingAttachmentDetail: View {
             FlowLayout(spacing: 8) {
                 Button("Locate…") { locating = pickLocated(for: item.id, named: item.fileName) }
                     .help("Choose its file, wherever it is now, to put back under its name")
-                Button("Delete Attachment") { run { try $0.delete(item.id) } }
-                    .help("It leaves the journal; there's no file to send to the Trash")
+                Button("Delete Attachment…") { deleting = true }
+                    .help("It leaves the journal")
                 Button("Show Game", action: showGame)
             }
+            .disabled(working)
         }
         .formStyle(.grouped)
         .locateAttachment($locating) { located, moving in
             run { try $0.locate(located.attachment, file: located.file, moving: moving) }
         }
+        .confirmationDialog("Delete \(item.fileName)?", isPresented: $deleting) {
+            Button("Delete Attachment", role: .destructive) { run { [id = item.id] in try $0.delete(id) } }
+        } message: {
+            Text("It leaves the journal. If its file has come back since, it goes to the Trash.")
+        }
     }
 
-    private func run(_ change: (Attachments) throws -> Void) {
-        guard let attachments = services.attachments else { return }
-        do {
-            try change(attachments)
-            failed(nil)
-        } catch {
-            failed(attachmentErrorText(error))
+    /// Off the main thread, as a located file is copied; then every screen reloads.
+    private func run(_ change: @escaping @Sendable (Attachments) throws -> Void) {
+        guard let attachments = services.attachments, !working else { return }
+        working = true
+        Task {
+            defer { working = false }
+            do {
+                try await offMain { try change(attachments) }
+                failed(nil)
+            } catch {
+                failed(attachmentErrorText(error))
+            }
+            services.changes.changed()
         }
-        services.changes.changed()
     }
 }

@@ -108,7 +108,7 @@ struct AttachmentsSection: View {
         do {
             let changed = try await offMain { [game] in
                 let moved = try store.follow(game)
-                let checked = try store.check(game)
+                let checked = try store.checkFiles(game)
                 return moved || checked
             }
             attachments = try store.attachments(of: game)
@@ -270,6 +270,7 @@ extension View {
 func attachmentErrorText(_ error: Error) -> String {
     switch error {
     case AttachmentError.notAFile(let name): "\(name) is a folder. Only single files can be attached: zip it, or make it a PDF, first."
+    case AttachmentError.alreadyInAttachments(let name): "\(name) is already in the Attachments folder."
     case AttachmentError.nameTaken: "Another Attachment, or another file in its folder, already has that name."
     case AttachmentError.nameRequired: "A name is required."
     case AttachmentError.notFound: "That Attachment is gone."

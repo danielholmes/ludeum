@@ -150,6 +150,15 @@ import Testing
         #expect(try attachments.attachments(of: game).map(\.fileName) == ["Manual (USA).pdf"])
     }
 
+    @Test func anExtensionTypedAgainIsNotDoubled() throws {
+        let game = try j.addGame()
+        let a = try #require(try attachments.add([try pick("scan.pdf")], to: game).first)
+
+        try attachments.rename(a.id, to: "Manual.PDF")
+
+        #expect(files("SNES/Super Metroid") == ["Manual.pdf"])
+    }
+
     @Test func renamingToANameAlreadyTakenIsRefused() throws {
         let game = try j.addGame()
         let added = try attachments.add([try pick("a.pdf"), try pick("b.pdf")], to: game)
@@ -190,9 +199,20 @@ import Testing
 
         try attachments.deleteGame(game)
 
-        #expect(try trashed() == ["Super Metroid"])
+        #expect(try trashed() == ["a.pdf", "b.pdf"])
         #expect(!exists("SNES"))
         #expect(throws: LudeumError.gameNotFound) { try j.journal.game(game) }
+    }
+
+    @Test func deletingAGameLeavesFilesIPutInItsFolderMyself() throws {
+        let game = try j.addGame()
+        try attachments.add([try pick("a.pdf")], to: game)
+        try Data("mine".utf8).write(to: root.appending(path: "SNES/Super Metroid/notes.txt"))
+
+        try attachments.deleteGame(game)
+
+        #expect(try trashed() == ["a.pdf"])
+        #expect(files("SNES/Super Metroid") == ["notes.txt"])
     }
 
     @Test func aGameWithACopyKeepsItsAttachments() throws {
@@ -215,7 +235,7 @@ import Testing
         let elsewhere = picked.appending(path: "kept.pdf")
         try FileManager.default.moveItem(at: file, to: elsewhere)
 
-        try attachments.check()
+        try attachments.checkFiles()
 
         #expect(try attachments.attachments(of: game).map(\.missing) == [true])
         let queue = try j.journal.reviewQueue()
@@ -225,7 +245,7 @@ import Testing
         #expect(queue.count == 1)
 
         try FileManager.default.moveItem(at: elsewhere, to: file)
-        try attachments.check(game)
+        try attachments.checkFiles(game)
 
         #expect(try j.journal.reviewQueue().missingAttachments.isEmpty)
     }
@@ -234,7 +254,7 @@ import Testing
         let game = try j.addGame()
         let a = try #require(try attachments.add([try pick("manual.pdf")], to: game).first)
         try FileManager.default.removeItem(at: root.appending(path: "SNES/Super Metroid/manual.pdf"))
-        try attachments.check()
+        try attachments.checkFiles()
 
         try attachments.locate(a.id, file: try pick("found it.pdf"), moving: true)
 
@@ -243,11 +263,42 @@ import Testing
         #expect(try j.journal.reviewQueue().missingAttachments.isEmpty)
     }
 
+    @Test func locatingAFileThatsBackAlreadyLeavesThePickedFileAlone() throws {
+        let game = try j.addGame()
+        let a = try #require(try attachments.add([try pick("manual.pdf")], to: game).first)
+        let file = root.appending(path: "SNES/Super Metroid/manual.pdf")
+        let elsewhere = picked.appending(path: "kept.pdf")
+        try FileManager.default.moveItem(at: file, to: elsewhere)
+        try attachments.checkFiles()
+        try FileManager.default.copyItem(at: elsewhere, to: file)
+
+        try attachments.locate(a.id, file: elsewhere, moving: true)
+        try attachments.locate(a.id, file: file, moving: true)
+
+        #expect(files("SNES/Super Metroid") == ["manual.pdf"])
+        #expect(FileManager.default.fileExists(atPath: elsewhere.path(percentEncoded: false)))
+        #expect(try trashed().isEmpty)
+        #expect(try j.journal.reviewQueue().missingAttachments.isEmpty)
+    }
+
+    @Test func aFileAlreadyInAttachmentsIsRefused() throws {
+        let game = try j.addGame()
+        let other = try j.addGame("Metroid Fusion")
+        let a = try #require(try attachments.add([try pick("manual.pdf")], to: game).first)
+
+        #expect(throws: AttachmentError.alreadyInAttachments("manual.pdf")) {
+            try attachments.add([a.url], to: other, moving: true)
+        }
+
+        #expect(files("SNES/Super Metroid") == ["manual.pdf"])
+        #expect(try trashed().isEmpty)
+    }
+
     @Test func deletingAMissingAttachmentJustLeavesTheJournal() throws {
         let game = try j.addGame()
         let a = try #require(try attachments.add([try pick("manual.pdf")], to: game).first)
         try FileManager.default.removeItem(at: root.appending(path: "SNES/Super Metroid/manual.pdf"))
-        try attachments.check()
+        try attachments.checkFiles()
 
         try attachments.delete(a.id)
 
@@ -261,7 +312,7 @@ import Testing
         try attachments.add([try pick("manual.pdf")], to: game)
         try Data("stray".utf8).write(to: root.appending(path: "SNES/Super Metroid/stray.txt"))
 
-        try attachments.check()
+        try attachments.checkFiles()
 
         #expect(try attachments.attachments(of: game).map(\.fileName) == ["manual.pdf"])
     }

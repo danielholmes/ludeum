@@ -22,11 +22,13 @@ extension LudeumStore {
     }
 
     /// Hard-deletes a Game with all its journal data. Refused while it has any Copy, a ROM (present or missing) or a
-    /// hand-recorded one: those are deleted first, so only a plain journal entry can go.
-    public func deleteGame(_ game: GameID) throws {
+    /// hand-recorded one: those are deleted first, so only a plain journal entry can go. `beforeDeleting` runs once the
+    /// backup is taken, just before the Game goes: `Attachments.deleteGame` sends its Attachments' files to the Trash there.
+    public func deleteGame(_ game: GameID, beforeDeleting: () throws -> Void = {}) throws {
         // Refuse before backing up, so a refused deletion leaves no backup behind.
         if try db.read({ try hasCopies($0, game) }) { throw LudeumError.gameHasCopies }
         try backups?.backUp(self, operation: .beforeDelete)
+        try beforeDeleting()
         try db.write { db in
             if try hasCopies(db, game) { throw LudeumError.gameHasCopies }
             try db.execute(sql: "DELETE FROM game WHERE id = ?", arguments: [game])
@@ -79,7 +81,7 @@ extension LudeumStore {
             db, sql: "SELECT id FROM rom WHERE gameId = ? AND missing AND id IS NOT ?", arguments: [game, except])
     }
 
-    func hasCopies(_ db: Database, _ game: GameID) throws -> Bool {
+    private func hasCopies(_ db: Database, _ game: GameID) throws -> Bool {
         try Bool.fetchOne(
             db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE gameId = ?) OR EXISTS (SELECT 1 FROM copy WHERE gameId = ?)",
             arguments: [game, game])!

@@ -1,5 +1,6 @@
 import LudeumCore
 import SwiftUI
+import os
 
 /// The Import: reading the ROM folders into the journal, at launch and by hand (the Review queue's Check again).
 /// One at a time; a request mid-Import runs once more after it.
@@ -14,6 +15,7 @@ import SwiftUI
 
     /// True while an Import runs: quitting asks first. Static, as the app delegate has no `Services` to ask.
     static var isRunning = false
+    private static let log = Logger(subsystem: "org.danielholmes.Ludeum", category: "import")
 
     init(services: Services) {
         self.services = services
@@ -42,10 +44,15 @@ import SwiftUI
                     await MainActor.run { work.lockJournal(false) }
                 }
                 // Attachments too: a Game's folder follows its name, and a file gone from it waits in the Review queue.
+                // The Import has written by now, so a failure here is only logged, and tried again at the next one.
                 if let attachments = services.attachments {
-                    try await offMain {
-                        try attachments.followAll()
-                        try attachments.check()
+                    do {
+                        try await offMain {
+                            try attachments.followAll()
+                            try attachments.checkFiles()
+                        }
+                    } catch {
+                        Self.log.error("Attachments not checked: \(error, privacy: .public)")
                     }
                 }
                 var shown = result

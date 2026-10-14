@@ -38,7 +38,7 @@ public struct DeletionSummary: Sendable, Equatable {
     public let attachments: Int
     public var canDelete: Bool { roms == 0 && copies == 0 }
 
-    public init(ratingEntries: Int, playthroughs: Int, lists: Int, roms: Int, copies: Int, attachments: Int = 0) {
+    public init(ratingEntries: Int, playthroughs: Int, lists: Int, roms: Int, copies: Int, attachments: Int) {
         self.ratingEntries = ratingEntries
         self.playthroughs = playthroughs
         self.lists = lists
