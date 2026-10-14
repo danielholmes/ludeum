@@ -54,6 +54,8 @@ extension Emulator {
         case .ymir: EmulatorVersionSpec(expected: "0.3.3", source: .appVersion)
         case .ppsspp: EmulatorVersionSpec(expected: "1.20.4", source: .commandLine("--version"))
         case .pcsx2: EmulatorVersionSpec(expected: "2.9.103", source: .commandLine("-version"))
+        // Its `-version` prints QEMU's version, not xemu's.
+        case .xemu: EmulatorVersionSpec(expected: "0.8.136", source: .appVersion)
         default: nil
         }
     }

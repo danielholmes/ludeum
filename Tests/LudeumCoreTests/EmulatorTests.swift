@@ -14,7 +14,7 @@ import Testing
         #expect(Emulator.of(platformId: 20) == .melonDS)  // Nintendo DS
         #expect(Emulator.of(platformId: 78) == .ares)  // Sega CD
         #expect(Emulator.of(platformId: 32) == .ymir)  // Saturn
-        #expect(Emulator.of(platformId: 11) == nil)  // Xbox
+        #expect(Emulator.of(platformId: 11) == .xemu)  // Xbox
     }
 
     @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() throws {
@@ -128,6 +128,43 @@ import Testing
         try Emulator.melonDS.arguments(rom: rom, platformId: 20, settings: EmulatorSettings()) == [
             "/Games/DS/Advance Wars - Dual Strike (USA).nds"
         ])
+}
+
+@Test func xemuJustBootsTheDisc() throws {
+    let rom = URL(filePath: "/Games/Xbox/Halo - Combat Evolved (USA).iso")
+    #expect(
+        try Emulator.xemu.arguments(rom: rom, platformId: 11, settings: EmulatorSettings()) == [
+            "-dvd_path", "/Games/Xbox/Halo - Combat Evolved (USA).iso",
+        ])
+}
+
+@Suite struct XboxDiscTests {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "xbox disc \(UUID().uuidString)", directoryHint: .isDirectory)
+
+    /// A file with the Xbox media header at `offset`, sparse up to it.
+    func image(_ name: String, headerAt offset: UInt64?) throws -> URL {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appending(path: name)
+        FileManager.default.createFile(atPath: file.path(percentEncoded: false), contents: nil)
+        let handle = try FileHandle(forWritingTo: file)
+        defer { try? handle.close() }
+        try handle.seek(toOffset: offset ?? 0x10000)
+        try handle.write(contentsOf: Data((offset == nil ? "NOT*THE*XBOX*HEADER" : "MICROSOFT*XBOX*MEDIA").utf8))
+        return file
+    }
+
+    @Test func anXISOHasTheGamePartitionAtTheStart() throws {
+        #expect(XboxDisc.kind(of: try image("Halo.iso", headerAt: 0x10000)) == .xiso)
+    }
+
+    @Test func aFullRedumpImageHasItAfterTheVideoPartition() throws {
+        #expect(XboxDisc.kind(of: try image("Halo.iso", headerAt: 0x1831_0000)) == .redump)
+    }
+
+    @Test func anythingElseIsUnknown() throws {
+        #expect(XboxDisc.kind(of: try image("Halo.iso", headerAt: nil)) == .unknown)
+        #expect(XboxDisc.kind(of: directory.appending(path: "Nowhere.iso")) == .unknown)
+    }
 }
 
 @Suite struct DuckStationSettingsTests {

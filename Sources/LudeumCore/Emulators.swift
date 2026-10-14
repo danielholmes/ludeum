@@ -14,8 +14,9 @@ public struct Emulator: Sendable, Equatable {
     public static let ymir = Emulator(name: "Ymir", bundleIdentifier: "io.github.strikerx3.ymir")
     public static let ppsspp = Emulator(name: "PPSSPP", bundleIdentifier: "org.ppsspp.ppsspp")
     public static let pcsx2 = Emulator(name: "PCSX2", bundleIdentifier: "net.pcsx2.pcsx2")
+    public static let xemu = Emulator(name: "xemu", bundleIdentifier: "xemu.app.0")
 
-    public static let all: [Emulator] = [.mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2]
+    public static let all: [Emulator] = [.mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu]
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
@@ -31,6 +32,7 @@ public struct Emulator: Sendable, Equatable {
         case 32: .ymir  // Saturn
         case 38: .ppsspp  // PlayStation Portable
         case 8: .pcsx2  // PlayStation 2
+        case 11: .xemu  // Xbox
         default: nil
         }
     }
@@ -66,6 +68,10 @@ public struct Emulator: Sendable, Equatable {
         case .pcsx2:
             // The game settings layer comes from Ludeum's file; PCSX2's own settings (controllers, BIOS) still apply.
             ["-batch", "-fastboot", "-gamecfg", try pcsx2.write().path(percentEncoded: false), "--", rom.path(percentEncoded: false)]
+        case .xemu:
+            // No settings: xemu has no run-ahead, and its one latency setting, VSync, stays its own. The disc isn't saved
+            // into its settings.
+            ["-dvd_path", rom.path(percentEncoded: false)]
         case .ppsspp:
             // Not `--appendconfig`: PPSSPP saves the merged settings into its own ppsspp.ini.
             ["--config=\(try ppsspp.write().path(percentEncoded: false))", rom.path(percentEncoded: false)]

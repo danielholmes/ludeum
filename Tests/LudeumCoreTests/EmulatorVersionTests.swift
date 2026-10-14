@@ -46,6 +46,9 @@ import Testing
         #expect(EmulatorVersions.check(found: "1.1", for: .melonDS) == .ok)
         #expect(EmulatorVersions.check(found: "2609", for: .dolphin) == .ok)
         #expect(EmulatorVersions.check(found: "Dolphin 2609", for: .dolphin) == .ok)
+        // xemu's `-version` is QEMU's; its app version is its release's.
+        #expect(EmulatorVersions.check(found: "0.8.136", for: .xemu) == .ok)
+        #expect(EmulatorVersions.check(found: "0.8.135", for: .xemu) == .tooOld(found: "0.8.135"))
     }
 
     @Test func theInstalledVersionIsShownTheWayItsCompared() {

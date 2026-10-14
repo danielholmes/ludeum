@@ -68,7 +68,7 @@ struct FakeROMFolder {
         #expect(Emulator.of(platformId: ROMPlatform.vita) == nil)
     }
 
-    @Test func xboxHasAROMFolderOfIsoFilesThoughNoEmulatorYet() throws {
+    @Test func xboxHasAROMFolderOfIsoFiles() throws {
         let xbox = try FakeROMFolder(in: directory, platform: ROMPlatform.xbox)
         let rom = try xbox.add("Halo - Combat Evolved (USA).iso")
         try xbox.add("Fable (USA).xbe")
@@ -77,7 +77,7 @@ struct FakeROMFolder {
         #expect(ROMPlatform.all[ROMPlatform.xbox]?.folderName == "Xbox")
         #expect(ROMPlatform.all[ROMPlatform.xbox]?.naming == .redump)
         #expect(LibretroThumbnails.boxartRepo(platform: ROMPlatform.xbox) == "Microsoft_-_Xbox")
-        #expect(Emulator.of(platformId: ROMPlatform.xbox) == nil)
+        #expect(Emulator.of(platformId: ROMPlatform.xbox) == .xemu)
     }
 
     @Test func otherFilesAndSubfoldersAreIgnored() throws {

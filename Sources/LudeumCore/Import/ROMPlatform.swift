@@ -140,8 +140,8 @@ public struct ROMPlatform: Sendable, Equatable {
             name: "Turbografx-16/PC Engine CD", folderName: "PC Engine CD", readyExtensions: ["m3u", "chd", "cue", "bin"],
             libretroRepo: "NEC_-_PC_Engine_CD_-_TurboGrafx-CD",
             archiving: .intoFolder, naming: .redump),
-        // An `.iso`, though no Emulator plays it yet. xemu opens only an XISO (the game partition alone), not a full
-        // Redump image, and nothing here tells the two apart.
+        // An `.iso`, for xemu, which boots only an XISO (the game partition alone): a full Redump image is read as a ROM
+        // all the same, and Play refuses it (`XboxDisc`).
         11: .init(
             name: "Xbox", folderName: "Xbox", readyExtensions: ["iso"], libretroRepo: "Microsoft_-_Xbox",
             archiving: .singleFile, naming: .redump),

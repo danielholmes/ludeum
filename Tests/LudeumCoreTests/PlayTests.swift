@@ -5,10 +5,11 @@ import Testing
 
 @Suite struct PlayAvailabilityTests {
     @Test func aPlatformWithNoEmulatorSaysSo() {
-        let play = Play(platformId: 11, platformName: "Xbox", roms: [folderROM("Halo")], settings: EmulatorSettings())
+        let play = Play(
+            platformId: ROMPlatform.vita, platformName: "PlayStation Vita", roms: [folderROM("Gravity Rush")], settings: EmulatorSettings())
 
-        #expect(play.availability == .refused(.noEmulator("Xbox")))
-        #expect(play.availability.refusal?.message == "No Xbox emulator yet")
+        #expect(play.availability == .refused(.noEmulator("PlayStation Vita")))
+        #expect(play.availability.refusal?.message == "No PlayStation Vita emulator yet")
     }
 
     @Test func aGameWhosePresentROMsAreAllArchivedHasToBeUnarchivedFirst() {
@@ -131,5 +132,51 @@ import Testing
 
         // PC Engine CD: MesenCE, which can't open a `.7z` disc.
         #expect(press([folderROM("Zelda", fileName: "Zelda.7z", archived: true)], in: ps2, platformId: 150) == .refused(.archived))
+    }
+}
+
+/// Plays in xemu, which boots only an XISO.
+@Suite struct XboxPlayTests {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "xbox play \(UUID().uuidString)")
+    let xemu = URL(filePath: "/Applications/Xemu.app")
+
+    func press(_ file: URL, in folder: FakeROMFolder) -> Play.Outcome {
+        let name = file.deletingPathExtension().lastPathComponent
+        let rom = LudeumROM(
+            id: 1, folderName: name, platformId: ROMPlatform.xbox, fileName: file.lastPathComponent, name: name, version: "", disc: nil,
+            missing: false, archived: false)
+        let xemu = xemu
+        return Play(platformId: ROMPlatform.xbox, platformName: "Xbox", roms: [rom], settings: EmulatorSettings())
+            .prepare(
+                locator: ROMLocator(romFolders: [folder.folder]), version: .ok, app: { $0 == Emulator.xemu.bundleIdentifier ? xemu : nil })
+    }
+
+    /// The Xbox media header at `offset` into the file.
+    func image(_ name: String, in folder: FakeROMFolder, headerAt offset: UInt64) throws -> URL {
+        let file = try folder.add(name)
+        let handle = try FileHandle(forWritingTo: file)
+        defer { try? handle.close() }
+        try handle.seek(toOffset: offset)
+        try handle.write(contentsOf: Data("MICROSOFT*XBOX*MEDIA".utf8))
+        return file
+    }
+
+    @Test func anXISOBootsInXemu() throws {
+        let xbox = try FakeROMFolder(in: directory, platform: ROMPlatform.xbox)
+        let file = try image("Halo (USA).iso", in: xbox, headerAt: 0x10000)
+
+        #expect(press(file, in: xbox) == .open(app: xemu, arguments: ["-dvd_path", file.path(percentEncoded: false)], warning: nil))
+    }
+
+    @Test func aFullRedumpImageIsRefusedAsXemuCantBootIt() throws {
+        let xbox = try FakeROMFolder(in: directory, platform: ROMPlatform.xbox)
+        let file = try image("Halo (USA).iso", in: xbox, headerAt: 0x1831_0000)
+
+        let outcome = press(file, in: xbox)
+
+        #expect(outcome == .refused(.notXISO))
+        #expect(
+            outcome.refusal?.message
+                == "It's a full Redump image, and xemu boots only an XISO: make one with `xdvdfs pack`, then put it in its place.")
     }
 }
