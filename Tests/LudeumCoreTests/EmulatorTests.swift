@@ -138,35 +138,6 @@ import Testing
         ])
 }
 
-@Suite struct XboxDiscTests {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "xbox disc \(UUID().uuidString)", directoryHint: .isDirectory)
-
-    /// A file with the Xbox media header at `offset`, sparse up to it.
-    func image(_ name: String, headerAt offset: UInt64?) throws -> URL {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let file = directory.appending(path: name)
-        FileManager.default.createFile(atPath: file.path(percentEncoded: false), contents: nil)
-        let handle = try FileHandle(forWritingTo: file)
-        defer { try? handle.close() }
-        try handle.seek(toOffset: offset ?? 0x10000)
-        try handle.write(contentsOf: Data((offset == nil ? "NOT*THE*XBOX*HEADER" : "MICROSOFT*XBOX*MEDIA").utf8))
-        return file
-    }
-
-    @Test func anXISOHasTheGamePartitionAtTheStart() throws {
-        #expect(XboxDisc.kind(of: try image("Halo.iso", headerAt: 0x10000)) == .xiso)
-    }
-
-    @Test func aFullRedumpImageHasItAfterTheVideoPartition() throws {
-        #expect(XboxDisc.kind(of: try image("Halo.iso", headerAt: 0x1831_0000)) == .redump)
-    }
-
-    @Test func anythingElseIsUnknown() throws {
-        #expect(XboxDisc.kind(of: try image("Halo.iso", headerAt: nil)) == .unknown)
-        #expect(XboxDisc.kind(of: directory.appending(path: "Nowhere.iso")) == .unknown)
-    }
-}
-
 @Suite struct DuckStationSettingsTests {
     let folder = FileManager.default.temporaryDirectory.appending(
         path: "duckstation tests \(UUID().uuidString)", directoryHint: .isDirectory)

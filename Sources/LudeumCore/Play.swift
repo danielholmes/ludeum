@@ -28,7 +28,7 @@ public struct Play: Sendable {
         case couldntLook(String, String)
         case couldntWriteSettings(Emulator, String)
         /// An Xbox ROM that's a full Redump image, which xemu can't boot.
-        case notXISO
+        case needsXISO
 
         public var message: String {
             switch self {
@@ -43,7 +43,7 @@ public struct Play: Sendable {
             case .fileNotFound(let file): "Couldn't find \(file). Run an Import, then try again."
             case .couldntLook(let file, let why): "Couldn't look for \(file): \(why)"
             case .couldntWriteSettings(let emulator, let why): "Couldn't write \(emulator.name)'s settings: \(why)"
-            case .notXISO: "It's a full Redump image, and xemu boots only an XISO: make one with `xdvdfs pack`, then put it in its place."
+            case .needsXISO: "It's a full Redump image, and xemu boots only an XISO: make one with `xdvdfs pack`, then put it in its place."
             }
         }
     }
@@ -128,7 +128,7 @@ public struct Play: Sendable {
             return .refused(.couldntLook(rom.fileName, error.localizedDescription))
         }
         // xemu would only reach its dashboard. An image that's neither kind goes ahead, as xemu may know better.
-        if emulator == .xemu, XboxDisc.kind(of: file) == .redump { return .refused(.notXISO) }
+        if emulator == .xemu, XboxDisc.kind(of: file) == .redump { return .refused(.needsXISO) }
         do {
             let arguments = try emulator.arguments(rom: file, platformId: platformId, settings: settings)
             if case .warn(let warning) = version { return .open(app: app, arguments: arguments, warning: warning) }

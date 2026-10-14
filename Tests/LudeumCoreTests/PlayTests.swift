@@ -151,32 +151,29 @@ import Testing
                 locator: ROMLocator(romFolders: [folder.folder]), version: .ok, app: { $0 == Emulator.xemu.bundleIdentifier ? xemu : nil })
     }
 
-    /// The Xbox media header at `offset` into the file.
-    func image(_ name: String, in folder: FakeROMFolder, headerAt offset: UInt64) throws -> URL {
-        let file = try folder.add(name)
-        let handle = try FileHandle(forWritingTo: file)
-        defer { try? handle.close() }
-        try handle.seek(toOffset: offset)
-        try handle.write(contentsOf: Data("MICROSOFT*XBOX*MEDIA".utf8))
-        return file
-    }
-
     @Test func anXISOBootsInXemu() throws {
         let xbox = try FakeROMFolder(in: directory, platform: ROMPlatform.xbox)
-        let file = try image("Halo (USA).iso", in: xbox, headerAt: 0x10000)
+        let file = try XboxHeader.write(into: xbox.add("Halo (USA).iso"), at: XboxHeader.xiso)
 
         #expect(press(file, in: xbox) == .open(app: xemu, arguments: ["-dvd_path", file.path(percentEncoded: false)], warning: nil))
     }
 
     @Test func aFullRedumpImageIsRefusedAsXemuCantBootIt() throws {
         let xbox = try FakeROMFolder(in: directory, platform: ROMPlatform.xbox)
-        let file = try image("Halo (USA).iso", in: xbox, headerAt: 0x1831_0000)
+        let file = try XboxHeader.write(into: xbox.add("Halo (USA).iso"), at: XboxHeader.redump)
 
         let outcome = press(file, in: xbox)
 
-        #expect(outcome == .refused(.notXISO))
+        #expect(outcome == .refused(.needsXISO))
         #expect(
             outcome.refusal?.message
                 == "It's a full Redump image, and xemu boots only an XISO: make one with `xdvdfs pack`, then put it in its place.")
+    }
+
+    @Test func anImageThatsNeitherGoesAheadAsXemuMayKnowBetter() throws {
+        let xbox = try FakeROMFolder(in: directory, platform: ROMPlatform.xbox)
+        let file = try xbox.add("Halo (USA).iso", "not an Xbox disc")
+
+        #expect(press(file, in: xbox).arguments == ["-dvd_path", file.path(percentEncoded: false)])
     }
 }
