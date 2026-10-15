@@ -75,7 +75,7 @@ Non-emulated Games (PC, Xbox 360, …) and Games I don't have a ROM for yet are 
 ### Journal database schema
 GRDB over SQLite, with foreign keys on. Table and column names are as they'll appear in `LudeumCore`.
 
-- **Conventions:** integer `INTEGER PRIMARY KEY` ids. A Partial date is one text column (`1996`, `1996-03`, `1996-03-17`, CHECKed for shape), so plain string order is the Partial date sort and "contains" is a prefix test. Timestamps are ISO-8601 UTC text (GRDB's `Date` encoding). A Rating history day is the local date as `YYYY-MM-DD` text. Ratings are integer tenths (0–100).
+- **Conventions:** integer `INTEGER PRIMARY KEY` ids. A Partial date is one text column (`1996`, `1996-03`, `1996-03-17`, CHECKed for shape), so plain string order is the Partial date sort and "contains" is a prefix test. Timestamps are ISO-8601 UTC text (GRDB's `Date` encoding). Every table has `createdAt` and `updatedAt`, kept by triggers ([ADR 0015](adr/0015-every-row-has-created-and-updated-timestamps-kept-by-triggers.md)). A Rating history day is the local date as `YYYY-MM-DD` text. Ratings are integer tenths (0–100).
 - **`platform`** (IGDB platform id, name): copied from IGDB so names show without the cache.
 - **`game.runAheadFrames`** (nullable integer, 0–10): the Game's own Emulator setting.
 - **`game.gameBoyModel`** (nullable text: `gameBoy`, `gameBoyColor`, `superGameBoy`; null is Auto): the Game Boy Model, for Game Boy and Game Boy Color Games.

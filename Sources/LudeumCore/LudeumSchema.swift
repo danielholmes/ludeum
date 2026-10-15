@@ -644,6 +644,50 @@ enum LudeumSchema {
                 t.uniqueKey(["gameId", "fileName"])
             }
         }
+        // Every row says when it was added and last changed (ADR 0015). Rows from before have neither, so they take the
+        // start of the day this came in, Sydney time.
+        migrator.registerMigration("v31 row timestamps") { db in
+            for table in try String.fetchAll(
+                db, sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'grdb_migrations'")
+            {
+                try keepTimestamps(db, on: table)
+            }
+        }
         return migrator
+    }
+
+    /// The time now as GRDB's `Date` encoding (UTC, to the millisecond), for SQL.
+    private static let now = "strftime('%Y-%m-%d %H:%M:%f', 'now')"
+
+    /// `createdAt` and `updatedAt` of the rows there were before `v31 row timestamps`: 00:00 on 2026-10-15 in Sydney.
+    static let beforeTimestamps = "2026-10-14 13:00:00.000"
+
+    /// Keeps `table`'s `createdAt` and `updatedAt` (ADR 0015), adding them if it hasn't got them, as `beforeTimestamps` for
+    /// the rows it already has. Triggers set both on insert, and `updatedAt` on any update that changes another column, unless the
+    /// update sets `updatedAt` itself; an update that changes nothing leaves it alone. Every migration that creates a table,
+    /// or adds a column to one, calls this again for it, so the triggers watch every column.
+    static func keepTimestamps(_ db: Database, on table: String) throws {
+        let timestamps = ["createdAt", "updatedAt"]
+        let columns = try db.columns(in: table).map(\.name)
+        for column in timestamps where !columns.contains(column) {
+            try db.execute(
+                sql: "ALTER TABLE \(table.quotedDatabaseIdentifier) ADD COLUMN \(column) DATETIME NOT NULL DEFAULT '\(beforeTimestamps)'")
+        }
+        let watched = columns.filter { !timestamps.contains($0) }.map(\.quotedDatabaseIdentifier)
+        let t = table.quotedDatabaseIdentifier
+        try db.execute(
+            sql: """
+                DROP TRIGGER IF EXISTS \("\(table)_createdAt".quotedDatabaseIdentifier);
+                CREATE TRIGGER \("\(table)_createdAt".quotedDatabaseIdentifier) AFTER INSERT ON \(t) BEGIN
+                    UPDATE \(t) SET createdAt = \(now), updatedAt = \(now) WHERE rowid = NEW.rowid;
+                END;
+                DROP TRIGGER IF EXISTS \("\(table)_updatedAt".quotedDatabaseIdentifier);
+                CREATE TRIGGER \("\(table)_updatedAt".quotedDatabaseIdentifier) AFTER UPDATE ON \(t)
+                WHEN NEW.updatedAt IS OLD.updatedAt
+                    AND (\(watched.map { "NEW.\($0)" }.joined(separator: ", "))) IS NOT (\(watched.map { "OLD.\($0)" }.joined(separator: ", ")))
+                BEGIN
+                    UPDATE \(t) SET updatedAt = \(now) WHERE rowid = NEW.rowid;
+                END;
+                """)
     }
 }

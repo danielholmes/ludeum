@@ -60,7 +60,11 @@ extension LudeumStore {
     public func storeCover(_ game: GameID, _ cover: NormalisedCover) throws {
         try db.write { db in
             try db.execute(
-                sql: "INSERT OR REPLACE INTO cover (gameId, jpeg, width, height, sha256) VALUES (?, ?, ?, ?, ?)",
+                sql: """
+                    INSERT INTO cover (gameId, jpeg, width, height, sha256) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT (gameId) DO UPDATE SET
+                        jpeg = excluded.jpeg, width = excluded.width, height = excluded.height, sha256 = excluded.sha256
+                    """,
                 arguments: [game, cover.jpeg, cover.width, cover.height, cover.sha256])
         }
     }

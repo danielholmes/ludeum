@@ -128,8 +128,15 @@ extension LudeumStore {
     }
 
     private static func setPlayers(_ db: Database, _ playthrough: Int64, _ players: [Int64]) throws {
-        try db.execute(sql: "DELETE FROM playthroughPlayer WHERE playthroughId = ?", arguments: [playthrough])
-        for player in Set(players) {
+        // Only the Players who change are touched, so the rest keep their `createdAt`.
+        let players = Set(players)
+        let before = Set(
+            try Int64.fetchAll(db, sql: "SELECT playerId FROM playthroughPlayer WHERE playthroughId = ?", arguments: [playthrough]))
+        for player in before.subtracting(players) {
+            try db.execute(
+                sql: "DELETE FROM playthroughPlayer WHERE playthroughId = ? AND playerId = ?", arguments: [playthrough, player])
+        }
+        for player in players.subtracting(before) {
             try db.execute(
                 sql: "INSERT INTO playthroughPlayer (playthroughId, playerId) VALUES (?, ?)", arguments: [playthrough, player])
         }
