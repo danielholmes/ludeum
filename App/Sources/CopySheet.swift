@@ -29,6 +29,7 @@ struct CopySheet: View {
     @State private var acquiredFrom = ""
     @State private var price = ""
     @State private var currency = Price.homeCurrency
+    @State private var notes = ""
     @State private var gone = false
     @State private var goneOn = ""
     @State private var goneTo = ""
@@ -64,6 +65,7 @@ struct CopySheet: View {
                         .help("A 3-letter code, e.g. AUD, USD, JPY")
                 }
             }
+            TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...6)
             if rom == nil {
                 Toggle("No longer owned", isOn: $gone)
                 if gone {
@@ -104,6 +106,7 @@ struct CopySheet: View {
             acquiredFrom = details.acquiredFrom ?? ""
             price = details.price.map { "\($0.amount)" } ?? ""
             currency = details.price?.currency ?? Price.homeCurrency
+            notes = details.notes ?? ""
             regionSuggestions = (try? services.journal?.regionSuggestions()) ?? Regions.suggested
         }
     }
@@ -120,7 +123,7 @@ struct CopySheet: View {
         do {
             let details = CopyDetails(
                 regions: regions, acquiredOn: try date(acquiredOn, "acquired"), acquiredFrom: acquiredFrom.trimmed.nilIfEmpty,
-                price: try parsedPrice())
+                price: try parsedPrice(), notes: notes.trimmed.nilIfEmpty)
             switch edit {
             case .rom(let r): try journal.setROMDetails(r.id, details)
             case .new, .copy:

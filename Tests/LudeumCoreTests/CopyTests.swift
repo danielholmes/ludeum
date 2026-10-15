@@ -18,7 +18,7 @@ import Testing
             kind: .physicalAndDigital,
             details: CopyDetails(
                 regions: ["USA", "Japan"], acquiredOn: PartialDate("2019-03")!, acquiredFrom: "eBay",
-                price: Price(amount: Decimal(string: "45.50")!, currency: "USD")),
+                price: Price(amount: Decimal(string: "45.50")!, currency: "USD"), notes: "Box a little crushed"),
             gone: Gone(on: PartialDate("2021")!, to: "A friend"))
 
         let id = try h.journal.addCopy(game, draft)
@@ -70,7 +70,8 @@ import Testing
         // Regions are kept in their shown order, not the name's.
         #expect(rom.details == CopyDetails(regions: ["Europe", "USA"]))
 
-        let details = CopyDetails(regions: ["Japan"], acquiredOn: PartialDate("2024")!, acquiredFrom: "A friend", price: Price(amount: 0))
+        let details = CopyDetails(
+            regions: ["Japan"], acquiredOn: PartialDate("2024")!, acquiredFrom: "A friend", price: Price(amount: 0), notes: "Saves wiped")
         try h.journal.setROMDetails(rom.id, details)
 
         #expect(try h.journal.roms(of: game).first?.details == details)

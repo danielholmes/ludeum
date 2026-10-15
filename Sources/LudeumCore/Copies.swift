@@ -32,19 +32,26 @@ public struct Price: Sendable, Equatable {
     }
 }
 
-/// What every Copy can say about itself, ROMs included: its Regions, and where, when and for how much it was acquired.
+/// What every Copy can say about itself, ROMs included: its Regions, where, when and for how much it was acquired, and
+/// Notes.
 public struct CopyDetails: Sendable, Equatable {
     /// Where it was released for, e.g. "USA", "Europe". Any text, though the usual ones are offered (`Regions.suggested`).
     public var regions: [String]
     public var acquiredOn: PartialDate?
     public var acquiredFrom: String?
     public var price: Price?
+    /// Anything else about this Copy, e.g. that its disc can't be traded in for a digital licence.
+    public var notes: String?
 
-    public init(regions: [String] = [], acquiredOn: PartialDate? = nil, acquiredFrom: String? = nil, price: Price? = nil) {
+    public init(
+        regions: [String] = [], acquiredOn: PartialDate? = nil, acquiredFrom: String? = nil, price: Price? = nil,
+        notes: String? = nil
+    ) {
         self.regions = regions
         self.acquiredOn = acquiredOn
         self.acquiredFrom = acquiredFrom
         self.price = price
+        self.notes = notes
     }
 }
 
@@ -132,8 +139,8 @@ extension LudeumStore {
         return try db.write { db in
             try db.execute(
                 sql: """
-                    INSERT INTO copy (gameId, kind, regions, acquiredOn, acquiredFrom, price, currency, gone, goneOn, goneTo)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO copy (gameId, kind, regions, acquiredOn, acquiredFrom, price, currency, notes, gone, goneOn, goneTo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [game, draft.kind.rawValue] + Self.arguments(draft.details) + Self.arguments(draft.gone))
             return db.lastInsertedRowID
@@ -145,7 +152,7 @@ extension LudeumStore {
         try db.write { db in
             try db.execute(
                 sql: """
-                    UPDATE copy SET kind = ?, regions = ?, acquiredOn = ?, acquiredFrom = ?, price = ?, currency = ?,
+                    UPDATE copy SET kind = ?, regions = ?, acquiredOn = ?, acquiredFrom = ?, price = ?, currency = ?, notes = ?,
                         gone = ?, goneOn = ?, goneTo = ?
                     WHERE id = ?
                     """,
@@ -185,7 +192,7 @@ extension LudeumStore {
     public func setROMDetails(_ rom: Int64, _ details: CopyDetails) throws {
         try db.write { db in
             try db.execute(
-                sql: "UPDATE rom SET regions = ?, acquiredOn = ?, acquiredFrom = ?, price = ?, currency = ? WHERE id = ?",
+                sql: "UPDATE rom SET regions = ?, acquiredOn = ?, acquiredFrom = ?, price = ?, currency = ?, notes = ? WHERE id = ?",
                 arguments: Self.arguments(details) + [rom])
         }
     }
@@ -206,12 +213,15 @@ extension LudeumStore {
             regions: Regions.decode(row["regions"]),
             acquiredOn: (row["acquiredOn"] as String?).flatMap(PartialDate.init),
             acquiredFrom: row["acquiredFrom"],
-            price: (row["price"] as String?).flatMap { Decimal(string: $0) }.map { Price(amount: $0, currency: row["currency"]) })
+            price: (row["price"] as String?).flatMap { Decimal(string: $0) }.map { Price(amount: $0, currency: row["currency"]) },
+            notes: row["notes"])
     }
 
-    /// `regions, acquiredOn, acquiredFrom, price, currency`.
+    /// `regions, acquiredOn, acquiredFrom, price, currency, notes`.
     private static func arguments(_ d: CopyDetails) -> StatementArguments {
-        [Regions.encode(d.regions), d.acquiredOn?.text, d.acquiredFrom, d.price.map { "\($0.amount)" }, d.price?.currency]
+        [
+            Regions.encode(d.regions), d.acquiredOn?.text, d.acquiredFrom, d.price.map { "\($0.amount)" }, d.price?.currency, d.notes,
+        ]
     }
 
     /// `gone, goneOn, goneTo`.

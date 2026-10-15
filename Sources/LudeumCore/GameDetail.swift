@@ -72,7 +72,7 @@ extension LudeumStore {
                     SELECT r.id, \(Self.folderNameSQL) AS folderName, r.platformId, r.archived, r.fileName,
                         COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
                         \(try Self.hasNeedsPlaylist(db) ? "r.needsPlaylist" : "0") AS needsPlaylist,
-                        \(try Self.hasCopyDetails(db) ? "r.regions, r.acquiredOn, r.acquiredFrom, r.price, r.currency" : "NULL AS regions, NULL AS acquiredOn, NULL AS acquiredFrom, NULL AS price, NULL AS currency")
+                        \(try Self.hasCopyDetails(db) ? "r.regions, r.acquiredOn, r.acquiredFrom, r.price, r.currency, r.notes" : "NULL AS regions, NULL AS acquiredOn, NULL AS acquiredFrom, NULL AS price, NULL AS currency, NULL AS notes")
                     FROM rom r
                     WHERE \(condition)
                     ORDER BY r.missing, r.fileName COLLATE NOCASE

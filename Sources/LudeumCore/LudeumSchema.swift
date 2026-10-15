@@ -653,6 +653,13 @@ enum LudeumSchema {
                 try keepTimestamps(db, on: table)
             }
         }
+        // Every Copy, ROMs included, can have Notes.
+        migrator.registerMigration("v32 copy notes") { db in
+            for table in ["copy", "rom"] {
+                try db.alter(table: table) { t in t.add(column: "notes", .text) }
+                try keepTimestamps(db, on: table)
+            }
+        }
         return migrator
     }
 

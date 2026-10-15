@@ -456,7 +456,8 @@ struct GameDetailView: View {
                                 .labelStyle(.iconOnly).buttonStyle(.hover).help("Show in Finder")
                         }
                         Button("Edit Copy details", systemImage: "pencil") { editingCopy = .rom(rom) }
-                            .labelStyle(.iconOnly).buttonStyle(.hover).help("Its Regions, and where, when and for how much it was acquired")
+                            .labelStyle(.iconOnly).buttonStyle(.hover).help(
+                                "Its Regions, where, when and for how much it was acquired, and Notes")
                         // A missing ROM is one gone from its ROM folder for good, e.g. replaced by a renamed file Import
                         // found as a new ROM; a present one's files go to the Trash.
                         Button("Delete ROM", systemImage: "trash") { deletingROM = rom }
@@ -466,6 +467,7 @@ struct GameDetailView: View {
                     if let details = copyDetailsText(rom.details) {
                         Text(details).font(.callout).foregroundStyle(.secondary)
                     }
+                    if let notes = rom.details.notes { Text(notes).font(.callout).foregroundStyle(.secondary) }
                     if let files = romFiles[rom.id], !files.isEmpty { fileList(rom, files) }
                 }
             }
@@ -485,6 +487,9 @@ struct GameDetailView: View {
                             .joined(separator: " · ").nilIfEmpty
                         {
                             Text(details).font(.callout).foregroundStyle(.secondary)
+                        }
+                        if let notes = copy.draft.details.notes {
+                            Text(notes).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.leading)
                         }
                     }
                     Spacer()
