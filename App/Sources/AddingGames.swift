@@ -169,25 +169,19 @@ struct IGDBSearchView: View {
                 SearchFilterMenu(filters: $filters, genres: genres, themes: themes, chooseCompany: { choosingCompany = true })
                 if browse != nil {
                     Menu("Sort", systemImage: "arrow.up.arrow.down") {
-                        // Choosing a sort also sets its usual order; Order can still flip it.
-                        Picker(
-                            "Sort by",
-                            selection: Binding(
-                                get: { sort },
-                                set: {
-                                    sort = $0
-                                    ascending = $0.defaultAscending
-                                })
-                        ) {
-                            Text("Name").tag(GameSearchSort.name)
-                            Text("Release date").tag(GameSearchSort.releaseDate)
-                        }
-                        Picker("Order", selection: $ascending) {
-                            Text("Ascending").tag(true)
-                            Text("Descending").tag(false)
+                        ForEach([(GameSearchSort.name, "Name"), (.releaseDate, "Release date")], id: \.0) { option, text in
+                            SortMenuItem(text: text, selected: sort == option, ascending: ascending) {
+                                if sort == option {
+                                    ascending.toggle()
+                                } else {
+                                    sort = option
+                                    ascending = option.defaultAscending
+                                }
+                            }
                         }
                     }
                     .fixedSize()
+                    .help("Sort. Choose the sort again to reverse it.")
                 }
             }
             if !filters.isEmpty { SearchFilterPills(filters: $filters) }

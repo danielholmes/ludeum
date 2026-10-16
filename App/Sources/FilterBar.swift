@@ -205,27 +205,35 @@ struct LibrarySortMenu: View {
 
     var body: some View {
         Menu(status) {
-            // Choosing a sort also sets its usual order; Order can still flip it.
-            Picker(
-                "Sort by",
-                selection: Binding(
-                    get: { sort },
-                    set: { new in
-                        sort = new
-                        if let new { ascending = new.defaultAscending }
-                    })
-            ) {
-                if offersDefault { Text("Default").tag(LibrarySort?.none) }
-                ForEach(sorts, id: \.self) { Text(sortText($0)).tag(LibrarySort?.some($0)) }
+            if offersDefault { SortMenuItem(text: "Default", selected: sort == nil, ascending: nil) { sort = nil } }
+            ForEach(sorts, id: \.self) { option in
+                SortMenuItem(text: sortText(option), selected: sort == option, ascending: ascending) {
+                    if sort == option {
+                        ascending.toggle()
+                    } else {
+                        sort = option
+                        ascending = option.defaultAscending
+                    }
+                }
             }
-            Picker("Order", selection: $ascending) {
-                Text("Ascending").tag(true)
-                Text("Descending").tag(false)
-            }
-            .disabled(sort == nil)
         }
         .menuStyle(.borderlessButton).fixedSize()
-        .help("Sort")
+        .help("Sort. Choose the sort again to reverse it.")
+    }
+}
+
+/// A sort in a sort menu: ticked, with its order's arrow, when it's the one sorting. Choosing a sort starts it in its
+/// usual order, and choosing it again reverses it.
+struct SortMenuItem: View {
+    let text: String
+    let selected: Bool
+    /// Nil for a sort with no order (What to play next's Default).
+    let ascending: Bool?
+    let choose: () -> Void
+
+    var body: some View {
+        let arrow = selected ? ascending.map { $0 ? " ↑" : " ↓" } ?? "" : ""
+        Toggle(text + arrow, isOn: Binding(get: { selected }, set: { _ in choose() }))
     }
 }
 
