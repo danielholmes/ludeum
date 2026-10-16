@@ -183,10 +183,13 @@ import Testing
 
     @Test func aMissingROMCanTakeAStrayFileAsItsOwn() async throws {
         let okami = try await renamedOkami()
+        try await j.journal.db.write { try $0.execute(sql: "UPDATE rom SET libretroLookedUp = 1") }
 
         try j.journal.giveStrayFile(okami.stray, to: okami.rom, in: ps2.folder)
 
         let row = try #require(try rom(okami.rom))
+        // Looked up again by its new name.
+        #expect(row["libretroLookedUp"] as Bool == false)
         #expect(row["folderName"] as String == "Okami (USA) (Rev 1)")
         #expect(row["fileName"] as String == "Okami (USA) (Rev 1).7z")
         #expect(row["missing"] as Bool == false)
@@ -197,6 +200,21 @@ import Testing
         #expect(try strays().isEmpty)
         #expect(try romCount() == 1)
         #expect(try await importNow() == ImportResult())
+    }
+
+    @Test func aROMRenamedOnlyInCaseCanBeGivenItsFileBack() async throws {
+        try ps2.add("Okami (USA).7z")
+        let added = try j.journal.recordAddedROM(
+            #require(try ps2.folder.rom(named: "Okami (USA)")), checksum: nil, on: ROMPlatform.ps2, reusing: nil, regions: [],
+            match: .byHand(name: "Okami"))
+        try ps2.remove("Okami (USA).7z")
+        try ps2.add("okami (usa).7z")
+        try await importNow()
+        let stray = try #require(try strays().first)
+
+        try j.journal.giveStrayFile(stray, to: added.rom, in: ps2.folder)
+
+        #expect(try rom(added.rom)?["folderName"] as String? == "okami (usa)")
     }
 
     @Test func aStrayFileCanOnlyBeGivenToAMissingROM() async throws {

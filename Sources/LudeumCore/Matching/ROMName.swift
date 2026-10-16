@@ -136,3 +136,26 @@ public struct ROMName: Sendable, Hashable {
 }
 
 func matches(_ s: String, _ pattern: String) -> Bool { s.range(of: pattern, options: .regularExpression) != nil }
+
+extension ROMName {
+    /// A ROM name's words, its title's apart from the rest (its Regions and Version), to tell how alike two names are.
+    struct Words {
+        let title: Set<String>
+        let rest: Set<String>
+
+        init(_ name: String) {
+            title = Self.words(ROMName(name).title)
+            rest = Self.words(name).subtracting(title)
+        }
+
+        /// How alike another name is: the title words they share, then the other words, which only break a tie.
+        func shared(with name: String) -> Int {
+            let other = Words(name)
+            return title.intersection(other.title).count * 1000 + rest.intersection(other.rest).count
+        }
+
+        private static func words(_ s: String) -> Set<String> {
+            Set(s.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
+        }
+    }
+}

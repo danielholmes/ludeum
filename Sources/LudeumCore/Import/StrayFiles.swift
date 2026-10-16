@@ -68,7 +68,8 @@ extension LudeumStore {
     }
 
     /// The missing ROMs of a Stray file's Platform, which it may be (its file renamed in Finder, or replaced): those whose
-    /// names share the most words with its name first, then by name.
+    /// titles share the most words with its title first, then those sharing the most other words (Regions, Version), then
+    /// by name.
     public func missingROMs(for stray: StrayFile) throws -> [StrayFile.MissingROM] {
         let condition = "r.platformId = ? AND r.missing AND r.folderName IS NOT NULL"
         let roms = try roms(where: condition, arguments: [stray.platformId])
@@ -76,10 +77,9 @@ extension LudeumStore {
             try Row.fetchAll(db, sql: "SELECT id, gameId FROM rom r WHERE \(condition)", arguments: [stray.platformId])
                 .reduce(into: [Int64: GameID]()) { $0[$1["id"]] = $1["gameId"] }
         }
-        let words = Self.words(stray.name)
-        func shared(_ rom: LudeumROM) -> Int { Self.words(rom.folderName).intersection(words).count }
+        let words = ROMName.Words(stray.name)
         let likeliest = roms.sorted { a, b in
-            let (sharedA, sharedB) = (shared(a), shared(b))
+            let (sharedA, sharedB) = (words.shared(with: a.folderName), words.shared(with: b.folderName))
             if sharedA != sharedB { return sharedA > sharedB }
             return a.folderName.localizedStandardCompare(b.folderName) == .orderedAscending
         }
@@ -88,14 +88,10 @@ extension LudeumStore {
         }
     }
 
-    private static func words(_ name: String) -> Set<String> {
-        Set(name.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
-    }
-
     /// Gives a missing ROM of its Platform a Stray file as its own: its file renamed in Finder, or replaced. It takes the
     /// file's name, and its Version from it, and stays the same ROM with its Match, Copy details and Playthroughs; its
-    /// checksum, its old file's, goes. Refused, with nothing changed, when the ROM isn't missing any more, the file has
-    /// left its ROM folder, or another ROM has its name in another case.
+    /// checksum, its old file's, goes, and its Box art is looked up again by its new name. Refused, with nothing changed,
+    /// when the ROM isn't missing any more, the file has left its ROM folder, or another ROM has its name in another case.
     public func giveStrayFile(_ stray: StrayFile, to rom: Int64, in folder: ROMFolder) throws {
         guard folder.platformId == stray.platformId else { throw ReviewError.noROMFolder }
         guard let file = try folder.rom(named: stray.name) else { throw ReviewError.strayFileGone }
@@ -107,13 +103,15 @@ extension LudeumStore {
             else { throw ReviewError.notMissing }
             guard
                 try Bool.fetchOne(
-                    db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE platformId = ? AND folderName = ? COLLATE NOCASE)",
-                    arguments: [stray.platformId, file.name]) == false
+                    db,
+                    sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE platformId = ? AND folderName = ? COLLATE NOCASE AND id <> ?)",
+                    arguments: [stray.platformId, file.name, rom]) == false
             else { throw ReviewError.alreadyInROMFolder }
             try Self.notStray(db, file.name, on: stray.platformId)
             try db.execute(
                 sql: """
-                    UPDATE rom SET folderName = ?, name = ?, version = ?, discNumber = ?, discLabel = ?, md5 = NULL, crc = NULL
+                    UPDATE rom SET folderName = ?, name = ?, version = ?, discNumber = ?, discLabel = ?, md5 = NULL, crc = NULL,
+                        libretroLookedUp = 0
                     WHERE id = ?
                     """,
                 arguments: [file.name, file.name, parsed.version, parsed.disc, parsed.discLabel, rom])

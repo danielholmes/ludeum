@@ -359,7 +359,8 @@ public enum ReviewError: Error, Equatable {
     case alreadyMatched
     /// IGDB doesn't know the suggested game any more.
     case suggestionGone
-    /// For a Rename, the ROM's Platform already has a ROM by that name, or a file where one of its files would go.
+    /// For a Rename, or a Stray file given to a missing ROM, the ROM's Platform already has another ROM by that name (in
+    /// any case), or a file where one of its files would go.
     case alreadyInROMFolder
     /// The ROM is present, but its files aren't in its ROM folder (or the folder can't be read).
     case romFilesNotFound
