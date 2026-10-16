@@ -1,8 +1,9 @@
 import LudeumCore
 import SwiftUI
 
-/// After an Import that changed something: what was sent to review and what's gone missing (and, after Add ROMs, what
-/// it Matched automatically), linking to their Games. Dismissible; an Import that changed nothing shows nothing.
+/// After an Import that changed something: what was sent to review, what's gone missing and the new Stray files (and,
+/// after Add ROMs, what it Matched automatically), linking to their Games. Dismissible; an Import that changed nothing
+/// shows nothing.
 struct ImportSummaryBanner: View {
     let summary: ImportResult
     let open: (GameID) -> Void
@@ -25,6 +26,10 @@ struct ImportSummaryBanner: View {
                         section("Back on their Game", summary.returned)
                         section("Sent to the Review queue", summary.sentToReview)
                         section("Gone missing", summary.goneMissing)
+                        if !summary.strayFiles.isEmpty {
+                            Text("Stray files, not ROMs").font(.caption).foregroundStyle(.secondary)
+                            ForEach(Array(summary.strayFiles.enumerated()), id: \.offset) { _, name in Text(name) }
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -43,6 +48,8 @@ struct ImportSummaryBanner: View {
             summary.returned.isEmpty ? nil : "\(romCount(summary.returned.count)) back on their Game",
             added > 0 ? "\(added) ROM\(added == 1 ? "" : "s") added to review" : nil,
             summary.goneMissing.isEmpty ? nil : "\(summary.goneMissing.count) gone missing",
+            summary.strayFiles.isEmpty
+                ? nil : "\(summary.strayFiles.count) Stray file\(summary.strayFiles.count == 1 ? "" : "s") in the ROM folders",
         ]
         .compactMap { $0 }
         .joined(separator: ", ")

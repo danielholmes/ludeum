@@ -255,7 +255,7 @@ struct GameDetailView: View {
         } message: {
             Text(
                 deletingROM?.missing == true
-                    ? "Its file is gone already. The ROM leaves the journal with its Copy details; if the file comes back, an Import finds it again."
+                    ? "Its file is gone already. The ROM leaves the journal with its Copy details; if the file comes back, it waits in the Review queue as a Stray file."
                     : "Its files go to the Trash, and the ROM leaves the journal with its Copy details. There's no undo; a backup is taken first."
             )
         }

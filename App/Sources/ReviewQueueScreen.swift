@@ -7,6 +7,8 @@ struct ReviewQueueScreen: View {
     let services: Services
     /// Re-reads the ROM folders (an Import).
     let checkAgain: () -> Void
+    /// Re-reads the ROM folders, adding these Stray files as ROMs.
+    let addStrayFiles: (Set<StrayFile.Key>) -> Void
     /// The Game shown in the detail column: set to the Game an answer gave the ROM.
     @Binding var shownGame: GameID?
 
@@ -22,6 +24,7 @@ struct ReviewQueueScreen: View {
         case bothForms = "In both forms"
         case notCompacted = "Not compacted"
         case missingAttachments = "Missing Attachments"
+        case strayFiles = "Stray files"
         var id: Self { self }
     }
 
@@ -33,6 +36,7 @@ struct ReviewQueueScreen: View {
     @State private var error: String?
     @State private var confirmingAll = false
     @State private var compactingAll = false
+    @State private var addingAllStrayFiles = false
     /// Suggested IGDB games' names, for the middle column.
     @State private var suggestionNames: [Int64: String] = [:]
 
@@ -57,8 +61,20 @@ struct ReviewQueueScreen: View {
                 if kind == .notCompacted, !notCompactedIdle.isEmpty {
                     Button("Compact all \(notCompactedIdle.count)") { compactingAll = true }.padding(8)
                 }
+                if kind == .strayFiles, !items.strayFiles.isEmpty {
+                    Button("Add all \(items.strayFiles.count) as ROMs") { addingAllStrayFiles = true }.padding(8)
+                }
                 List(selection: $selection) {
-                    if kind == .notCompacted {
+                    if kind == .strayFiles {
+                        ForEach(items.strayFiles) { item in
+                            VStack(alignment: .leading) {
+                                Text(item.name)
+                                Text(ROMPlatform.all[item.platformId]?.name ?? "Platform \(item.platformId)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .tag(item.id)
+                        }
+                    } else if kind == .notCompacted {
                         ForEach(items.notCompacted) { item in
                             HStack {
                                 VStack(alignment: .leading) {
@@ -161,6 +177,9 @@ struct ReviewQueueScreen: View {
                         services: services, item: item, checkAgain: checkAgain, showGame: { shownGame = $0 }, failed: { error = $0 })
                 } else if kind == .notCompacted, let item = items.notCompacted.first(where: { $0.id == selection }) {
                     NotCompactedDetail(services: services, item: item, showGame: { shownGame = $0 })
+                } else if kind == .strayFiles, let item = items.strayFiles.first(where: { $0.id == selection }) {
+                    StrayFileDetail(
+                        services: services, item: item, checkAgain: checkAgain, add: { addStrayFiles([item.key]) })
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
                     ReviewItemDetail(services: services, item: item, failed: { error = $0 }, answered: { shownGame = $0 })
                 } else {
@@ -195,6 +214,14 @@ struct ReviewQueueScreen: View {
                 "Each is packed into the archive its Emulator opens directly, one at a time in Background tasks. The files they "
                     + "replace go to the Trash. Online-only files download first.")
         }
+        .confirmationDialog("Add all \(items.strayFiles.count) Stray files as ROMs?", isPresented: $addingAllStrayFiles) {
+            // Those listed, not any file that has turned up since.
+            Button("Add all") { addStrayFiles(Set(items.strayFiles.map(\.key))) }
+        } message: {
+            Text(
+                "Each becomes a ROM on its ROM folder's Platform, Matched automatically where its checksum and name agree, else "
+                    + "waiting in the Review queue. To keep one out, take it out of its ROM folder first.")
+        }
     }
 
     /// The Not compacted items no Background task is working on yet.
@@ -206,7 +233,9 @@ struct ReviewQueueScreen: View {
         case .checksum: items.checksumSuggestions
         case .name: items.nameSuggestions
         case .noSuggestion: items.noSuggestion
-        case .duplicateVersions, .noPlaylist, .missingROMs, .oldMissingROMs, .bothForms, .notCompacted, .missingAttachments, nil: []
+        case .duplicateVersions, .noPlaylist, .missingROMs, .oldMissingROMs, .bothForms, .notCompacted, .missingAttachments,
+            .strayFiles, nil:
+            []
         }
     }
 
@@ -223,6 +252,7 @@ struct ReviewQueueScreen: View {
         case .bothForms: items.bothForms.count
         case .notCompacted: items.notCompacted.count
         case .missingAttachments: items.missingAttachments.count
+        case .strayFiles: items.strayFiles.count
         }
     }
 
@@ -236,6 +266,7 @@ struct ReviewQueueScreen: View {
         case .bothForms: items.bothForms.map(\.id)
         case .notCompacted: items.notCompacted.map(\.id)
         case .missingAttachments: items.missingAttachments.map(\.id)
+        case .strayFiles: items.strayFiles.map(\.id)
         default: romItems.map(\.romId)
         }
     }
@@ -933,7 +964,7 @@ private struct MissingROMsDetail: View {
                     }
                     services.changes.changed()
                 }
-                .help("They leave the journal with their Copy details. If a file comes back, an Import finds it again.")
+                .help("They leave the journal with their Copy details. If a file comes back, it waits here as a Stray file.")
                 Button("Show Game", action: showGame)
                 Button("Check again", action: checkAgain)
             }
@@ -988,7 +1019,7 @@ private struct OldMissingROMsDetail: View {
                         ROMRow(rom: rom)
                         Spacer()
                         Button("Delete") { delete { try $0.deleteROM(rom.id, romFolders: []) } }
-                            .help("Delete this missing ROM from the journal. If its file comes back, an Import finds it again.")
+                            .help("Delete this missing ROM from the journal. If its file comes back, it waits here as a Stray file.")
                     }
                 }
             }
@@ -1201,5 +1232,45 @@ private struct MissingAttachmentDetail: View {
             }
             services.changes.changed()
         }
+    }
+}
+
+/// A Stray file (ADR 0016): a file in a ROM folder that isn't a ROM in the journal. Add as ROM records it, Matching it
+/// automatically or leaving it in the Review queue; a file taken out of its ROM folder by hand clears it at the next
+/// Import.
+private struct StrayFileDetail: View {
+    let services: Services
+    let item: StrayFile
+    let checkAgain: () -> Void
+    let add: () -> Void
+
+    private var platformName: String { ROMPlatform.all[item.platformId]?.name ?? "Platform \(item.platformId)" }
+    private var file: URL? {
+        services.settings.romFolders.first { $0.platformId == item.platformId }?.url.appending(path: item.fileName)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Text(item.name).font(.title2).bold()
+                Text(
+                    "A file in \(platformName)'s ROM folder that isn't a ROM in the journal, as it wasn't put there by Add ROM. "
+                        + "Add it as a ROM, or take it out of the folder."
+                )
+                .foregroundStyle(.secondary)
+            }
+            Section("File") {
+                LabeledContent("In \(platformName)", value: item.fileName)
+            }
+            FlowLayout(spacing: 8) {
+                Button("Add as ROM", action: add)
+                    .help("Make it a ROM, Matched automatically where its checksum and name agree, else waiting here to be Matched")
+                if let file {
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([file]) }
+                }
+                Button("Check again", action: checkAgain)
+            }
+        }
+        .formStyle(.grouped)
     }
 }

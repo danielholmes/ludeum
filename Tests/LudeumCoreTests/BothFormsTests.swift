@@ -177,7 +177,8 @@ import Testing
     var romFolders: [ROMFolder] { [snes.folder, ps2.folder] }
 
     func importNow() async throws {
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: romFolders)
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
+            addingEveryFileIn: romFolders)
     }
 
     func bothForms() throws -> [BothFormsROM] { try j.journal.reviewQueue().bothForms }
@@ -272,7 +273,8 @@ import Testing
         let n64 = try FakeROMFolder(in: h.directory, platform: 4)
         try n64.add("Super Mario 64 (USA).z64")
         try n64.add("Super Mario 64 (USA).7z")
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [n64.folder])
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
+            addingEveryFileIn: [n64.folder])
         let item = try #require(try bothForms().first)
         let forms = try #require(try n64.folder.bothForms(named: "Super Mario 64 (USA)"))
         try n64.add("Super Mario 64 (USA).zip")

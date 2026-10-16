@@ -37,7 +37,7 @@ extension LudeumStore {
 
     /// Deletes a ROM, Matched or not: a present one's files go to the Trash first (its subfolder whole, with any `.7z` or
     /// Compacted copy), and a missing one just leaves the journal, with its Copy details either way. If its file comes
-    /// back, the next Import records it afresh. Refused, with nothing sent to the Trash, when it's present but its files
+    /// back, the next Import lists it as a Stray file. Refused, with nothing sent to the Trash, when it's present but its files
     /// aren't in its ROM folder; if sending them fails part-way, the journal sees what's left, and the ROM goes only if
     /// all of it reached the Trash. Refused, with nothing sent to the Trash, while a Playthrough was played on it.
     public func deleteROM(

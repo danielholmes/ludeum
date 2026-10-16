@@ -304,11 +304,12 @@ public struct AddROM: Sendable {
     }
 
     /// Adds several ROMs at once, one after another, without Matching them: each goes into its ROM folder as `add` puts
-    /// it, and the next Import reads it as a new ROM, Matching it automatically or sending it to the Review queue. One
-    /// that can't go in is left as it was, and the rest still go in; then it throws, saying which and why.
+    /// it, and is passed to `wentIn`, for an Import to add that Stray file as a new ROM, Matching it automatically or sending
+    /// it to the Review queue. One that can't go in is left as it was, and the rest still go in; then it throws, saying
+    /// which and why.
     public func add(
         _ roms: [(source: ROMSource, folder: ROMFolder)], keepingOriginals: Bool,
-        progress: @escaping @Sendable (Double) -> Void = { _ in }
+        progress: @escaping @Sendable (Double) -> Void = { _ in }, wentIn: @Sendable (StrayFile.Key) -> Void = { _ in }
     ) async throws {
         var failures: [String] = []
         for (i, rom) in roms.enumerated() {
@@ -323,6 +324,7 @@ public struct AddROM: Sendable {
                 failures.append("\(rom.source.romName): \(error.localizedDescription)")
                 continue
             }
+            wentIn(StrayFile.Key(platformId: rom.folder.platformId, name: rom.source.romName))
             if !keepingOriginals { trashOriginals(of: rom.source) }
         }
         if !failures.isEmpty { throw AddROMError.notAllAdded(failures, of: roms.count) }
@@ -475,6 +477,8 @@ extension LudeumStore {
         let day = today()
         return try db.write { db in
             try ROMPlatform.ensureKnown(db, platformId)
+            // An Import that read it before it was recorded listed it as a Stray file.
+            try Self.notStray(db, file.name, on: platformId)
             let rom: Int64
             if let missingRow {
                 rom = missingRow

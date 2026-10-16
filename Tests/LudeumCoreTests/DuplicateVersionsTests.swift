@@ -27,7 +27,8 @@ import Testing
 
     /// Imports the ROM folders, then Matches every ROM to one new Game on the Platform, giving it Duplicate Versions.
     func duplicates(on platform: Int64, _ name: String) async throws -> DuplicateVersionsGame {
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: romFolders)
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
+            addingEveryFileIn: romFolders)
         let game = try j.journal.addGame(platformId: platform, name: name)
         for item in try j.journal.reviewQueue().noSuggestion where item.platformId == platform {
             try j.journal.assign(item, to: game)

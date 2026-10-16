@@ -17,12 +17,15 @@ public struct ImportResult: Sendable, Equatable {
     /// Missing ROMs that came back and rejoined their old Game, silently.
     public var returned: [ImportedROM] = []
     public var goneMissing: [ImportedROM] = []
+    /// The names of files that turned up in a ROM folder without being ROMs: Stray files, waiting in the Review queue
+    /// (ADR 0016).
+    public var strayFiles: [String] = []
     /// Whether any Game's Cover may have changed: a ROM's Box art did, or the ROMs a Game takes its Box art from did.
     /// When not, the Covers already shown stand.
     public var coversChanged = false
 
-    /// Whether the summary has anything to say: ROMs sent to review or gone missing.
-    public var changedSomething: Bool { !(sentToReview.isEmpty && goneMissing.isEmpty) }
+    /// Whether the summary has anything to say: ROMs sent to review or gone missing, or new Stray files.
+    public var changedSomething: Bool { !(sentToReview.isEmpty && goneMissing.isEmpty && strayFiles.isEmpty) }
 }
 
 public enum ImportError: Error, Equatable {
@@ -30,8 +33,9 @@ public enum ImportError: Error, Equatable {
     case openEmuMigrationNeeded
 }
 
-/// Reading the ROM folders into the journal: at launch, and by hand. It never changes the folders.
-/// Refused until `migrate-openemu` has run.
+/// Reading the ROM folders against the journal: at launch, and by hand. It never changes the folders. The journal says
+/// which ROMs there are (ADR 0016): the Import reads how their files are now, and lists any other file as a Stray file,
+/// recording it as a new ROM only when asked to add it. Refused until `migrate-openemu` has run.
 public final class Import: Sendable {
     let matcher: Matcher
     let igdb: IGDBClient
@@ -54,11 +58,14 @@ public final class Import: Sendable {
         self.sevenZip = sevenZip
     }
 
-    /// Reads the ROM folders and brings the journal up to date. A folder that can't be read is left alone.
-    /// `writing` is awaited just before the write step (the backup and the one transaction), so the app can stop
-    /// journal edits first; `wrote` just after it, before the Box art step, which never touches what I edit.
+    /// Reads the ROM folders and brings the journal up to date, recording the Stray files in `adding` as new ROMs, Matching
+    /// each automatically or sending it to the Review queue: those Add ROM put in without a Match, or that I Add from the
+    /// Review queue, and no others. A folder that can't be read is left alone, Stray files and all. `writing` is awaited
+    /// just before the write step (the backup and the one transaction), so the app can stop journal edits first; `wrote`
+    /// just after it, before the Box art step, which never touches what I edit.
     public func run(
-        romFolders: [ROMFolder], writing: @Sendable () async -> Void = {}, wrote: @Sendable () async -> Void = {}
+        romFolders: [ROMFolder], adding: Set<StrayFile.Key> = [], writing: @Sendable () async -> Void = {},
+        wrote: @Sendable () async -> Void = {}
     ) async throws -> ImportResult {
         guard try !journal.needsOpenEmuMigration() else { throw ImportError.openEmuMigrationNeeded }
         var plan = ImportPlan()
@@ -68,13 +75,16 @@ public final class Import: Sendable {
         let knownInFolders = Dictionary(grouping: try journal.knownFolderROMs(), by: \.platformId)
         for folder in romFolders {
             guard let files = try? folder.scan() else { continue }
+            plan.strayFiles[folder.platformId] = []
             let known = Dictionary(uniqueKeysWithValues: (knownInFolders[folder.platformId] ?? []).map { ($0.name, $0) })
             for file in files {
                 if let row = known[file.name] {
                     plan.seen.append((row, file))
                     if row.gameId == nil && !row.hasChecksum { unchecked.append((row, file)) }
-                } else {
+                } else if adding.contains(StrayFile.Key(platformId: folder.platformId, name: file.name)) {
                     newROMs.append((folder.platformId, file))
+                } else {
+                    plan.strayFiles[folder.platformId, default: []].append(file)
                 }
             }
             let names = Set(files.map(\.name))
@@ -177,10 +187,12 @@ struct ImportPlan {
     var seen: [(KnownFolderROM, FolderROMFile)] = []
     /// Known, present ROMs whose files are all gone.
     var gone: [KnownFolderROM] = []
-    /// New ROMs.
+    /// New ROMs: Stray files to be added.
     var new: [NewFolderROM] = []
     /// Unmatched ROMs that have a checksum at last, matched again with it.
     var rechecked: [(KnownFolderROM, ROMChecksum, ResolvedMatch)] = []
+    /// Each ROM folder read, by Platform, with its files that aren't ROMs and weren't to be added: its Stray files.
+    var strayFiles: [Int64: [FolderROMFile]] = [:]
 }
 
 extension LudeumStore {
@@ -206,7 +218,7 @@ extension LudeumStore {
         }
     }
 
-    /// Writes an Import in one transaction: new ROMs, rechecked ones, and returning and missing ones.
+    /// Writes an Import in one transaction: new ROMs, rechecked ones, returning and missing ones, and Stray files.
     func applyImport(_ plan: ImportPlan) throws -> ImportResult {
         let now = clock.now()
         let day = today()
@@ -264,6 +276,10 @@ extension LudeumStore {
                 if let game = try Self.apply(db, match, to: known.id, named: known.name, on: known.platformId, day: day, now: now) {
                     result.matched.append(ImportedROM(romName: known.name, game: game))
                 }
+            }
+            // After the new ROMs, which are Stray files no longer.
+            for (platformId, files) in plan.strayFiles.sorted(by: { $0.key < $1.key }) {
+                result.strayFiles += try Self.setStrayFiles(db, on: platformId, to: files)
             }
             return result
         }

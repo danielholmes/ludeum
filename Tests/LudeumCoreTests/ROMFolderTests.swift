@@ -207,7 +207,8 @@ struct FakeROMFolder {
     }
 
     func importNow() async throws -> ImportResult {
-        try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [ps2.folder])
+        try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
+            addingEveryFileIn: [ps2.folder])
     }
 
     func rom(_ name: String) throws -> Row? {
@@ -332,7 +333,9 @@ struct FakeROMFolder {
         let journal = j.journal
 
         // An Unarchive finishing after the Import read the ROM folder, which checks its ROM again.
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: journal, backups: nil).run(romFolders: [ps2.folder]) {
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: journal, backups: nil).run(
+            addingEveryFileIn: [ps2.folder]
+        ) {
             _ = try? ps2.add("Okami (USA).iso")
             try? ps2.remove("Okami (USA).7z")
             try? journal.checkROMAgain(id, in: ps2.folder)
@@ -348,7 +351,9 @@ struct FakeROMFolder {
         let ps2 = ps2
         let journal = j.journal
 
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: journal, backups: nil).run(romFolders: [ps2.folder]) {
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: journal, backups: nil).run(
+            addingEveryFileIn: [ps2.folder]
+        ) {
             try? ps2.remove("Okami (USA).7z")
             try? journal.checkROMsAgain(game, in: [ps2.folder])
         }

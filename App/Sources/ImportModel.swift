@@ -2,8 +2,8 @@ import LudeumCore
 import SwiftUI
 import os
 
-/// The Import: reading the ROM folders into the journal, at launch and by hand (the Review queue's Check again).
-/// One at a time; a request mid-Import runs once more after it.
+/// The Import: reading the ROM folders against the journal, at launch and by hand (the Review queue's Check again, and
+/// adding Stray files as ROMs, from there or after Add ROMs). One at a time; a request mid-Import runs once more after it.
 @Observable @MainActor final class ImportModel {
     /// The last Import's changes, shown until dismissed. Nil when it changed nothing.
     var summary: ImportResult?
@@ -11,6 +11,7 @@ import os
     var error: String?
     private var runAgain = false
     private var runAgainShowingMatched = false
+    private var runAgainAdding: Set<StrayFile.Key> = []
     private let services: Services
 
     /// True while an Import runs: quitting asks first. Static, as the app delegate has no `Services` to ask.
@@ -23,12 +24,14 @@ import os
 
     /// `byHand` is false for the launch Import, which says nothing when it's refused: the main window's banner does.
     /// `showingMatched` has the summary list the ROMs it Matched automatically, and the missing ones that came back to
-    /// their Game, too: as after Add ROMs, where I want to know where each went.
-    func importNow(byHand: Bool = true, showingMatched: Bool = false) {
+    /// their Game, too: as after Add ROMs, where I want to know where each went. `adding` names the Stray files it records
+    /// as new ROMs.
+    func importNow(byHand: Bool = true, showingMatched: Bool = false, adding: Set<StrayFile.Key> = []) {
         guard let igdb = services.igdb, let hasheous = services.hasheous, let journal = services.journal else { return }
         guard services.work.beginImport() else {
             runAgain = true
             runAgainShowingMatched = runAgainShowingMatched || showingMatched
+            runAgainAdding.formUnion(adding)
             return
         }
         Self.isRunning = true
@@ -38,7 +41,7 @@ import os
         Task {
             do {
                 let work = services.work
-                let result = try await run.run(romFolders: romFolders) {
+                let result = try await run.run(romFolders: romFolders, adding: adding) {
                     await MainActor.run { work.lockJournal(true) }
                 } wrote: {
                     await MainActor.run { work.lockJournal(false) }
@@ -74,9 +77,11 @@ import os
             services.work.endImport()
             if runAgain {
                 let showing = runAgainShowingMatched
+                let adding = runAgainAdding
                 runAgain = false
                 runAgainShowingMatched = false
-                importNow(showingMatched: showing)
+                runAgainAdding = []
+                importNow(showingMatched: showing, adding: adding)
             }
         }
     }

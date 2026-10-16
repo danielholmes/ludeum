@@ -21,7 +21,8 @@ import Testing
 
     /// Imports the ROM folder, then the No suggestion item named `name`.
     func item(_ name: String) async throws -> ReviewItem {
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [snes.folder])
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
+            addingEveryFileIn: [snes.folder])
         return try #require(try j.journal.reviewQueue().noSuggestion.first { $0.romName == name })
     }
 
@@ -50,7 +51,8 @@ import Testing
         try snes.add("Bootleg Thing (USA).sfc")
         let item = try await item("Bootleg Thing (USA)")
         try snes.remove("Bootleg Thing (USA).sfc")
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [snes.folder])
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
+            addingEveryFileIn: [snes.folder])
 
         try delete(try #require(try j.journal.reviewQueue().noSuggestion.first { $0.id == item.id }))
 

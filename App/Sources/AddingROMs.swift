@@ -1,6 +1,7 @@
 import AppKit
 import LudeumCore
 import SwiftUI
+import Synchronization
 
 /// What's been picked to Add as a ROM, and the Platforms whose ROM folders read it.
 struct PickedROM: Identifiable {
@@ -437,30 +438,33 @@ func readPicked(several sources: [ROMSource], romFolders: [ROMFolder]) async -> 
 func romCount(_ count: Int) -> String { count == 1 ? "1 ROM" : "\(count) ROMs" }
 
 /// Adds several ROMs as one Background task, unmatched. Once it has run (also when some failed or it was cancelled, as
-/// the ones before went in), `then` runs, for the Import that Matches them.
+/// the ones before went in), `then` gets those that went in, for the Import that adds them as ROMs and Matches them.
 @MainActor func startAddingROMs(
-    _ roms: [(source: ROMSource, platformId: Int64)], keepingOriginals: Bool, services: Services, then: @escaping () -> Void
+    _ roms: [(source: ROMSource, platformId: Int64)], keepingOriginals: Bool, services: Services,
+    then: @escaping (Set<StrayFile.Key>) -> Void
 ) {
     guard let journal = services.journal else { return }
     let folders = services.settings.romFolders
     let items = roms.compactMap { rom in folders.first { $0.platformId == rom.platformId }.map { (source: rom.source, folder: $0) } }
     let adder = AddROM(journal: journal, libretro: services.libretro)
+    let wentIn = Mutex<Set<StrayFile.Key>>([])
     services.tasks.enqueue("Adding \(romCount(items.count))") { progress in
-        try await adder.add(items, keepingOriginals: keepingOriginals, progress: progress)
+        try await adder.add(
+            items, keepingOriginals: keepingOriginals, progress: progress, wentIn: { key in wentIn.withLock { _ = $0.insert(key) } })
     } ended: {
-        then()
+        then(wentIn.withLock { $0 })
     }
 }
 
 /// Add ROM with several ROMs picked: each in turn, as Add ROM does one, with the IGDB search already run on its name.
-/// One whose game IGDB doesn't have can go in without a Match instead, for an Import to Match automatically or send to
-/// the Review queue, or be skipped. Those without a Match go in together from a last step, where I choose whether their
-/// files are copied or moved; cancelling leaves them out.
+/// One whose game IGDB doesn't have can go in without a Match instead, for an Import to add as a ROM, Matching it
+/// automatically or sending it to the Review queue, or be skipped. Those without a Match go in together from a last step,
+/// where I choose whether their files are copied or moved; cancelling leaves them out.
 struct AddROMsSheet: View {
     let services: Services
     let picked: PickedROMs
-    /// Runs the Import once those without a Match are in.
-    let thenImport: () -> Void
+    /// Runs the Import that adds those without a Match as ROMs, once they're in their ROM folders.
+    let thenImport: (Set<StrayFile.Key>) -> Void
     @Environment(\.dismiss) private var dismiss
     @AppStorage("addROMKeepsOriginals") private var keepingOriginals = true
     @State private var step = 0

@@ -142,7 +142,7 @@ struct ArchivedROMChecksumTests {
 
     func importNow(sevenZip: SevenZip? = nil) async throws -> ImportResult {
         try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, sevenZip: sevenZip)
-            .run(romFolders: [gameBoy.folder])
+            .run(addingEveryFileIn: [gameBoy.folder])
     }
 
     func rom(_ name: String) throws -> Row? {

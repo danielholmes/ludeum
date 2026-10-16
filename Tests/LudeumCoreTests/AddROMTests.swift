@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import Synchronization
 import Testing
 
 @testable import LudeumCore
@@ -499,15 +500,39 @@ struct AddROMTests {
         try pick("Okami (USA)/Okami (USA).iso", "PS2")
         let okami = picked.appending(path: "Okami (USA)", directoryHint: .isDirectory)
 
+        let wentIn = Mutex<[StrayFile.Key]>([])
+
         try await adder.add(
             [(ROMSource([tetris]), gameBoy.folder), (ROMSource([kirby]), gameBoy.folder), (ROMSource([okami]), ps2.folder)],
-            keepingOriginals: false)
+            keepingOriginals: false, wentIn: { key in wentIn.withLock { $0.append(key) } })
 
         #expect(try gameBoy.folder.scan().map(\.fileName) == ["Kirby's Dream Land (USA).7z", "Tetris (World).7z"])
         #expect(try ps2.folder.scan().map(\.fileName) == ["Okami (USA)/Okami (USA).iso"])
         #expect(try trashed() == ["Kirby's Dream Land (USA).gb", "Okami (USA)", "Tetris (World).gb"])
-        // Not recorded: the Import reads them as new ROMs, Matching them automatically or sending them to review.
+        // Not recorded: the Import adds them as new ROMs, Matching them automatically or sending them to review.
         #expect(try romCount() == 0)
+        #expect(
+            wentIn.withLock { $0 } == [
+                StrayFile.Key(platformId: 33, name: "Tetris (World)"), StrayFile.Key(platformId: 33, name: "Kirby's Dream Land (USA)"),
+                StrayFile.Key(platformId: ROMPlatform.ps2, name: "Okami (USA)"),
+            ])
+    }
+
+    @Test func theImportAddsThoseThatWentInAndLeavesAnyOtherFileStray() async throws {
+        let h = try Harness()
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        try gameBoy.add("Dropped In By Hand (USA).gb")
+        let tetris = try pick("Tetris (World).gb", "GB")
+        let wentIn = Mutex<Set<StrayFile.Key>>([])
+        try await adder.add(
+            [(ROMSource([tetris]), gameBoy.folder)], keepingOriginals: true, wentIn: { key in wentIn.withLock { _ = $0.insert(key) } })
+
+        let result = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, sevenZip: sevenZip)
+            .run(romFolders: [gameBoy.folder], adding: wentIn.withLock { $0 })
+
+        #expect(result.sentToReview.map(\.romName) == ["Tetris (World)"])
+        #expect(try romRow("Tetris (World)") != nil)
+        #expect(try j.journal.reviewQueue().strayFiles.map(\.name) == ["Dropped In By Hand (USA)"])
     }
 
     @Test func oneThatCantGoInDoesntStopTheRestAndSaysWhy() async throws {
@@ -515,11 +540,16 @@ struct AddROMTests {
         try gameBoy.add("Tetris (World).7z")
         let tetris = try pick("Tetris (World).gb", "GB")
         let kirby = try pick("Kirby's Dream Land (USA).gb", "GB")
+        let wentIn = Mutex<[String]>([])
 
         await #expect(throws: AddROMError.notAllAdded(["Tetris (World): Tetris (World) is already in its ROM folder."], of: 2)) {
-            try await adder.add([(ROMSource([tetris]), gameBoy.folder), (ROMSource([kirby]), gameBoy.folder)], keepingOriginals: false)
+            try await adder.add(
+                [(ROMSource([tetris]), gameBoy.folder), (ROMSource([kirby]), gameBoy.folder)], keepingOriginals: false,
+                wentIn: { key in wentIn.withLock { $0.append(key.name) } })
         }
         #expect(try gameBoy.folder.scan().map(\.fileName) == ["Kirby's Dream Land (USA).7z", "Tetris (World).7z"])
         #expect(try trashed() == ["Kirby's Dream Land (USA).gb"])
+        // The Tetris already there isn't the one picked, so it isn't added for it.
+        #expect(wentIn.withLock { $0 } == ["Kirby's Dream Land (USA)"])
     }
 }

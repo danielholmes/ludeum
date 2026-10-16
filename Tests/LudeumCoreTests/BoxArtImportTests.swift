@@ -20,7 +20,7 @@ import Testing
 
     func importNow() async throws {
         _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
-            .run(romFolders: [snes.folder])
+            .run(addingEveryFileIn: [snes.folder])
     }
 
     func roms() throws -> [Row] {
@@ -57,7 +57,8 @@ import Testing
     @Test func itSaysWhetherAnyROMsBoxArtChanged() async throws {
         try snes.add("Super Metroid (USA).sfc")
         try snes.add("Homebrew Nobody Scanned.sfc")
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [snes.folder])
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
+            addingEveryFileIn: [snes.folder])
         let boxArt = BoxArtImport(journal: j.journal, libretro: h.libretro)
 
         #expect(await boxArt.run())
@@ -71,13 +72,13 @@ import Testing
         try snes.add("Super Metroid (USA).sfc")
         let run = Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
 
-        #expect(try await run.run(romFolders: [snes.folder]).coversChanged)
+        #expect(try await run.run(addingEveryFileIn: [snes.folder]).coversChanged)
         // Nothing new, so every Cover is as it was.
-        #expect(try await run.run(romFolders: [snes.folder]).coversChanged == false)
+        #expect(try await run.run(addingEveryFileIn: [snes.folder]).coversChanged == false)
         // Its file changed, and which of a Game's ROMs its Box art comes from can follow.
         try snes.remove("Super Metroid (USA).sfc")
         try snes.add("Super Metroid (USA).7z")
-        #expect(try await run.run(romFolders: [snes.folder]).coversChanged)
+        #expect(try await run.run(addingEveryFileIn: [snes.folder]).coversChanged)
     }
 
     @Test func whenLibretroIsUnreachableTheImportStillCommitsAndTheNextOneLooksItUp() async throws {
@@ -99,7 +100,7 @@ import Testing
         try snes.add("Super Metroid (USA).sfc")
 
         _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
-            .run(romFolders: [nes.folder, snes.folder])
+            .run(addingEveryFileIn: [nes.folder, snes.folder])
 
         let rows = try roms()
         #expect(rows.map { $0["libretroLookedUp"] as Bool } == [false, true])

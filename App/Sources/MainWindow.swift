@@ -117,8 +117,11 @@ struct MainWindow: View {
                     IGDBScreen(
                         services: services, query: $igdbQuery, shown: $igdbResult, focusRequest: igdbFocusRequest, open: openGame)
                 case .reviewQueue:
-                    ReviewQueueScreen(services: services, checkAgain: { importModel.importNow() }, shownGame: $selectedGame)
-                        .disabled(services.work.journalLocked)
+                    ReviewQueueScreen(
+                        services: services, checkAgain: { importModel.importNow() },
+                        addStrayFiles: { importModel.importNow(showingMatched: true, adding: $0) }, shownGame: $selectedGame
+                    )
+                    .disabled(services.work.journalLocked)
                 case let screen?:
                     PlaceholderScreen(screen: screen)
                 case nil:
@@ -165,7 +168,7 @@ struct MainWindow: View {
         .sheet(isPresented: Bindable(services.sheets).storageStats) { StorageStatsSheet(services: services) }
         .sheet(item: $addingROM) { AddROMSheet(services: services, picked: $0, added: openGame) }
         .sheet(item: $addingROMs) { picked in
-            AddROMsSheet(services: services, picked: picked) { importModel.importNow(showingMatched: true) }
+            AddROMsSheet(services: services, picked: picked) { importModel.importNow(showingMatched: true, adding: $0) }
         }
         .alert("Couldn't add the ROM", isPresented: Binding(get: { addROMError != nil }, set: { if !$0 { addROMError = nil } })) {
             Button("OK") {}

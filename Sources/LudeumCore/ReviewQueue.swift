@@ -46,8 +46,8 @@ public struct MissingROMsGame: Sendable, Equatable, Identifiable {
     public var id: GameID { game.id }
 }
 
-/// A Game that still has a present ROM, with missing ones left over (a file renamed or replaced, which Import found
-/// as a new ROM): I delete them, or put a file back.
+/// A Game that still has a present ROM, with missing ones left over (a file renamed or replaced, then Added as a new
+/// ROM): I delete them, or put a file back.
 public struct OldMissingROMsGame: Sendable, Equatable, Identifiable {
     public let game: Game
     public let missing: [LudeumROM]
@@ -101,6 +101,8 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var notCompacted: [NotCompactedROM] = []
     /// Attachments whose files are missing: Locate or Delete each.
     public var missingAttachments: [MissingAttachment] = []
+    /// Files in ROM folders that aren't ROMs (ADR 0016): Add each as a ROM, or take it out of its folder.
+    public var strayFiles: [StrayFile] = []
 
     public init() {}
 
@@ -108,7 +110,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var count: Int {
         namesAgree.count + checksumSuggestions.count + nameSuggestions.count + noSuggestion.count + duplicateVersions.count
             + noPlaylist.count + missingROMs.count + oldMissingROMs.count + bothForms.count + notCompacted.count
-            + missingAttachments.count
+            + missingAttachments.count + strayFiles.count
     }
 }
 
@@ -173,6 +175,7 @@ extension LudeumStore {
         items.bothForms = try bothForms()
         items.notCompacted = try notCompacted()
         items.missingAttachments = try missingAttachments()
+        items.strayFiles = try strayFiles()
         return items
     }
 

@@ -91,7 +91,8 @@ import Testing
     }
 
     func importNow() async throws {
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [ps1.folder])
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
+            addingEveryFileIn: [ps1.folder])
     }
 
     func rom() throws -> Row {
