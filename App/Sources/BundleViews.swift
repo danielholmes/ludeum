@@ -36,39 +36,47 @@ struct BundledInLine: View {
     }
 }
 
-/// A Game's Copies that are its Bundles': shown, not edited, here. Each Bundle's heading opens it, where they're edited.
+/// A Game's Copies that are its Bundles': shown, not edited, here. Each reads like one of the Game's own, but with
+/// "(from ‹Bundle›)" after its title, and a click opens the Bundle, where it's edited.
 struct BundleCopyRows: View {
     let shares: [BundleShare]
     let open: (GameID) -> Void
 
     var body: some View {
-        ForEach(shares.filter { !$0.roms.isEmpty || !$0.copies.isEmpty }) { share in
-            Button {
-                open(share.bundle.id)
-            } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("From \(share.bundle.name)")
-                        ForEach(share.roms) { rom in
-                            Text(rom.subfolder ?? rom.fileName).strikethrough(rom.missing)
-                                .font(.callout).foregroundStyle(.secondary)
-                        }
-                        ForEach(share.copies) { copy in
-                            Text(
-                                [copyKindText(copy.draft.kind), copyDetailsText(copy.draft.details), copy.draft.gone.map(goneText)]
-                                    .compactMap { $0 }.joined(separator: " · ")
-                            )
-                            .strikethrough(copy.draft.gone != nil).font(.callout).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-                }
-                .contentShape(.rect)
+        ForEach(shares) { share in
+            ForEach(share.roms) { rom in
+                row(share, title: rom.subfolder ?? rom.fileName, details: rom.missing ? "missing" : nil, notes: nil, gone: rom.missing)
             }
-            .buttonStyle(.plain)
-            .help("A Copy of the Bundle, so of every Game in it. Open the Bundle to edit it.")
+            ForEach(share.copies) { copy in
+                row(
+                    share, title: copyKindText(copy.draft.kind),
+                    details: [copyDetailsText(copy.draft.details), copy.draft.gone.map(goneText)].compactMap { $0 }
+                        .joined(separator: " · ").nilIfEmpty,
+                    notes: copy.draft.details.notes, gone: copy.draft.gone != nil)
+            }
         }
+    }
+
+    private func row(_ share: BundleShare, title: String, details: String?, notes: String?, gone: Bool) -> some View {
+        Button {
+            open(share.bundle.id)
+        } label: {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("\(title) (from \(share.bundle.name))").strikethrough(gone)
+                    if let details { Text(details).font(.callout).foregroundStyle(.secondary) }
+                    if let notes {
+                        Text(notes).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                    }
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(gone ? .secondary : .primary)
+        .help("A Copy of \(share.bundle.name), so of every Game in it. Open the Bundle to edit it.")
     }
 }
 
