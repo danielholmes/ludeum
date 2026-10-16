@@ -671,6 +671,19 @@ enum LudeumSchema {
             try db.drop(table: "listGame")
             try db.drop(table: "list")
         }
+        // A Bundle is a row of `game` marked as one, so it shares a Game's IGDB link, Cover, Attachments, Highlight note,
+        // Copies and ROM Matching, and contains Games through `bundleGame` (ADR 0016). A Game a Bundle contains can't be
+        // deleted.
+        migrator.registerMigration("v35 bundles") { db in
+            try db.alter(table: "game") { t in t.add(column: "bundle", .boolean).notNull().defaults(to: false) }
+            try keepTimestamps(db, on: "game")
+            try db.create(table: "bundleGame") { t in
+                t.column("bundleId", .integer).notNull().references("game", onDelete: .cascade)
+                t.column("gameId", .integer).notNull().indexed().references("game", onDelete: .restrict)
+                t.primaryKey(["bundleId", "gameId"])
+            }
+            try keepTimestamps(db, on: "bundleGame")
+        }
         return migrator
     }
 

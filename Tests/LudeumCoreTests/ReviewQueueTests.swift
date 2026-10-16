@@ -95,6 +95,16 @@ import Testing
         #expect(try j.journal.reviewQueue().count == 0)
     }
 
+    @Test func confirmingASuggestionThatsABundleMatchesTheROMToTheBundle() async throws {
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        let bundle = try j.journal.addBundle(platformId: 19, name: "Kirby Super Star", igdbGameId: 7, igdbName: "Kirby Super Star")
+        let rom = try unmatched(1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
+
+        #expect(try await queue.confirm(item) == bundle)
+        #expect(try match(rom) == (bundle, "confirmed"))
+    }
+
     @Test func theJournalHoldsNoOpenEmuDataAnyMore() async throws {
         #expect(try await j.journal.db.read { try $0.tableExists("heldOpenEmuData") } == false)
     }

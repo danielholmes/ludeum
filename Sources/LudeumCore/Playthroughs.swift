@@ -146,7 +146,7 @@ extension LudeumStore {
         [d.start.text, d.end?.text, d.outcome?.rawValue, d.notes, d.copy?.romId, d.copy?.copyId]
     }
 
-    /// A Playthrough's Copy has to be one of its own Game's.
+    /// A Playthrough's Copy has to be one of its own Game's, or of a Bundle that contains it.
     private static func checkCopy(_ db: Database, _ copy: CopyID?, of game: GameID) throws {
         guard let copy else { return }
         let owner =
@@ -154,7 +154,8 @@ extension LudeumStore {
             case .rom(let id): try GameID.fetchOne(db, sql: "SELECT gameId FROM rom WHERE id = ?", arguments: [id])
             case .copy(let id): try GameID.fetchOne(db, sql: "SELECT gameId FROM copy WHERE id = ?", arguments: [id])
             }
-        guard owner == game else { throw LudeumError.copyNotOfGame }
+        let bundles = try GameID.fetchAll(db, sql: "SELECT bundleId FROM bundleGame WHERE gameId = ?", arguments: [game])
+        guard let owner, owner == game || bundles.contains(owner) else { throw LudeumError.copyNotOfGame }
     }
 
     /// Refuses, changing nothing, when a Playthrough was played on any of these Copies: they can't be deleted, or leave

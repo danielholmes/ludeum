@@ -68,6 +68,8 @@ struct IGDBGameDetailView: View {
     @State private var platforms: [IGDBPlatform] = []
     @State private var used: Set<Int64> = []
     @State private var choosingPlatform = false
+    /// A bundle being added on this Platform, choosing its contents.
+    @State private var addingBundleOn: IGDBPlatform?
     @State private var error: String?
 
     var body: some View {
@@ -139,10 +141,22 @@ struct IGDBGameDetailView: View {
             }
             .task { platforms = (try? await services.igdb?.platforms()) ?? [] }
         }
+        .sheet(item: $addingBundleOn) { platform in
+            AddBundleSheet(services: services, result: result, platform: platform) { addGame(on: platform) }
+        }
     }
 
-    /// Adds the game to the Library on `platform`, staying here: its chip turns "In Library".
+    /// Adds the game to the Library on `platform`, staying here: its chip turns "In Library". An IGDB bundle is added as a
+    /// Bundle unless I choose otherwise.
     private func add(on platform: IGDBPlatform) {
+        if result.isBundle {
+            addingBundleOn = platform
+        } else {
+            addGame(on: platform)
+        }
+    }
+
+    private func addGame(on platform: IGDBPlatform) {
         guard let search = services.gameSearch else { return }
         do {
             _ = try search.add(result, on: platform)

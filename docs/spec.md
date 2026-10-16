@@ -12,7 +12,7 @@ This file holds the decisions made so far and the open questions (fog). Vocabula
 
 ## Non-goals (for now)
 
-Phone or remote access; several Macs; importing from Steam or Xbox; exceptions to the Duplicate Versions rule; combining Games; moving a ROM to another Game after its Match (other than Splitting a Version off a Game with Duplicate Versions); ScreenScraper media (manuals); back, cart and disc scans; showing Screenshots and Cover art (they're stored, not yet shown).
+Phone or remote access; several Macs; importing from Steam or Xbox; exceptions to the Duplicate Versions rule; combining Games; moving a ROM to another Game after its Match (other than Splitting a Version off a Game with Duplicate Versions); making a Game into a Bundle, or a Bundle by hand, in the app; ScreenScraper media (manuals); back, cart and disc scans; showing Screenshots and Cover art (they're stored, not yet shown).
 
 ## Decisions so far
 
@@ -60,6 +60,18 @@ Non-emulated Games (PC, Xbox 360, …) and Games I don't have a ROM for yet are 
 - **One search component:** the Review queue's manual IGDB search is this same search. There, the Platform filter is pre-set to the ROM's platforms, and clicking a result Matches the ROM instead of adding a Game.
 - **A hand-made Game created from a ROM** (Review queue, no suggestion): its Platform is pre-selected from the ROM's (its ROM folder's), and I can still pick any other Platform.
 
+### Bundles
+A Bundle is one release of several games that were each also released on their own ([ADR 0016](adr/0016-a-bundle-is-not-a-game.md)).
+
+- **Not a Game:** it's never a Library row, nor counted on its Platform in the sidebar. Its Games are, on its Platform. Its page is Game detail without My journal or Play: its Cover, IGDB facts, Highlight note, Copies, Attachments and a **Contains** section listing its Games as links, each with Remove, and **Add Game…** (one IGDB lists for it, added to the Library if need be, or any Game of its Platform in the Library).
+- **Adding one:** in the IGDB screen, a result IGDB types a bundle opens a sheet on choosing its Platform: IGDB's contents for it (`where bundles = (id)`), every one ticked, each already in the Library marked so and linked rather than added. **Add Bundle** is the default; **Add as a Game Instead** is for a release that's one game (Kirby Super Star).
+- **Its Copies are its Games' Copies:** each Game shows them under its own Copies as "From ‹Bundle›" (a click opens the Bundle, where they're edited), and is Owned (as a ROM, for a ROM) by them. Play opens the Game's own ROM first, else a Bundle's, with the Game's Emulator settings, from Game detail and the Library. A Playthrough can name a Bundle's Copy. Duplicate Versions counts only a Game's own ROMs.
+- **Shown on its Games:** "Bundled in: ‹Bundle›" under the Platform line, its Highlight note (prefixed with its name), and its Attachments in their own section, opened there and managed on the Bundle. A Game with no Cover of its own shows the first Bundle's.
+- **Search** matches a Bundle's name to its Games.
+- **Matching:** a ROM whose IGDB game is a Bundle in the journal is Matched to the Bundle. Otherwise a Game is made, as before.
+- **Deleting:** a Bundle can't be deleted while it has a Copy; its Games stay. A Game can't be deleted while a Bundle contains it, and can't leave one while a Playthrough of it names one of the Bundle's Copies.
+- **`ludeum-import into-bundles [--dry-run] [--journal <folder>] [--data <folder>]`** (`IntoBundles`): the one-off move, with Ludeum closed, of the Games that were really Bundles into Bundles of the Games IGDB lists for them, and of the two boxes I'd recorded as one Copy per Game (the Game Wizards C&C compilation; Duke Nukem 3D, Shadow Warrior and Final Doom) into Bundles made by hand with one Gone Copy each. A Game becoming a Bundle keeps its Copies, ROMs, Attachments and Highlight note and loses its Rating (Super Mario All-Stars' 9.0, said in the plan). One with Playthroughs, Intent, Childhood or Battles is a problem, and nothing changes. It takes a `before-into-bundles` backup, kept forever, and running it again does nothing.
+
 ### Journal data
 - **Rating:** 0.0–10.0, or unrated (different from 0.0). One per Game, with a Rating history of dated entries.
 - **Rating history:** at most one entry per day (local time). Changing the Rating again the same day replaces that day's entry, and re-entering the current value does nothing. Clearing a Rating adds an "unrated" entry. Entries can be deleted but not edited, so there's no backdating. Deleting the latest entry makes the previous one the Rating.
@@ -87,6 +99,7 @@ GRDB over SQLite, with foreign keys on. Table and column names are as they'll ap
 - **`rom`**: one row per ROM in a ROM folder: `platformId` and `folderName` (its name in the folder, `UNIQUE(platformId, folderName)`), an optional checksum, `md5` or `crc` (see ROM folders' Checksums; migrated ROMs keep OpenEmu's MD5), `fileName`, `name` (from the file name), `missing`, `archived`, `version` text, `discNumber`, `discLabel`, `needsPlaylist` (its subfolder holds Discs but no playlist), `inBothForms` (its ROM folder keeps it in more than one form), the libretro names found for it, and its Copy details (`v22`): `regions` (a JSON array of names, or null), `acquiredOn` (a Partial date), `acquiredFrom`, `price` (a decimal as text) and `currency` (both set or both null), and `notes` (`v32`). **The Match is columns on the ROM:** `gameId`, `matchKind` (automatic/confirmed/manual) and `matchedAt` are all null or all set (CHECK). An unmatched ROM is in the Review queue.
 - **`copy`** (`v22`): a hand-recorded Copy: `gameId` (cascades with its Game), `kind` (physical/digital/physicalAndDigital), the same Copy details as a ROM's, and `gone` with `goneOn` (a Partial date) and `goneTo`, which are null unless `gone` (CHECK). Gone on ≥ acquired on is checked in app code, like a Playthrough's dates.
 - **`attachment`** (`v30`): `gameId` (cascades with its Game), `fileName` (its file's name, extension and all; `UNIQUE(gameId, fileName)`, case-insensitive), `manual` and `missing`. **`game.attachmentFolder`** is the Game's folder's path in `Attachments/` (`SNES/Super Metroid`), unique case-insensitively, null until it has one.
+- **`game.bundle`** and **`bundleGame`** (`v35`): a Bundle is a `game` row marked as one; `bundleGame` (`bundleId` cascades with the Bundle, `gameId` restricts deleting the Game) says which Games it contains.
 - **Review queue suggestions are stored** on the ROM when the Import writes (`suggestedIgdbGameId`, `suggestionKind` checksum/name, `checksumIgdbGameId` for the crossed-out checksum game, `namesAgree`) and cleared on matching. Opening the queue makes no IGDB calls.
 - **`import`** (`startedAt`, `isFirst`). There is no Activity (ADR 0007).
 - **`heldOpenEmuData`** held an unmatched ROM's OpenEmu collections and `_Current` start date answer, captured by the first Import (from OpenEmu) and applied when the Review queue resolved the ROM. Once none were left it went (`v33`): an answer applies nothing more. Sync's `syncedCollection`, `syncedCover` and `openEmuLibrary` went with OpenEmu.

@@ -431,7 +431,7 @@ enum FactStyle {
     let roms: [LudeumROM]
     let settings: EmulatorSettings
     do {
-        roms = try journal.roms(of: row.id)
+        roms = try journal.romsToPlay(of: row.id)
         settings = try journal.emulatorSettings(row.id)
     } catch {
         refused("Couldn't read its ROMs and Emulator settings: \(error.localizedDescription)")

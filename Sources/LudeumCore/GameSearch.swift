@@ -41,6 +41,17 @@ public struct GameSearchResult: Sendable, Hashable, Identifiable {
     public let coverImageID: String?
     public let chips: [PlatformChip]
     public var id: Int64 { igdbGameId }
+    /// IGDB types it a bundle: it's added as a Bundle unless I choose a Game (Kirby Super Star is one game).
+    public var isBundle: Bool { gameType == "Bundle" }
+}
+
+/// One of the games IGDB lists a bundle as containing.
+public struct BundleContent: Sendable, Hashable, Identifiable {
+    public let igdbGameId: Int64
+    public let name: String
+    /// The Game it already is on the Bundle's Platform; nil until it's added.
+    public let game: GameID?
+    public var id: Int64 { igdbGameId }
 }
 
 /// What the IGDB search is narrowed to besides its text: any of the genres, any of the themes,
@@ -129,6 +140,46 @@ public struct GameSearch: Sendable {
         if let existing = try journal.gameID(igdbGameId: result.igdbGameId, platformId: platform.id) { return existing }
         try journal.addPlatform(id: platform.id, name: platform.name)
         return try journal.addGame(platformId: platform.id, name: result.name, igdbGameId: result.igdbGameId, igdbName: result.name)
+    }
+
+    /// The search result for one IGDB game, as the search would show it; nil if IGDB doesn't know it.
+    public func result(igdbGameId: Int64) async throws -> GameSearchResult? {
+        try await igdb.games(ids: [Int(igdbGameId)])[Int(igdbGameId)].map(result)
+    }
+
+    /// What IGDB lists a bundle as containing, by name, each with the Game it already is on `platform`, if any.
+    public func bundleContents(of result: GameSearchResult, on platform: IGDBPlatform) async throws -> [BundleContent] {
+        let ids = try await igdb.bundleContents(of: Int(result.igdbGameId))
+        let games = try await igdb.games(ids: ids)
+        return try ids.compactMap { games[$0] }.map { game in
+            BundleContent(
+                igdbGameId: Int64(game.id), name: game.name ?? "Game \(game.id)",
+                game: try journal.gameID(igdbGameId: Int64(game.id), platformId: platform.id))
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Adds the IGDB game as a Bundle on `platform` containing `contents`: each is added as a Game there unless it
+    /// already is one. If that IGDB game and platform is already a Bundle, the contents join it; if it's a Game, it's
+    /// refused (`igdbLinkTaken`).
+    @discardableResult
+    public func addBundle(_ result: GameSearchResult, on platform: IGDBPlatform, contents: [BundleContent]) throws -> GameID {
+        try journal.addPlatform(id: platform.id, name: platform.name)
+        let bundle: GameID
+        if let existing = try journal.gameID(igdbGameId: result.igdbGameId, platformId: platform.id) {
+            guard try journal.game(existing).isBundle else { throw LudeumError.igdbLinkTaken }
+            bundle = existing
+        } else {
+            bundle = try journal.addBundle(
+                platformId: platform.id, name: result.name, igdbGameId: result.igdbGameId, igdbName: result.name)
+        }
+        for content in contents {
+            let game =
+                try content.game ?? journal.gameID(igdbGameId: content.igdbGameId, platformId: platform.id)
+                ?? journal.addGame(platformId: platform.id, name: content.name, igdbGameId: content.igdbGameId, igdbName: content.name)
+            try journal.addToBundle(bundle, game)
+        }
+        return bundle
     }
 
     /// Links a hand-made Game to the IGDB game. Refused if another Game holds that link

@@ -18,9 +18,13 @@ public enum BackupOperation: String, Sendable, CaseIterable {
     case beforeSchemaMigration = "before-schema-migration"
     /// `into-folders`'s: never pruned.
     case beforeIntoFolders = "before-into-folders"
+    /// `into-bundles`'s: never pruned.
+    case beforeIntoBundles = "before-into-bundles"
 
     /// A one-off command's, the one way back from it.
-    var isKeptForever: Bool { self == .beforeMigration || self == .beforeIntoFolders || self == .beforeRecovery }
+    var isKeptForever: Bool {
+        self == .beforeMigration || self == .beforeIntoFolders || self == .beforeRecovery || self == .beforeIntoBundles
+    }
 }
 
 /// One backup file of the journal database.
