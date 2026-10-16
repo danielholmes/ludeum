@@ -18,7 +18,7 @@ public struct ImportResult: Sendable, Equatable {
     public var returned: [ImportedROM] = []
     public var goneMissing: [ImportedROM] = []
     /// The names of files that turned up in a ROM folder without being ROMs: Stray files, waiting in the Review queue
-    /// (ADR 0016).
+    /// (ADR 0017).
     public var strayFiles: [String] = []
     /// Whether any Game's Cover may have changed: a ROM's Box art did, or the ROMs a Game takes its Box art from did.
     /// When not, the Covers already shown stand.
@@ -34,7 +34,7 @@ public enum ImportError: Error, Equatable {
 }
 
 /// Reading the ROM folders against the journal: at launch, and by hand. It never changes the folders. The journal says
-/// which ROMs there are (ADR 0016): the Import reads how their files are now, and lists any other file as a Stray file,
+/// which ROMs there are (ADR 0017): the Import reads how their files are now, and lists any other file as a Stray file,
 /// recording it as a new ROM only when asked to add it. Refused until `migrate-openemu` has run.
 public final class Import: Sendable {
     let matcher: Matcher

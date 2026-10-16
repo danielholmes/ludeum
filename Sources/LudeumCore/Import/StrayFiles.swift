@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-/// A game file in a ROM folder that the journal doesn't have as a ROM (ADR 0016). An Import lists it in the Review queue
+/// A game file in a ROM folder that the journal doesn't have as a ROM (ADR 0017). An Import lists it in the Review queue
 /// rather than recording it, until it's Added as a ROM or leaves its ROM folder.
 public struct StrayFile: Sendable, Equatable, Identifiable {
     public let id: Int64

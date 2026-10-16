@@ -4,7 +4,7 @@ import Testing
 
 @testable import LudeumCore
 
-/// Stray files (ADR 0016): the journal says which ROMs there are, so an Import never makes a ROM of a file it doesn't
+/// Stray files (ADR 0017): the journal says which ROMs there are, so an Import never makes a ROM of a file it doesn't
 /// have. It lists the file in the Review queue instead, until it's Added as a ROM or leaves its ROM folder.
 @Suite struct StrayFileTests {
     let h: Harness

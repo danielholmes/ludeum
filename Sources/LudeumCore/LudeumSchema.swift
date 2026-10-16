@@ -665,7 +665,7 @@ enum LudeumSchema {
         migrator.registerMigration("v33 no held openemu data") { db in
             try db.drop(table: "heldOpenEmuData")
         }
-        // The journal says which ROMs there are (ADR 0016): a file in a ROM folder that isn't one is a Stray file, which
+        // The journal says which ROMs there are (ADR 0017): a file in a ROM folder that isn't one is a Stray file, which
         // the Import lists rather than records as a ROM.
         migrator.registerMigration("v34 stray files") { db in
             try db.create(table: "strayFile") { t in

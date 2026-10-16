@@ -4,7 +4,7 @@ import Foundation
 
 extension Import {
     /// An Import that adds every file in the folders as a ROM: tests that set up ROMs by putting files in a ROM folder, as
-    /// every Import did before the journal said which ROMs there are (ADR 0016).
+    /// every Import did before the journal said which ROMs there are (ADR 0017).
     func run(
         addingEveryFileIn folders: [ROMFolder], writing: @Sendable () async -> Void = {}, wrote: @Sendable () async -> Void = {}
     ) async throws -> ImportResult {

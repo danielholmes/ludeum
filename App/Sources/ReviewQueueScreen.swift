@@ -1117,7 +1117,7 @@ private struct MissingAttachmentDetail: View {
     }
 }
 
-/// A Stray file (ADR 0016): a file in a ROM folder that isn't a ROM in the journal. Add as ROM records it, Matching it
+/// A Stray file (ADR 0017): a file in a ROM folder that isn't a ROM in the journal. Add as ROM records it, Matching it
 /// automatically or leaving it in the Review queue; a file taken out of its ROM folder by hand clears it at the next
 /// Import.
 private struct StrayFileDetail: View {

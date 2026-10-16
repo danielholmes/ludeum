@@ -84,7 +84,7 @@ public struct ReviewQueueItems: Sendable, Equatable {
     public var notCompacted: [NotCompactedROM] = []
     /// Attachments whose files are missing: Locate or Delete each.
     public var missingAttachments: [MissingAttachment] = []
-    /// Files in ROM folders that aren't ROMs (ADR 0016): Add each as a ROM, or take it out of its folder.
+    /// Files in ROM folders that aren't ROMs (ADR 0017): Add each as a ROM, or take it out of its folder.
     public var strayFiles: [StrayFile] = []
 
     public init() {}
