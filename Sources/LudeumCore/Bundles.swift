@@ -15,10 +15,12 @@ extension LudeumStore {
         }
     }
 
-    /// Puts `game` in `bundle`. Adding it again does nothing.
+    /// Puts `game` in `bundle`. Adding it again does nothing. Refused for a Game of another Platform, or a Bundle.
     public func addToBundle(_ bundle: GameID, _ game: GameID) throws {
+        let (bundle, game) = (try self.game(bundle), try self.game(game))
+        guard bundle.isBundle, !game.isBundle, game.platformId == bundle.platformId else { throw LudeumError.cantBeInBundle }
         try db.write { db in
-            try db.execute(sql: "INSERT OR IGNORE INTO bundleGame (bundleId, gameId) VALUES (?, ?)", arguments: [bundle, game])
+            try db.execute(sql: "INSERT OR IGNORE INTO bundleGame (bundleId, gameId) VALUES (?, ?)", arguments: [bundle.id, game.id])
         }
     }
 
@@ -45,6 +47,12 @@ extension LudeumStore {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    /// Every Bundle, by name: what the Review queue can Assign a ROM to besides the Library's Games.
+    public func bundles() throws -> [Game] {
+        try db.read { db in try GameID.fetchAll(db, sql: "SELECT id FROM game WHERE bundle") }.map(game)
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     /// The Bundles that contain `game`, as they were made: the first is the one whose Cover it falls back on.
     public func bundles(containing game: GameID) throws -> [Game] {
         try db.read { db in
@@ -53,8 +61,11 @@ extension LudeumStore {
         .map(self.game)
     }
 
-    /// The ROMs Play can open for `game`: its own, then those of the Bundles that contain it.
+    /// The ROMs Play can open for `game`: its own while one is present and not Archived, so a Bundle's can't get in its
+    /// way, else its own then those of the Bundles that contain it.
     public func romsToPlay(of game: GameID) throws -> [LudeumROM] {
-        try roms(of: game) + bundles(containing: game).flatMap { try roms(of: $0.id) }
+        let own = try roms(of: game)
+        if own.contains(where: { !$0.missing && !$0.archived }) { return own }
+        return try own + bundles(containing: game).flatMap { try roms(of: $0.id) }
     }
 }

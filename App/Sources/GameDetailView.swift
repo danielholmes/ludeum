@@ -19,6 +19,8 @@ struct GameDetailView: View {
     @State private var playthroughs: [Playthrough] = []
     @State private var players: [Player] = []
     @State private var roms: [LudeumROM] = []
+    /// The ROMs Play can open: its own, else its Bundles' too (`romsToPlay`).
+    @State private var playROMs: [LudeumROM] = []
     /// The hand-recorded Copies; the ROMs are Copies too.
     @State private var copies: [Copy] = []
     @State private var editingCopy: CopyEdit?
@@ -137,7 +139,7 @@ struct GameDetailView: View {
                             HStack {
                                 VStack(alignment: .leading) {
                                     Text(playthroughTitle(p.draft))
-                                    if let details = playthroughDetails(p.draft, roms: playROMs, copies: allCopies) {
+                                    if let details = playthroughDetails(p.draft, roms: allROMs, copies: allCopies) {
                                         Text(details).font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
@@ -304,13 +306,13 @@ struct GameDetailView: View {
             isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), presenting: deletion
         ) { summary in
             if summary.canDelete {
-                Button("Delete Game", role: .destructive, action: deleteGame)
+                Button(game.isBundle ? "Delete Bundle" : "Delete Game", role: .destructive, action: deleteGame)
                 Button("Cancel", role: .cancel) {}
             } else {
                 Button("OK", role: .cancel) {}
             }
         } message: { summary in
-            Text(deletionMessage(summary))
+            Text(deletionMessage(summary, isBundle: game.isBundle))
         }
     }
 
@@ -325,6 +327,7 @@ struct GameDetailView: View {
             playthroughs = try journal.playthroughs(id)
             players = try journal.players()
             roms = try journal.roms(of: id)
+            playROMs = try journal.romsToPlay(of: id)
             copies = try journal.copies(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
             bundles = game.isBundle ? [] : try BundleShare.of(id, services: services)
@@ -407,8 +410,8 @@ struct GameDetailView: View {
         }
     }
 
-    /// The ROMs Play can open: its own, then its Bundles'.
-    private var playROMs: [LudeumROM] { roms + bundles.flatMap(\.roms) }
+    /// Its ROMs and its Bundles', for naming a Playthrough's Copy.
+    private var allROMs: [LudeumROM] { roms + bundles.flatMap(\.roms) }
 
     /// Its hand-recorded Copies and its Bundles', for naming a Playthrough's Copy.
     private var allCopies: [Copy] { copies + bundles.flatMap(\.copies) }
@@ -747,22 +750,24 @@ func parseRating(_ text: String) -> Rating? {
     return Rating(tenths: Int((value * 10).rounded()))
 }
 
-private func deletionMessage(_ s: DeletionSummary) -> String {
-    if s.bundles > 0 {
-        return "It's in \(s.bundles == 1 ? "a Bundle" : "\(s.bundles) Bundles"). Take it out first, on the Bundle's page."
+private func deletionMessage(_ s: DeletionSummary, isBundle: Bool) -> String {
+    if s.containingBundles > 0 {
+        return
+            "It's in \(s.containingBundles == 1 ? "a Bundle" : "\(s.containingBundles) Bundles"). Take it out first, on the Bundle's page."
     }
     guard s.canDelete else {
         let copies = [
             s.roms > 0 ? "\(s.roms) ROM\(s.roms == 1 ? "" : "s")" : nil,
             s.copies > 0 ? "\(s.copies) other Cop\(s.copies == 1 ? "y" : "ies")" : nil,
         ].compactMap { $0 }.joined(separator: " and ")
-        return "It has \(copies). Only a Game with no Copies can be deleted: delete them first, under Copies."
+        return "It has \(copies). Only a \(isBundle ? "Bundle" : "Game") with no Copies can be deleted: delete them first, under Copies."
     }
     var parts: [String] = []
     if s.ratingEntries > 0 { parts.append("its Rating history (\(s.ratingEntries))") }
     if s.playthroughs > 0 { parts.append("\(s.playthroughs) Playthrough\(s.playthroughs == 1 ? "" : "s")") }
     if s.attachments > 0 { parts.append("\(s.attachments) Attachment\(s.attachments == 1 ? "" : "s"), whose files go to the Trash") }
-    parts.append("its Intent, Childhood, IGDB link and any uploaded Cover")
+    parts.append(
+        isBundle ? "its IGDB link and any uploaded Cover. Its Games stay" : "its Intent, Childhood, IGDB link and any uploaded Cover")
     return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
 }
 
@@ -800,6 +805,7 @@ func journalErrorText(_ error: Error) -> String {
     case .playerNameTaken: "There's already a Player with that name."
     case .gameHasCopies: "This Game has Copies. Delete them first, under Copies."
     case .gameInBundle: "This Game is in a Bundle. Take it out first, on the Bundle's page."
+    case .cantBeInBundle: "Only a Game of the Bundle's Platform can be in it."
     case .goneBeforeAcquired: "A Copy can't be gone before it was acquired."
     case .igdbLinkTaken: "Another Game already has that IGDB link."
     case .alreadyLinked: "This Game already has an IGDB link. Use Change IGDB link… to replace it."
@@ -900,9 +906,9 @@ struct PlaythroughSheet: View {
                 selectedPlayers = Set(d.players)
             }
             // Its Bundles' Copies are its Copies too.
-            roms = (try? services.journal?.romsToPlay(of: game)) ?? []
-            let bundleCopies = ((try? BundleShare.of(game, services: services)) ?? []).flatMap(\.copies)
-            copies = ((try? services.journal?.copies(of: game)) ?? []) + bundleCopies
+            let shares = (try? BundleShare.of(game, services: services)) ?? []
+            roms = ((try? services.journal?.roms(of: game)) ?? []) + shares.flatMap(\.roms)
+            copies = ((try? services.journal?.copies(of: game)) ?? []) + shares.flatMap(\.copies)
             players = (try? services.journal?.players()) ?? []
         }
     }

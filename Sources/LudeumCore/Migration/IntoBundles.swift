@@ -25,14 +25,14 @@ public struct IntoBundles: Sendable {
         public var games: [Int64]
         /// The Bundle's one Copy.
         public var copy: CopyDraft
-        /// What the Copies it replaces were acquired from, at its start.
-        public var replacing: String
+        /// How the "acquired from" of the Copies it replaces begins: one for each of its Games.
+        public var replacesCopiesAcquiredFrom: String
 
-        public init(name: String, games: [Int64], copy: CopyDraft, replacing: String) {
+        public init(name: String, games: [Int64], copy: CopyDraft, replacesCopiesAcquiredFrom: String) {
             self.name = name
             self.games = games
             self.copy = copy
-            self.replacing = replacing
+            self.replacesCopiesAcquiredFrom = replacesCopiesAcquiredFrom
         }
     }
 
@@ -59,11 +59,11 @@ public struct IntoBundles: Sendable {
             HandMade(
                 name: "Command & Conquer and Red Alert compilation", games: [647, 663, 295, 676, 652],
                 copy: CopyDraft(kind: .physical, details: CopyDetails(acquiredFrom: "Game Wizards"), gone: Gone()),
-                replacing: "Game Wizards, compilation"),
+                replacesCopiesAcquiredFrom: "Game Wizards, compilation"),
             HandMade(
                 name: "Duke Nukem 3D, Shadow Warrior and Final Doom", games: [342, 2947, 8191],
                 copy: CopyDraft(kind: .physical, gone: Gone()),
-                replacing: "bought in a bundle with Duke Nukem 3D, Shadow Warrior and Final Doom"),
+                replacesCopiesAcquiredFrom: "bought in a bundle with Duke Nukem 3D, Shadow Warrior and Final Doom"),
         ])
 
     /// One Bundle to make.
@@ -124,12 +124,12 @@ public struct IntoBundles: Sendable {
                 continue
             }
             let blockers = try await journal.db.read { db in
-                func has(_ sql: String) throws -> Bool { try Bool.fetchOne(db, sql: sql, arguments: [game.id, game.id])! }
+                func has(_ sql: String) throws -> Bool { try Bool.fetchOne(db, sql: sql, arguments: [game.id])! }
                 return [
-                    try has("SELECT EXISTS (SELECT 1 FROM playthrough WHERE gameId = ? OR gameId = ?)") ? "Playthroughs" : nil,
+                    try has("SELECT EXISTS (SELECT 1 FROM playthrough WHERE gameId = ?)") ? "Playthroughs" : nil,
                     game.intent != nil ? "an Intent" : nil,
                     game.childhood ? "Childhood" : nil,
-                    try has("SELECT EXISTS (SELECT 1 FROM battle WHERE gameAId = ? OR gameBId = ?)") ? "Battles" : nil,
+                    try has("SELECT EXISTS (SELECT 1 FROM battle WHERE ?1 IN (gameAId, gameBId))") ? "Battles" : nil,
                 ].compactMap { $0 }
             }
             plan.problems += blockers.map { "\(game.name) has \($0)" }
@@ -158,7 +158,12 @@ public struct IntoBundles: Sendable {
                 continue
             }
             let replaced = try games.flatMap { try journal.copies(of: $0.id) }
-                .filter { $0.draft.details.acquiredFrom?.hasPrefix(box.replacing) == true }.map(\.id)
+                .filter { $0.draft.details.acquiredFrom?.hasPrefix(box.replacesCopiesAcquiredFrom) == true }.map(\.id)
+            if replaced.count != games.count {
+                plan.problems.append(
+                    "\(box.name): \(replaced.count) Cop\(replaced.count == 1 ? "y" : "ies") to replace, not one for each of its \(games.count) Games"
+                )
+            }
             if try await journal.db.read({ db in
                 try Bool.fetchOne(
                     db, sql: "SELECT EXISTS (SELECT 1 FROM playthrough WHERE copyId IN (\(databaseQuestionMarks(count: replaced.count))))",

@@ -28,6 +28,11 @@ import Testing
         allStars = try j.journal.addGame(platformId: 19, name: "Super Mario All-Stars", igdbGameId: 5199, igdbName: "Super Mario All-Stars")
         redAlert = try j.journal.addGame(platformId: Int64(Self.pc), name: "Red Alert", igdbGameId: 295, igdbName: "Red Alert")
         aftermath = try j.journal.addGame(platformId: Int64(Self.pc), name: "The Aftermath", igdbGameId: 652, igdbName: "The Aftermath")
+        // The box, recorded once per Game.
+        for game in [redAlert, aftermath] {
+            try j.journal.addCopy(
+                game, CopyDraft(kind: .physical, details: CopyDetails(acquiredFrom: "Game Wizards, compilation (RA)"), gone: Gone()))
+        }
     }
 
     static let spec = IntoBundles.Spec(
@@ -36,7 +41,7 @@ import Testing
             .init(
                 name: "Red Alert compilation", games: [295, 652],
                 copy: CopyDraft(kind: .physical, details: CopyDetails(acquiredFrom: "Game Wizards"), gone: Gone()),
-                replacing: "Game Wizards, compilation")
+                replacesCopiesAcquiredFrom: "Game Wizards, compilation")
         ])
 
     var intoBundles: IntoBundles { IntoBundles(journal: j.journal, igdb: h.igdb, backups: backups, spec: Self.spec) }
@@ -81,10 +86,6 @@ import Testing
 
     @Test func aBoxRecordedOncePerGameBecomesABundleMadeByHandWithOneCopy() async throws {
         try j.journal.addCopy(redAlert, CopyDraft(kind: .physical, details: CopyDetails(acquiredFrom: "Electronics Boutique")))
-        try j.journal.addCopy(
-            redAlert, CopyDraft(kind: .physical, details: CopyDetails(acquiredFrom: "Game Wizards, compilation (RA)"), gone: Gone()))
-        try j.journal.addCopy(
-            aftermath, CopyDraft(kind: .physical, details: CopyDetails(acquiredFrom: "Game Wizards, compilation (RA)"), gone: Gone()))
 
         try await intoBundles.run(try await intoBundles.plan())
 
@@ -101,17 +102,25 @@ import Testing
     }
 
     @Test func aGameInTwoBundlesIsAddedOnce() async throws {
-        h.internet.addGame(5200, "Mario Pack", fields: ["game_type": 3])
+        h.internet.addGame(5200, "Mario Bundle", fields: ["game_type": 3])
         h.internet.addGame(222095, "Super Mario Bros.", fields: ["bundles": [5199, 5200]])
-        let pack = try j.journal.addGame(platformId: 19, name: "Mario Pack", igdbGameId: 5200, igdbName: "Mario Pack")
+        let marioBundle = try j.journal.addGame(platformId: 19, name: "Mario Bundle", igdbGameId: 5200, igdbName: "Mario Bundle")
         let spec = IntoBundles.Spec(fromGames: [5199, 5200])
         let intoBundles = IntoBundles(journal: j.journal, igdb: h.igdb, backups: backups, spec: spec)
 
         try await intoBundles.run(try await intoBundles.plan())
 
-        let smb = try #require(try j.journal.bundleGames(pack).first)
-        #expect(try j.journal.bundles(containing: smb.id).map(\.id) == [allStars, pack])
+        let smb = try #require(try j.journal.bundleGames(marioBundle).first)
+        #expect(try j.journal.bundles(containing: smb.id).map(\.id) == [allStars, marioBundle])
         #expect(try j.journal.games(igdbGameId: 222095).count == 1)
+    }
+
+    @Test func aBoxWhoseCopiesArentOnePerGameIsAProblem() async throws {
+        try j.journal.deleteCopy(try #require(try j.journal.copies(of: aftermath).first).id)
+
+        let plan = try await intoBundles.plan()
+
+        #expect(plan.problems == ["Red Alert compilation: 1 Copy to replace, not one for each of its 2 Games"])
     }
 
     @Test func runningAgainChangesNothing() async throws {

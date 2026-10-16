@@ -36,11 +36,11 @@ public struct DeletionSummary: Sendable, Equatable {
     /// Its Attachments, whose files go to the Trash with it.
     public let attachments: Int
     /// The Bundles containing it: a Game in one can't be deleted until it leaves.
-    public let bundles: Int
-    public var canDelete: Bool { roms == 0 && copies == 0 && bundles == 0 }
+    public let containingBundles: Int
+    public var canDelete: Bool { roms == 0 && copies == 0 && containingBundles == 0 }
 
-    public init(ratingEntries: Int, playthroughs: Int, roms: Int, copies: Int, attachments: Int, bundles: Int = 0) {
-        self.bundles = bundles
+    public init(ratingEntries: Int, playthroughs: Int, roms: Int, copies: Int, attachments: Int, containingBundles: Int) {
+        self.containingBundles = containingBundles
         self.ratingEntries = ratingEntries
         self.playthroughs = playthroughs
         self.roms = roms
@@ -115,7 +115,7 @@ extension LudeumStore {
                 roms: try count("SELECT COUNT(*) FROM rom WHERE gameId = ?"),
                 copies: try count("SELECT COUNT(*) FROM copy WHERE gameId = ?"),
                 attachments: try db.tableExists("attachment") ? count("SELECT COUNT(*) FROM attachment WHERE gameId = ?") : 0,
-                bundles: try db.tableExists("bundleGame") ? count("SELECT COUNT(*) FROM bundleGame WHERE gameId = ?") : 0)
+                containingBundles: try db.tableExists("bundleGame") ? count("SELECT COUNT(*) FROM bundleGame WHERE gameId = ?") : 0)
         }
     }
 }

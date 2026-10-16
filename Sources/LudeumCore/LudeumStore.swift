@@ -11,6 +11,8 @@ public enum LudeumError: Error, Equatable {
     case gameHasCopies
     /// A Game can't be deleted while a Bundle contains it: it leaves the Bundle first.
     case gameInBundle
+    /// Only a Game on a Bundle's Platform can be in it: not a Game of another Platform, nor a Bundle.
+    case cantBeInBundle
     /// A Copy can't be Gone before it was acquired.
     case goneBeforeAcquired
     case gameNotFound
@@ -43,7 +45,7 @@ public struct Game: Sendable, Equatable {
     /// The current Rating: the latest Rating history entry. Nil when unrated.
     public let rating: Rating?
     /// A Bundle (ADR 0016): it contains Games, and has no Rating, Intent, Childhood or Playthroughs.
-    public var isBundle = false
+    public let isBundle: Bool
 }
 
 public enum Intent: String, Sendable, CaseIterable {

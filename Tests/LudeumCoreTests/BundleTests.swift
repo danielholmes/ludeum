@@ -79,23 +79,37 @@ import Testing
     }
 
     @Test func aBundleListsItsGamesAndAGameItsBundles() throws {
-        let deluxe = try h.journal.addBundle(platformId: 19, name: "Mario Deluxe Pack")
+        let deluxe = try h.journal.addBundle(platformId: 19, name: "Mario Deluxe")
         try h.journal.addToBundle(deluxe, smb3)
 
         #expect(try h.journal.bundleGames(allStars).map(\.name) == ["Super Mario Bros.", "Super Mario Bros. 3"])
-        #expect(try h.journal.bundles(containing: smb3).map(\.name) == ["Super Mario All-Stars", "Mario Deluxe Pack"])
+        #expect(try h.journal.bundles(containing: smb3).map(\.name) == ["Super Mario All-Stars", "Mario Deluxe"])
         #expect(try h.journal.bundles(containing: smb).map(\.id) == [allStars])
+        #expect(try h.journal.bundles().map(\.name) == ["Mario Deluxe", "Super Mario All-Stars"])
     }
 
     @Test func playOpensAGamesOwnROMBeforeItsBundles() throws {
         try h.journal.recordROM(game: allStars, fileName: "Super Mario All-Stars (USA).sfc", missing: false)
         #expect(try h.journal.romsToPlay(of: smb).map(\.fileName) == ["Super Mario All-Stars (USA).sfc"])
 
+        // A Game's own playable ROM is all Play looks at, so a Bundle's playlist or busy ROM can't get in its way.
         try h.journal.recordROM(game: smb, fileName: "Super Mario Bros. (World).nes", missing: false)
+        #expect(try h.journal.romsToPlay(of: smb).map(\.fileName) == ["Super Mario Bros. (World).nes"])
+        // A missing one doesn't count.
+        try h.journal.recordROM(game: smb3, fileName: "Super Mario Bros. 3 (USA).nes", missing: true)
         #expect(
-            try h.journal.romsToPlay(of: smb).map(\.fileName) == [
-                "Super Mario Bros. (World).nes", "Super Mario All-Stars (USA).sfc",
+            try h.journal.romsToPlay(of: smb3).map(\.fileName) == [
+                "Super Mario Bros. 3 (USA).nes", "Super Mario All-Stars (USA).sfc",
             ])
+    }
+
+    @Test func onlyAGameOfItsPlatformCanBeInABundle() throws {
+        try h.journal.addPlatform(id: 4, name: "NES")
+        let nes = try h.journal.addGame(platformId: 4, name: "Super Mario Bros.")
+        let other = try h.journal.addBundle(platformId: 19, name: "Super Mario Bundle")
+
+        #expect(throws: LudeumError.cantBeInBundle) { try h.journal.addToBundle(allStars, nes) }
+        #expect(throws: LudeumError.cantBeInBundle) { try h.journal.addToBundle(allStars, other) }
     }
 
     @Test func aPlaythroughCanBePlayedOnABundlesCopy() throws {

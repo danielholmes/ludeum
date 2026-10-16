@@ -9,3 +9,5 @@ Being a Bundle is my call, not IGDB's. IGDB types single-game releases such as K
 There is no action to turn a Game into a Bundle. The Games that were already Bundles became Bundles in a one-off migration, which dropped Super Mario All-Stars' Rating.
 
 In the journal a Bundle is a `game` row marked as one, with `bundleGame` saying which Games it contains. That way it shares, with no second copy of the code, everything it has in common with a Game: the IGDB link and its uniqueness, the Cover, Attachments, Highlight note, Copies and ROM Matching. The price is that every screen that lists Games leaves Bundles out, which the Library query does once for all of them.
+
+The code says so too: a Bundle is a `Game` whose `isBundle` is set, held by its `GameID`, and the screens a Bundle shares with a Game (its page, Assign to Game) ask that flag. A type of its own would mean a second copy of every Game read and write a Bundle uses, for no rule the flag gets wrong.
