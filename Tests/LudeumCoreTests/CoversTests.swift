@@ -340,8 +340,9 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         h.internet.addGame(2002, "Command & Conquer: Red Alert", fields: ["cover": ["image_id": "co9"]])
         h.internet.addLibretro("DOS", ["Command and Conquer - Red Alert (1997)"])
         try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
-        let game = try j.journal.addGame(platformId: 6, name: "Command & Conquer: Red Alert", igdbGameId: 2002,
-                                         igdbName: "Command & Conquer: Red Alert")
+        let game = try j.journal.addGame(
+            platformId: 6, name: "Command & Conquer: Red Alert", igdbGameId: 2002,
+            igdbName: "Command & Conquer: Red Alert")
 
         guard case .libretro(_, let path) = try await covers.cover(for: game) else {
             Issue.record("expected libretro's DOS Box art")
