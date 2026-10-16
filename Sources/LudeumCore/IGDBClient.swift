@@ -88,6 +88,8 @@ public struct IGDBGame: Sendable, Hashable {
     public var name: String? { record["name"]?.string }
     public var timeToBeat: JSONValue? { record["time_to_beat"] }
     public var releaseYear: Int? { Self.releaseYear(record) }
+    /// Other names IGDB knows it by: regional titles, abbreviations, working titles.
+    public var alternativeNames: [String] { (record["alternative_names"]?.array ?? []).compactMap { $0["name"]?.string } }
 
     /// The year of a record's first release, in UTC.
     static func releaseYear(_ record: JSONValue) -> Int? {
@@ -173,12 +175,6 @@ public final class IGDBClient: Sendable {
         let imageID = try await cachedGames(ids: [id])[id]?.record["cover"]?["image_id"]?.string
         coverImageIDs.withLock { $0[id] = .some(imageID) }
         return imageID
-    }
-
-    /// The year of the game's first release (in UTC), from its cached record: what tells LaunchBox's games of the same
-    /// name apart.
-    public func releaseYear(game id: Int) async throws -> Int? {
-        try await cachedGames(ids: [id])[id]?.releaseYear
     }
 
     /// IGDB game ids matching each name search on its platform, best match first.

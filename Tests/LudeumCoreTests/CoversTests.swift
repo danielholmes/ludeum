@@ -414,6 +414,62 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
+    @Test func aGameNeitherSourceFindsByItsOwnNamesIsFoundByIGDBsAlternativeNames() async throws {
+        h.internet.addGame(
+            2006, "Commander Keen in Invasion of the Vorticons: Marooned on Mars",
+            fields: ["alternative_names": [["name": "Commander Keen 1: Marooned on Mars"]], "cover": ["image_id": "co9"]])
+        h.internet.addLibretro("DOS", ["Commander Keen 1 - Marooned on Mars (1990)"])
+        try j.journal.addPlatform(id: 13, name: "DOS")
+        let game = try j.journal.addGame(
+            platformId: 13, name: "Commander Keen in Invasion of the Vorticons: Marooned on Mars", igdbGameId: 2006,
+            igdbName: "Commander Keen in Invasion of the Vorticons: Marooned on Mars")
+
+        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        #expect(path == "DOS/Named_Boxarts/Commander Keen 1 - Marooned on Mars (1990).png")
+    }
+
+    @Test func launchBoxFindsAGameByIGDBsAlternativeNames() async throws {
+        h.internet.addGame(
+            2007, "Commander Keen in Goodbye, Galaxy!: Secret of the Oracle",
+            fields: ["alternative_names": [["name": "Commander Keen 4: Secret of the Oracle"]], "cover": ["image_id": "co9"]])
+        h.internet.addLibretro("DOS", ["Doom (1993)"])
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Commander Keen 4: Secret of the Oracle", platform: "MS-DOS", boxes: [(nil, "keen4.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        try j.journal.addPlatform(id: 13, name: "DOS")
+        let game = try j.journal.addGame(
+            platformId: 13, name: "Commander Keen in Goodbye, Galaxy!: Secret of the Oracle", igdbGameId: 2007,
+            igdbName: "Commander Keen in Goodbye, Galaxy!: Secret of the Oracle")
+
+        guard case .launchBox(_, file: "keen4.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's Box art")
+            return
+        }
+    }
+
+    @Test func launchBoxsBoxForAGamesOwnNameBeatsLibretrosForAnAlternativeName() async throws {
+        // IGDB keeps Renegade's working title, Commando, which libretro's DOS set has a different game's box for.
+        h.internet.addGame(
+            2008, "Command & Conquer: Renegade", fields: ["alternative_names": [["name": "Commando"]], "cover": ["image_id": "co9"]])
+        h.internet.addLibretro("DOS", ["Commando (1986)"])
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Command & Conquer: Renegade", platform: "Windows", boxes: [(nil, "renegade.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
+        let game = try j.journal.addGame(
+            platformId: 6, name: "Command & Conquer: Renegade", igdbGameId: 2008, igdbName: "Command & Conquer: Renegade")
+
+        guard case .launchBox(_, file: "renegade.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's Box art for Renegade itself")
+            return
+        }
+    }
+
     @Test func aCoverGoesWithItsGame() async throws {
         let game = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
         try covers.upload(testImage(width: 60, height: 80), for: game)
