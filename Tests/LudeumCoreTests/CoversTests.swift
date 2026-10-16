@@ -483,6 +483,69 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
+    @Test func eachSourcesBoxArtIsShownWhicheverTheCoverIs() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System", boxes: [(nil, "sm.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+        try covers.upload(testImage(width: 60, height: 80), for: game)
+
+        let boxArt = try await covers.boxArtBySource(for: game)
+
+        guard case .libretro(_, "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (USA).png") = boxArt.libretro
+        else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+        guard case .launchBox(_, file: "sm.jpg") = boxArt.launchBox else {
+            Issue.record("expected LaunchBox's Box art")
+            return
+        }
+    }
+
+    @Test func aSourceWithNoBoxForAGameHasNone() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Mario World (USA)"])
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System", boxes: [(nil, "sm.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+
+        let boxArt = try await covers.boxArtBySource(for: game)
+
+        #expect(boxArt.libretro == nil)
+        guard case .launchBox(_, file: "sm.jpg") = boxArt.launchBox else {
+            Issue.record("expected LaunchBox's Box art")
+            return
+        }
+    }
+
+    @Test func eachSourceLooksAGameUpByIGDBsAlternativeNamesWhenItsOwnFindNothing() async throws {
+        // What the Cover order hides: libretro's box for Renegade's working title is a 1986 game's.
+        h.internet.addGame(2008, "Command & Conquer: Renegade", fields: ["alternative_names": [["name": "Commando"]]])
+        h.internet.addLibretro("DOS", ["Commando (1986)"])
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Command & Conquer: Renegade", platform: "Windows", boxes: [(nil, "renegade.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
+        let game = try j.journal.addGame(
+            platformId: 6, name: "Command & Conquer: Renegade", igdbGameId: 2008, igdbName: "Command & Conquer: Renegade")
+
+        let boxArt = try await covers.boxArtBySource(for: game)
+
+        guard case .libretro(_, "DOS/Named_Boxarts/Commando (1986).png") = boxArt.libretro else {
+            Issue.record("expected libretro's box for Commando")
+            return
+        }
+        guard case .launchBox(_, file: "renegade.jpg") = boxArt.launchBox else {
+            Issue.record("expected LaunchBox's Box art")
+            return
+        }
+    }
+
     @Test func aCoverGoesWithItsGame() async throws {
         let game = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
         try covers.upload(testImage(width: 60, height: 80), for: game)

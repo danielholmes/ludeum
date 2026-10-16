@@ -105,9 +105,26 @@ enum CoverTileSize {
     let revision = services.changes.coverRevision
     if let cached = services.memory.cover(game, revision: revision, pixels: pixels) { return cached }
     guard let source = try? await services.covers?.cover(for: game) else { return nil }  // a failed download: try again later
-    // Decoded off the main thread, there and then rather than at first draw, and no larger than a tile shows it.
-    let image = await Task.detached(priority: .userInitiated) { () -> NSImage? in
+    let image = await decodeCover(source, pixels: pixels)
+    services.memory.store(cover: image, for: game, revision: revision, pixels: pixels)
+    return image
+}
+
+/// The Cover's image as it is, for looking at full size. Not kept: only tile-sized Covers are.
+@MainActor func loadFullCover(_ services: Services, _ game: GameID) async -> NSImage? {
+    guard let source = try? await services.covers?.cover(for: game) else { return nil }
+    return await decodeCover(source, pixels: nil)
+}
+
+/// A Cover's image, decoded off the main thread, there and then rather than at first draw: no larger than `pixels` on
+/// its long edge, or as it is when that's nil. Nil for the placeholder.
+func decodeCover(_ source: CoverSource, pixels: Int?) async -> NSImage? {
+    await Task.detached(priority: .userInitiated) { () -> NSImage? in
         guard let imageSource = coverImageSource(source) else { return nil }
+        guard let pixels else {
+            guard let image = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else { return nil }
+            return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+        }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -116,19 +133,6 @@ enum CoverTileSize {
         ]
         guard let tile = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else { return nil }
         return NSImage(cgImage: tile, size: NSSize(width: tile.width, height: tile.height))
-    }.value
-    services.memory.store(cover: image, for: game, revision: revision, pixels: pixels)
-    return image
-}
-
-/// The Cover's image as it is, for looking at full size. Not kept: only tile-sized Covers are.
-@MainActor func loadFullCover(_ services: Services, _ game: GameID) async -> NSImage? {
-    guard let source = try? await services.covers?.cover(for: game) else { return nil }
-    return await Task.detached(priority: .userInitiated) { () -> NSImage? in
-        guard let imageSource = coverImageSource(source), let image = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
-            return nil
-        }
-        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
     }.value
 }
 

@@ -72,10 +72,10 @@ struct GameDetailView: View {
         Form {
             // Identity and actions: what the Game is, and playing it.
             Section {
-                HStack(alignment: .top, spacing: 16) {
-                    // The Cover in its own shape (SNES boxes are wide), at the top of its column.
-                    CoverView(services: services, game: id, name: game.name, fitsImage: true)
-                        .frame(width: 150).frame(maxHeight: 200, alignment: .top)
+                VStack(alignment: .leading, spacing: 12) {
+                    // For now, the Cover beside each source's Box art, to compare them; each in its own shape (SNES
+                    // boxes are wide).
+                    CoverComparison(services: services, game: id, name: game.name)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(game.name).font(.title).bold().textSelection(.enabled)
