@@ -18,8 +18,8 @@ struct CoverComparison: View {
 
         var label: String {
             switch self {
-            case .libretro: BoxArtSource.libretro.rawValue
-            case .launchBox: BoxArtSource.launchBox.rawValue
+            case .libretro: ImageSource.libretro.rawValue
+            case .launchBox: ImageSource.launchBox.rawValue
             case .igdb: "IGDB"
             }
         }
@@ -108,5 +108,85 @@ private struct SourceImageView: View {
             content()
         }
         .frame(maxWidth: 150).frame(height: 200)
+    }
+}
+
+/// For now, beside IGDB's: one source's Screenshots for the Game (`Covers.screenshots(for:from:)`), title screens
+/// first, each whole in a 4:3 tile and full size when clicked, to compare the sources while it's decided whether both
+/// are needed.
+struct SourceScreenshotsSection: View {
+    let services: Services
+    let game: GameID
+    let source: ImageSource
+    @State private var screenshots: [String]?
+    @State private var failed = false
+
+    var body: some View {
+        Section("\(source.rawValue) Screenshots") {
+            if let screenshots, !screenshots.isEmpty {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+                    ForEach(screenshots, id: \.self) { reference in
+                        SourceScreenshotTile(services: services, source: source, reference: reference)
+                    }
+                }
+            } else if failed {
+                Text("Couldn't load").foregroundStyle(.red)
+            } else if screenshots == nil {
+                ProgressView().controlSize(.small)
+            } else {
+                Text("None").foregroundStyle(.secondary)
+            }
+        }
+        .task(id: CoverKey(game: game, revision: services.changes.coverRevision, pixels: 0)) {
+            screenshots = nil
+            failed = false
+            do {
+                screenshots = try await services.covers?.screenshots(for: game, from: source) ?? []
+            } catch {
+                failed = true
+            }
+        }
+    }
+}
+
+/// One of a source's Screenshots, whole in a 4:3 tile, downloaded on first view; full size when clicked.
+private struct SourceScreenshotTile: View {
+    let services: Services
+    let source: ImageSource
+    let reference: String
+    @State private var image: SourceImage = .loading
+    @State private var enlarged = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4).fill(.quaternary)
+            switch image {
+            case .found(let found, let tile):
+                Image(nsImage: tile).resizable().interpolation(.high).antialiased(true).scaledToFit()
+                    .onTapGesture { enlarged = true }
+                    .help("\(reference) (click to show full size)")
+                    .sheet(isPresented: $enlarged) {
+                        EnlargedImage(name: "\(source.rawValue) Screenshot", tileSized: tile) { await decodeImage(found, pixels: nil) }
+                    }
+            case .loading: ProgressView().controlSize(.small)
+            case .none: EmptyView()
+            case .failed: Text("Couldn't load").font(.caption).foregroundStyle(.red)
+            }
+        }
+        .aspectRatio(4 / 3, contentMode: .fit)
+        .frame(minWidth: 0)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .task(id: reference) { image = await load() }
+    }
+
+    private func load() async -> SourceImage {
+        guard let file = try? await services.covers?.screenshot(reference, from: source) else { return .failed }
+        let found: CoverSource =
+            switch source {
+            case .libretro: .libretro(file, path: reference)
+            case .launchBox: .launchBox(file, file: reference)
+            }
+        guard let tile = await decodeImage(found, pixels: 600) else { return .failed }
+        return .found(found, tile)
     }
 }

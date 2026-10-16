@@ -96,6 +96,8 @@ struct IGDBFactsRows: View {
 struct ScreenshotsSection: View {
     let igdb: IGDBClient
     let screenshots: [String]
+    /// "IGDB Screenshots" on Game detail, for now, beside libretro's and LaunchBox's.
+    var title = "Screenshots"
     @State private var showingAll = false
     /// Three across while each gets at least `narrowest` points (in Game detail, a panel of about 400 points), else two.
     @State private var columns = 3
@@ -105,7 +107,7 @@ struct ScreenshotsSection: View {
     private nonisolated static let narrowest: CGFloat = 105
 
     var body: some View {
-        Section("Screenshots") {
+        Section(title) {
             let limit = 6
             let collapsed = !showingAll && screenshots.count > limit
             let shown = collapsed ? Array(screenshots.prefix(limit - 1)) : screenshots

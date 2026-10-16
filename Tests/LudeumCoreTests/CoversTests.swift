@@ -519,6 +519,43 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(try await covers.coverArt(for: byHand) == nil)
     }
 
+    @Test func eachSourcesScreenshotsAreFound() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System",
+                otherImages: [("Screenshot - Gameplay", "sm1.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+
+        #expect(
+            try await covers.screenshots(for: game, from: .libretro) == [
+                "Nintendo - Super Nintendo Entertainment System/Named_Titles/Super Metroid (USA).png",
+                "Nintendo - Super Nintendo Entertainment System/Named_Snaps/Super Metroid (USA).png",
+            ])
+        #expect(try await covers.screenshots(for: game, from: .launchBox) == ["sm1.jpg"])
+        let file = try #require(try await covers.screenshot("sm1.jpg", from: .launchBox))
+        #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
+    }
+
+    @Test func aGameWithNoROMsScreenshotsAreFoundByIGDBsAlternativeNamesWhenItsOwnFindNone() async throws {
+        h.internet.addGame(
+            2006, "Commander Keen in Invasion of the Vorticons: Marooned on Mars",
+            fields: ["alternative_names": [["name": "Commander Keen 1: Marooned on Mars"]]])
+        h.internet.addLibretro("DOS", ["Commander Keen 1 - Marooned on Mars (1990)"], folders: ["Named_Snaps"])
+        try j.journal.addPlatform(id: 13, name: "DOS")
+        let game = try j.journal.addGame(
+            platformId: 13, name: "Commander Keen in Invasion of the Vorticons: Marooned on Mars", igdbGameId: 2006,
+            igdbName: "Commander Keen in Invasion of the Vorticons: Marooned on Mars")
+
+        #expect(
+            try await covers.screenshots(for: game, from: .libretro) == [
+                "DOS/Named_Snaps/Commander Keen 1 - Marooned on Mars (1990).png"
+            ])
+        #expect(try await covers.screenshots(for: game, from: .launchBox) == [])
+    }
+
     @Test func aSourceWithNoBoxForAGameHasNone() async throws {
         h.internet.addLibretro(Self.snes, ["Super Mario World (USA)"])
         h.internet.setLaunchBox([

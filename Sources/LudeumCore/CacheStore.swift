@@ -53,6 +53,18 @@ public final class CacheStore: Sendable {
                     CREATE INDEX launchbox_image_on_game_id ON launchbox_image (game_id);
                     """)
         }
+        // An image's type as its place in `LaunchBoxGamesDB.keptTypes`, not its name: a dump's 560,000 images repeat a
+        // handful of names. What's kept is read again anyway (its read key changed with it).
+        migrator.registerMigration("v4") { db in
+            try db.execute(
+                sql: """
+                    DROP TABLE launchbox_image;
+                    CREATE TABLE launchbox_image (
+                        position INTEGER PRIMARY KEY, game_id INTEGER NOT NULL, type INTEGER NOT NULL, region TEXT,
+                        file_name TEXT NOT NULL);
+                    CREATE INDEX launchbox_image_on_game_id ON launchbox_image (game_id);
+                    """)
+        }
         try migrator.migrate(db)
     }
 

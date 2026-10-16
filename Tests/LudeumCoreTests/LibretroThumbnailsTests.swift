@@ -154,4 +154,21 @@ import Testing
         #expect(try await h.libretro.boxart(platform: 14, titles: ["Myst"], regions: []) == nil)
         #expect(h.internet.sent.isEmpty)
     }
+
+    @Test func itsTitleScreenAndSnapAreFoundTheSameWayTitleScreenFirst() async throws {
+        h.internet.addLibretro(
+            "Sony_-_PlayStation", ["Total Drivin (Europe) (En,Fr,De,Es,It,Pt)"], folders: ["Named_Snaps", "Named_Titles"])
+        h.internet.addLibretro("Sony_-_PlayStation", ["Gran Turismo (USA)"], folders: ["Named_Snaps"])
+
+        #expect(
+            try await h.libretro.screenshots(platform: 7, titles: ["Total Drivin"], regions: []) == [
+                "Sony - PlayStation/Named_Titles/Total Drivin (Europe) (En,Fr,De,Es,It,Pt).png",
+                "Sony - PlayStation/Named_Snaps/Total Drivin (Europe) (En,Fr,De,Es,It,Pt).png",
+            ])
+        #expect(
+            try await h.libretro.screenshots(platform: 7, titles: ["Gran Turismo"], regions: []) == [
+                "Sony - PlayStation/Named_Snaps/Gran Turismo (USA).png"
+            ])
+        #expect(try await h.libretro.screenshots(platform: 14, titles: ["Myst"], regions: []) == [])
+    }
 }

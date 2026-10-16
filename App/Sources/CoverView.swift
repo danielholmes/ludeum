@@ -145,8 +145,8 @@ extension CoverSource {
     var origin: String? {
         switch self {
         case .upload: "upload"
-        case .libretro: BoxArtSource.libretro.rawValue
-        case .launchBox: BoxArtSource.launchBox.rawValue
+        case .libretro: ImageSource.libretro.rawValue
+        case .launchBox: ImageSource.launchBox.rawValue
         case .igdb: "IGDB"
         case .placeholder: nil
         }

@@ -25,9 +25,10 @@ public final class LibretroThumbnails: Sendable {
     let transport: HTTPTransport
     let api: Throttle
     let maxAge: TimeInterval
-    /// Each repo's Box art names by title key, for Games with no ROM: worked out the first time one's Cover is shown and
-    /// kept, as it's looked up again each time. One that fails isn't kept, so the next Cover tries again.
-    private let boxartTitles = Mutex<[String: Task<LibretroLookup.TitleIndex, any Error>]>([:])
+    /// Each repo folder's names by title key, for Games with no ROM, by "<repo>/<folder>": worked out the first time one's
+    /// Cover (or Screenshots) are shown and kept, as they're looked up again each time. One that fails isn't kept, so
+    /// the next tries again.
+    private let titleIndexes = Mutex<[String: Task<LibretroLookup.TitleIndex, any Error>]>([:])
 
     public init(
         cache: CacheStore, transport: HTTPTransport = URLSessionTransport(), clock: TimeSource = SystemTimeSource(),
@@ -90,22 +91,37 @@ public final class LibretroThumbnails: Sendable {
     /// A Game with no ROM's Box art, which has no file name to look up: a title match on each of `titles` in turn,
     /// `regions`' box first, else USA, Europe, Japan. Nil when nothing matches, or for a Platform libretro has no repo for.
     public func boxart(platform: Int64, titles: [String], regions: Set<NameRegion>) async throws -> String? {
-        guard let repo = Self.boxartRepo(platform: platform) else { return nil }
-        let byTitle = try await boxartTitleIndex(repo)
-        return LibretroLookup.fuzzy(titles: titles, regions: regions, in: byTitle).map { Self.path(repo, "Named_Boxarts", $0) }
+        try await titleMatch("Named_Boxarts", platform: platform, titles: titles, regions: regions)
     }
 
-    private func boxartTitleIndex(_ repo: String) async throws -> LibretroLookup.TitleIndex {
-        let task = boxartTitles.withLock { tasks in
-            if let task = tasks[repo] { return task }
-            let task = Task { LibretroLookup.titleIndex(try await listing(repo)["Named_Boxarts"] ?? []) }
-            tasks[repo] = task
+    /// A Game with no ROM's title screen, then its gameplay snap, found the way its Box art is. Either can be missing;
+    /// empty for a Platform libretro has no repo for.
+    public func screenshots(platform: Int64, titles: [String], regions: Set<NameRegion>) async throws -> [String] {
+        var found: [String] = []
+        for folder in ["Named_Titles", "Named_Snaps"] {
+            if let path = try await titleMatch(folder, platform: platform, titles: titles, regions: regions) { found.append(path) }
+        }
+        return found
+    }
+
+    private func titleMatch(_ folder: String, platform: Int64, titles: [String], regions: Set<NameRegion>) async throws -> String? {
+        guard let repo = Self.boxartRepo(platform: platform) else { return nil }
+        let byTitle = try await titleIndex(repo, folder)
+        return LibretroLookup.fuzzy(titles: titles, regions: regions, in: byTitle).map { Self.path(repo, folder, $0) }
+    }
+
+    private func titleIndex(_ repo: String, _ folder: String) async throws -> LibretroLookup.TitleIndex {
+        let key = "\(repo)/\(folder)"
+        let task = titleIndexes.withLock { tasks in
+            if let task = tasks[key] { return task }
+            let task = Task { LibretroLookup.titleIndex(try await listing(repo)[folder] ?? []) }
+            tasks[key] = task
             return task
         }
         do {
             return try await task.value
         } catch {
-            boxartTitles.withLock { if $0[repo] == task { $0[repo] = nil } }
+            titleIndexes.withLock { if $0[key] == task { $0[key] = nil } }
             throw error
         }
     }

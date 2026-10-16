@@ -169,7 +169,11 @@ struct GameDetailView: View {
                 }
             }
             if !facts.screenshots.isEmpty, let igdb = services.igdb {
-                ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots)
+                ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots, title: "IGDB Screenshots")
+            }
+            // For now, each source's Screenshots too, to compare them.
+            ForEach(ImageSource.allCases, id: \.self) { source in
+                SourceScreenshotsSection(services: services, game: id, source: source)
             }
 
             // Copies: the ROMs (checked now and then), then the ones recorded by hand.

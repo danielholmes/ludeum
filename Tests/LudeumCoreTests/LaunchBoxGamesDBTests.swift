@@ -80,6 +80,44 @@ import Testing
         #expect(try boxart(6, ["Germany"]) == "de3.jpg")
     }
 
+    @Test func aGamesScreenshotsAreFoundTitleScreensFirst() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 9, name: "Half-Life", platform: "Windows",
+                otherImages: [
+                    ("Screenshot - Gameplay", "hl1.jpg"), ("Screenshot - Game Title", "hlt.jpg"), ("Screenshot - Gameplay", "hl2.jpg"),
+                    ("Box - Back", "back.jpg"),
+                ]),
+            Self.redAlert2,
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(try launchBox.screenshots(platform: 6, titles: ["Half-Life"], year: nil) == ["hlt.jpg", "hl1.jpg", "hl2.jpg"])
+        #expect(try launchBox.screenshots(platform: 6, titles: ["Command & Conquer: Red Alert 2"], year: nil) == ["ra2-shot.jpg"])
+        #expect(try boxart(6, ["Half-Life"]) == nil)
+    }
+
+    @Test func theScreenshotsAreAllOneGamesTheYearPicking() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Doom", platform: "Windows", released: "1993-12-10", otherImages: [("Screenshot - Gameplay", "d93.jpg")]),
+            LaunchBoxGame(
+                id: 2, name: "Doom", platform: "Windows", released: "2016-05-13", otherImages: [("Screenshot - Gameplay", "d16.jpg")]),
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(try launchBox.screenshots(platform: 6, titles: ["Doom"], year: 2016) == ["d16.jpg"])
+        #expect(try launchBox.screenshots(platform: 6, titles: ["Doom"], year: nil) == ["d93.jpg"])
+    }
+
+    @Test func aDumpReadBeforeScreenshotsWereKeptIsReadAgain() throws {
+        try h.cache.store(["launchbox:metadata": Data()])
+
+        #expect(try launchBox.isStale())
+    }
+
     @Test func aGamesOwnNameBeatsAnothersAlternateName() async throws {
         h.internet.setLaunchBox([
             LaunchBoxGame(id: 2, name: "Descent 3", platform: "Windows", alternateNames: ["Descent"], boxes: [(nil, "d3.jpg")]),
