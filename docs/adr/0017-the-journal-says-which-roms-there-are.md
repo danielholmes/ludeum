@@ -8,6 +8,8 @@ What stays is the half of 0009 that keeps the journal honest about files: each I
 
 Stray files are kept in the journal (`strayFile`), as the files' state is for ROMs and Attachments, so the Review queue and its count don't need the folders read again. Each Import rewrites a ROM folder's list once it has read the folder, and leaves the list of a folder it couldn't read alone.
 
+A ROM's file renamed in Finder is now a missing ROM and a Stray file, where it used to be a missing ROM and a new one. Adding the Stray file would still make a new ROM, leaving the old one with its Match, Copy details and Playthroughs. So a Stray file can instead be given to a missing ROM of its Platform, which takes the file and its name and stays the same ROM. Ludeum suggests the likeliest by name but never decides, as a replaced file, a better dump say, is as likely as a renamed one.
+
 ## Considered Options
 
 - **Keep reading new files as new ROMs** (0009 as it was): rejected. A half-copied file, a Dropbox sync caught part-way, something unpacked by hand in Finder, or a file renamed in Finder, became a ROM with a Match of its own (or an unmatched one), and its review item, without my asking.

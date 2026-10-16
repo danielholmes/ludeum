@@ -828,6 +828,8 @@ private func reviewErrorText(_ error: ReviewError) -> String {
     case .noROMFolder: "That Platform has no ROM folder."
     case .bothFormsChanged: "This ROM's copies have changed in its ROM folder. Nothing went to the Trash."
     case .duplicateVersionsChanged: "This Game's ROMs have changed since they were shown. Nothing was changed."
+    case .notMissing: "That ROM isn't missing any more. Nothing was changed."
+    case .strayFileGone: "That file isn't in its ROM folder any more. Check again."
     }
 }
 

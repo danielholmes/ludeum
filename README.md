@@ -83,7 +83,7 @@ Ludeum also uses these command-line tools, and warns at launch if one is missing
 
 Cartridge ROMs (and DS) can be kept in a `.7z`, or a `.zip` for N64 and Mega Drive, since their emulators open those directly; the Review queue lists loose ones and compacts them for you. A ROM packed in a format its emulator can't open (for example a `.7z` disc image) shows as archived. Unarchive it in Game detail (PS1, PS2, PSP, Vita, GameCube, Wii, Xbox, Sega CD, Saturn and PC Engine CD) or extract it in its ROM folder to make it playable.
 
-On the disc platforms (PS1, Sega CD, Saturn and PC Engine CD), each ROM is a subfolder named after it. A multi-disc game's subfolder holds its discs and an `.m3u` playlist that loads them. Add ROM writes the playlist; a folder put in by hand without one can't be played until it has one.
+On the disc platforms (PS1, Sega CD, Saturn and PC Engine CD), each ROM is a subfolder named after it. A multi-disc game's subfolder holds its discs and an `.m3u` playlist that loads them. Add ROM writes the playlist; a folder put in by hand without one, then Added from the Review queue, can't be played until it has one.
 
 ## License
 

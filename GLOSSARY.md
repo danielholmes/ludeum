@@ -223,7 +223,7 @@ Reading the ROM folders against the journal: how each ROM's files are now, and w
 _Avoid_: Scan, pull
 
 **Stray file**:
-A game file in a ROM folder that isn't a ROM in the journal, such as one put there by hand, or by another Mac through Dropbox. It waits in the Review queue until I Add it as a ROM (Matched automatically, or waiting there to be Matched like any new ROM) or take it out of the folder.
+A game file in a ROM folder that isn't a ROM in the journal, such as one put there by hand, or by another Mac through Dropbox. It waits in the Review queue until I Add it as a ROM (Matched automatically, or waiting there to be Matched like any new ROM), give it to a missing ROM whose file it is (renamed in Finder, or replaced), or take it out of the folder.
 _Avoid_: Orphan, unknown file, new ROM
 
 **Add ROM**:

@@ -23,6 +23,13 @@ public struct StrayFile: Sendable, Equatable, Identifiable {
             self.name = name
         }
     }
+
+    /// A missing ROM of its Platform it could be, with the name of the Game it's Matched to, if any.
+    public struct MissingROM: Sendable, Equatable, Identifiable {
+        public let rom: LudeumROM
+        public let gameName: String?
+        public var id: Int64 { rom.id }
+    }
 }
 
 extension LudeumStore {
@@ -58,6 +65,60 @@ extension LudeumStore {
             if !before.contains(file.name) { new.append(file.name) }
         }
         return new
+    }
+
+    /// The missing ROMs of a Stray file's Platform, which it may be (its file renamed in Finder, or replaced): those whose
+    /// names share the most words with its name first, then by name.
+    public func missingROMs(for stray: StrayFile) throws -> [StrayFile.MissingROM] {
+        let condition = "r.platformId = ? AND r.missing AND r.folderName IS NOT NULL"
+        let roms = try roms(where: condition, arguments: [stray.platformId])
+        let games = try db.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, gameId FROM rom r WHERE \(condition)", arguments: [stray.platformId])
+                .reduce(into: [Int64: GameID]()) { $0[$1["id"]] = $1["gameId"] }
+        }
+        let words = Self.words(stray.name)
+        func shared(_ rom: LudeumROM) -> Int { Self.words(rom.folderName).intersection(words).count }
+        let likeliest = roms.sorted { a, b in
+            let (sharedA, sharedB) = (shared(a), shared(b))
+            if sharedA != sharedB { return sharedA > sharedB }
+            return a.folderName.localizedStandardCompare(b.folderName) == .orderedAscending
+        }
+        return try likeliest.map { rom in
+            StrayFile.MissingROM(rom: rom, gameName: try games[rom.id].map { try game($0).name })
+        }
+    }
+
+    private static func words(_ name: String) -> Set<String> {
+        Set(name.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
+    }
+
+    /// Gives a missing ROM of its Platform a Stray file as its own: its file renamed in Finder, or replaced. It takes the
+    /// file's name, and its Version from it, and stays the same ROM with its Match, Copy details and Playthroughs; its
+    /// checksum, its old file's, goes. Refused, with nothing changed, when the ROM isn't missing any more, the file has
+    /// left its ROM folder, or another ROM has its name in another case.
+    public func giveStrayFile(_ stray: StrayFile, to rom: Int64, in folder: ROMFolder) throws {
+        guard folder.platformId == stray.platformId else { throw ReviewError.noROMFolder }
+        guard let file = try folder.rom(named: stray.name) else { throw ReviewError.strayFileGone }
+        let parsed = ROMName(file.name)
+        try db.write { db in
+            guard
+                try Bool.fetchOne(
+                    db, sql: "SELECT missing FROM rom WHERE id = ? AND platformId = ?", arguments: [rom, stray.platformId]) == true
+            else { throw ReviewError.notMissing }
+            guard
+                try Bool.fetchOne(
+                    db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE platformId = ? AND folderName = ? COLLATE NOCASE)",
+                    arguments: [stray.platformId, file.name]) == false
+            else { throw ReviewError.alreadyInROMFolder }
+            try Self.notStray(db, file.name, on: stray.platformId)
+            try db.execute(
+                sql: """
+                    UPDATE rom SET folderName = ?, name = ?, version = ?, discNumber = ?, discLabel = ?, md5 = NULL, crc = NULL
+                    WHERE id = ?
+                    """,
+                arguments: [file.name, file.name, parsed.version, parsed.disc, parsed.discLabel, rom])
+            try Self.setFolderROM(db, rom, to: file)
+        }
     }
 
     /// No Stray file of that name: it's gone from its ROM folder, or a ROM of that name is recorded.

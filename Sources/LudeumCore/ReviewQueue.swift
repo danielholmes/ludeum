@@ -369,6 +369,10 @@ public enum ReviewError: Error, Equatable {
     case bothFormsChanged
     /// The Game's present ROMs aren't the ones shown when I chose a Version: one Split off, gone, or added meanwhile.
     case duplicateVersionsChanged
+    /// A missing ROM given a Stray file has its own file back already.
+    case notMissing
+    /// The Stray file has left its ROM folder since it was listed.
+    case strayFileGone
 }
 
 private func gameROM(_ rom: LudeumROM) -> GameROM {

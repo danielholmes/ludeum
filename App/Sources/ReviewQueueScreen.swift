@@ -163,7 +163,8 @@ struct ReviewQueueScreen: View {
                     NotCompactedDetail(services: services, item: item, showGame: { shownGame = $0 })
                 } else if kind == .strayFiles, let item = items.strayFiles.first(where: { $0.id == selection }) {
                     StrayFileDetail(
-                        services: services, item: item, checkAgain: checkAgain, add: { addStrayFiles([item.key]) })
+                        services: services, item: item, checkAgain: checkAgain, add: { addStrayFiles([item.key]) },
+                        failed: { error = $0 })
                 } else if let item = romItems.first(where: { $0.romId == selection }) {
                     ReviewItemDetail(services: services, item: item, failed: { error = $0 }, answered: { shownGame = $0 })
                 } else {
@@ -845,8 +846,9 @@ private struct MissingROMsDetail: View {
                     .labelStyle(.iconOnly).buttonStyle(.hover).help("Copy the Game's name, to search for its ROM")
                 }
                 Text(
-                    "Its ROMs are all missing from its ROM folder. Add a ROM, put one back then Check again, or delete its missing "
-                        + "ROMs: the Game stays, as a journal entry I can delete too."
+                    "Its ROMs are all missing from its ROM folder. Add a ROM, put one back then Check again (a file renamed in "
+                        + "Finder waits under Stray files, to be given back to its ROM), or delete its missing ROMs: the Game stays, "
+                        + "as a journal entry I can delete too."
                 )
                 .foregroundStyle(.secondary)
             }
@@ -1143,11 +1145,14 @@ private struct StrayFileDetail: View {
     let item: StrayFile
     let checkAgain: () -> Void
     let add: () -> Void
+    let failed: (String?) -> Void
+    /// Its Platform's missing ROMs, likeliest first, which it may be the file of.
+    @State private var missingROMs: [StrayFile.MissingROM] = []
+    @State private var missingROM: Int64?
 
     private var platformName: String { ROMPlatform.all[item.platformId]?.name ?? "Platform \(item.platformId)" }
-    private var file: URL? {
-        services.settings.romFolders.first { $0.platformId == item.platformId }?.url.appending(path: item.fileName)
-    }
+    private var folder: ROMFolder? { services.settings.romFolders.first { $0.platformId == item.platformId } }
+    private var file: URL? { folder?.url.appending(path: item.fileName) }
 
     var body: some View {
         Form {
@@ -1162,6 +1167,23 @@ private struct StrayFileDetail: View {
             Section("File") {
                 LabeledContent("In \(platformName)", value: item.fileName)
             }
+            if !missingROMs.isEmpty {
+                Section("A missing ROM's file?") {
+                    Text(
+                        "If it's the file of one of \(platformName)'s missing ROMs, renamed or replaced, give it to that ROM: it "
+                            + "takes the file's name and keeps its Match and Copy details."
+                    )
+                    .foregroundStyle(.secondary)
+                    HStack {
+                        Picker("Missing ROM", selection: $missingROM) {
+                            ForEach(missingROMs) { m in
+                                Text(m.gameName.map { "\(m.rom.folderName) · \($0)" } ?? m.rom.folderName).tag(Int64?.some(m.id))
+                            }
+                        }
+                        Button("Give it this file", action: give).disabled(missingROM == nil)
+                    }
+                }
+            }
             FlowLayout(spacing: 8) {
                 Button("Add as ROM", action: add)
                     .help("Make it a ROM, Matched automatically where its checksum and name agree, else waiting here to be Matched")
@@ -1172,5 +1194,23 @@ private struct StrayFileDetail: View {
             }
         }
         .formStyle(.grouped)
+        .task(id: item) { load() }
+    }
+
+    private func load() {
+        missingROMs = (try? services.journal?.missingROMs(for: item)) ?? []
+        missingROM = missingROMs.first?.id
+    }
+
+    private func give() {
+        guard let journal = services.journal, let missingROM else { return }
+        do {
+            guard let folder else { throw ReviewError.noROMFolder }
+            try journal.giveStrayFile(item, to: missingROM, in: folder)
+            failed(nil)
+        } catch {
+            failed(journalErrorText(error))
+        }
+        services.changes.coverChanged()
     }
 }

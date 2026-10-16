@@ -65,7 +65,7 @@ extension LudeumStore {
         try roms(where: "r.id = ?", arguments: [id]).first
     }
 
-    private func roms(where condition: String, arguments: StatementArguments) throws -> [LudeumROM] {
+    func roms(where condition: String, arguments: StatementArguments) throws -> [LudeumROM] {
         try db.read { db in
             try Row.fetchAll(
                 db,
