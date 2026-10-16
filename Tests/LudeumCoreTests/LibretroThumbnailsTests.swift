@@ -151,7 +151,7 @@ import Testing
     }
 
     @Test func aPlatformWithoutARepoFindsNothing() async throws {
-        #expect(try await h.libretro.boxart(platform: 6, titles: ["Half-Life"], regions: []) == nil)
+        #expect(try await h.libretro.boxart(platform: 14, titles: ["Myst"], regions: []) == nil)
         #expect(h.internet.sent.isEmpty)
     }
 }

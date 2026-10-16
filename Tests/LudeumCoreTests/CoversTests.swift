@@ -325,7 +325,34 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     }
 
     @Test func aGameOnAPlatformLibretroHasNoBoxesForNeverAsksLibretro() async throws {
+        h.internet.addGame(2000, "Myst", fields: ["cover": ["image_id": "co9"]])
+        try j.journal.addPlatform(id: 14, name: "Mac")
+        let game = try j.journal.addGame(platformId: 14, name: "Myst", igdbGameId: 2000, igdbName: "Myst")
+
+        guard case .igdb(_, "co9") = try await covers.cover(for: game) else {
+            Issue.record("expected IGDB's Cover art")
+            return
+        }
+        #expect(h.internet.sent(to: FakeInternet.Hosts.github).isEmpty)
+    }
+
+    @Test func aPCGameShowsItsDOSBoxArt() async throws {
+        h.internet.addGame(2002, "Command & Conquer: Red Alert", fields: ["cover": ["image_id": "co9"]])
+        h.internet.addLibretro("DOS", ["Command and Conquer - Red Alert (1997)"])
+        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
+        let game = try j.journal.addGame(platformId: 6, name: "Command & Conquer: Red Alert", igdbGameId: 2002,
+                                         igdbName: "Command & Conquer: Red Alert")
+
+        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's DOS Box art")
+            return
+        }
+        #expect(path == "DOS/Named_Boxarts/Command and Conquer - Red Alert (1997).png")
+    }
+
+    @Test func aPCGameDOSHasNoBoxForShowsIGDBsCoverArt() async throws {
         h.internet.addGame(2000, "Half-Life", fields: ["cover": ["image_id": "co9"]])
+        h.internet.addLibretro("DOS", ["Command and Conquer - Red Alert (1997)"])
         try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
         let game = try j.journal.addGame(platformId: 6, name: "Half-Life", igdbGameId: 2000, igdbName: "Half-Life")
 
@@ -333,7 +360,6 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
             Issue.record("expected IGDB's Cover art")
             return
         }
-        #expect(h.internet.sent(to: FakeInternet.Hosts.github).isEmpty)
     }
 
     @Test func aCoverGoesWithItsGame() async throws {

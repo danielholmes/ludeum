@@ -48,11 +48,12 @@ public final class LibretroThumbnails: Sendable {
     }
 
     /// The repos for Platforms with no ROM folder (`ROMPlatform.libretroRepo` has the rest), by IGDB platform id. Some
-    /// are thin (PS3, PS4 and the Xbox 360 have a few dozen boxes); PC, Mac, the Switch and the Xbox One and later have
+    /// are thin (PS3, PS4 and the Xbox 360 have a few dozen boxes); Mac, the Switch and the Xbox One and later have
     /// none. IGDB splits some Platforms libretro doesn't: the Neo Geo MVS and AES (79, 80) share one repo, as do the 3DS
-    /// and New 3DS (37, 137).
+    /// and New 3DS (37, 137). libretro has no Windows repo, so PC (6) looks in DOS's, where the Windows 95 era's boxes
+    /// are (Command & Conquer: Red Alert).
     static let reposForPlatformsWithNoROMFolder: [Int64: String] = [
-        9: "Sony_-_PlayStation_3", 12: "Microsoft_-_Xbox_360", 13: "DOS", 15: "Commodore_-_64",
+        6: "DOS", 9: "Sony_-_PlayStation_3", 12: "Microsoft_-_Xbox_360", 13: "DOS", 15: "Commodore_-_64",
         16: "Commodore_-_Amiga", 23: "Sega_-_Dreamcast", 25: "Amstrad_-_CPC", 26: "Sinclair_-_ZX_Spectrum", 27: "Microsoft_-_MSX",
         30: "Sega_-_32X", 37: "Nintendo_-_Nintendo_3DS", 41: "Nintendo_-_Wii_U", 48: "Sony_-_PlayStation_4",
         50: "The_3DO_Company_-_3DO", 51: "Nintendo_-_Family_Computer_Disk_System", 57: "Bandai_-_WonderSwan", 59: "Atari_-_2600",
