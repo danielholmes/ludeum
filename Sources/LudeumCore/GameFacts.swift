@@ -179,7 +179,7 @@ extension IGDBGame {
 extension IGDBClient {
     /// A linked Game's facts, from the cache (fetched if it isn't there yet).
     public func facts(igdbGameId: Int64) async throws -> GameFacts {
-        try await cachedGames(ids: [Int(igdbGameId)])[Int(igdbGameId)]?.facts ?? .none
+        try await cachedGame(id: Int(igdbGameId))?.facts ?? .none
     }
 
     /// A screenshot at `screenshot_med` (569 × 320, cropped to fill it) for a strip of thumbnails, or the `original`,

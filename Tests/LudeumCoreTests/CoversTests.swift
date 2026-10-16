@@ -431,6 +431,19 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(path == "DOS/Named_Boxarts/Commander Keen 1 - Marooned on Mars (1990).png")
     }
 
+    @Test func aGameWithAROMHasItsROMsLibretroBoxArtOrNoneWhateverItsAlternativeNames() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        h.internet.addGame(2009, "Metroid 3", fields: ["alternative_names": [["name": "Super Metroid"]], "cover": ["image_id": "co9"]])
+        let game = try j.journal.addGame(platformId: 19, name: "Metroid 3", igdbGameId: 2009, igdbName: "Metroid 3")
+        try j.journal.recordROM(game: game, fileName: "Metroid 3 (Hack).sfc", missing: false)
+        await BoxArtImport(journal: j.journal, libretro: h.libretro).run()
+
+        guard case .igdb(_, "co9") = try await covers.cover(for: game) else {
+            Issue.record("expected IGDB's Cover art")
+            return
+        }
+    }
+
     @Test func launchBoxFindsAGameByIGDBsAlternativeNames() async throws {
         h.internet.addGame(
             2007, "Commander Keen in Goodbye, Galaxy!: Secret of the Oracle",

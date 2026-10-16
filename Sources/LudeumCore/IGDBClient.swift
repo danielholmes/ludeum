@@ -139,6 +139,11 @@ public final class IGDBClient: Sendable {
         try await games(ids: ids, servesStale: true, usesExpired: true)
     }
 
+    /// One game's record, as `cachedGames`.
+    public func cachedGame(id: Int) async throws -> IGDBGame? {
+        try await cachedGames(ids: [id])[id]
+    }
+
     func games(ids: [Int], servesStale: Bool, usesExpired: Bool = false) async throws -> [Int: IGDBGame] {
         var fetched: [Int] = []
         // Once their new records are in the cache, even if a later batch fails: what was kept from the old ones is out
@@ -172,7 +177,7 @@ public final class IGDBClient: Sendable {
     /// fetched again, so showing a Cover reads its whole record once, not every time.
     public func coverImageID(game id: Int) async throws -> String? {
         if let known = coverImageIDs.withLock({ $0[id] }) { return known }
-        let imageID = try await cachedGames(ids: [id])[id]?.record["cover"]?["image_id"]?.string
+        let imageID = try await cachedGame(id: id)?.record["cover"]?["image_id"]?.string
         coverImageIDs.withLock { $0[id] = .some(imageID) }
         return imageID
     }
