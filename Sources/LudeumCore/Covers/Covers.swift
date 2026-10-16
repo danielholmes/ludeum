@@ -142,7 +142,7 @@ public struct Covers: Sendable {
     let launchBox: LaunchBoxGamesDB?
 
     /// Without a client (no cache, no credentials) its source is skipped.
-    public init(journal: LudeumStore, igdb: IGDBClient?, libretro: LibretroThumbnails?, launchBox: LaunchBoxGamesDB? = nil) {
+    public init(journal: LudeumStore, igdb: IGDBClient?, libretro: LibretroThumbnails?, launchBox: LaunchBoxGamesDB?) {
         self.journal = journal
         self.igdb = igdb
         self.libretro = libretro
@@ -180,7 +180,8 @@ public struct Covers: Sendable {
     }
 
     /// A title match in LaunchBox, for any Game libretro has no Box art for, with or without a ROM: by the Game's names,
-    /// its Copies' Regions and IGDB's year for it, which tells games of the same name apart (Doom in 1993 and 2016).
+    /// its Copies' Regions and IGDB's year for it, which prefers the right one of games of the same name (Doom in 1993 and
+    /// 2016).
     private func launchBoxBoxArt(_ game: GameID, _ launchBox: LaunchBoxGamesDB) async throws -> String? {
         let lookup = try journal.boxArtLookup(game)
         var year: Int?

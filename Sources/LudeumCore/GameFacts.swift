@@ -157,9 +157,7 @@ extension IGDBGame {
         var facts = GameFacts(
             genres: names("genres"), themes: names("themes"), franchises: franchises, series: names("collections"),
             credits: credits,
-            releaseYear: record["first_release_date"]?.int.map {
-                Calendar(identifier: .gregorian).dateComponents(in: .gmt, from: Date(timeIntervalSince1970: TimeInterval($0))).year!
-            },
+            releaseYear: IGDBGame.releaseYear(record),
             links: links,
             playerScore: CommunityScore(record["rating"], count: record["rating_count"]),
             criticScore: CommunityScore(record["aggregated_rating"], count: record["aggregated_rating_count"]),

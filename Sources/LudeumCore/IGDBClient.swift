@@ -87,6 +87,14 @@ public struct IGDBGame: Sendable, Hashable {
     public let record: JSONValue
     public var name: String? { record["name"]?.string }
     public var timeToBeat: JSONValue? { record["time_to_beat"] }
+    public var releaseYear: Int? { Self.releaseYear(record) }
+
+    /// The year of a record's first release, in UTC.
+    static func releaseYear(_ record: JSONValue) -> Int? {
+        record["first_release_date"]?.int.map {
+            Calendar(identifier: .gregorian).dateComponents(in: .gmt, from: Date(timeIntervalSince1970: TimeInterval($0))).year!
+        }
+    }
 }
 
 public final class IGDBClient: Sendable {
@@ -170,9 +178,7 @@ public final class IGDBClient: Sendable {
     /// The year of the game's first release (in UTC), from its cached record: what tells LaunchBox's games of the same
     /// name apart.
     public func releaseYear(game id: Int) async throws -> Int? {
-        try await cachedGames(ids: [id])[id]?.record["first_release_date"]?.int.map {
-            Calendar(identifier: .gregorian).dateComponents(in: .gmt, from: Date(timeIntervalSince1970: TimeInterval($0))).year!
-        }
+        try await cachedGames(ids: [id])[id]?.releaseYear
     }
 
     /// IGDB game ids matching each name search on its platform, best match first.

@@ -16,7 +16,7 @@ public struct CacheRefresh: Sendable {
     let launchBox: LaunchBoxGamesDB?
     let gate: WorkGate
 
-    public init(cache: CacheStore, igdb: IGDBClient?, hasheous: HasheousClient, launchBox: LaunchBoxGamesDB? = nil, gate: WorkGate) {
+    public init(cache: CacheStore, igdb: IGDBClient?, hasheous: HasheousClient, launchBox: LaunchBoxGamesDB?, gate: WorkGate) {
         self.cache = cache
         self.igdb = igdb
         self.hasheous = hasheous

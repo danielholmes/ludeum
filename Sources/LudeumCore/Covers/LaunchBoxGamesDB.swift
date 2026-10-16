@@ -1,71 +1,74 @@
 import Foundation
 import GRDB
 
-/// The LaunchBox Games Database: retail box scans for nearly every platform, Windows and the consoles libretro-thumbnails
-/// has no repo for among them. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB unzipped), made
-/// daily. It's read at most every 30 days, by the launch refresh, streamed out of the zip without unpacking it to disk,
-/// and only what finds a Game's box is kept, in the cache: each game on a Platform `platforms` maps, with its names, year
-/// and Box - Front images, and their names' title keys (about 44 MB). Images come from `images.launchbox-app.com` by file name, downloaded the first
-/// time one's shown.
+/// The LaunchBox Games Database: retail box scans for nearly every Platform, Windows and the ones libretro-thumbnails has
+/// no repo for among them. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB unzipped), made daily.
+/// It's read at most every 30 days, by the launch refresh, downloaded to a file and streamed out of the zip without
+/// unpacking it, and only what finds a Game's box is kept, in the cache: each game on a Platform `platforms` maps, with
+/// its year, names and their title keys, and Box - Front images (about 44 MB). Images come from
+/// `images.launchbox-app.com` by file name, downloaded the first time one's shown.
 public final class LaunchBoxGamesDB: Sendable {
     let cache: CacheStore
     let transport: HTTPTransport
 
     /// How long a dump is kept before the launch refresh reads LaunchBox's again.
-    public static let maxAge: TimeInterval = 30 * 86_400
+    static let maxAge: TimeInterval = 30 * 86_400
+    /// How long after a dump couldn't be downloaded or read before it's tried again, rather than at every launch.
+    static let retryAfter: TimeInterval = 86_400
     static let dumpURL = URL(string: "https://gamesdb.launchbox-app.com/Metadata.zip")!
     /// The cache entry whose `fetched_at` says when the dump was last read.
     static let readKey = "launchbox:metadata"
+    /// The cache entry whose `fetched_at` says when a dump last couldn't be downloaded or read.
+    static let failedKey = "launchbox:failed"
+    static let boxFront = "Box - Front"
     /// The image types kept from the dump.
-    static let keptTypes: Set<String> = ["Box - Front"]
+    static let keptTypes: Set<String> = [boxFront]
 
     public init(cache: CacheStore, transport: HTTPTransport = URLSessionTransport()) {
         self.cache = cache
         self.transport = transport
     }
 
-    /// True when no dump has been read, or the last was read more than 30 days ago.
+    /// True when no dump has been read, or the last was read more than 30 days ago, unless one couldn't be downloaded or
+    /// read in the last day.
     public func isStale() throws -> Bool {
-        guard let read = try cache.entries([Self.readKey])[Self.readKey] else { return true }
-        return cache.clock.now().timeIntervalSince(read.fetchedAt) > Self.maxAge
-    }
-
-    /// Reads the dump when it's stale. True when it did.
-    @discardableResult
-    public func refreshIfStale() async throws -> Bool {
-        guard try isStale() else { return false }
-        try await refresh()
-        return true
+        let entries = try cache.entries([Self.readKey, Self.failedKey])
+        let now = cache.clock.now()
+        if let failed = entries[Self.failedKey], now.timeIntervalSince(failed.fetchedAt) < Self.retryAfter { return false }
+        guard let read = entries[Self.readKey] else { return true }
+        return now.timeIntervalSince(read.fetchedAt) > Self.maxAge
     }
 
     /// Downloads the dump and replaces what's kept of the last one. One that can't be downloaded or read throws and
-    /// leaves the last one, still stale, to be tried again at the next launch.
+    /// leaves the last one in place, to be tried again a day later.
     public func refresh() async throws {
-        let (data, response) = try await transport.send(URLRequest(url: Self.dumpURL))
-        guard response.statusCode == 200 else { throw HTTPStatusError(status: response.statusCode, url: Self.dumpURL) }
         let zip = FileManager.default.temporaryDirectory.appending(path: "ludeum-launchbox-\(UUID().uuidString).zip")
-        try data.write(to: zip)
         defer { try? FileManager.default.removeItem(at: zip) }
-        try cache.replaceLaunchBox(try LaunchBoxDump.read(zip: zip))
+        do {
+            let response = try await transport.download(URLRequest(url: Self.dumpURL), to: zip)
+            guard response.statusCode == 200 else { throw HTTPStatusError(status: response.statusCode, url: Self.dumpURL) }
+            try cache.replaceLaunchBox(try LaunchBoxDump.read(zip: zip))
+        } catch {
+            try? cache.store([Self.failedKey: Data()])
+            throw error
+        }
     }
 
     /// The file name of a game's Box - Front, matched by title on the Platform as libretro's are (`LibretroLookup`), each
     /// of `titles` in turn, by title key, then by loose title key. Of several, a game's own name beats another's
-    /// alternate name, then the game released in `year`, then the box for `regions`, else North America's, the World's,
+    /// alternate name, then the game released in `year` is preferred (one of another year still matches), then the box
+    /// for `regions`, else North America's, the World's,
     /// one with no region, Europe's, Japan's; then the shortest name, then the first in the dump. Nil when nothing
     /// matches, before any dump has been read, or for a Platform LaunchBox has none for.
     public func boxart(platform: Int64, titles: [String], regions: Set<NameRegion>, year: Int?) throws -> String? {
         guard let platforms = Self.platforms[platform] else { return nil }
         let spelled = titles.map(LibretroLookup.spelledOut).filter { !titles.contains($0) }
-        let tiers: [(column: String, key: (String) -> String)] = [
-            ("title_key", LibretroLookup.titleKey), ("loose_title_key", LibretroLookup.looseTitleKey),
-        ]
         let regionOrder = Self.regionOrder(regions)
-        for tier in tiers {
+        for tier in TitleKey.allCases {
             for title in titles + spelled {
-                let key = tier.key(title)
+                let key = tier.of(title)
                 guard !key.isEmpty else { continue }
-                let boxes = try cache.launchBoxBoxes(tier.column, key, platforms: platforms)
+                let boxes = try cache.launchBoxBoxes(Self.boxFront, tier, key, platforms: platforms)
                 let best = boxes.min { a, b in
                     func rank(_ box: LaunchBoxBox) -> (Int, Int, Int, Int, Int) {
                         (
@@ -150,6 +153,19 @@ public final class LaunchBoxGamesDB: Sendable {
         480: ["Funtech Super Acan"], 481: ["Tomy Tutor"], 482: ["Sega CD 32X"], 487: ["Pioneer LaserActive"],
         504: ["Uzebox"], 506: ["Amstrad GX4000"], 508: ["Nintendo Switch 2"],
     ]
+}
+
+/// A name's two title keys, each a column of `launchbox_name`, tried in turn as libretro's fuzzy match does.
+enum TitleKey: String, CaseIterable {
+    case title = "title_key"
+    case loose = "loose_title_key"
+
+    func of(_ title: String) -> String {
+        switch self {
+        case .title: LibretroLookup.titleKey(title)
+        case .loose: LibretroLookup.looseTitleKey(title)
+        }
+    }
 }
 
 /// One Box - Front a title key found.
@@ -339,9 +355,7 @@ extension CacheStore {
                 sql: "INSERT INTO launchbox_name (game_id, own, length, title_key, loose_title_key) VALUES (?, ?, ?, ?, ?)")
             for n in dump.names {
                 try name.execute(
-                    arguments: [
-                        n.gameID, n.own, n.name.count, LibretroLookup.titleKey(n.name), LibretroLookup.looseTitleKey(n.name),
-                    ])
+                    arguments: [n.gameID, n.own, n.name.count, TitleKey.title.of(n.name), TitleKey.loose.of(n.name)])
             }
             let image = try db.makeStatement(
                 sql: "INSERT INTO launchbox_image (game_id, type, region, file_name, position) VALUES (?, ?, ?, ?, ?)")
@@ -354,8 +368,8 @@ extension CacheStore {
         }
     }
 
-    /// Every Box - Front of the games on `platforms` with a name whose `column` (a title key) is `key`.
-    func launchBoxBoxes(_ column: String, _ key: String, platforms: [String]) throws -> [LaunchBoxBox] {
+    /// Every image of `type` of the games on `platforms` with a name whose `titleKey` is `key`.
+    func launchBoxBoxes(_ type: String, _ titleKey: TitleKey, _ key: String, platforms: [String]) throws -> [LaunchBoxBox] {
         try db.read { db in
             try Row.fetchAll(
                 db,
@@ -363,10 +377,10 @@ extension CacheStore {
                     SELECT i.file_name, i.region, n.own, g.year, n.length, i.position
                     FROM launchbox_name n
                     JOIN launchbox_game g ON g.id = n.game_id
-                    JOIN launchbox_image i ON i.game_id = g.id AND i.type = 'Box - Front'
-                    WHERE n.\(column) = ? AND g.platform IN (\(platforms.map { _ in "?" }.joined(separator: ",")))
+                    JOIN launchbox_image i ON i.game_id = g.id AND i.type = ?
+                    WHERE n.\(titleKey.rawValue) = ? AND g.platform IN (\(platforms.map { _ in "?" }.joined(separator: ",")))
                     """,
-                arguments: StatementArguments([key] + platforms)
+                arguments: StatementArguments([type, key] + platforms)
             ).map {
                 LaunchBoxBox(
                     fileName: $0["file_name"], region: $0["region"], own: $0["own"], year: $0["year"],

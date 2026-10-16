@@ -7,7 +7,7 @@ import Testing
     let h = try! Harness()
 
     private func refresh(gate: WorkGate = WorkGate()) -> CacheRefresh {
-        CacheRefresh(cache: h.cache, igdb: h.igdb, hasheous: h.hasheous, gate: gate)
+        CacheRefresh(cache: h.cache, igdb: h.igdb, hasheous: h.hasheous, launchBox: nil, gate: gate)
     }
 
     @Test func refetchesOnlyExpiredEntries() async throws {

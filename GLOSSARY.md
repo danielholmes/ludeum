@@ -124,7 +124,7 @@ The one image a Game shows. In order: an image I uploaded, else its libretro Box
 _Avoid_: Artwork, box image, thumbnail
 
 **Box art**:
-A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe, the Xbox One's green bar). It comes from libretro-thumbnails, for the Platforms it has a repo for, whether or not they have a ROM folder, else from the LaunchBox Games Database, which has boxes for nearly every Platform, Windows and the newer consoles among them.
+A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe, the Xbox One's green bar). It comes from libretro-thumbnails, for the Platforms it has a repo for, whether or not they have a ROM folder, else from the LaunchBox Games Database, which has boxes for nearly every Platform, Windows and the newer Xboxes, PlayStations and Switches among them.
 _Avoid_: Cover (that's what's shown, whatever its source)
 
 **Cover art**:

@@ -104,38 +104,48 @@ import Testing
         #expect(try boxart(6, ["Doom"]) == "doom93.jpg")
     }
 
-    @Test func theDumpIsFetchedAtMostEvery30Days() async throws {
+    @Test func aDumpIsStaleOnceItsOlderThan30DaysAndANewOneReplacesIt() async throws {
         h.internet.setLaunchBox([Self.redAlert2])
         #expect(try launchBox.isStale())
-        #expect(try await launchBox.refreshIfStale())
-        h.internet.resetSent()
+        try await launchBox.refresh()
 
         h.clock.advance(days: 29)
-        #expect(try await launchBox.refreshIfStale() == false)
-        #expect(h.internet.sent(to: FakeInternet.Hosts.launchBox).isEmpty)
+        #expect(try launchBox.isStale() == false)
 
         h.clock.advance(days: 2)
+        #expect(try launchBox.isStale())
         h.internet.setLaunchBox([LaunchBoxGame(id: 9, name: "Half-Life", platform: "Windows", boxes: [(nil, "hl.jpg")])])
-        #expect(try await launchBox.refreshIfStale())
+        try await launchBox.refresh()
         #expect(try boxart(6, ["Half-Life"]) == "hl.jpg")
         #expect(try boxart(6, ["Command & Conquer: Red Alert 2"]) == nil)
         #expect(try launchBox.isStale() == false)
     }
 
-    @Test func aDumpThatCantBeFetchedOrReadKeepsTheOldOneAndIsTriedAgain() async throws {
+    @Test func aDumpThatCantBeFetchedOrReadKeepsTheOldOne() async throws {
+        h.internet.setLaunchBox([Self.redAlert2])
+        try await launchBox.refresh()
+
+        h.internet.setDown(FakeInternet.Hosts.launchBox, true)
+        await #expect(throws: (any Error).self) { try await launchBox.refresh() }
+        h.internet.setDown(FakeInternet.Hosts.launchBox, false)
+        h.internet.state.withLock { $0.launchBoxDump = Data("not a zip".utf8) }
+        await #expect(throws: (any Error).self) { try await launchBox.refresh() }
+        h.internet.setLaunchBox([LaunchBoxGame(id: 1, name: "Half-Life", platform: "Windows")])
+        await #expect(throws: (any Error).self) { try await launchBox.refresh() }
+
+        #expect(try boxart(6, ["Command & Conquer: Red Alert 2"]) == "ra2.jpg")
+    }
+
+    @Test func aDumpThatCantBeFetchedIsTriedAgainADayLaterNotAtEveryLaunch() async throws {
         h.internet.setLaunchBox([Self.redAlert2])
         try await launchBox.refresh()
         h.clock.advance(days: 31)
-
         h.internet.setDown(FakeInternet.Hosts.launchBox, true)
-        await #expect(throws: (any Error).self) { try await launchBox.refreshIfStale() }
-        h.internet.setDown(FakeInternet.Hosts.launchBox, false)
-        h.internet.state.withLock { $0.launchBoxDump = Data("not a zip".utf8) }
-        await #expect(throws: (any Error).self) { try await launchBox.refreshIfStale() }
-        h.internet.setLaunchBox([LaunchBoxGame(id: 1, name: "Half-Life", platform: "Windows")])
-        await #expect(throws: (any Error).self) { try await launchBox.refreshIfStale() }
 
-        #expect(try boxart(6, ["Command & Conquer: Red Alert 2"]) == "ra2.jpg")
+        await #expect(throws: (any Error).self) { try await launchBox.refresh() }
+
+        #expect(try launchBox.isStale() == false)
+        h.clock.advance(days: 1)
         #expect(try launchBox.isStale())
     }
 
