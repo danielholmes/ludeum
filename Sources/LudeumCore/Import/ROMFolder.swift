@@ -140,11 +140,6 @@ public struct ROMFolder: Sendable, Equatable {
         try rom(named: name)?.ready
     }
 
-    /// The Discs of the ROM `name`, in Disc order, when its subfolder has no playlist for them; else none.
-    public func discsWithoutPlaylist(named name: String) throws -> [URL] {
-        try rom(named: name)?.discsWithoutPlaylist ?? []
-    }
-
     /// The file names a cue sheet's `FILE` lines name, without any folder.
     static func cueTracks(_ cue: URL) -> [String] {
         guard let text = try? String(contentsOf: cue, encoding: .utf8) else { return [] }
@@ -202,38 +197,9 @@ public struct FolderROMFile: Sendable, Equatable {
     }
 }
 
-/// Moving one ROM from its ROM folder into another's: its ready file (with its subfolder, or a cue sheet's tracks)
-/// and its `.7z`, each to the same place in the other folder.
+/// Moving a ROM's files, each from one place to another: a Rename.
 struct ROMMove {
     let moves: [(from: URL, to: URL)]
-
-    /// Checks everything before anything moves: the ROM's files are there, the other folder has nothing in their way,
-    /// and it reads the ROM's file.
-    static func plan(_ name: String, from: ROMFolder, to: ROMFolder) throws -> ROMMove {
-        guard let rom = try? from.rom(named: name) else { throw ReviewError.romFilesNotFound }
-        if (try? to.rom(named: name)) != nil { throw ReviewError.alreadyInROMFolder }
-        var items: [URL]
-        if let subfolder = from.subfolder(of: name, holding: rom.ready) {
-            items = [subfolder]
-        } else if let ready = rom.ready {
-            guard to.reads(fileName: ready.lastPathComponent) else { throw ReviewError.siblingWontReadFile }
-            items = ROMFiles.files(of: ready)
-        } else {
-            items = []
-        }
-        if let archive = rom.archive, !items.contains(archive) { items.append(archive) }
-        let base = from.url.standardizedFileURL.path(percentEncoded: false)
-        let moves = items.map { item in
-            let path = item.standardizedFileURL.path(percentEncoded: false)
-            let relative =
-                path.hasPrefix(base) ? String(path.dropFirst(base.count)).trimmingPrefix("/").description : item.lastPathComponent
-            return (from: item, to: to.url.appending(path: relative))
-        }
-        if moves.contains(where: { FileManager.default.fileExists(atPath: $0.to.path(percentEncoded: false)) }) {
-            throw ReviewError.alreadyInROMFolder
-        }
-        return ROMMove(moves: moves)
-    }
 
     /// Renaming the ROM `name` within its ROM folder: everything at the top of the folder with its name (its subfolder,
     /// its file in each form, a save beside it), so nothing of it is left to be found as a new ROM, but not a cue

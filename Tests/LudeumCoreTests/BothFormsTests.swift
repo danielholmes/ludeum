@@ -211,7 +211,7 @@ import Testing
         #expect(queue.bothForms.map(\.rom.folderName) == ["Okami (USA)", "Zelda (USA)"])
         #expect(queue.bothForms.map(\.rom.fileName) == ["Okami (USA)/Okami (USA).iso", "Zelda (USA).sfc"])
         #expect(queue.bothForms.map(\.game) == [nil, nil])
-        #expect(queue.count == queue.noSuggestion.count + queue.notCompacted.count + 2)
+        #expect(queue.count == queue.unmatched.count + queue.notCompacted.count + 2)
     }
 
     @Test func aCopyRemovedByHandClearsTheItemOnTheNextImport() async throws {

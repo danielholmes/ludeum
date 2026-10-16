@@ -85,7 +85,7 @@ import Testing
         let result = try await importNow(adding: [okami])
 
         #expect(result.sentToReview.map(\.romName) == ["Okami (USA)"])
-        #expect(try j.journal.reviewQueue().namesAgree.first?.suggestedIgdbGameId == 1234)
+        #expect(try j.journal.reviewQueue().unmatched.first?.suggestedIgdbGameId == 1234)
         #expect(try romCount() == 1)
         #expect(try strays().map(\.name) == ["Kuon (USA)"])
     }

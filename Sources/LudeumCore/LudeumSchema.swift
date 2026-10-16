@@ -660,9 +660,14 @@ enum LudeumSchema {
                 try keepTimestamps(db, on: table)
             }
         }
+        // The OpenEmu data held for ROMs left unmatched by the first Import went once none were left: an answer no
+        // longer applies any.
+        migrator.registerMigration("v33 no held openemu data") { db in
+            try db.drop(table: "heldOpenEmuData")
+        }
         // The journal says which ROMs there are (ADR 0016): a file in a ROM folder that isn't one is a Stray file, which
         // the Import lists rather than records as a ROM.
-        migrator.registerMigration("v33 stray files") { db in
+        migrator.registerMigration("v34 stray files") { db in
             try db.create(table: "strayFile") { t in
                 t.autoIncrementedPrimaryKey("id")
                 t.column("platformId", .integer).notNull()

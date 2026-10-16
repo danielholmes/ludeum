@@ -206,7 +206,7 @@ public struct IntoFoldersPlan: Sendable {
         public let renamed: Bool
         /// The other rows of a multi-disc Version, forgotten.
         public let forgottenROMs: [Int64]
-        /// Discs with no playlist: the ROM waits in the Review queue for one.
+        /// Discs with no playlist: the ROM can't be Played until one is put in its folder.
         public let needsPlaylist: Bool
     }
 

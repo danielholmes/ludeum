@@ -244,7 +244,7 @@ struct CompactTests {
         #expect(items.map(\.compactFileName) == ["Sonic (USA).zip", "Zelda (USA).7z"])
         #expect(items.map { $0.game != nil } == [false, true])
         let queue = try j.journal.reviewQueue()
-        #expect(queue.count == queue.noSuggestion.count + 2)
+        #expect(queue.count == queue.unmatched.count + 2)
     }
 
     @Test(.enabled(if: SevenZip.find() != nil, "needs 7-Zip's 7zz"))

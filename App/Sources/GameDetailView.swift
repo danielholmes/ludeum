@@ -792,12 +792,9 @@ private func reviewErrorText(_ error: ReviewError) -> String {
     switch error {
     case .alreadyMatched: "This ROM was already answered."
     case .suggestionGone: "IGDB no longer has the suggested game."
-    case .notASiblingPlatform: "Confirm can only use this ROM's Platform or its sibling."
-    case .alreadyInROMFolder: "That Platform's ROM folder already has a ROM by this name. Nothing was moved."
+    case .alreadyInROMFolder: "Its ROM folder already has a ROM by that name. Nothing was renamed."
     case .romFilesNotFound: "A ROM's files aren't in its ROM folder, so nothing was changed. Check again first."
     case .noROMFolder: "That Platform has no ROM folder."
-    case .siblingWontReadFile: "That Platform's ROM folder doesn't read this ROM's file type. Nothing was moved."
-    case .noDiscsWithoutPlaylist: "This ROM's folder no longer has Discs without a playlist. Check again."
     case .bothFormsChanged: "This ROM's copies have changed in its ROM folder. Nothing went to the Trash."
     case .duplicateVersionsChanged: "This Game's ROMs have changed since they were shown. Nothing was changed."
     }

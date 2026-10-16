@@ -164,7 +164,7 @@ struct ArchivedROMChecksumTests {
         let game = try j.journal.game(try #require(row["gameId"]))
         #expect(game.platformId == 33)
         #expect(game.igdbGameId == 1)
-        #expect(try j.journal.reviewQueue().namesAgree.isEmpty)
+        #expect(try j.journal.reviewQueue().unmatched.isEmpty)
     }
 
     @Test func aChecksumWhoseNamesDisagreeIsOnlySuggested() async throws {
@@ -174,8 +174,10 @@ struct ArchivedROMChecksumTests {
         let result = try await importNow()
 
         #expect(result.sentToReview.map(\.romName) == ["Tetris (World)"])
-        let item = try #require(try j.journal.reviewQueue().checksumSuggestions.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
         #expect(item.suggestedIgdbGameId == 2)
+        #expect(item.suggestionKind == .checksum)
+        #expect(!item.namesAgree)
     }
 
     @Test(.enabled(if: SevenZip.find() != nil, "needs 7-Zip's 7zz"))
@@ -190,13 +192,13 @@ struct ArchivedROMChecksumTests {
         #expect(result.sentToReview.isEmpty)
         #expect(try rom("Tetris (World)")?["matchKind"] as String? == "automatic")
         #expect(try rom("Tetris (World)")?["crc"] as String? == helloCRC)
-        #expect(try j.journal.reviewQueue().namesAgree.isEmpty)
+        #expect(try j.journal.reviewQueue().unmatched.isEmpty)
     }
 
     @Test func aROMAnsweredInTheReviewQueueIsntMatchedAgain() async throws {
         try gameBoy.add("Tetris (World).gb", "hello")
         _ = try await importNow()
-        let item = try #require(try j.journal.reviewQueue().namesAgree.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
         try j.journal.assign(item, to: try j.addGame("Tetris"))
         try await j.journal.db.write { try $0.execute(sql: "UPDATE rom SET md5 = NULL") }
         h.internet.addHash(md5: helloMD5, game: 1, platform: 33)

@@ -41,7 +41,7 @@ public struct Suggestion: Sendable, Hashable, Codable {
 
     public let gameID: Int
     public let source: Source
-    /// Names agree, so the Review queue can bulk-confirm it.
+    /// Names agree, which the Review queue shows beside it.
     public let namesAgree: Bool
     /// For a related-record suggestion, the checksum's own game (shown crossed out).
     public let checksumGameID: Int?

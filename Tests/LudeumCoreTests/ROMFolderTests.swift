@@ -219,7 +219,7 @@ struct FakeROMFolder {
     func okamiInTheJournal() async throws -> GameID {
         try ps2.add("Okami (USA).7z")
         _ = try await importNow()
-        let item = try #require(try j.journal.reviewQueue().namesAgree.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
         _ = try await ReviewQueue(journal: j.journal, igdb: h.igdb).confirm(item)
         return try #require(try rom("Okami (USA)")?["gameId"])
     }
@@ -230,7 +230,7 @@ struct FakeROMFolder {
         let result = try await importNow()
 
         #expect(result.sentToReview.map(\.romName) == ["Okami (USA)"])
-        let item = try #require(try j.journal.reviewQueue().namesAgree.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
         #expect(item.suggestedIgdbGameId == 1234)
         #expect(item.platformId == ROMPlatform.ps2)
         #expect(try rom("Okami (USA)")?["archived"] as Bool? == true)

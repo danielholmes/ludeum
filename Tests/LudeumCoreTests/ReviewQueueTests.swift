@@ -20,11 +20,11 @@ import Testing
 
     var queue: ReviewQueue { ReviewQueue(journal: j.journal, igdb: h.igdb) }
 
-    /// An unmatched ROM, with OpenEmu data held for it as the first Import from OpenEmu left some.
+    /// An unmatched ROM, as an Import leaves it.
     @discardableResult
     func unmatched(
         _ pk: Int64, _ name: String, suggestion: Int64? = nil, kind: String? = nil, namesAgree: Bool? = nil, checksumGame: Int64? = nil,
-        collections: [String] = [], start: String? = nil, missing: Bool = false
+        missing: Bool = false
     ) throws -> Int64 {
         try j.journal.db.write { db in
             try ROMPlatform.ensureKnown(db, 19)
@@ -38,12 +38,7 @@ import Testing
                 arguments: [
                     name, "md5-\(pk)", "\(name).7z", name, missing, ROMName(name).version, suggestion, kind, checksumGame, namesAgree,
                 ])
-            let id = db.lastInsertedRowID
-            let json = String(decoding: try JSONEncoder().encode(collections), as: UTF8.self)
-            try db.execute(
-                sql: "INSERT INTO heldOpenEmuData (romId, collections, currentStart) VALUES (?, ?, ?)",
-                arguments: [id, json, start])
-            return id
+            return db.lastInsertedRowID
         }
     }
 
@@ -54,7 +49,7 @@ import Testing
         }
     }
 
-    @Test func itemsAreSortedIntoKinds() throws {
+    @Test func everyUnmatchedROMIsOneKindByNameWithItsSuggestion() throws {
         try unmatched(1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
         try unmatched(2, "Super Star Wars - Return of the Jedi (USA)", suggestion: 8, kind: "checksum", namesAgree: false)
         try unmatched(3, "Super Return (USA)", suggestion: 9, kind: "name", namesAgree: false)
@@ -63,11 +58,14 @@ import Testing
 
         let items = try j.journal.reviewQueue()
 
-        #expect(items.namesAgree.map(\.romName) == ["Kirby Super Star (USA)", "RE2 Dual Shock (USA)"])
-        #expect(items.namesAgree[1].checksumIgdbGameId == 8)
-        #expect(items.checksumSuggestions.map(\.romName) == ["Super Star Wars - Return of the Jedi (USA)"])
-        #expect(items.nameSuggestions.map(\.romName) == ["Super Return (USA)"])
-        #expect(items.noSuggestion.map(\.romName) == ["Unknown Homebrew"])
+        #expect(
+            items.unmatched.map(\.romName) == [
+                "Kirby Super Star (USA)", "RE2 Dual Shock (USA)", "Super Return (USA)", "Super Star Wars - Return of the Jedi (USA)",
+                "Unknown Homebrew",
+            ])
+        #expect(items.unmatched.map(\.suggestedIgdbGameId) == [7, 9, 9, 8, nil])
+        #expect(items.unmatched.map(\.namesAgree) == [true, true, false, false, false])
+        #expect(items.unmatched[1].checksumIgdbGameId == 8)
         #expect(items.count == 5)
     }
 
@@ -81,11 +79,9 @@ import Testing
         #expect(try j.journal.rom(rom + 1) == nil)
     }
 
-    @Test func confirmingMatchesTheROMAndAppliesItsHeldOpenEmuData() async throws {
-        let rom = try unmatched(
-            1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true,
-            collections: ["_TODO", "_Current", "Kirby"], start: "2026-09")
-        let item = try #require(try j.journal.reviewQueue().namesAgree.first)
+    @Test func confirmingMatchesTheROMToItsSuggestion() async throws {
+        let rom = try unmatched(1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
 
         let game = try await queue.confirm(item)
 
@@ -94,41 +90,18 @@ import Testing
         #expect(g.name == "Kirby Super Star")
         #expect(g.igdbGameId == 7)
         #expect(g.platformId == 19)
-        #expect(g.intent == .backlog)
-        #expect(g.rating == nil)
-        #expect(try j.journal.playthroughs(game).map(\.draft.start) == [PartialDate("2026-09")])
-        #expect(try j.journal.lists(containing: game).map(\.name) == ["Kirby"])
+        #expect(g.intent == nil)
+        #expect(try j.journal.playthroughs(game).isEmpty)
         #expect(try j.journal.reviewQueue().count == 0)
     }
 
-    @Test func confirmAllTakesEveryItemWhoseNamesAgree() async throws {
-        try unmatched(1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
-        try unmatched(2, "Super Return of the Jedi (USA)", suggestion: 9, kind: "checksum", namesAgree: true, checksumGame: 8)
-        try unmatched(3, "Super Return (USA)", suggestion: 9, kind: "name", namesAgree: false)
-
-        let confirmed = try await queue.confirmAll()
-
-        #expect(confirmed == 2)
-        let left = try j.journal.reviewQueue()
-        #expect(left.namesAgree.isEmpty)
-        #expect(left.nameSuggestions.count == 1)
-    }
-
-    @Test func confirmAllLooksUpEveryROMItMatchesInLibretro() async throws {
-        h.internet.addLibretro(
-            "Nintendo_-_Super_Nintendo_Entertainment_System", ["Kirby Super Star (USA)", "Super Return of the Jedi (USA)"])
-        try unmatched(1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
-        try unmatched(2, "Super Return of the Jedi (USA)", suggestion: 9, kind: "checksum", namesAgree: true)
-
-        _ = try await ReviewQueue(journal: j.journal, igdb: h.igdb, libretro: h.libretro).confirmAll()
-
-        let boxArt = try await j.journal.db.read { try String?.fetchAll($0, sql: "SELECT libretroBoxart FROM rom ORDER BY id") }
-        #expect(boxArt.allSatisfy { $0 != nil })
+    @Test func theJournalHoldsNoOpenEmuDataAnyMore() async throws {
+        #expect(try await j.journal.db.read { try $0.tableExists("heldOpenEmuData") } == false)
     }
 
     @Test func choosingASearchResultIsAManualMatch() async throws {
         let rom = try unmatched(4, "Unknown Homebrew")
-        let item = try #require(try j.journal.reviewQueue().noSuggestion.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
 
         let game = try await queue.choose(item, igdbGameId: 7, name: "Kirby Super Star", platform: IGDBPlatform(id: 19, name: "SNES"))
 
@@ -140,7 +113,7 @@ import Testing
         try j.journal.addPlatform(id: 19, name: "SNES")
         let game = try j.journal.addGame(platformId: 19, name: "Sweet Home", igdbGameId: 70, igdbName: "Sweet Home")
         let rom = try unmatched(6, "Sweet Home (Japan) [T+Eng]")
-        let item = try #require(try j.journal.reviewQueue().noSuggestion.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
 
         #expect(try !j.journal.wouldHaveDuplicateVersions(game, adding: item.romId))
         try j.journal.assign(item, to: game)
@@ -150,7 +123,7 @@ import Testing
 
     @Test func makingAGameByHandMatchesTheROM() throws {
         let rom = try unmatched(4, "Hermano 1.1 jam")
-        let item = try #require(try j.journal.reviewQueue().noSuggestion.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
 
         let game = try j.journal.makeByHand(item, name: "Hermano", platform: IGDBPlatform(id: 33, name: "Game Boy"))
 
@@ -161,20 +134,12 @@ import Testing
         try j.journal.addPlatform(id: 19, name: "SNES")
         let game = try j.journal.addGame(platformId: 19, name: "Kirby Super Star", igdbGameId: 7, igdbName: "Kirby Super Star")
         let japan = try unmatched(1, "Kirby Super Star (Japan)")
-        try j.journal.assign(try #require(try j.journal.reviewQueue().noSuggestion.first { $0.romId == japan }), to: game)
+        try j.journal.assign(try #require(try j.journal.reviewQueue().unmatched.first { $0.romId == japan }), to: game)
         try unmatched(2, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
 
-        let item = try #require(try j.journal.reviewQueue().namesAgree.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
 
         #expect(try await queue.confirmWouldGiveDuplicateVersions(item))
-    }
-
-    @Test func confirmAllSkipsItemsAnsweredMeanwhile() async throws {
-        try unmatched(1, "Kirby Super Star (USA)", suggestion: 7, kind: "name", namesAgree: true)
-        let stale = try #require(try j.journal.reviewQueue().namesAgree.first)
-        try await queue.confirm(stale)
-
-        #expect(try await queue.confirmAll() == 0)
     }
 
     @Test func duplicateVersionsItemsListPresentROMsOfOneGame() throws {
@@ -183,7 +148,7 @@ import Testing
         let japan = try unmatched(10, "Double Dragon III (Japan)")
         let usa = try unmatched(11, "Double Dragon III (USA)")
         try unmatched(12, "Double Dragon III (Europe)", missing: true)
-        let items = try j.journal.reviewQueue().noSuggestion
+        let items = try j.journal.reviewQueue().unmatched
 
         try j.journal.assign(try #require(items.first { $0.romId == japan }), to: game)
         #expect(try j.journal.wouldHaveDuplicateVersions(game, adding: usa))
@@ -206,7 +171,7 @@ import Testing
         try unmatched(21, "Zombies Ate My Neighbors (Europe)", missing: true)
         try unmatched(22, "Pilotwings (Japan)", missing: true)
         try unmatched(23, "Pilotwings (USA)")
-        for item in try j.journal.reviewQueue().noSuggestion {
+        for item in try j.journal.reviewQueue().unmatched {
             try j.journal.assign(item, to: item.romName.hasPrefix("Zombies") ? gone : replaced)
         }
 
@@ -225,7 +190,7 @@ import Testing
         try unmatched(21, "Streets of Rage (Europe)", missing: true)
         try unmatched(22, "Streets of Rage (Japan)", missing: true)
         try unmatched(23, "Streets of Rage (World)")
-        for item in try j.journal.reviewQueue().noSuggestion { try j.journal.assign(item, to: game) }
+        for item in try j.journal.reviewQueue().unmatched { try j.journal.assign(item, to: game) }
 
         try j.journal.deleteMissingROMs(of: game)
 

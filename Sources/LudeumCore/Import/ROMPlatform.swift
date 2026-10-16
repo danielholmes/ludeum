@@ -150,14 +150,6 @@ public struct ROMPlatform: Sendable, Equatable {
             name: "MSX2", folderName: "MSX2", readyExtensions: ["rom", "mx2", "mx1", "dsk", "cas"], libretroRepo: "Microsoft_-_MSX2"),
     ]
 
-    /// Platforms OpenEmu kept under one system, so a ROM from it may belong on any of them.
-    static let siblingGroups: [[Int64]] = [[33, 22], [18, 99], [19, 58]]
-
-    /// The Platforms a ROM on `id` may be Confirmed on: its sibling group in order, or just `id`.
-    static func siblings(of id: Int64) -> [Int64] {
-        siblingGroups.first { $0.contains(id) } ?? [id]
-    }
-
     /// Records the Platform if the journal doesn't know it yet, so a ROM can point at it.
     static func ensureKnown(_ db: Database, _ id: Int64) throws {
         try db.execute(

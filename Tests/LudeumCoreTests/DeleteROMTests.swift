@@ -19,11 +19,11 @@ import Testing
         h.internet.addPlatform(19, "Super Nintendo Entertainment System")
     }
 
-    /// Imports the ROM folder, then the No suggestion item named `name`.
+    /// Imports the ROM folder, then the unmatched ROM named `name`.
     func item(_ name: String) async throws -> ReviewItem {
         _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
             addingEveryFileIn: [snes.folder])
-        return try #require(try j.journal.reviewQueue().noSuggestion.first { $0.romName == name })
+        return try #require(try j.journal.reviewQueue().unmatched.first { $0.romName == name })
     }
 
     /// Deletes the ROM, the Trash being a folder the test can look in.
@@ -44,7 +44,7 @@ import Testing
 
         #expect(try trashed() == ["Bootleg Thing (USA).sfc"])
         #expect(try snes.folder.scan().map(\.fileName) == ["Other Thing (USA).sfc"])
-        #expect(try j.journal.reviewQueue().noSuggestion.map(\.romName) == ["Other Thing (USA)"])
+        #expect(try j.journal.reviewQueue().unmatched.map(\.romName) == ["Other Thing (USA)"])
     }
 
     @Test func aMissingROMJustLeavesTheJournal() async throws {
@@ -54,10 +54,10 @@ import Testing
         _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(
             addingEveryFileIn: [snes.folder])
 
-        try delete(try #require(try j.journal.reviewQueue().noSuggestion.first { $0.id == item.id }))
+        try delete(try #require(try j.journal.reviewQueue().unmatched.first { $0.id == item.id }))
 
         #expect(try trashed().isEmpty)
-        #expect(try j.journal.reviewQueue().noSuggestion.isEmpty)
+        #expect(try j.journal.reviewQueue().unmatched.isEmpty)
     }
 
     @Test func deletingIsRefusedOnceTheROMIsMatched() async throws {
@@ -78,6 +78,6 @@ import Testing
 
         #expect(throws: ReviewError.romFilesNotFound) { try delete(item) }
 
-        #expect(try j.journal.reviewQueue().noSuggestion.map(\.id) == [item.id])
+        #expect(try j.journal.reviewQueue().unmatched.map(\.id) == [item.id])
     }
 }

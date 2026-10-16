@@ -16,9 +16,6 @@ public struct ReviewItem: Sendable, Equatable, Identifiable {
     public let checksumIgdbGameId: Int64?
     public let namesAgree: Bool
     public var id: Int64 { romId }
-    /// The Platforms Confirm offers: the ROM's, and its siblings (Game Boy and Game Boy Color, NES and Famicom,
-    /// SNES and Super Famicom). Choosing another moves the ROM into that Platform's ROM folder.
-    public var platformChoices: [Int64] { ROMPlatform.siblings(of: platformId) }
 
     public enum SuggestionKind: String, Sendable {
         case checksum, name
@@ -56,15 +53,6 @@ public struct OldMissingROMsGame: Sendable, Equatable, Identifiable {
     public var id: GameID { game.id }
 }
 
-/// A ROM whose subfolder holds its Discs but no playlist, so Play can't open them all: Make playlist writes one.
-public struct NoPlaylistItem: Sendable, Equatable, Identifiable {
-    public let romId: Int64
-    /// The ROM's name: its subfolder's.
-    public let romName: String
-    public let platformId: Int64
-    public var id: Int64 { romId }
-}
-
 /// A present ROM kept in both forms at once: a Playable copy beside its Archived `.7z`, or a loose file beside its
 /// Compacted copy. Keep the Playable copy (or Keep the Compacted copy) sends the other to the Trash.
 public struct BothFormsROM: Sendable, Equatable, Identifiable {
@@ -87,17 +75,12 @@ public struct NotCompactedROM: Sendable, Equatable, Identifiable {
 
 /// Everything waiting in the Review queue, by kind.
 public struct ReviewQueueItems: Sendable, Equatable {
-    /// Name and related-record suggestions whose names agree: bulk-confirmable.
-    public var namesAgree: [ReviewItem] = []
-    public var checksumSuggestions: [ReviewItem] = []
-    public var nameSuggestions: [ReviewItem] = []
-    public var noSuggestion: [ReviewItem] = []
+    /// Every unmatched ROM, each with its suggestion if it has one.
+    public var unmatched: [ReviewItem] = []
     public var duplicateVersions: [DuplicateVersionsGame] = []
     public var missingROMs: [MissingROMsGame] = []
     public var oldMissingROMs: [OldMissingROMsGame] = []
-    public var noPlaylist: [NoPlaylistItem] = []
     public var bothForms: [BothFormsROM] = []
-    /// Bulk-compactable.
     public var notCompacted: [NotCompactedROM] = []
     /// Attachments whose files are missing: Locate or Delete each.
     public var missingAttachments: [MissingAttachment] = []
@@ -108,9 +91,8 @@ public struct ReviewQueueItems: Sendable, Equatable {
 
     /// The sidebar badge.
     public var count: Int {
-        namesAgree.count + checksumSuggestions.count + nameSuggestions.count + noSuggestion.count + duplicateVersions.count
-            + noPlaylist.count + missingROMs.count + oldMissingROMs.count + bothForms.count + notCompacted.count
-            + missingAttachments.count + strayFiles.count
+        unmatched.count + duplicateVersions.count + missingROMs.count + oldMissingROMs.count + bothForms.count
+            + notCompacted.count + missingAttachments.count + strayFiles.count
     }
 }
 
@@ -124,18 +106,12 @@ extension LudeumStore {
                     "SELECT *, COALESCE(name, fileName) AS displayName FROM rom WHERE gameId IS NULL ORDER BY displayName COLLATE NOCASE, id"
             )
         }
-        for row in rows {
-            let item = ReviewItem(
+        items.unmatched = rows.map { row in
+            ReviewItem(
                 romId: row["id"], romName: row["displayName"], platformId: row["platformId"], missing: row["missing"],
                 suggestedIgdbGameId: row["suggestedIgdbGameId"],
                 suggestionKind: (row["suggestionKind"] as String?).flatMap(ReviewItem.SuggestionKind.init(rawValue:)),
                 checksumIgdbGameId: row["checksumIgdbGameId"], namesAgree: row["namesAgree"] ?? false)
-            switch (item.suggestedIgdbGameId, item.suggestionKind, item.namesAgree) {
-            case (nil, _, _): items.noSuggestion.append(item)
-            case (_, _, true): items.namesAgree.append(item)
-            case (_, .checksum, _): items.checksumSuggestions.append(item)
-            default: items.nameSuggestions.append(item)
-            }
         }
         // Only a Game with two present ROMs or more can have Duplicate Versions, so the rest aren't read one by one.
         let games = try db.read { db in
@@ -164,14 +140,6 @@ extension LudeumStore {
         }
         items.missingROMs.sort { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
         items.oldMissingROMs.sort { $0.game.name.localizedStandardCompare($1.game.name) == .orderedAscending }
-        items.noPlaylist = try db.read { db in
-            guard try Self.hasNeedsPlaylist(db) else { return [] }
-            return try Row.fetchAll(
-                db,
-                sql: "SELECT id, folderName, platformId FROM rom WHERE needsPlaylist AND NOT missing ORDER BY folderName COLLATE NOCASE, id"
-            )
-            .map { NoPlaylistItem(romId: $0["id"], romName: $0["folderName"], platformId: $0["platformId"]) }
-        }
         items.bothForms = try bothForms()
         items.notCompacted = try notCompacted()
         items.missingAttachments = try missingAttachments()
@@ -229,20 +197,6 @@ extension LudeumStore {
         else { return false }
         let added = GameROM(id: Int(rom), name: item["displayName"], isPlaylist: isPlaylist(item["fileName"]), isPresent: !item["missing"])
         return hasDuplicateVersions(try roms(of: game).map(gameROM) + [added])
-    }
-
-    /// Make playlist: writes `<ROM name>.m3u` into the ROM's subfolder, naming its Discs in order, so Play opens them all.
-    /// Throws, writing nothing, when its folder no longer has Discs without a playlist.
-    public func makePlaylist(_ item: NoPlaylistItem, romFolders: [ROMFolder]) throws {
-        guard let folder = romFolders.first(where: { $0.platformId == item.platformId }) else { throw ReviewError.noROMFolder }
-        let discs = try folder.discsWithoutPlaylist(named: item.romName)
-        guard !discs.isEmpty else { throw ReviewError.noDiscsWithoutPlaylist }
-        let subfolder = folder.url.appending(path: item.romName, directoryHint: .isDirectory).standardizedFileURL
-        let lines = discs.map { $0.standardizedFileURL.pathComponents.dropFirst(subfolder.pathComponents.count).joined(separator: "/") }
-        let playlist = subfolder.appending(path: "\(item.romName).m3u", directoryHint: .notDirectory)
-        try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: playlist, options: .withoutOverwriting)
-        let file = try folder.rom(named: item.romName)
-        try db.write { db in try Self.setFolderROM(db, item.romId, to: file) }
     }
 
     /// Keep the Playable copy, or Keep the Compacted copy: sends every copy of a ROM kept in both forms to the Trash but
@@ -355,27 +309,14 @@ extension LudeumStore {
         }
     }
 
-    /// Matches the ROM to the Game with that IGDB link on that Platform, creating the Game if needed. With `romMove`,
-    /// the ROM goes to the Platform too: its files move first, and move back if the Match then fails.
-    func match(
-        _ item: ReviewItem, igdbGameId: Int64, igdbName: String, platform: IGDBPlatform, kind: String, romMove: ROMMove? = nil
-    ) throws -> GameID {
-        try romMove?.run()
-        do {
-            return try db.write { db in
-                try db.execute(
-                    sql: "INSERT INTO platform (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING",
-                    arguments: [platform.id, platform.name])
-                if romMove != nil {
-                    try db.execute(sql: "UPDATE rom SET platformId = ? WHERE id = ?", arguments: [platform.id, item.romId])
-                }
-                return try Self.matchToIGDBGame(
-                    db, rom: item.romId, romName: item.romName, igdbGameId: igdbGameId, igdbName: igdbName, platformId: platform.id,
-                    kind: kind, day: today(), now: clock.now())
-            }
-        } catch {
-            romMove?.undo()
-            throw error
+    /// Matches the ROM to the Game with that IGDB link on that Platform, creating the Game if needed.
+    func match(_ item: ReviewItem, igdbGameId: Int64, igdbName: String, platform: IGDBPlatform, kind: String) throws -> GameID {
+        try db.write { db in
+            try db.execute(
+                sql: "INSERT INTO platform (id, name) VALUES (?, ?) ON CONFLICT (id) DO NOTHING", arguments: [platform.id, platform.name])
+            return try Self.matchToIGDBGame(
+                db, rom: item.romId, romName: item.romName, igdbGameId: igdbGameId, igdbName: igdbName, platformId: platform.id,
+                kind: kind, day: today(), now: clock.now())
         }
     }
 
@@ -400,27 +341,8 @@ extension LudeumStore {
         return game
     }
 
-    /// Plans moving a ROM to a sibling Platform. A missing ROM, or one still OpenEmu's, has no files here to move, so
-    /// only its Platform changes. Throws, with nothing touched, when the ROM can't go there.
-    func romMove(_ item: ReviewItem, to platformId: Int64, romFolders: [ROMFolder]) throws -> ROMMove {
-        let row = try db.read { db in
-            try Row.fetchOne(db, sql: "SELECT folderName, missing FROM rom WHERE id = ?", arguments: [item.romId])
-        }
-        guard let row, let name = row["folderName"] as String? else { return ROMMove(moves: []) }
-        let taken = try db.read { db in
-            try Bool.fetchOne(
-                db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE platformId = ? AND folderName = ?)", arguments: [platformId, name])!
-        }
-        if taken { throw ReviewError.alreadyInROMFolder }
-        if row["missing"] { return ROMMove(moves: []) }
-        guard let from = romFolders.first(where: { $0.platformId == item.platformId }),
-            let to = romFolders.first(where: { $0.platformId == platformId })
-        else { throw ReviewError.noROMFolder }
-        return try ROMMove.plan(name, from: from, to: to)
-    }
-
-    /// Sets the ROM's Match, clears its suggestion, and applies any OpenEmu data held for it since the first Import. The
-    /// ROM is looked up in libretro again, as its Game's IGDB name may now find Box art its file name didn't.
+    /// Sets the ROM's Match and clears its suggestion. The ROM is looked up in libretro again, as its Game's IGDB name may
+    /// now find Box art its file name didn't.
     static func match(_ db: Database, rom: Int64, to game: GameID, kind: String, day: String, now: Date) throws {
         try db.execute(
             sql: """
@@ -429,13 +351,6 @@ extension LudeumStore {
                 WHERE id = ? AND gameId IS NULL
                 """, arguments: [game, kind, now, rom])
         guard db.changesCount == 1 else { throw ReviewError.alreadyMatched }
-        if let held = try Row.fetchOne(db, sql: "SELECT * FROM heldOpenEmuData WHERE romId = ?", arguments: [rom]) {
-            let collections = (try? JSONDecoder().decode([String].self, from: Data((held["collections"] as String).utf8))) ?? []
-            try applyOpenEmuData(
-                db, game: game, collections: Set(collections),
-                start: (held["currentStart"] as String?).flatMap(PartialDate.init))
-            try db.execute(sql: "DELETE FROM heldOpenEmuData WHERE romId = ?", arguments: [rom])
-        }
     }
 }
 
@@ -444,19 +359,12 @@ public enum ReviewError: Error, Equatable {
     case alreadyMatched
     /// IGDB doesn't know the suggested game any more.
     case suggestionGone
-    /// Confirm offers only the ROM's Platform and its siblings.
-    case notASiblingPlatform
-    /// The sibling Platform (or, for a Rename, the ROM's own) already has a ROM by that name, or a file where one of its
-    /// files would go.
+    /// For a Rename, the ROM's Platform already has a ROM by that name, or a file where one of its files would go.
     case alreadyInROMFolder
     /// The ROM is present, but its files aren't in its ROM folder (or the folder can't be read).
     case romFilesNotFound
-    /// The ROM's Platform, or the sibling, has no ROM folder.
+    /// The ROM's Platform has no ROM folder.
     case noROMFolder
-    /// The sibling's ROM folder doesn't read the ROM's file type.
-    case siblingWontReadFile
-    /// Make playlist found no Discs without a playlist in the ROM's subfolder: gone, or given one meanwhile.
-    case noDiscsWithoutPlaylist
     /// The ROM's copies aren't the ones shown when I chose which to keep: one gone, or another added meanwhile.
     case bothFormsChanged
     /// The Game's present ROMs aren't the ones shown when I chose a Version: one Split off, gone, or added meanwhile.
@@ -473,78 +381,46 @@ private func isPlaylist(_ fileName: String) -> Bool { (fileName as NSString).pat
 public struct ReviewQueue: Sendable {
     let journal: LudeumStore
     let igdb: IGDBClient
-    let romFolders: [ROMFolder]
     let libretro: LibretroThumbnails?
 
-    /// `romFolders` are where Confirm on a sibling Platform moves a ROM's files from and to. With `libretro`, a Matched
-    /// ROM is looked up there again by its Game's IGDB name straight away; without, at the next Import.
-    public init(journal: LudeumStore, igdb: IGDBClient, romFolders: [ROMFolder] = [], libretro: LibretroThumbnails? = nil) {
+    /// With `libretro`, a Matched ROM is looked up there again by its Game's IGDB name straight away; without, at the
+    /// next Import.
+    public init(journal: LudeumStore, igdb: IGDBClient, libretro: LibretroThumbnails? = nil) {
         self.journal = journal
         self.igdb = igdb
-        self.romFolders = romFolders
         self.libretro = libretro
     }
 
-    /// Confirm: Matches the ROM to its suggestion, on the ROM's Platform or one of its siblings (`platformChoices`).
-    /// On a sibling, the ROM moves there too: into its ROM folder when present, only in the journal when missing or
-    /// still OpenEmu's.
+    /// Confirm: Matches the ROM to its suggestion, on the ROM's Platform.
     @discardableResult
-    public func confirm(_ item: ReviewItem, on platformId: Int64? = nil) async throws -> GameID {
-        let game = try await match(item, on: platformId)
-        await lookUpBoxArt([item])
+    public func confirm(_ item: ReviewItem) async throws -> GameID {
+        guard let suggested = item.suggestedIgdbGameId else { throw ReviewError.suggestionGone }
+        guard let record = try await igdb.games(ids: [Int(suggested)])[Int(suggested)] else { throw ReviewError.suggestionGone }
+        let game = try journal.match(
+            item, igdbGameId: suggested, igdbName: record.name ?? cleanName(item.romName), platform: try await platform(item.platformId),
+            kind: "confirmed")
+        await lookUpBoxArt(item)
         return game
     }
 
-    /// Confirm without the Box art lookup, which Confirm all does once for every ROM it Matches.
-    private func match(_ item: ReviewItem, on platformId: Int64?) async throws -> GameID {
-        let platformId = platformId ?? item.platformId
-        guard item.platformChoices.contains(platformId) else { throw ReviewError.notASiblingPlatform }
-        guard let suggested = item.suggestedIgdbGameId else { throw ReviewError.suggestionGone }
-        guard let record = try await igdb.games(ids: [Int(suggested)])[Int(suggested)] else { throw ReviewError.suggestionGone }
-        let romMove = platformId == item.platformId ? nil : try journal.romMove(item, to: platformId, romFolders: romFolders)
-        let platform = try await platform(platformId)
-        return try journal.match(
-            item, igdbGameId: suggested, igdbName: record.name ?? cleanName(item.romName), platform: platform, kind: "confirmed",
-            romMove: romMove)
-    }
-
-    /// Whether confirming on that Platform would give an existing Game Duplicate Versions. It warns, never blocks.
-    public func confirmWouldGiveDuplicateVersions(_ item: ReviewItem, on platformId: Int64? = nil) async throws -> Bool {
-        guard let suggested = item.suggestedIgdbGameId,
-            let game = try journal.gameID(igdbGameId: suggested, platformId: platformId ?? item.platformId)
+    /// Whether confirming would give an existing Game Duplicate Versions. It warns, never blocks.
+    public func confirmWouldGiveDuplicateVersions(_ item: ReviewItem) async throws -> Bool {
+        guard let suggested = item.suggestedIgdbGameId, let game = try journal.gameID(igdbGameId: suggested, platformId: item.platformId)
         else { return false }
         return try journal.wouldHaveDuplicateVersions(game, adding: item.romId)
-    }
-
-    /// Confirm all: every item whose names agree, skipping any answered meanwhile. Returns how many it confirmed.
-    public func confirmAll() async throws -> Int {
-        let items = try journal.reviewQueue().namesAgree
-        _ = try await igdb.games(ids: items.compactMap(\.suggestedIgdbGameId).map(Int.init))  // one batch, then cached
-        var confirmed: [ReviewItem] = []
-        for item in items {
-            do {
-                _ = try await match(item, on: nil)
-                confirmed.append(item)
-            } catch ReviewError.alreadyMatched {
-                // Answered on its own meanwhile.
-            }
-        }
-        await lookUpBoxArt(confirmed)
-        return confirmed.count
     }
 
     /// A result from Search IGDB…: a manual Match.
     @discardableResult
     public func choose(_ item: ReviewItem, igdbGameId: Int64, name: String, platform: IGDBPlatform) async throws -> GameID {
         let game = try journal.match(item, igdbGameId: igdbGameId, igdbName: name, platform: platform, kind: "manual")
-        await lookUpBoxArt([item])
+        await lookUpBoxArt(item)
         return game
     }
 
-    /// The Matched ROMs looked up in libretro again, each Platform's listing read once; if they can't be, the next
-    /// Import does it.
-    private func lookUpBoxArt(_ items: [ReviewItem]) async {
-        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(items.map(\.romId))
+    /// The Matched ROM looked up in libretro again; if it can't be, the next Import does it.
+    private func lookUpBoxArt(_ item: ReviewItem) async {
+        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp([item.romId])
     }
 
     private func platform(_ id: Int64) async throws -> IGDBPlatform {

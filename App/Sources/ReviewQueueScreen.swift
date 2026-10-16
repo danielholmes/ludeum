@@ -13,12 +13,8 @@ struct ReviewQueueScreen: View {
     @Binding var shownGame: GameID?
 
     enum Kind: String, CaseIterable, Identifiable {
-        case namesAgree = "Names agree"
-        case checksum = "Checksum suggestions"
-        case name = "Name suggestions"
-        case noSuggestion = "No suggestion"
+        case unmatched = "Unmatched ROMs"
         case duplicateVersions = "Duplicate Versions"
-        case noPlaylist = "No playlist"
         case missingROMs = "Missing ROMs"
         case oldMissingROMs = "Old missing ROMs"
         case bothForms = "In both forms"
@@ -29,13 +25,11 @@ struct ReviewQueueScreen: View {
     }
 
     @State private var items = ReviewQueueItems()
-    @State private var kind: Kind? = .namesAgree
+    @State private var kind: Kind? = .unmatched
     @State private var selection: Int64?
     /// Selected once `kind` changes, which otherwise clears the selection.
     @State private var selectAfterKindChange: Int64?
     @State private var error: String?
-    @State private var confirmingAll = false
-    @State private var compactingAll = false
     @State private var addingAllStrayFiles = false
     /// Suggested IGDB games' names, for the middle column.
     @State private var suggestionNames: [Int64: String] = [:]
@@ -55,12 +49,6 @@ struct ReviewQueueScreen: View {
             .frame(minWidth: Self.kindsMinWidth, idealWidth: 190, maxWidth: 200)
 
             VStack(alignment: .leading, spacing: 0) {
-                if kind == .namesAgree, !items.namesAgree.isEmpty {
-                    Button("Confirm all \(items.namesAgree.count)") { confirmingAll = true }.padding(8)
-                }
-                if kind == .notCompacted, !notCompactedIdle.isEmpty {
-                    Button("Compact all \(notCompactedIdle.count)") { compactingAll = true }.padding(8)
-                }
                 if kind == .strayFiles, !items.strayFiles.isEmpty {
                     Button("Add all \(items.strayFiles.count) as ROMs") { addingAllStrayFiles = true }.padding(8)
                 }
@@ -102,14 +90,6 @@ struct ReviewQueueScreen: View {
                             }
                             .tag(d.id)
                         }
-                    } else if kind == .noPlaylist {
-                        ForEach(items.noPlaylist) { item in
-                            VStack(alignment: .leading) {
-                                Text(item.romName)
-                                Text("Discs with no playlist").font(.caption).foregroundStyle(.secondary)
-                            }
-                            .tag(item.romId)
-                        }
                     } else if kind == .missingROMs {
                         ForEach(items.missingROMs) { m in
                             VStack(alignment: .leading) {
@@ -143,8 +123,14 @@ struct ReviewQueueScreen: View {
                         ForEach(romItems) { item in
                             VStack(alignment: .leading) {
                                 Text(item.romName)
-                                Text(item.suggestedIgdbGameId.map { suggestionNames[$0] ?? "IGDB #\($0)" } ?? "Search IGDB by hand")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                HStack(spacing: 4) {
+                                    if item.namesAgree {
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).help("Names agree")
+                                    }
+                                    Text(item.suggestedIgdbGameId.map { suggestionNames[$0] ?? "IGDB #\($0)" } ?? "Search IGDB by hand")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .font(.caption)
                             }
                             .tag(item.romId)
                         }
@@ -160,7 +146,7 @@ struct ReviewQueueScreen: View {
                         showSplitOff: { version in
                             // Straight to the split-off ROM, to Match it.
                             selectAfterKindChange = version.first?.id
-                            kind = .noSuggestion
+                            kind = .unmatched
                         }, failed: { error = $0 })
                 } else if kind == .missingROMs, let m = items.missingROMs.first(where: { $0.id == selection }) {
                     MissingROMsDetail(
@@ -170,8 +156,6 @@ struct ReviewQueueScreen: View {
                         services: services, item: m, checkAgain: checkAgain, showGame: { shownGame = m.id }, failed: { error = $0 })
                 } else if kind == .missingAttachments, let item = items.missingAttachments.first(where: { $0.id == selection }) {
                     MissingAttachmentDetail(services: services, item: item, showGame: { shownGame = item.game.id }, failed: { error = $0 })
-                } else if kind == .noPlaylist, let item = items.noPlaylist.first(where: { $0.id == selection }) {
-                    NoPlaylistDetail(services: services, item: item, failed: { error = $0 })
                 } else if kind == .bothForms, let item = items.bothForms.first(where: { $0.id == selection }) {
                     BothFormsDetail(
                         services: services, item: item, checkAgain: checkAgain, showGame: { shownGame = $0 }, failed: { error = $0 })
@@ -200,20 +184,6 @@ struct ReviewQueueScreen: View {
             selection = selectAfterKindChange
             selectAfterKindChange = nil
         }
-        .confirmationDialog("Confirm all \(items.namesAgree.count) suggestions whose names agree?", isPresented: $confirmingAll) {
-            Button("Confirm all") { confirmAll() }
-        } message: {
-            Text("Each ROM is Matched to its suggestion. To keep one out, answer it on its own first.")
-        }
-        .confirmationDialog("Compact all \(notCompactedIdle.count) ROMs?", isPresented: $compactingAll) {
-            Button("Compact all") {
-                for item in notCompactedIdle { compact(item, services: services) }
-            }
-        } message: {
-            Text(
-                "Each is packed into the archive its Emulator opens directly, one at a time in Background tasks. The files they "
-                    + "replace go to the Trash. Online-only files download first.")
-        }
         .confirmationDialog("Add all \(items.strayFiles.count) Stray files as ROMs?", isPresented: $addingAllStrayFiles) {
             // Those listed, not any file that has turned up since.
             Button("Add all") { addStrayFiles(Set(items.strayFiles.map(\.key))) }
@@ -224,29 +194,12 @@ struct ReviewQueueScreen: View {
         }
     }
 
-    /// The Not compacted items no Background task is working on yet.
-    private var notCompactedIdle: [NotCompactedROM] { items.notCompacted.filter { services.tasks.active(.rom($0.id)) == nil } }
-
-    private var romItems: [ReviewItem] {
-        switch kind {
-        case .namesAgree: items.namesAgree
-        case .checksum: items.checksumSuggestions
-        case .name: items.nameSuggestions
-        case .noSuggestion: items.noSuggestion
-        case .duplicateVersions, .noPlaylist, .missingROMs, .oldMissingROMs, .bothForms, .notCompacted, .missingAttachments,
-            .strayFiles, nil:
-            []
-        }
-    }
+    private var romItems: [ReviewItem] { kind == .unmatched ? items.unmatched : [] }
 
     private func count(_ kind: Kind) -> Int {
         switch kind {
-        case .namesAgree: items.namesAgree.count
-        case .checksum: items.checksumSuggestions.count
-        case .name: items.nameSuggestions.count
-        case .noSuggestion: items.noSuggestion.count
+        case .unmatched: items.unmatched.count
         case .duplicateVersions: items.duplicateVersions.count
-        case .noPlaylist: items.noPlaylist.count
         case .missingROMs: items.missingROMs.count
         case .oldMissingROMs: items.oldMissingROMs.count
         case .bothForms: items.bothForms.count
@@ -260,7 +213,6 @@ struct ReviewQueueScreen: View {
     private var listedIDs: [Int64] {
         switch kind {
         case .duplicateVersions: items.duplicateVersions.map(\.id)
-        case .noPlaylist: items.noPlaylist.map(\.id)
         case .missingROMs: items.missingROMs.map(\.id)
         case .oldMissingROMs: items.oldMissingROMs.map(\.id)
         case .bothForms: items.bothForms.map(\.id)
@@ -286,26 +238,13 @@ struct ReviewQueueScreen: View {
     }
 
     private func loadSuggestionNames() async {
-        let ids = (items.namesAgree + items.checksumSuggestions + items.nameSuggestions).compactMap(\.suggestedIgdbGameId)
+        let ids = items.unmatched.compactMap(\.suggestedIgdbGameId)
         guard let igdb = services.igdb, !ids.isEmpty, let games = try? await igdb.games(ids: ids.map(Int.init)) else { return }
         suggestionNames = games.reduce(into: [:]) { $0[Int64($1.key)] = $1.value.name }
     }
-
-    private func confirmAll() {
-        guard let queue = services.reviewQueue else { return }
-        Task {
-            do {
-                _ = try await queue.confirmAll()
-                error = nil
-            } catch {
-                self.error = "Confirm all stopped: \(error.localizedDescription)"
-            }
-            services.changes.coverChanged()
-        }
-    }
 }
 
-/// A ROM item: why it's here, its suggestion, and Confirm / Search IGDB… / Assign to Game… / Make by hand….
+/// A ROM item: why it's here, its suggestion, and Confirm / Search IGDB… / Assign to Game… / Make by hand… / Delete ROM….
 private struct ReviewItemDetail: View {
     let services: Services
     let item: ReviewItem
@@ -319,8 +258,6 @@ private struct ReviewItemDetail: View {
     @State private var checksumGame: IGDBGame?
     /// The ROM's Platform, once IGDB's list of platforms is loaded.
     @State private var romPlatform: IGDBPlatform?
-    /// The Platform Confirm matches on: one of `item.platformChoices`, at first the one the suggestion is on.
-    @State private var confirmPlatform: Int64 = 0
     /// Every IGDB platform, for Make by hand's "any other Platform".
     @State private var allPlatforms: [IGDBPlatform] = []
     @State private var searching = false
@@ -469,15 +406,6 @@ private struct ReviewItemDetail: View {
                     }
                     FlowLayout(spacing: 8) {
                         Button("Confirm", action: confirm).buttonStyle(.borderedProminent)
-                        if picked == nil, item.platformChoices.count > 1 {
-                            Picker("on", selection: $confirmPlatform) {
-                                ForEach(item.platformChoices, id: \.self) { id in
-                                    Text(ROMPlatform.all[id]?.name ?? "Platform \(id)").tag(id)
-                                }
-                            }
-                            .fixedSize()
-                            .help("Another Platform moves the ROM into its ROM folder")
-                        }
                         if picked != nil {
                             Button(item.suggestedIgdbGameId == nil ? "Clear" : "Back to the suggestion") {
                                 Task { await load() }
@@ -490,11 +418,9 @@ private struct ReviewItemDetail: View {
                 Button("Search IGDB…") { searching = true }.disabled(services.gameSearch == nil)
                 Button("Assign to Game…") { assigning = true }
                 Button("Make by hand…") { makingByHand = true }
-                if item.suggestedIgdbGameId == nil {
-                    Button("Delete ROM…", role: .destructive) { deleting = true }
-                        .disabled(services.tasks.isActive(.rom(item.romId)))
-                        .help(item.missing ? "Delete it: its file is gone already" : "Send its files to the Trash, and delete it")
-                }
+                Button("Delete ROM…", role: .destructive) { deleting = true }
+                    .disabled(services.tasks.isActive(.rom(item.romId)))
+                    .help(item.missing ? "Delete it: its file is gone already" : "Send its files to the Trash, and delete it")
             }
         }
         .formStyle(.grouped)
@@ -561,8 +487,8 @@ private struct ReviewItemDetail: View {
         }
     }
 
-    /// A No suggestion ROM's Emulator, to Play it and see what it is: none for a missing ROM, a Platform with no
-    /// Emulator, or one the launch check found isn't installed.
+    /// The Emulator of a ROM with nothing suggested, to Play it and see what it is: none for a missing ROM, a Platform
+    /// with no Emulator, or one the launch check found isn't installed.
     private var playableEmulator: Emulator? {
         guard item.suggestedIgdbGameId == nil, !item.missing, let emulator = Emulator.of(platformId: item.platformId),
             !services.versions.notInstalled.contains(emulator.bundleIdentifier)
@@ -609,7 +535,6 @@ private struct ReviewItemDetail: View {
         rom = try? services.journal?.rom(item.romId)
         suggestion = nil
         checksumGame = nil
-        confirmPlatform = item.platformId
         let all = (try? await services.igdb?.platforms()) ?? []
         allPlatforms = all
         romPlatform = all.first { $0.id == item.platformId }
@@ -618,11 +543,6 @@ private struct ReviewItemDetail: View {
         let games = (try? await igdb.games(ids: wanted)) ?? [:]
         suggestion = item.suggestedIgdbGameId.flatMap { games[Int($0)] }
         checksumGame = item.checksumIgdbGameId.flatMap { games[Int($0)] }
-        // The ROM's own Platform if the suggestion is on it, else the first sibling it is on.
-        let listed = Set((suggestion?.record["platforms"]?.array ?? []).compactMap { $0["id"]?.int ?? $0.int }.map(Int64.init))
-        if !listed.contains(item.platformId), let sibling = item.platformChoices.first(where: listed.contains) {
-            confirmPlatform = sibling
-        }
     }
 
     /// A sheet that's closing can't present the warning, so it waits a moment.
@@ -639,12 +559,11 @@ private struct ReviewItemDetail: View {
             act { try await queue.choose(item, igdbGameId: picked.igdbGameId, name: picked.name, platform: picked.platform) }
             return
         }
-        let platform = confirmPlatform
         Task {
-            if (try? await queue.confirmWouldGiveDuplicateVersions(item, on: platform)) == true {
-                duplicateWarning = { act { try await queue.confirm(item, on: platform) } }
+            if (try? await queue.confirmWouldGiveDuplicateVersions(item)) == true {
+                duplicateWarning = { act { try await queue.confirm(item) } }
             } else {
-                act { try await queue.confirm(item, on: platform) }
+                act { try await queue.confirm(item) }
             }
         }
     }
@@ -836,7 +755,7 @@ private struct DuplicateVersionsDetail: View {
                         Button("Keep only this Version") { keeping = version }
                             .help("Sends the other Versions' ROMs to the Trash, and deletes them")
                         Button("Split into its own Game") { split(version) }
-                            .help("Takes it off this Game, to be Matched again from No suggestion")
+                            .help("Takes it off this Game, to be Matched again from Unmatched ROMs")
                     }
                     .disabled(busy)
                 }
@@ -880,43 +799,6 @@ private struct DuplicateVersionsDetail: View {
             failed(journalErrorText(error))
         }
         services.changes.coverChanged()
-    }
-}
-
-/// A No playlist item: the ROM's Discs, and Make playlist, which writes one into its subfolder.
-private struct NoPlaylistDetail: View {
-    let services: Services
-    let item: NoPlaylistItem
-    let failed: (String?) -> Void
-    @State private var discs: [URL] = []
-
-    var body: some View {
-        Form {
-            Section {
-                Text(item.romName).font(.title2).bold()
-                Text("Its folder holds its Discs but no playlist, so Play can't open them all. Make playlist writes one.")
-                    .foregroundStyle(.secondary)
-            }
-            Section("Discs") {
-                ForEach(discs, id: \.self) { Text($0.lastPathComponent) }
-            }
-            Button("Make playlist", action: makePlaylist)
-        }
-        .formStyle(.grouped)
-        .task(id: item) { discs = (try? romFolder?.discsWithoutPlaylist(named: item.romName)) ?? [] }
-    }
-
-    private var romFolder: ROMFolder? { services.settings.romFolders.first { $0.platformId == item.platformId } }
-
-    private func makePlaylist() {
-        guard let journal = services.journal else { return }
-        do {
-            try journal.makePlaylist(item, romFolders: services.settings.romFolders)
-            failed(nil)
-        } catch {
-            failed(journalErrorText(error))
-        }
-        services.changes.changed()
     }
 }
 

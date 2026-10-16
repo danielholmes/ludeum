@@ -108,8 +108,6 @@ import Testing
         #expect(after[0]["folderName"] as String == "Gran Turismo 2 (Europe)")
         #expect(after[0]["discNumber"] as Int? == nil)
         #expect(after[0]["needsPlaylist"] as Bool == true)
-        #expect(
-            try j.journal.reviewQueue().noPlaylist == [NoPlaylistItem(romId: disc1, romName: "Gran Turismo 2 (Europe)", platformId: 7)])
     }
 
     @Test func discsMatchedToAnotherGameThanTheirPlaylistAreLeftLoose() async throws {

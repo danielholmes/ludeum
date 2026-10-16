@@ -113,7 +113,7 @@ import Testing
         try snes.add("G. Darius (USA).sfc")
         try await importNow()
         #expect(try roms()[0]["libretroBoxart"] as String? == nil)
-        return try #require(try j.journal.reviewQueue().noSuggestion.first)
+        return try #require(try j.journal.reviewQueue().unmatched.first)
     }
 
     @Test func aROMMatchedInTheReviewQueueIsLookedUpAgainByItsGamesIGDBName() async throws {
