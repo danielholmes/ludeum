@@ -192,7 +192,7 @@ struct AddAttachmentsSheet: View {
     let pending: PendingAttachments
     let add: (_ manual: Bool, _ moving: Bool) -> Void
     @State private var manual: Bool
-    @State private var keepingOriginals = true
+    @State private var keepingOriginals = false
     @Environment(\.dismiss) private var dismiss
 
     init(pending: PendingAttachments, add: @escaping (_ manual: Bool, _ moving: Bool) -> Void) {
