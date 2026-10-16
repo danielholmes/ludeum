@@ -530,13 +530,29 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         let game = try await superMetroid(["Super Metroid (USA).sfc"])
 
         #expect(
-            try await covers.screenshots(for: game, from: .libretro) == [
+            try await covers.screenshots(for: game, from: .libretro).map(\.reference) == [
                 "Nintendo - Super Nintendo Entertainment System/Named_Titles/Super Metroid (USA).png",
                 "Nintendo - Super Nintendo Entertainment System/Named_Snaps/Super Metroid (USA).png",
             ])
-        #expect(try await covers.screenshots(for: game, from: .launchBox) == ["sm1.jpg"])
-        let file = try #require(try await covers.screenshot("sm1.jpg", from: .launchBox))
+        #expect(try await covers.screenshots(for: game, from: .launchBox).map(\.reference) == ["sm1.jpg"])
+        let image = try await covers.image(of: SourceScreenshot(source: .launchBox, reference: "sm1.jpg"))
+        guard case .launchBox(let file, file: "sm1.jpg") = image else {
+            Issue.record("expected LaunchBox's image")
+            return
+        }
         #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
+    }
+
+    @Test func aGameWithROMsHasTheFirstTitleScreenAndSnapOfItsROMs() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"], folders: ["Named_Titles"])
+        h.internet.addLibretro(Self.snes, ["Super Metroid (Europe)"], folders: ["Named_Snaps"])
+        let game = try await superMetroid(["Super Metroid (USA).sfc", "Super Metroid (Europe).sfc"])
+
+        #expect(
+            try await covers.screenshots(for: game, from: .libretro).map(\.reference) == [
+                "Nintendo - Super Nintendo Entertainment System/Named_Titles/Super Metroid (USA).png",
+                "Nintendo - Super Nintendo Entertainment System/Named_Snaps/Super Metroid (Europe).png",
+            ])
     }
 
     @Test func aGameWithNoROMsScreenshotsAreFoundByIGDBsAlternativeNamesWhenItsOwnFindNone() async throws {
@@ -550,10 +566,10 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
             igdbName: "Commander Keen in Invasion of the Vorticons: Marooned on Mars")
 
         #expect(
-            try await covers.screenshots(for: game, from: .libretro) == [
+            try await covers.screenshots(for: game, from: .libretro).map(\.reference) == [
                 "DOS/Named_Snaps/Commander Keen 1 - Marooned on Mars (1990).png"
             ])
-        #expect(try await covers.screenshots(for: game, from: .launchBox) == [])
+        #expect(try await covers.screenshots(for: game, from: .launchBox).map(\.reference) == [])
     }
 
     @Test func aSourceWithNoBoxForAGameHasNone() async throws {

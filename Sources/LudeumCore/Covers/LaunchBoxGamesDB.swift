@@ -4,7 +4,7 @@ import GRDB
 /// The LaunchBox Games Database: retail box scans for nearly every Platform, Windows and the ones libretro-thumbnails has
 /// no repo for among them. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB unzipped), made daily.
 /// It's read at most every 30 days, by the launch refresh, downloaded to a file and streamed out of the zip without
-/// unpacking it, and only what finds a Game's box is kept, in the cache: each game on a Platform `platforms` maps, with
+/// unpacking it, and only what finds a Game's images is kept, in the cache: each game on a Platform `platforms` maps, with
 /// its year, names and their title keys, and its Box - Front and Screenshot images (about 73 MB). Images come from
 /// `images.launchbox-app.com` by file name, downloaded the first time one's shown.
 public final class LaunchBoxGamesDB: Sendable {
@@ -21,11 +21,6 @@ public final class LaunchBoxGamesDB: Sendable {
     static let readKey = "launchbox:metadata:2"
     /// The cache entry whose `fetched_at` says when a dump last couldn't be downloaded or read.
     static let failedKey = "launchbox:failed"
-    static let boxFront = "Box - Front"
-    /// Screenshot types, in the order they're shown: title screens first.
-    static let screenshotTypes = ["Screenshot - Game Title", "Screenshot - Gameplay"]
-    /// The image types kept from the dump, each stored as its place here.
-    static let keptTypes = [boxFront] + screenshotTypes
 
     public init(cache: CacheStore, transport: HTTPTransport = URLSessionTransport()) {
         self.cache = cache
@@ -66,7 +61,7 @@ public final class LaunchBoxGamesDB: Sendable {
     public func boxart(platform: Int64, titles: [String], regions: Set<NameRegion>, year: Int?) throws -> String? {
         guard let platforms = Self.platforms[platform] else { return nil }
         let regionOrder = Self.regionOrder(regions)
-        let boxes = try images(of: [Self.boxFront], platforms: platforms, titles: titles)
+        let boxes = try images(of: [.boxFront], platforms: platforms, titles: titles)
         return boxes.min { a, b in
             func rank(_ box: LaunchBoxImage) -> (Int, Int, Int, Int, Int) {
                 (
@@ -80,25 +75,23 @@ public final class LaunchBoxGamesDB: Sendable {
 
     /// The file names of a game's Screenshots, title screens first, all of the one game matched by title as for its Box
     /// art: its own name beats another's alternate name, then the game released in `year` is preferred, then the
-    /// shortest name, then the first in the dump. Empty when nothing matches.
+    /// shortest name, then the lowest LaunchBox id. Empty when nothing matches.
     public func screenshots(platform: Int64, titles: [String], year: Int?) throws -> [String] {
         guard let platforms = Self.platforms[platform] else { return [] }
-        let shots = try images(of: Self.screenshotTypes, platforms: platforms, titles: titles)
+        let shots = try images(of: LaunchBoxImageType.screenshots, platforms: platforms, titles: titles)
         func rank(_ shot: LaunchBoxImage) -> (Int, Int, Int, Int) {
             (shot.own ? 0 : 1, year == nil || shot.year == year ? 0 : 1, shot.nameLength, shot.gameID)
         }
         guard let best = shots.min(by: { rank($0) < rank($1) }) else { return [] }
         var seen: Set<String> = []
         return shots.filter { $0.gameID == best.gameID && seen.insert($0.fileName).inserted }
-            .sorted {
-                (Self.screenshotTypes.firstIndex(of: $0.type)!, $0.position) < (Self.screenshotTypes.firstIndex(of: $1.type)!, $1.position)
-            }
+            .sorted { ($0.type.rawValue, $0.position) < ($1.type.rawValue, $1.position) }
             .map(\.fileName)
     }
 
     /// Every image of `types` of the games on `platforms` that the first title to match any finds: each of `titles` in
     /// turn (then spelled out), by title key, then by loose title key, as libretro's are matched.
-    private func images(of types: [String], platforms: [String], titles: [String]) throws -> [LaunchBoxImage] {
+    private func images(of types: [LaunchBoxImageType], platforms: [String], titles: [String]) throws -> [LaunchBoxImage] {
         let spelled = titles.map(LibretroLookup.spelledOut).filter { !titles.contains($0) }
         for tier in TitleKey.allCases {
             for title in titles + spelled {
@@ -195,10 +188,32 @@ enum TitleKey: String, CaseIterable {
     }
 }
 
+/// The image types kept from a dump, each stored as its raw value; Screenshots in the order they're shown, title screens
+/// first.
+enum LaunchBoxImageType: Int, CaseIterable, Sendable {
+    case boxFront, titleScreen, gameplay
+
+    static let screenshots: [LaunchBoxImageType] = [.titleScreen, .gameplay]
+
+    /// Its name in the dump.
+    var name: String {
+        switch self {
+        case .boxFront: "Box - Front"
+        case .titleScreen: "Screenshot - Game Title"
+        case .gameplay: "Screenshot - Gameplay"
+        }
+    }
+
+    init?(name: String) {
+        guard let type = Self.allCases.first(where: { $0.name == name }) else { return nil }
+        self = type
+    }
+}
+
 /// One image a title key found.
 struct LaunchBoxImage: Sendable {
     let gameID: Int
-    let type: String
+    let type: LaunchBoxImageType
     let fileName: String
     let region: String?
     /// Found by the game's own name, not an alternate one.
@@ -227,7 +242,7 @@ struct LaunchBoxDump: Sendable {
 
     struct Image: Sendable {
         let gameID: Int
-        let type: String
+        let type: LaunchBoxImageType
         let region: String?
         let fileName: String
     }
@@ -349,7 +364,7 @@ private final class DumpReader: NSObject, XMLParserDelegate {
         case "GameAlternateName":
             if let name = values["AlternateName"], !name.isEmpty { alternateNames.append((id, name)) }
         case "GameImage":
-            guard let type = values["Type"], LaunchBoxGamesDB.keptTypes.contains(type), let file = values["FileName"], !file.isEmpty
+            guard let type = values["Type"].flatMap(LaunchBoxImageType.init(name:)), let file = values["FileName"], !file.isEmpty
             else { return }
             images.append(
                 LaunchBoxDump.Image(gameID: id, type: type, region: values["Region"].flatMap { $0.isEmpty ? nil : $0 }, fileName: file))
@@ -389,7 +404,7 @@ extension CacheStore {
             let image = try db.makeStatement(
                 sql: "INSERT INTO launchbox_image (game_id, type, region, file_name, position) VALUES (?, ?, ?, ?, ?)")
             for (position, i) in dump.images.enumerated() {
-                try image.execute(arguments: [i.gameID, LaunchBoxGamesDB.keptTypes.firstIndex(of: i.type)!, i.region, i.fileName, position])
+                try image.execute(arguments: [i.gameID, i.type.rawValue, i.region, i.fileName, position])
             }
             try db.execute(
                 sql: "INSERT OR REPLACE INTO entry (key, payload, fetched_at) VALUES (?, ?, ?)",
@@ -398,7 +413,8 @@ extension CacheStore {
     }
 
     /// Every image of `types` of the games on `platforms` with a name whose `titleKey` is `key`.
-    func launchBoxImages(_ types: [String], _ titleKey: TitleKey, _ key: String, platforms: [String]) throws -> [LaunchBoxImage] {
+    func launchBoxImages(_ types: [LaunchBoxImageType], _ titleKey: TitleKey, _ key: String, platforms: [String]) throws -> [LaunchBoxImage]
+    {
         try db.read { db in
             try Row.fetchAll(
                 db,
@@ -410,12 +426,13 @@ extension CacheStore {
                         ON i.game_id = g.id AND i.type IN (\(types.map { _ in "?" }.joined(separator: ",")))
                     WHERE n.\(titleKey.rawValue) = ? AND g.platform IN (\(platforms.map { _ in "?" }.joined(separator: ",")))
                     """,
-                arguments: StatementArguments(types.map { LaunchBoxGamesDB.keptTypes.firstIndex(of: $0)! } + [key] + platforms)
-            ).map {
-                LaunchBoxImage(
-                    gameID: $0["id"], type: LaunchBoxGamesDB.keptTypes[$0["type"]], fileName: $0["file_name"], region: $0["region"],
-                    own: $0["own"], year: $0["year"],
-                    nameLength: $0["length"], position: $0["position"])
+                arguments: StatementArguments(types.map(\.rawValue) + [key] + platforms)
+            ).compactMap { row in
+                LaunchBoxImageType(rawValue: row["type"]).map { type in
+                    LaunchBoxImage(
+                        gameID: row["id"], type: type, fileName: row["file_name"], region: row["region"], own: row["own"],
+                        year: row["year"], nameLength: row["length"], position: row["position"])
+                }
             }
         }
     }

@@ -61,9 +61,7 @@ struct CoverComparison: View {
     private func load(_ source: Source) async -> SourceImage {
         guard let covers = services.covers else { return .none }
         do {
-            guard let found = try await source.find(covers, game) else { return .none }
-            guard let image = await decodeImage(found, pixels: CoverTileSize.pixels) else { return .failed }
-            return .found(found, image)
+            return await SourceImage(try await source.find(covers, game), pixels: CoverTileSize.pixels)
         } catch {
             return .failed
         }
@@ -78,9 +76,19 @@ private enum SourceImage {
     /// It couldn't be downloaded or read: not the same as having none.
     case failed
     case found(CoverSource, NSImage)
+
+    /// `found` decoded at `pixels`, or none.
+    init(_ found: CoverSource?, pixels: Int) async {
+        guard let found else {
+            self = .none
+            return
+        }
+        self = await decodeImage(found, pixels: pixels).map { .found(found, $0) } ?? .failed
+    }
 }
 
-/// A source's image at tile size, opening full size when clicked, or what stands in for it.
+/// A source's image at tile size, opening full size when clicked, or what stands in for it, filling the space it's
+/// given.
 private struct SourceImageView: View {
     let state: SourceImage
     let name: String
@@ -107,7 +115,7 @@ private struct SourceImageView: View {
             RoundedRectangle(cornerRadius: 6).fill(.quaternary)
             content()
         }
-        .frame(maxWidth: 150).frame(height: 200)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -118,15 +126,15 @@ struct SourceScreenshotsSection: View {
     let services: Services
     let game: GameID
     let source: ImageSource
-    @State private var screenshots: [String]?
+    @State private var screenshots: [SourceScreenshot]?
     @State private var failed = false
 
     var body: some View {
         Section("\(source.rawValue) Screenshots") {
             if let screenshots, !screenshots.isEmpty {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                    ForEach(screenshots, id: \.self) { reference in
-                        SourceScreenshotTile(services: services, source: source, reference: reference)
+                    ForEach(screenshots, id: \.self) { screenshot in
+                        SourceScreenshotTile(services: services, screenshot: screenshot)
                     }
                 }
             } else if failed {
@@ -137,7 +145,8 @@ struct SourceScreenshotsSection: View {
                 Text("None").foregroundStyle(.secondary)
             }
         }
-        .task(id: CoverKey(game: game, revision: services.changes.coverRevision, pixels: 0)) {
+        // Again when the Game's Covers change: its names or IGDB link, which the Screenshots are found by.
+        .task(id: "\(game) \(services.changes.coverRevision)") {
             screenshots = nil
             failed = false
             do {
@@ -152,41 +161,19 @@ struct SourceScreenshotsSection: View {
 /// One of a source's Screenshots, whole in a 4:3 tile, downloaded on first view; full size when clicked.
 private struct SourceScreenshotTile: View {
     let services: Services
-    let source: ImageSource
-    let reference: String
+    let screenshot: SourceScreenshot
     @State private var image: SourceImage = .loading
-    @State private var enlarged = false
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 4).fill(.quaternary)
-            switch image {
-            case .found(let found, let tile):
-                Image(nsImage: tile).resizable().interpolation(.high).antialiased(true).scaledToFit()
-                    .onTapGesture { enlarged = true }
-                    .help("\(reference) (click to show full size)")
-                    .sheet(isPresented: $enlarged) {
-                        EnlargedImage(name: "\(source.rawValue) Screenshot", tileSized: tile) { await decodeImage(found, pixels: nil) }
-                    }
-            case .loading: ProgressView().controlSize(.small)
-            case .none: EmptyView()
-            case .failed: Text("Couldn't load").font(.caption).foregroundStyle(.red)
+        SourceImageView(state: image, name: "\(screenshot.source.rawValue) Screenshot")
+            .aspectRatio(4 / 3, contentMode: .fit)
+            .frame(minWidth: 0)
+            .task(id: screenshot) {
+                do {
+                    image = await SourceImage(try await services.covers?.image(of: screenshot), pixels: 600)
+                } catch {
+                    image = .failed
+                }
             }
-        }
-        .aspectRatio(4 / 3, contentMode: .fit)
-        .frame(minWidth: 0)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-        .task(id: reference) { image = await load() }
-    }
-
-    private func load() async -> SourceImage {
-        guard let file = try? await services.covers?.screenshot(reference, from: source) else { return .failed }
-        let found: CoverSource =
-            switch source {
-            case .libretro: .libretro(file, path: reference)
-            case .launchBox: .launchBox(file, file: reference)
-            }
-        guard let tile = await decodeImage(found, pixels: 600) else { return .failed }
-        return .found(found, tile)
     }
 }

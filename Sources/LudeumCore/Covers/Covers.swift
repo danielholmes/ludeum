@@ -131,6 +131,13 @@ struct BoxArtLookup {
     func titled(_ titles: [String]) -> BoxArtLookup { BoxArtLookup(platform: platform, titles: titles, regions: regions) }
 }
 
+/// One of a source's Screenshots for a Game (`Covers.screenshots(for:from:)`): libretro's path or LaunchBox's file
+/// name.
+public struct SourceScreenshot: Sendable, Hashable {
+    public let source: ImageSource
+    public let reference: String
+}
+
 /// Where Box art and Screenshots come from besides IGDB, in the Cover order.
 public enum ImageSource: String, CaseIterable, Sendable {
     case libretro = "libretro"
@@ -202,49 +209,61 @@ public struct Covers: Sendable {
     /// IGDB's alternative names for it. For comparing them, beside the Cover, while it's decided whether both are
     /// needed; uploads and Bundles play no part. Nil when the source has none; a failed download throws.
     public func boxArt(for game: GameID, from source: ImageSource) async throws -> CoverSource? {
-        let roms = try journal.coverROMs(game)
-        let lookup = try journal.boxArtLookup(game)
-        let record = try await igdbGame(game)
-        for lookup in [lookup, byAlternatives(lookup, record)].compactMap({ $0 }) {
-            let found =
-                switch source {
-                case .libretro: try await libretroBoxArt(roms: roms, lookup)
-                case .launchBox: try await launchBoxBoxArt(lookup, year: record?.releaseYear)
-                }
-            if let found { return found }
+        try await byNamesThenAlternatives(game) { roms, lookup, record in
+            switch source {
+            case .libretro: try await libretroBoxArt(roms: roms, lookup)
+            case .launchBox: try await launchBoxBoxArt(lookup, year: record?.releaseYear)
+            }
         }
-        return nil
     }
 
     /// One source's Screenshots for the Game, title screens first, found as `boxArt(for:from:)` finds its Box art: by the
-    /// Game's names, else IGDB's alternative names. libretro has one title screen and one gameplay snap at most, a
-    /// Game with a ROM its ROMs'; LaunchBox has any number. Each is a path or file name for `screenshot(_:from:)`.
-    public func screenshots(for game: GameID, from source: ImageSource) async throws -> [String] {
+    /// Game's names, else IGDB's alternative names. libretro has one title screen and one gameplay snap at most, for a
+    /// Game with a ROM the first of its ROMs to have each; LaunchBox has any number, all of the one game matched.
+    public func screenshots(for game: GameID, from source: ImageSource) async throws -> [SourceScreenshot] {
+        let found = try await byNamesThenAlternatives(game) { roms, lookup, record -> [String]? in
+            let found: [String]
+            switch source {
+            case .libretro:
+                guard let libretro else { return nil }
+                found =
+                    roms.isEmpty
+                    ? (try? await libretro.screenshots(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions)) ?? []
+                    : [roms.compactMap(\.title).first, roms.compactMap(\.snap).first].compactMap { $0 }
+            case .launchBox:
+                guard let launchBox else { return nil }
+                found = try launchBox.screenshots(platform: lookup.platform, titles: lookup.titles, year: record?.releaseYear)
+            }
+            return found.isEmpty ? nil : found
+        }
+        return (found ?? []).map { SourceScreenshot(source: source, reference: $0) }
+    }
+
+    /// A Screenshot's image, downloaded the first time: nil when its source isn't to hand (no cache).
+    public func image(of screenshot: SourceScreenshot) async throws -> CoverSource? {
+        let reference = screenshot.reference
+        switch screenshot.source {
+        case .libretro:
+            guard let libretro else { return nil }
+            return .libretro(try await libretro.image(reference), path: reference)
+        case .launchBox:
+            guard let launchBox else { return nil }
+            return .launchBox(try await launchBox.image(reference), file: reference)
+        }
+    }
+
+    /// What `find` finds by the Game's names, else by IGDB's alternative names for it: how each source's own Box art and
+    /// Screenshots are found.
+    private func byNamesThenAlternatives<Found>(
+        _ game: GameID, _ find: ([LibretroNames], BoxArtLookup, IGDBGame?) async throws -> Found?
+    ) async throws -> Found? {
         let roms = try journal.coverROMs(game)
         let lookup = try journal.boxArtLookup(game)
         let record = try await igdbGame(game)
         for lookup in [lookup, byAlternatives(lookup, record)].compactMap({ $0 }) {
-            let found: [String]
-            switch source {
-            case .libretro:
-                guard let libretro else { return [] }
-                guard roms.isEmpty else { return roms.first.map { [$0.title, $0.snap].compactMap { $0 } } ?? [] }
-                found = (try? await libretro.screenshots(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions)) ?? []
-            case .launchBox:
-                guard let launchBox else { return [] }
-                found = try launchBox.screenshots(platform: lookup.platform, titles: lookup.titles, year: record?.releaseYear)
-            }
-            if !found.isEmpty { return found }
+            if let found = try await find(roms, lookup, record) { return found }
         }
-        return []
-    }
-
-    /// A Screenshot's image from its source, downloaded the first time.
-    public func screenshot(_ reference: String, from source: ImageSource) async throws -> URL? {
-        switch source {
-        case .libretro: try await libretro?.image(reference)
-        case .launchBox: try await launchBox?.image(reference)
-        }
+        return nil
     }
 
     /// The lookup by IGDB's alternative names for the Game that aren't among its own, or nil when there are none.
