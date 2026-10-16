@@ -22,14 +22,16 @@ extension LudeumStore {
     }
 
     /// Hard-deletes a Game with all its journal data. Refused while it has any Copy, a ROM (present or missing) or a
-    /// hand-recorded one: those are deleted first, so only a plain journal entry can go. `beforeDeleting` runs once the
+    /// hand-recorded one: those are deleted first, so only a plain journal entry can go. Refused too while a Bundle contains it. `beforeDeleting` runs once the
     /// backup is taken, just before the Game goes: `Attachments.deleteGame` sends its Attachments' files to the Trash there.
     public func deleteGame(_ game: GameID, beforeDeleting: () throws -> Void = {}) throws {
         // Refuse before backing up, so a refused deletion leaves no backup behind.
+        if try db.read({ try isInBundle($0, game) }) { throw LudeumError.gameInBundle }
         if try db.read({ try hasCopies($0, game) }) { throw LudeumError.gameHasCopies }
         try backups?.backUp(self, operation: .beforeDelete)
         try beforeDeleting()
         try db.write { db in
+            if try isInBundle(db, game) { throw LudeumError.gameInBundle }
             if try hasCopies(db, game) { throw LudeumError.gameHasCopies }
             try db.execute(sql: "DELETE FROM game WHERE id = ?", arguments: [game])
         }
@@ -79,6 +81,10 @@ extension LudeumStore {
     static func missingROMs(_ db: Database, of game: GameID, except: Int64? = nil) throws -> [Int64] {
         try Int64.fetchAll(
             db, sql: "SELECT id FROM rom WHERE gameId = ? AND missing AND id IS NOT ?", arguments: [game, except])
+    }
+
+    private func isInBundle(_ db: Database, _ game: GameID) throws -> Bool {
+        try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM bundleGame WHERE gameId = ?)", arguments: [game])!
     }
 
     private func hasCopies(_ db: Database, _ game: GameID) throws -> Bool {

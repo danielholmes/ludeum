@@ -21,7 +21,6 @@ struct MainWindow: View {
     /// A filter another screen asked the Library to open with, bumping `libraryRequest` to apply it.
     @State private var libraryFilter = LibraryFilter()
     @State private var libraryRequest = 0
-    @State private var lists: [GameList] = []
     @State private var reviewQueueCount = 0
     @State private var platformCounts: [PlatformCount] = []
     @State private var pins: [Pin] = []
@@ -73,7 +72,7 @@ struct MainWindow: View {
     var body: some View {
         NavigationSplitView {
             Sidebar(
-                services: services, selection: $selection, lists: lists, platforms: platformCounts, pins: pins,
+                services: services, selection: $selection, platforms: platformCounts, pins: pins,
                 reviewQueueCount: reviewQueueCount
             )
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -100,11 +99,6 @@ struct MainWindow: View {
                 case .pinned(let pin):
                     LibraryScreen(services: services, selection: $selectedGame, scope: pin.filter, title: pin.name)
                         .id(selection)
-                case .list(let id, _):
-                    if let list = lists.first(where: { $0.id == id }) {
-                        LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(listId: id), title: list.name).id(
-                            id)
-                    }
                 case .whatToPlayNext:
                     WhatToPlayNextScreen(services: services, selection: $selectedGame)
                 case .topRated:
@@ -196,13 +190,11 @@ struct MainWindow: View {
         .onSubmit(of: .search, search)
         .focusedSceneValue(\.focusSearch) { searchFocused = true }
         .task(id: services.changes.revision) {
-            lists = (try? services.journal?.lists()) ?? []
             reviewQueueCount = (try? services.journal?.reviewQueue().count) ?? 0
             platformCounts = (try? services.journal?.platformCounts()) ?? []
             pins = (try? services.journal?.pins()) ?? []
             needsOpenEmuMigration = (try? services.journal?.needsOpenEmuMigration()) == true
             if case .pinned(let pin) = selection, !pins.contains(pin) { selection = .library }
-            if case .list(let id, _) = selection, !lists.contains(where: { $0.id == id }) { selection = .library }
             if case .platform(let id, _) = selection, !platformCounts.contains(where: { $0.id == id }) { selection = .library }
             if let game = selectedGame, (try? services.journal?.game(game)) == nil { selectedGame = nil }
         }
@@ -226,13 +218,10 @@ private struct WindowFrameAutosave: NSViewRepresentable {
 struct Sidebar: View {
     let services: Services
     @Binding var selection: Screen?
-    let lists: [GameList]
     let platforms: [PlatformCount]
     let pins: [Pin]
     let reviewQueueCount: Int
 
-    @State private var naming: ListNaming?
-    @State private var deleting: GameList?
     @State private var error: String?
 
     var body: some View {
@@ -259,26 +248,7 @@ struct Sidebar: View {
                 }
             }
         }
-        .sheet(item: $naming) { naming in
-            ListNameSheet(naming: naming) { name in
-                apply {
-                    if let list = naming.list {
-                        try $0.renameList(list.id, name)
-                    } else {
-                        let id = try $0.createList(name)
-                        selection = .list(id: id, name: name)
-                    }
-                }
-            }
-        }
-        .confirmationDialog(
-            "Delete the List \(deleting?.name ?? "")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
-        ) {
-            Button("Delete List", role: .destructive) { if let list = deleting { delete(list) } }
-        } message: {
-            Text("Its Games stay in the journal. There's no undo; a backup is taken first.")
-        }
-        .alert("Couldn't change the List", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+        .alert("Couldn't unpin", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") {}
         } message: {
             Text(error ?? "")
@@ -305,20 +275,6 @@ struct Sidebar: View {
         error = apply(change)
     }
 
-    /// Off the main thread, as a backup of the whole journal is taken first.
-    private func delete(_ list: GameList) {
-        guard let journal = services.journal else { return }
-        let id = list.id
-        Task {
-            do {
-                try await offMain { try journal.deleteList(id) }
-                services.changes.changed()
-            } catch {
-                self.error = journalErrorText(error)
-            }
-        }
-    }
-
     /// Runs a journal change and reloads the screens, or returns what went wrong.
     private func apply(_ change: (LudeumStore) throws -> Void) -> String? {
         guard let journal = services.journal else { return nil }
@@ -329,42 +285,6 @@ struct Sidebar: View {
         } catch {
             return journalErrorText(error)
         }
-    }
-}
-
-struct ListNaming: Identifiable {
-    /// Nil for a new List.
-    let list: GameList?
-    let name: String
-    var id: Int64 { list?.id ?? -1 }
-}
-
-/// Naming a new List, or renaming one. `save` returns an error to show, or nil when done.
-struct ListNameSheet: View {
-    let naming: ListNaming
-    let save: (String) -> String?
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var error: String?
-
-    var body: some View {
-        Form {
-            TextField("Name", text: $name)
-            if let error { Text(error).foregroundStyle(.red) }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                Button(naming.list == nil ? "Create" : "Rename") {
-                    error = save(name.trimmed)
-                    if error == nil { dismiss() }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(name.trimmed.isEmpty)
-            }
-        }
-        .padding()
-        .frame(width: 320)
-        .onAppear { name = naming.name }
     }
 }
 

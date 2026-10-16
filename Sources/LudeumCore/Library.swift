@@ -9,7 +9,6 @@ public struct LibraryFilter: Sendable, Equatable {
     public var rating: RatingFilter?
     /// `.some(nil)` is "no Intent"; `nil` is any.
     public var intent: Intent??
-    public var listId: Int64?
     public var player: PlayerFilter?
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
@@ -29,7 +28,7 @@ public struct LibraryFilter: Sendable, Equatable {
 
     public init(
         platformId: Int64? = nil, archivablePlatforms: Bool = false, rating: RatingFilter? = nil, intent: Intent?? = nil,
-        listId: Int64? = nil, player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
+        player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
         roms: ROMFilter? = nil, copies: CopiesFilter? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         name: String = ""
@@ -44,7 +43,6 @@ public struct LibraryFilter: Sendable, Equatable {
         self.archivablePlatforms = archivablePlatforms
         self.rating = rating
         self.intent = intent
-        self.listId = listId
         self.player = player
         self.outcome = outcome
         self.childhood = childhood
@@ -58,7 +56,7 @@ extension LibraryFilter {
     /// necessarily together: "streets rage" finds Streets of Rage.
     public var searchWords: [String] { name.split(whereSeparator: \.isWhitespace).map(String.init) }
 
-    /// These filters within a screen's fixed scope (a Platform, a List, Finished…): whatever the scope
+    /// These filters within a screen's fixed scope (a Platform, a theme, Finished…): whatever the scope
     /// sets wins, and the rest combine with it.
     public func scoped(by scope: LibraryFilter) -> LibraryFilter {
         var f = self
@@ -66,7 +64,6 @@ extension LibraryFilter {
         if scope.archivablePlatforms { f.archivablePlatforms = true }
         if let v = scope.rating { f.rating = v }
         if let v = scope.intent { f.intent = v }
-        if let v = scope.listId { f.listId = v }
         if let v = scope.player { f.player = v }
         if let v = scope.outcome { f.outcome = v }
         if let v = scope.childhood { f.childhood = v }
@@ -194,25 +191,30 @@ public enum LibraryROMState: Sendable, Equatable {
 }
 
 extension LudeumStore {
+    /// A Copy (`rom` or `copy`) belongs to Game `g`: it's its own, or a Bundle's that contains it (ADR 0016).
+    static let ofGameSQL = "(gameId = g.id OR gameId IN (SELECT bundleId FROM bundleGame WHERE gameId = g.id))"
     /// Game `g` has a present ROM that isn't Archived.
-    static let playableSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing AND NOT archived)"
+    static let playableSQL = "EXISTS (SELECT 1 FROM rom WHERE \(ofGameSQL) AND NOT missing AND NOT archived)"
     /// Game `g` has present ROMs, and every one is Archived.
-    static let archivedSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND NOT missing) AND NOT \(playableSQL)"
+    static let archivedSQL = "EXISTS (SELECT 1 FROM rom WHERE \(ofGameSQL) AND NOT missing) AND NOT \(playableSQL)"
     /// Game `g` has a ROM, present or missing: a Copy either way.
-    static let hasROMSQL = "EXISTS (SELECT 1 FROM rom WHERE gameId = g.id)"
+    static let hasROMSQL = "EXISTS (SELECT 1 FROM rom WHERE \(ofGameSQL))"
     /// Game `g` has a hand-recorded Copy that isn't Gone.
-    static let hasOwnedCopySQL = "EXISTS (SELECT 1 FROM copy WHERE gameId = g.id AND NOT gone)"
+    static let hasOwnedCopySQL = "EXISTS (SELECT 1 FROM copy WHERE \(ofGameSQL) AND NOT gone)"
     /// Game `g` has a hand-recorded Copy, Gone or not.
-    static let hasCopySQL = "EXISTS (SELECT 1 FROM copy WHERE gameId = g.id)"
+    static let hasCopySQL = "EXISTS (SELECT 1 FROM copy WHERE \(ofGameSQL))"
 
     /// The condition, on `game g`, that a Game goes by `word` under any of its names, so an override doesn't hide
-    /// IGDB's or the No-Intro one.
+    /// IGDB's or the No-Intro one, or that a Bundle containing it does.
     private static func goesBy(_ word: String) -> (sql: String, arguments: [String]) {
         let escaped = word.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
             .replacingOccurrences(of: "_", with: "\\_")
+        func named(_ t: String) -> String {
+            "(\(t).nameOverride LIKE ? ESCAPE '\\' OR \(t).igdbName LIKE ? ESCAPE '\\' OR \(t).name LIKE ? ESCAPE '\\')"
+        }
         return (
-            "(g.nameOverride LIKE ? ESCAPE '\\' OR g.igdbName LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\')",
-            Array(repeating: "%\(escaped)%", count: 3)
+            "(\(named("g")) OR EXISTS (SELECT 1 FROM bundleGame bg JOIN game b ON b.id = bg.bundleId WHERE bg.gameId = g.id AND \(named("b"))))",
+            Array(repeating: "%\(escaped)%", count: 6)
         )
     }
 
@@ -229,7 +231,8 @@ extension LudeumStore {
     /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent)
     /// sort last either way; ties go by name.
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool) throws -> [LibraryRow] {
-        var conditions: [String] = []
+        // A Bundle is never a Library row: its Games are (ADR 0016).
+        var conditions = ["NOT g.bundle"]
         var arguments: [any DatabaseValueConvertible] = []
         if let platformId = filter.platformId {
             let ids = PlatformGroups.ids(shownAs: platformId)
@@ -254,10 +257,6 @@ extension LudeumStore {
             arguments.append(intent.rawValue)
         case .some(.none): conditions.append("g.intent IS NULL")
         case .none: break
-        }
-        if let listId = filter.listId {
-            conditions.append("EXISTS (SELECT 1 FROM listGame l WHERE l.gameId = g.id AND l.listId = ?)")
-            arguments.append(listId)
         }
         switch filter.player {
         case .player(let id):
@@ -324,7 +323,7 @@ extension LudeumStore {
                 (SELECT MAX(start) FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playingSince,
                 (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
                 \(Self.hasROMSQL) AS hasROM,
-                EXISTS (SELECT 1 FROM rom WHERE gameId = g.id AND missing) AS hasMissingROM,
+                EXISTS (SELECT 1 FROM rom WHERE \(Self.ofGameSQL) AND missing) AS hasMissingROM,
                 \(Self.archivedSQL) AS archived,
                 \(Self.hasROMSQL) OR \(Self.hasOwnedCopySQL) AS owned
             FROM game g
@@ -363,7 +362,7 @@ extension LudeumStore {
             let counts = try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT p.id, p.name, COUNT(*) AS games FROM game g JOIN platform p ON p.id = g.platformId
+                    SELECT p.id, p.name, COUNT(*) AS games FROM game g JOIN platform p ON p.id = g.platformId WHERE NOT g.bundle
                     GROUP BY p.id ORDER BY p.name COLLATE NOCASE
                     """
             ).map { PlatformCount(id: $0["id"], name: $0["name"], games: $0["games"]) }

@@ -14,6 +14,19 @@ import Testing
         #expect(games[1070]?.record["screenshots"]?[0]?["image_id"]?.string == "sc1070")
     }
 
+    @Test func aBundlesContentsAreTheGamesThatListIt() async throws {
+        let h = try Harness()
+        h.internet.addGame(5199, "Super Mario All-Stars")
+        h.internet.addGame(222095, "Super Mario Bros.", fields: ["bundles": [5199]])
+        h.internet.addGame(222099, "Super Mario Bros. 3", fields: ["bundles": [5199, 1]])
+        h.internet.addGame(1070, "Super Mario World", fields: ["bundles": [1]])
+
+        #expect(try await h.igdb.bundleContents(of: 5199) == [222095, 222099])
+        h.internet.resetSent()
+        #expect(try await h.igdb.bundleContents(of: 5199) == [222095, 222099])
+        #expect(h.internet.sent.isEmpty)
+    }
+
     @Test func servesARepeatRequestFromTheCacheWithoutTouchingTheNetwork() async throws {
         let h = try Harness()
         h.internet.addGame(1070, "Super Mario World")

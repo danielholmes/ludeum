@@ -13,6 +13,9 @@ import LudeumCore
 //                                         [--data <folder>] [--backup <before-migration.sqlite>]
 //                                           After migrate-openemu, moves in the ROMs it left missing
 //                                           whose files had been renamed, once (OpenEmu closed).
+//   ludeum-import into-bundles [--dry-run] [--journal <folder>] [--data <folder>]
+//                                           Makes the Games that were really Bundles into Bundles, once
+//                                           (Ludeum closed).
 //
 // Every command first needs the Data folder, and refuses without it in the app's words.
 // Credentials come from the environment or a .env file in the current directory
@@ -73,6 +76,8 @@ case "into-folders":
     try await intoFoldersRun(Array(CommandLine.arguments.dropFirst(2)))
 case "recover-openemu-renamed":
     try await recoverOpenEmuRenamedRun(Array(CommandLine.arguments.dropFirst(2)))
+case "into-bundles":
+    try await intoBundlesRun(Array(CommandLine.arguments.dropFirst(2)))
 default:
-    fail("usage: ludeum-import check | \(migrateOpenEmuUsage) | \(intoFoldersUsage) | \(recoverOpenEmuRenamedUsage)")
+    fail("usage: ludeum-import check | \(migrateOpenEmuUsage) | \(intoFoldersUsage) | \(recoverOpenEmuRenamedUsage) | \(intoBundlesUsage)")
 }

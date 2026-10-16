@@ -6,10 +6,13 @@ public typealias GameID = Int64
 public enum LudeumError: Error, Equatable {
     case igdbLinkTaken
     case endBeforeStart
-    case listNameTaken
     case playerNameTaken
     /// A Game can't be deleted while it has any Copy: its ROMs and hand-recorded Copies are deleted first.
     case gameHasCopies
+    /// A Game can't be deleted while a Bundle contains it: it leaves the Bundle first.
+    case gameInBundle
+    /// Only a Game on a Bundle's Platform can be in it: not a Game of another Platform, nor a Bundle.
+    case cantBeInBundle
     /// A Copy can't be Gone before it was acquired.
     case goneBeforeAcquired
     case gameNotFound
@@ -41,6 +44,8 @@ public struct Game: Sendable, Equatable {
     public let intentSetAt: Date?
     /// The current Rating: the latest Rating history entry. Nil when unrated.
     public let rating: Rating?
+    /// A Bundle (ADR 0016): it contains Games, and has no Rating, Intent, Childhood or Playthroughs.
+    public let isBundle: Bool
 }
 
 public enum Intent: String, Sendable, CaseIterable {
@@ -64,7 +69,7 @@ public final class LudeumStore: Sendable {
     let db: DatabaseQueue
     let clock: TimeSource
     let calendar: Calendar
-    /// Where a backup is taken before every deletion of a Game, List or Playthrough.
+    /// Where a backup is taken before every deletion of a Game or Playthrough.
     let backups: Backups?
 
     /// Opens the journal, migrating it as far as it can go: a journal that still has OpenEmu ROMs stays at
@@ -205,7 +210,8 @@ public final class LudeumStore: Sendable {
                 name: row["displayName"], highlightNote: row["highlightNote"], childhood: row["childhood"],
                 intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)),
                 intentSetAt: row["intentSetAt"],
-                rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) })
+                rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) },
+                isBundle: (row["bundle"] as Bool?) ?? false)
         }
     }
 }

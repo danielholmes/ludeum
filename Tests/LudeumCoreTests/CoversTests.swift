@@ -157,6 +157,19 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(try await covers.cover(for: hand) == .placeholder)
     }
 
+    @Test func aGameWithNoCoverOfItsOwnShowsItsFirstBundlesCover() async throws {
+        let bundle = try j.journal.addBundle(platformId: 19, name: "Metroid Pack", igdbGameId: 1103, igdbName: "Super Metroid")
+        let other = try j.journal.addBundle(platformId: 19, name: "Hermano Pack")
+        let game = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
+        try j.journal.addToBundle(bundle, game)
+        try j.journal.addToBundle(other, game)
+
+        guard case .igdb(_, "co1") = try await covers.cover(for: game) else {
+            Issue.record("expected its Bundle's Cover")
+            return
+        }
+    }
+
     @Test func anUploadWinsOnAnyGameAndRemovingItFallsBack() async throws {
         h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
         let game = try await superMetroid(["Super Metroid (USA).sfc"])

@@ -651,7 +651,7 @@ private struct AssignToGameSheet: View {
     let choose: (GameID) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var filter = ""
-    @State private var rows: [LibraryRow] = []
+    @State private var rows: [AssignChoice] = []
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -678,8 +678,26 @@ private struct AssignToGameSheet: View {
         }
         .padding()
         .frame(width: 480, height: 480)
-        .onAppear { rows = (try? services.journal?.library(LibraryFilter(), sort: .name, ascending: true)) ?? [] }
+        .onAppear {
+            guard let journal = services.journal else { return }
+            let games = ((try? journal.library(LibraryFilter(), sort: .name, ascending: true)) ?? []).map {
+                AssignChoice(id: $0.id, name: $0.name, platformName: $0.platformName)
+            }
+            // A Bundle's ROM (Konami GB Collection) is Matched to the Bundle, which the Library doesn't list.
+            let bundles = ((try? journal.bundles()) ?? []).map { bundle in
+                AssignChoice(
+                    id: bundle.id, name: bundle.name,
+                    platformName: "Bundle · \((try? journal.platform(bundle.platformId))?.name ?? "")")
+            }
+            rows = (games + bundles).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
     }
+}
+
+private struct AssignChoice: Identifiable {
+    let id: GameID
+    let name: String
+    let platformName: String
 }
 
 /// Make by hand…: a Game with no IGDB link, its Platform pre-selected from the ROM's.

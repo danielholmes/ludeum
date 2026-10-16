@@ -214,6 +214,14 @@ final class FakeInternet: HTTPTransport, Sendable {
                     && has("involved_companies", "involved_companies.company = (") { ($0["company"] as? [String: Any])?["id"] as? Int }
             }
             return (200, [:], try! JSONSerialization.data(withJSONObject: found.map { ["id": $0] }))
+        case "/v4/games" where body.contains("where bundles = ("):
+            // A bundle's contents: games whose record lists it in `bundles` (as ids, like IGDB's unexpanded field).
+            let bundle = Self.ids(after: "where bundles = (", in: body).first
+            let found = s.games.keys.sorted().filter { id in
+                let extra = s.gameFields[id].flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                return (extra["bundles"] as? [Int] ?? []).contains { $0 == bundle }
+            }
+            return (200, [:], try! JSONSerialization.data(withJSONObject: found.map { ["id": $0] }))
         case "/v4/genres":
             return (200, [:], try! JSONSerialization.data(withJSONObject: s.genres))
         case "/v4/themes":

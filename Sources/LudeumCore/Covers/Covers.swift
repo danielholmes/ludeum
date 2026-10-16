@@ -130,7 +130,7 @@ public enum CoverSource: Sendable, Equatable {
     case placeholder
 }
 
-/// A Game's Cover: my upload, else libretro Box art, else IGDB's Cover art,
+/// A Game's Cover: my upload, else libretro Box art, else IGDB's Cover art, else the first Bundle's that contains it,
 /// else a placeholder. Everything but uploads lives in the cache, downloaded the first time it's shown.
 public struct Covers: Sendable {
     let journal: LudeumStore
@@ -155,6 +155,8 @@ public struct Covers: Sendable {
         if let igdb, let id = try journal.game(game).igdbGameId.map(Int.init), let imageID = try await igdb.coverImageID(game: id) {
             return .igdb(try await igdb.cover(imageID: imageID), imageID: imageID)
         }
+        // A Game a Bundle contains, with no Cover of its own, shows the first Bundle's.
+        if let bundle = try journal.bundles(containing: game).first { return try await cover(for: bundle.id) }
         return .placeholder
     }
 

@@ -9,7 +9,6 @@ struct TopRatedScreen: View {
     @State private var filter = LibraryFilter()
     @State private var rows: [TopRatedRow] = []
     @State private var platforms: [IGDBPlatform] = []
-    @State private var lists: [GameList] = []
     @State private var players: [Player] = []
     @State private var error: String?
     // Shared with the Library: one choice of view and Cover size everywhere.
@@ -48,7 +47,7 @@ struct TopRatedScreen: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             FilterBar(
-                count: rows.count, filter: $filter, kinds: [.platform, .list, .player, .childhood], platforms: platforms, lists: lists,
+                count: rows.count, filter: $filter, kinds: [.platform, .player, .childhood], platforms: platforms,
                 players: players
             ) {
                 ViewModeControls(showCovers: $showCovers, coverWidth: $coverWidth)
@@ -68,7 +67,7 @@ struct TopRatedScreen: View {
         guard let journal = services.journal else { return }
         do {
             rows = try journal.topRated(filter)
-            (platforms, lists, players) = try filterChoices(journal)
+            (platforms, players) = try filterChoices(journal)
             error = nil
         } catch {
             self.error = error.localizedDescription

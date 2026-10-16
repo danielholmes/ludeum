@@ -18,6 +18,10 @@ _Avoid_: DLC (that's one of IGDB's kinds of Expansion), add-on, expansion pack
 The IGDB game an Expansion expands. It may or may not be a Game in the journal.
 _Avoid_: Parent game, main game
 
+**Bundle**:
+One release of several games that were each also released on their own, on its Platform or another, e.g. Command & Conquer: The First Decade, Super Mario All-Stars or Ninja Gaiden Trilogy (whose games came out alone only on NES). It is not a Game: it contains Games (Expansions included) on its Platform, and has Copies, Attachments, a Highlight note and an IGDB link (or none, for one IGDB doesn't have, made by hand), but nothing about playing or rating it. A release that is one game, however IGDB types it (Kirby Super Star), is a Game. Games bought together, or with a console, are separate Copies, not a Bundle. A Bundle can't be Deleted while it has a Copy, nor can a Game while a Bundle contains it, and a Game can't leave a Bundle while a Playthrough of it names one of the Bundle's Copies.
+_Avoid_: Compilation, collection, anthology, pack
+
 **Platform**:
 The hardware or ecosystem a Game was made for, e.g. SNES, Game Boy, PC, Xbox 360. It is never the device or service the Game was actually played on. The Platforms are exactly IGDB's platforms. Every Game has one, including a Game with no IGDB link.
 _Avoid_: System, console
@@ -27,7 +31,7 @@ One specific edition of a Game, e.g. a region, a revision, or a fan translation 
 _Avoid_: Release, revision, dump
 
 **ROM**:
-A game file in a ROM folder that the journal has recorded, and a Copy of the Game it's Matched to. Only Ludeum makes one: Add ROM, or Adding a Stray file; a file in a ROM folder isn't a ROM until then. A ROM identifies a Version of a Game, and is linked to its Game automatically or by hand; its Copy details (Regions, where and when it was acquired) belong to the ROM and go with it through any change of Match, so an unmatched ROM is a Copy of no Game. Removing or replacing the file loses nothing: the ROM is kept as missing, with its details, until I put a file back or Delete it. Deleting a ROM is the only way it leaves the journal: by hand (or by Keeping only another Version of its Game), which sends any files it still has to the Trash; the move from OpenEmu, and the recovery of its renamed files after it, also deleted a ROM found to duplicate a playlist's disc. Nothing deletes a ROM on its own, and a Game can't be deleted while it has any Copy.
+A game file in a ROM folder that the journal has recorded, and a Copy of the Game or Bundle it's Matched to. Only Ludeum makes one: Add ROM, or Adding a Stray file; a file in a ROM folder isn't a ROM until then. A ROM identifies a Version of a Game or Bundle, and is linked to it automatically or by hand; its Copy details (Regions, where and when it was acquired) belong to the ROM and go with it through any change of Match, so an unmatched ROM is a Copy of no Game. Removing or replacing the file loses nothing: the ROM is kept as missing, with its details, until I put a file back or Delete it. Deleting a ROM is the only way it leaves the journal: by hand (or by Keeping only another Version of its Game), which sends any files it still has to the Trash; the move from OpenEmu, and the recovery of its renamed files after it, also deleted a ROM found to duplicate a playlist's disc. Nothing deletes a ROM on its own, and a Game can't be deleted while it has any Copy.
 _Avoid_: File, image
 
 **ROM folder**:
@@ -51,7 +55,7 @@ Packing a ROM into the archive its Platform's Emulator opens directly, so it tak
 _Avoid_: Compress, zip, Archive (that leaves it unplayable)
 
 **Standard name**:
-The name No-Intro would give a ROM (Redump, on disc Platforms): its Game's name written their way, its Regions as its region tag, and the rest of what its name says about its Version and Disc in their form, without what says nothing about them. So `Super Mario World (U) [!]` with Regions USA has the Standard name `Super Mario World (USA)`, and `The Legend of Zelda: Spirit Tracks`' ROM `Legend of Zelda, The - Spirit Tracks (…)`. A ROM with no Regions has no region tag. A tag it can't place, such as a scene group's or an edition's, is kept unless I choose to drop it.
+The name No-Intro would give a ROM (Redump, on disc Platforms): its Game's (or Bundle's) name written their way, its Regions as its region tag, and the rest of what its name says about its Version and Disc in their form, without what says nothing about them. So `Super Mario World (U) [!]` with Regions USA has the Standard name `Super Mario World (USA)`, and `The Legend of Zelda: Spirit Tracks`' ROM `Legend of Zelda, The - Spirit Tracks (…)`. A ROM with no Regions has no region tag. A tag it can't place, such as a scene group's or an edition's, is kept unless I choose to drop it.
 _Avoid_: Proposed name, canonical name, No-Intro name
 
 **Rename**:
@@ -63,11 +67,11 @@ One of several disc images that together make up a single Version of a multi-dis
 _Avoid_: Part, volume, CD
 
 **IGDB link**:
-An optional reference from a Game to one IGDB game on the Game's Platform, used for metadata, the Game's name and its Cover. A Game has at most one, and no two Games share one. A Game with no IGDB link can gain one later, and a mistaken link can be changed to another (never removed).
+An optional reference from a Game to one IGDB game on the Game's Platform, used for metadata, the Game's name and its Cover. A Game a Bundle contains may link to an IGDB game that isn't on its Platform, as Metal Slug 6 in the PSP's Metal Slug Anthology does. A Bundle has an IGDB link the same way. A Game has at most one, and no two Games on a Platform share one. A Game with no IGDB link can gain one later, and a mistaken link can be changed to another (never removed).
 _Avoid_: Anchor, source game
 
 **Match**:
-The link between a ROM and its Game, together with how it was made and when. It is Automatic (the checksum identifies the game *and* the names agree), Confirmed (I accepted a suggestion from the Review queue), or Manual (I searched IGDB myself).
+The link between a ROM and its Game or Bundle, together with how it was made and when. It is Automatic (the checksum identifies the game *and* the names agree), Confirmed (I accepted a suggestion from the Review queue), or Manual (I searched IGDB myself).
 _Avoid_: Mapping, association
 
 ### Journal data
@@ -112,15 +116,11 @@ A flag on a Game meaning I played it as a child, at some unknown time.
 _Avoid_: Childhood Played
 
 **Highlight note**:
-A note on a Game that I want to see first whenever I open it (a tip, a warning, where I got to), shown at the top of its page. A Game has at most one; clearing its text removes it.
+A note on a Game or Bundle that I want to see first whenever I open it (a tip, a warning, where I got to), shown at the top of its page. A Bundle's also shows on each Game it contains. Each has at most one; clearing its text removes it.
 _Avoid_: Pinned note, comment
 
-**List**:
-A named, unordered group of Games that I curate, e.g. "Castlevania" or "Light Gun Games". A Game can be in many Lists.
-_Avoid_: Tag
-
 **Cover**:
-The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else IGDB's Cover art. A Game can have no Cover at all.
+The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else IGDB's Cover art, else the Cover of the first Bundle that contains it. A Game can have no Cover at all. A Bundle has a Cover the same way.
 _Avoid_: Artwork, box image, thumbnail
 
 **Box art**:
@@ -137,7 +137,7 @@ An image of a game being played, or its title screen. From IGDB (several per gam
 ### Copies
 
 **Copy**:
-One instance of a Game that I have, or once had. A Copy is one of four Kinds: a ROM, or one I record by hand as Physical, Digital, or Physical + digital (a disc that came with a linked digital licence is one Copy, not two). A Game can have any number. Every Copy can say where, when (a Partial date) and for how much it was acquired, which Regions it is for, and anything else about it in Notes. A hand-recorded Copy is Owned until I mark it Gone. A ROM is a Copy with those same fields and more of its own (where its file is, whether it's Archived or Compacted), and is Owned for as long as it's in the journal, present or missing: a missing ROM is a problem to fix, never a Copy I've lost. Any Copy can be Deleted, which is different from Gone: it leaves the journal for good, and a ROM's files go to the Trash with it.
+One instance of a Game that I have, or once had. A Bundle's Copy is one Copy, and a Copy of every Game the Bundle contains. A Copy is one of four Kinds: a ROM, or one I record by hand as Physical, Digital, or Physical + digital (a disc that came with a linked digital licence is one Copy, not two). A Game can have any number. Every Copy can say where, when (a Partial date) and for how much it was acquired, which Regions it is for, and anything else about it in Notes. A hand-recorded Copy is Owned until I mark it Gone. A ROM is a Copy with those same fields and more of its own (where its file is, whether it's Archived or Compacted), and is Owned for as long as it's in the journal, present or missing: a missing ROM is a problem to fix, never a Copy I've lost. Any Copy can be Deleted, which is different from Gone: it leaves the journal for good, and a ROM's files go to the Trash with it.
 _Avoid_: Ownership (that's the Game's status), purchase, edition, licence, forget (for a ROM)
 
 **Region**:
@@ -155,7 +155,7 @@ _Avoid_: Have, in the collection, journal-only (for the status)
 ### Attachments
 
 **Attachment**:
-A file about a Game that I keep with it, such as its manual, a map or a guide, opened in whatever app the system uses for it. A Game can have any number, Owned or not. An Attachment is never a copy of the Game itself: an image of the game, even one no Emulator can Play yet, is a Copy.
+A file about a Game or Bundle that I keep with it, such as its manual, a map or a guide, opened in whatever app the system uses for it. A Game can have any number, Owned or not; a Bundle's also show on each Game it contains. An Attachment is never a copy of the Game itself: an image of the game, even one no Emulator can Play yet, is a Copy.
 _Avoid_: Additional file, extra, document
 
 **Manual**:
@@ -195,7 +195,7 @@ An Emulator setting for Game Boy and Game Boy Color Games: the hardware the Emul
 _Avoid_: Forced platform, hardware mode
 
 **Play**:
-Opening a Game's present ROM in its Platform's Emulator. Play never changes journal data. A Game can't be Played while a Background task is working on one of its ROMs.
+Opening a present ROM of a Game, or of a Bundle that contains it, in its Platform's Emulator, with the Game's Emulator settings. Play never changes journal data. A Game can't be Played while a Background task is working on one of its ROMs.
 _Avoid_: Launch, run
 
 **Background task**:
@@ -235,7 +235,7 @@ Things the journal won't decide on its own and waits for me to resolve: unmatche
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:
-Two or more present ROMs that belong to one Game but aren't Discs of the same Version. Missing ROMs never count. It's resolved by leaving the Game one Version: I Keep only one Version (the others' ROMs are Deleted: their files go to the Trash), Split a Version into its own Game (its ROMs lose their Match and wait in the Review queue to be Matched again, e.g. to a re-release IGDB lists apart), or remove ROMs from the ROM folder myself.
+Two or more present ROMs that belong to one Game but aren't Discs of the same Version. Missing ROMs never count, and nor do the ROMs of a Bundle that contains the Game. It's resolved by leaving the Game one Version: I Keep only one Version (the others' ROMs are Deleted: their files go to the Trash), Split a Version into its own Game (its ROMs lose their Match and wait in the Review queue to be Matched again, e.g. to a re-release IGDB lists apart), or remove ROMs from the ROM folder myself.
 _Avoid_: Duplicates, merge
 
 **Search**:

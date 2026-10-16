@@ -33,15 +33,12 @@ import Testing
     @Test func takesItsJournalDataWithIt() throws {
         try h.journal.setRating(game, Rating(tenths: 95))
         try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
-        let list = try h.journal.createList("Metroid")
-        try h.journal.addToList(list, game)
 
         try h.journal.deleteGame(game)
 
         #expect(throws: LudeumError.gameNotFound) { try h.journal.game(game) }
         #expect(try h.journal.ratingHistory(game).isEmpty)
         #expect(try h.journal.playthroughs(game).isEmpty)
-        #expect(try h.journal.games(in: list).isEmpty)
     }
 }
 

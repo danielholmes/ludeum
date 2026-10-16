@@ -19,6 +19,8 @@ struct GameDetailView: View {
     @State private var playthroughs: [Playthrough] = []
     @State private var players: [Player] = []
     @State private var roms: [LudeumROM] = []
+    /// The ROMs Play can open: its own, else its Bundles' too (`romsToPlay`).
+    @State private var playROMs: [LudeumROM] = []
     /// The hand-recorded Copies; the ROMs are Copies too.
     @State private var copies: [Copy] = []
     @State private var editingCopy: CopyEdit?
@@ -37,6 +39,8 @@ struct GameDetailView: View {
     /// What it's an Expansion of, if it's one; and its Expansions in the journal, if it has any.
     @State private var baseGame: BaseGameLine?
     @State private var expansions: [Game] = []
+    /// The Bundles containing it, with what of theirs it shows: Copies, Attachments, Highlight notes.
+    @State private var bundles: [BundleShare] = []
     @State private var editing: PlaythroughEdit?
     @State private var linking = false
     @State private var editingGame = false
@@ -85,8 +89,9 @@ struct GameDetailView: View {
                         }
                         if let baseGame { ExpansionOfLine(line: baseGame, open: open) }
                         if !expansions.isEmpty { ExpansionsLine(games: expansions, open: open) }
+                        if !bundles.isEmpty { BundledInLine(bundles: bundles.map(\.bundle), open: open) }
                         OpenManualButton(services: services, game: id)
-                        if !roms.isEmpty, !roms.allSatisfy(\.missing) {
+                        if !game.isBundle, !playROMs.isEmpty, !playROMs.allSatisfy(\.missing) {
                             playControls
                             if let message = playError ?? emulator.flatMap(services.versions.tooOldMessage) {
                                 Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
@@ -95,57 +100,66 @@ struct GameDetailView: View {
                     }
                 }
                 if let note = game.highlightNote { HighlightNote(text: note) }
+                ForEach(bundles) { share in
+                    if let note = share.bundle.highlightNote { HighlightNote(text: "\(share.bundle.name): \(note)") }
+                }
             }
 
-            // My journal: what I think of it and when I played it.
-            Section("My journal") {
-                // Mine, Players and Critics alike: a label above the value, lined up along the bottom.
-                HStack(alignment: .lastTextBaseline, spacing: 28) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Mine").font(FactStyle.label).foregroundStyle(.secondary)
-                        RatingEditor(
-                            rating: game.rating, hasHistory: !history.isEmpty,
-                            set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
-                    }
-                    CommunityScores(players: facts.playerScore, critics: facts.criticScore, stacked: true)
-                }
-                HStack {
-                    Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
-                        Text("None").tag(Intent?.none)
-                        ForEach(Intent.allCases, id: \.self) { Text(intentText($0)).tag(Intent?.some($0)) }
-                    }
-                    .pickerStyle(.segmented)
-                    .help(game.intentSetAt.map { "Set \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
-                    Toggle("Childhood", isOn: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
-                        .toggleStyle(.checkbox).fixedSize()
-                }
-                ForEach(playthroughs, id: \.id) { p in
-                    // Click to edit; delete from the right-click menu or the edit sheet.
-                    Button {
-                        editing = PlaythroughEdit(id: p.id, draft: p.draft)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(playthroughTitle(p.draft))
-                                if let details = playthroughDetails(p.draft, roms: roms, copies: copies) {
-                                    Text(details).font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            PlayerBadges(ids: p.draft.players, players: players)
-                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+            if game.isBundle {
+                // A Bundle has no journal of its own: its Games do (ADR 0016).
+                BundleContentsSection(services: services, bundle: game, open: open)
+            } else {
+                // My journal: what I think of it and when I played it.
+                Section("My journal") {
+                    // Mine, Players and Critics alike: a label above the value, lined up along the bottom.
+                    HStack(alignment: .lastTextBaseline, spacing: 28) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Mine").font(FactStyle.label).foregroundStyle(.secondary)
+                            RatingEditor(
+                                rating: game.rating, hasHistory: !history.isEmpty,
+                                set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
                         }
-                        .contentShape(.rect)
+                        CommunityScores(players: facts.playerScore, critics: facts.criticScore, stacked: true)
                     }
-                    .buttonStyle(.plain)
-                    .help("Edit this Playthrough")
-                    .contextMenu {
-                        Button("Edit…") { editing = PlaythroughEdit(id: p.id, draft: p.draft) }
-                        Button("Delete…", role: .destructive) { deletingPlaythrough = p }
+                    HStack {
+                        Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
+                            Text("None").tag(Intent?.none)
+                            ForEach(Intent.allCases, id: \.self) { Text(intentText($0)).tag(Intent?.some($0)) }
+                        }
+                        .pickerStyle(.segmented)
+                        .help(game.intentSetAt.map { "Set \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
+                        Toggle("Childhood", isOn: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
+                            .toggleStyle(.checkbox).fixedSize()
                     }
+                    ForEach(playthroughs, id: \.id) { p in
+                        // Click to edit; delete from the right-click menu or the edit sheet.
+                        Button {
+                            editing = PlaythroughEdit(id: p.id, draft: p.draft)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(playthroughTitle(p.draft))
+                                    if let details = playthroughDetails(p.draft, roms: allROMs, copies: allCopies) {
+                                        Text(details).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                PlayerBadges(ids: p.draft.players, players: players)
+                                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Edit this Playthrough")
+                        .contextMenu {
+                            Button("Edit…") { editing = PlaythroughEdit(id: p.id, draft: p.draft) }
+                            Button("Delete…", role: .destructive) { deletingPlaythrough = p }
+                        }
+                    }
+                    Button("Add Playthrough…", systemImage: "plus") { editing = PlaythroughEdit(id: nil, draft: nil) }
+                        .buttonStyle(.hover)
                 }
-                Button("Add Playthrough…", systemImage: "plus") { editing = PlaythroughEdit(id: nil, draft: nil) }
-                    .buttonStyle(.hover)
+
             }
 
             // About: what IGDB says about it.
@@ -162,12 +176,14 @@ struct GameDetailView: View {
             Section("Copies") {
                 romRows
                 copyRows
+                BundleCopyRows(shares: bundles, open: open)
                 Button("Add Copy…", systemImage: "plus") { editingCopy = .new }
                     .buttonStyle(.hover).help("A physical or digital Copy I own, or once owned")
             }
 
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)
+            ForEach(bundles.filter { !$0.attachments.isEmpty }) { BundleAttachmentsSection(share: $0, open: open) }
 
             if let error { Text(error).foregroundStyle(.red) }
         }
@@ -290,13 +306,13 @@ struct GameDetailView: View {
             isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }), presenting: deletion
         ) { summary in
             if summary.canDelete {
-                Button("Delete Game", role: .destructive, action: deleteGame)
+                Button(game.isBundle ? "Delete Bundle" : "Delete Game", role: .destructive, action: deleteGame)
                 Button("Cancel", role: .cancel) {}
             } else {
                 Button("OK", role: .cancel) {}
             }
         } message: { summary in
-            Text(deletionMessage(summary))
+            Text(deletionMessage(summary, isBundle: game.isBundle))
         }
     }
 
@@ -311,8 +327,10 @@ struct GameDetailView: View {
             playthroughs = try journal.playthroughs(id)
             players = try journal.players()
             roms = try journal.roms(of: id)
+            playROMs = try journal.romsToPlay(of: id)
             copies = try journal.copies(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
+            bundles = game.isBundle ? [] : try BundleShare.of(id, services: services)
             readExpansions()
         } catch LudeumError.gameNotFound {
             self.game = nil
@@ -367,7 +385,7 @@ struct GameDetailView: View {
                 // Stacked and still too wide, it wraps rather than being cut short.
                 Label(Play.Refusal.archived.message, systemImage: "archivebox").foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
-                if let rom = roms.first(where: { !$0.missing && $0.archived }) { archiveButton(rom) }
+                if let rom = playROMs.first(where: { !$0.missing && $0.archived }) { archiveButton(rom) }
             }
         } else if let emulator, let platformId = game?.platformId {
             SideBySideOrStacked {
@@ -392,17 +410,25 @@ struct GameDetailView: View {
         }
     }
 
+    /// Its ROMs and its Bundles', for naming a Playthrough's Copy.
+    private var allROMs: [LudeumROM] { roms + bundles.flatMap(\.roms) }
+
+    /// Its hand-recorded Copies and its Bundles', for naming a Playthrough's Copy.
+    private var allCopies: [Copy] { copies + bundles.flatMap(\.copies) }
+
     /// This Game's Play, with the ROMs a Background task is working on.
     private var playing: Play {
         Play(
-            platformId: game?.platformId ?? 0, platformName: platform?.name ?? "", roms: roms, settings: emulatorSettings,
-            busyROMs: Set(roms.map(\.id).filter { services.tasks.isActive(.rom($0)) }))
+            platformId: game?.platformId ?? 0, platformName: platform?.name ?? "", roms: playROMs, settings: emulatorSettings,
+            busyROMs: Set(playROMs.map(\.id).filter { services.tasks.isActive(.rom($0)) }))
     }
 
     @ViewBuilder private var romRows: some View {
         if roms.isEmpty {
             // Hand-recorded Copies have their own rows, so only a Game with none of either says so.
-            if copies.isEmpty { Text("No Copies").foregroundStyle(.secondary) }
+            if copies.isEmpty, bundles.allSatisfy({ $0.roms.isEmpty && $0.copies.isEmpty }) {
+                Text("No Copies").foregroundStyle(.secondary)
+            }
         } else {
             if roms.allSatisfy(\.missing) {
                 Text("No ROM in its ROM folder").foregroundStyle(.orange)
@@ -724,20 +750,24 @@ func parseRating(_ text: String) -> Rating? {
     return Rating(tenths: Int((value * 10).rounded()))
 }
 
-private func deletionMessage(_ s: DeletionSummary) -> String {
+private func deletionMessage(_ s: DeletionSummary, isBundle: Bool) -> String {
+    if s.containingBundles > 0 {
+        return
+            "It's in \(s.containingBundles == 1 ? "a Bundle" : "\(s.containingBundles) Bundles"). Take it out first, on the Bundle's page."
+    }
     guard s.canDelete else {
         let copies = [
             s.roms > 0 ? "\(s.roms) ROM\(s.roms == 1 ? "" : "s")" : nil,
             s.copies > 0 ? "\(s.copies) other Cop\(s.copies == 1 ? "y" : "ies")" : nil,
         ].compactMap { $0 }.joined(separator: " and ")
-        return "It has \(copies). Only a Game with no Copies can be deleted: delete them first, under Copies."
+        return "It has \(copies). Only a \(isBundle ? "Bundle" : "Game") with no Copies can be deleted: delete them first, under Copies."
     }
     var parts: [String] = []
     if s.ratingEntries > 0 { parts.append("its Rating history (\(s.ratingEntries))") }
     if s.playthroughs > 0 { parts.append("\(s.playthroughs) Playthrough\(s.playthroughs == 1 ? "" : "s")") }
-    if s.lists > 0 { parts.append("its place in \(s.lists) List\(s.lists == 1 ? "" : "s")") }
     if s.attachments > 0 { parts.append("\(s.attachments) Attachment\(s.attachments == 1 ? "" : "s"), whose files go to the Trash") }
-    parts.append("its Intent, Childhood, IGDB link and any uploaded Cover")
+    parts.append(
+        isBundle ? "its IGDB link and any uploaded Cover. Its Games stay" : "its Intent, Childhood, IGDB link and any uploaded Cover")
     return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
 }
 
@@ -772,9 +802,10 @@ func journalErrorText(_ error: Error) -> String {
     if let error = error as? ReviewError { return reviewErrorText(error) }
     return switch error as? LudeumError {
     case .endBeforeStart: "The end date can't come before the start date."
-    case .listNameTaken: "There's already a List with that name."
     case .playerNameTaken: "There's already a Player with that name."
     case .gameHasCopies: "This Game has Copies. Delete them first, under Copies."
+    case .gameInBundle: "This Game is in a Bundle. Take it out first, on the Bundle's page."
+    case .cantBeInBundle: "Only a Game of the Bundle's Platform can be in it."
     case .goneBeforeAcquired: "A Copy can't be gone before it was acquired."
     case .igdbLinkTaken: "Another Game already has that IGDB link."
     case .alreadyLinked: "This Game already has an IGDB link. Use Change IGDB link… to replace it."
@@ -874,8 +905,10 @@ struct PlaythroughSheet: View {
                 copy = d.copy
                 selectedPlayers = Set(d.players)
             }
-            roms = (try? services.journal?.roms(of: game)) ?? []
-            copies = (try? services.journal?.copies(of: game)) ?? []
+            // Its Bundles' Copies are its Copies too.
+            let shares = (try? BundleShare.of(game, services: services)) ?? []
+            roms = ((try? services.journal?.roms(of: game)) ?? []) + shares.flatMap(\.roms)
+            copies = ((try? services.journal?.copies(of: game)) ?? []) + shares.flatMap(\.copies)
             players = (try? services.journal?.players()) ?? []
         }
     }

@@ -215,6 +215,18 @@ public final class IGDBClient: Sendable {
         return results
     }
 
+    /// The IGDB games a bundle contains: those whose `bundles` lists it, by id. Cached like a search.
+    public func bundleContents(of bundle: Int) async throws -> [Int] {
+        let payloads = try await cache.resolve(
+            [bundle], key: Self.bundleContentsKey, maxAge: maxAge, batchSize: 1, servesStale: true
+        ) { batch in
+            let body = "fields id; where bundles = (\(batch[0])); sort id asc; limit 500;"
+            let ids = (try JSONValue.decode(try await post("games", body)).array ?? []).compactMap { $0["id"]?.int }
+            return [batch[0]: try JSONEncoder().encode(ids)]
+        }
+        return try JSONDecoder().decode([Int].self, from: payloads[bundle] ?? Data("[]".utf8))
+    }
+
     /// Every IGDB platform: the journal's Platforms. Cached as one entry, like any other record.
     public func platforms() async throws -> [IGDBPlatform] {
         try await platforms(servesStale: true)
@@ -301,6 +313,7 @@ public final class IGDBClient: Sendable {
     static func gameKey(_ id: Int) -> String { "igdb:game:\(id)" }
     static func platformsKey(_: String) -> String { "igdb:platforms:all" }
     static func namedKey(_ endpoint: String) -> String { "igdb:\(endpoint):all" }
+    static func bundleContentsKey(_ bundle: Int) -> String { "igdb:bundle-contents:\(bundle)" }
     static func companiesKey(_ text: String) -> String { "igdb:companies:\(text)" }
     /// Fully expanded records are large: IGDB answers 413 for ~250 at once but is fine with 100.
     static let maxBatch = 100
