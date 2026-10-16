@@ -127,11 +127,10 @@ struct Screenshot: Identifiable {
     let id: String
 }
 
-/// An IGDB screenshot, downloaded on first view; a grey box until then.
+/// An IGDB screenshot filling its frame, cropped to it, downloaded on first view; a grey box until then.
 struct ScreenshotImage: View {
     let igdb: IGDBClient
     let imageID: String
-    let large: Bool
     @State private var image: NSImage?
 
     var body: some View {
@@ -142,8 +141,50 @@ struct ScreenshotImage: View {
             }
             .clipped()
             .task(id: imageID) {
-                if let file = try? await igdb.screenshot(imageID: imageID, large: large) { image = NSImage(contentsOf: file) }
+                if let file = try? await igdb.screenshot(imageID: imageID) { image = NSImage(contentsOf: file) }
             }
+    }
+}
+
+/// IGDB's original of a screenshot, whole: as large as its frame allows without going over its own size in pixels, and
+/// never cropped. One under 200 pixels either way has its own size scaled up by a whole amount (`screenshotScale`).
+/// A spinner until it's downloaded.
+struct WholeScreenshot: View {
+    let igdb: IGDBClient
+    let imageID: String
+    @State private var image: NSImage?
+    @State private var failed = false
+
+    var body: some View {
+        ZStack {
+            if let image {
+                let pixels = Self.pixelSize(of: image)
+                let scale = CGFloat(screenshotScale(pixelWidth: Int(pixels.width), pixelHeight: Int(pixels.height)))
+                Image(nsImage: image).resizable()
+                    // Scaled up, each pixel stays a sharp square of them; shrunk to fit, it's smoothed.
+                    .interpolation(scale > 1 ? .none : .high)
+                    .scaledToFit()
+                    .frame(maxWidth: pixels.width * scale, maxHeight: pixels.height * scale)
+            } else if failed {
+                Text("Couldn't download it.").foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task(id: imageID) {
+            if let file = try? await igdb.screenshot(imageID: imageID, original: true), let image = NSImage(contentsOf: file) {
+                self.image = image
+            } else {
+                failed = true
+            }
+        }
+    }
+
+    /// Its size in pixels, whatever resolution the file claims (which `NSImage.size` goes by).
+    private static func pixelSize(of image: NSImage) -> CGSize {
+        guard let rep = image.representations.first, rep.pixelsWide > 0, rep.pixelsHigh > 0 else { return image.size }
+        return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
     }
 }
 

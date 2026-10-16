@@ -184,11 +184,19 @@ extension IGDBClient {
         try await cachedGames(ids: [Int(igdbGameId)])[Int(igdbGameId)]?.facts ?? .none
     }
 
-    /// A screenshot at `screenshot_med` (569 × 320) for a strip of thumbnails, or `screenshot_huge`
-    /// (1280 × 720) to look at; cached after the first download.
-    public func screenshot(imageID: String, large: Bool = false) async throws -> URL {
-        try await image(imageID: imageID, size: large ? "screenshot_huge" : "screenshot_med")
+    /// A screenshot at `screenshot_med` (569 × 320, cropped to fill it) for a strip of thumbnails, or the `original`,
+    /// uncropped at its own size, to look at; cached after the first download.
+    public func screenshot(imageID: String, original: Bool = false) async throws -> URL {
+        try await image(imageID: imageID, size: original ? "original" : "screenshot_med")
     }
+}
+
+/// How many times bigger to show a screenshot: 1 for one at least 200 pixels each way, else the least whole amount that
+/// takes its shorter side to 200, so each of its pixels becomes a square of them.
+public func screenshotScale(pixelWidth: Int, pixelHeight: Int) -> Int {
+    let shorter = min(pixelWidth, pixelHeight)
+    guard shorter > 0, shorter < 200 else { return 1 }
+    return (200 + shorter - 1) / shorter
 }
 
 /// One release of a game: where and when.

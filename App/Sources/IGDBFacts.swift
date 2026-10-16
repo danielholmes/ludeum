@@ -111,7 +111,7 @@ struct ScreenshotsSection: View {
             let shown = collapsed ? Array(screenshots.prefix(limit - 1)) : screenshots
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columns), spacing: Self.spacing) {
                 ForEach(shown, id: \.self) { imageID in
-                    ScreenshotImage(igdb: igdb, imageID: imageID, large: false)
+                    ScreenshotImage(igdb: igdb, imageID: imageID)
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .frame(minWidth: 0)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -122,7 +122,7 @@ struct ScreenshotsSection: View {
                         showingAll = true
                     } label: {
                         // The next screenshot, dimmed, under "+N more".
-                        ScreenshotImage(igdb: igdb, imageID: screenshots[shown.count], large: false)
+                        ScreenshotImage(igdb: igdb, imageID: screenshots[shown.count])
                             .aspectRatio(16 / 9, contentMode: .fit)
                             .frame(minWidth: 0)
                             .overlay(Color.black.opacity(0.55))
@@ -143,12 +143,103 @@ struct ScreenshotsSection: View {
         }
         .onChange(of: screenshots) { showingAll = false }
         .sheet(item: $viewing) { shot in
-            // IGDB's full size (1280 × 720), shrinking to fit a smaller screen. Click to close.
-            ScreenshotImage(igdb: igdb, imageID: shot.id, large: true)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .frame(minWidth: 640, idealWidth: 1280, maxWidth: 1280)
-                .onTapGesture { viewing = nil }
+            ScreenshotGallery(igdb: igdb, screenshots: screenshots, showing: shot.id)
         }
+    }
+}
+
+/// IGDB's screenshots one at a time, whole, over a strip of them all. ← and → or the arrows on the image go
+/// back and on, round from the last to the first; click one in the strip to see it.
+struct ScreenshotGallery: View {
+    let igdb: IGDBClient
+    let screenshots: [String]
+    @State private var index: Int
+    @Environment(\.dismiss) private var dismiss
+
+    private nonisolated static let thumbnailWidth: CGFloat = 112
+
+    init(igdb: IGDBClient, screenshots: [String], showing imageID: String) {
+        self.igdb = igdb
+        self.screenshots = screenshots
+        _index = State(initialValue: screenshots.firstIndex(of: imageID) ?? 0)
+    }
+
+    var body: some View {
+        let stage = stageSize
+        VStack(spacing: 12) {
+            WholeScreenshot(igdb: igdb, imageID: screenshots[index])
+                // A spinner while the next one downloads, not the last one.
+                .id(screenshots[index])
+                .frame(width: stage.width, height: stage.height)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                .overlay(alignment: .leading) { arrow(-1) }
+                .overlay(alignment: .trailing) { arrow(1) }
+            thumbnails(width: stage.width)
+            HStack {
+                Text("\(index + 1) of \(screenshots.count)").monospacedDigit().foregroundStyle(.secondary)
+                Spacer()
+                Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(20)
+    }
+
+    /// Where each screenshot is shown, the same size for all of them: 16:9, as big as the screen leaves room for
+    /// beside the strip and buttons, up to 1920 × 1080 (IGDB's biggest).
+    private var stageSize: CGSize {
+        let screen = (NSApp.keyWindow?.screen ?? NSScreen.main)?.visibleFrame.size ?? CGSize(width: 1440, height: 900)
+        let width = max(640, min(1920, screen.width - 80, (screen.height - 240) * 16 / 9))
+        return CGSize(width: width, height: width * 9 / 16)
+    }
+
+    /// A chevron over the image's edge: back one (←) or on one (→).
+    private func arrow(_ step: Int) -> some View {
+        Button {
+            go(step)
+        } label: {
+            Image(systemName: step < 0 ? "chevron.left" : "chevron.right")
+                .font(.title2.weight(.semibold))
+                .frame(width: 40, height: 40)
+                .background(.regularMaterial, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(step < 0 ? .leftArrow : .rightArrow, modifiers: [])
+        .help(step < 0 ? "Previous (←)" : "Next (→)")
+        .padding(12)
+        .disabled(screenshots.count < 2)
+    }
+
+    private func go(_ step: Int) {
+        index = (index + step + screenshots.count) % screenshots.count
+    }
+
+    /// Every screenshot small, the one showing outlined and kept in view.
+    private func thumbnails(width: CGFloat) -> some View {
+        ScrollViewReader { scroller in
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(screenshots.indices, id: \.self) { i in
+                        ScreenshotImage(igdb: igdb, imageID: screenshots[i])
+                            .frame(width: Self.thumbnailWidth, height: Self.thumbnailWidth * 9 / 16)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .strokeBorder(Color.accentColor, lineWidth: i == index ? 3 : 0)
+                            }
+                            .opacity(i == index ? 1 : 0.6)
+                            .contentShape(Rectangle())
+                            .onTapGesture { index = i }
+                    }
+                }
+                .padding(.vertical, 2)
+                // Centred when they don't fill the width.
+                .frame(minWidth: width)
+            }
+            .onAppear { scroller.scrollTo(index, anchor: .center) }
+            .onChange(of: index) { withAnimation { scroller.scrollTo(index, anchor: .center) } }
+        }
+        .frame(width: width)
     }
 }
 
