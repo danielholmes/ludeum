@@ -3,43 +3,65 @@ import LudeumCore
 import SwiftUI
 
 /// For now, while it's decided whether Box art needs both libretro and LaunchBox: Game detail's Cover, labelled with
-/// where it came from, then each source's own Box art for the Game (`Covers.boxArt(for:from:)`), so a box the Cover
-/// order hides can be seen. The Library still shows only the Cover.
+/// where it came from, then each source's own Box art for the Game (`Covers.boxArt(for:from:)`) and IGDB's Cover art,
+/// so an image the Cover order hides can be seen. The Library still shows only the Cover.
 struct CoverComparison: View {
     let services: Services
     let game: GameID
     let name: String
     @State private var coverOrigin: String?
-    @State private var boxArt: [BoxArtSource: SourceBoxArt] = [:]
+    @State private var images: [Source: SourceImage] = [:]
+
+    /// What's shown beside the Cover, in the Cover order.
+    private enum Source: CaseIterable {
+        case libretro, launchBox, igdb
+
+        var label: String {
+            switch self {
+            case .libretro: BoxArtSource.libretro.rawValue
+            case .launchBox: BoxArtSource.launchBox.rawValue
+            case .igdb: "IGDB"
+            }
+        }
+
+        func find(_ covers: Covers, _ game: GameID) async throws -> CoverSource? {
+            switch self {
+            case .libretro: try await covers.boxArt(for: game, from: .libretro)
+            case .launchBox: try await covers.boxArt(for: game, from: .launchBox)
+            case .igdb: try await covers.coverArt(for: game)
+            }
+        }
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             column(["Cover", coverOrigin].compactMap { $0 }.joined(separator: " · ")) {
                 CoverView(services: services, game: game, name: name, fitsImage: true)
             }
-            ForEach(BoxArtSource.allCases, id: \.self) { source in
-                column(source.rawValue) { SourceBoxArtView(state: boxArt[source] ?? .loading, name: "\(name), \(source.rawValue)") }
+            ForEach(Source.allCases, id: \.self) { source in
+                column(source.label) { SourceImageView(state: images[source] ?? .loading, name: "\(name), \(source.label)") }
             }
         }
         .task(id: CoverKey(game: game, revision: services.changes.coverRevision, pixels: CoverTileSize.pixels)) {
-            boxArt = [:]
+            images = [:]
             coverOrigin = (try? await services.covers?.cover(for: game))?.origin
-            // Each on its own, so one that can't be read doesn't hide the other.
-            for source in BoxArtSource.allCases { boxArt[source] = await load(source) }
+            // Each on its own, so one that can't be read doesn't hide the others.
+            for source in Source.allCases { images[source] = await load(source) }
         }
     }
 
     private func column(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
         VStack(spacing: 4) {
-            content().frame(width: 150).frame(maxHeight: 200, alignment: .top)
+            // Narrower in a narrow window, rather than running off its edge.
+            content().frame(maxWidth: 150).frame(maxHeight: 200, alignment: .top)
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
     }
 
-    private func load(_ source: BoxArtSource) async -> SourceBoxArt {
+    private func load(_ source: Source) async -> SourceImage {
         guard let covers = services.covers else { return .none }
         do {
-            guard let found = try await covers.boxArt(for: game, from: source) else { return .none }
+            guard let found = try await source.find(covers, game) else { return .none }
             guard let image = await decodeImage(found, pixels: CoverTileSize.pixels) else { return .failed }
             return .found(found, image)
         } catch {
@@ -48,34 +70,34 @@ struct CoverComparison: View {
     }
 }
 
-/// One source's Box art for a Game, as far as it's been looked up.
-private enum SourceBoxArt {
+/// One source's image for a Game, as far as it's been looked up.
+private enum SourceImage {
     case loading
-    /// The source has no box for the Game.
+    /// The source has none for the Game.
     case none
     /// It couldn't be downloaded or read: not the same as having none.
     case failed
     case found(CoverSource, NSImage)
 }
 
-/// A source's box at tile size, opening full size when clicked, or what stands in for it.
-private struct SourceBoxArtView: View {
-    let state: SourceBoxArt
+/// A source's image at tile size, opening full size when clicked, or what stands in for it.
+private struct SourceImageView: View {
+    let state: SourceImage
     let name: String
     @State private var enlarged = false
 
     var body: some View {
         switch state {
-        case .found(let boxArt, let image):
+        case .found(let found, let image):
             Image(nsImage: image).resizable().interpolation(.high).antialiased(true).scaledToFit()
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .onTapGesture { enlarged = true }
-                .help(boxArt.location.map { "\($0) (click to show full size)" } ?? "Show full size")
+                .help(found.location.map { "\($0) (click to show full size)" } ?? "Show full size")
                 .sheet(isPresented: $enlarged) {
-                    EnlargedImage(name: name, tileSized: image) { await decodeImage(boxArt, pixels: nil) }
+                    EnlargedImage(name: name, tileSized: image) { await decodeImage(found, pixels: nil) }
                 }
         case .loading: placeholder { ProgressView().controlSize(.small) }
-        case .none: placeholder { Text("No box").font(.caption).foregroundStyle(.secondary) }
+        case .none: placeholder { Text("None").font(.caption).foregroundStyle(.secondary) }
         case .failed: placeholder { Text("Couldn't load").font(.caption).foregroundStyle(.red) }
         }
     }
@@ -85,6 +107,6 @@ private struct SourceBoxArtView: View {
             RoundedRectangle(cornerRadius: 6).fill(.quaternary)
             content()
         }
-        .frame(width: 150, height: 200)
+        .frame(maxWidth: 150).frame(height: 200)
     }
 }

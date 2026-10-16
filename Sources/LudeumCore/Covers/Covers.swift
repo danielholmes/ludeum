@@ -186,10 +186,15 @@ public struct Covers: Sendable {
             let cover = try await cover(for: bundle.id)
             if cover != .placeholder { return cover }
         }
-        if let igdb, let id = try journal.game(game).igdbGameId.map(Int.init), let imageID = try await igdb.coverImageID(game: id) {
-            return .igdb(try await igdb.cover(imageID: imageID), imageID: imageID)
-        }
-        return .placeholder
+        return try await coverArt(for: game) ?? .placeholder
+    }
+
+    /// IGDB's Cover art for the Game, whatever its Cover is: nil for a Game not linked to IGDB, or whose IGDB game has
+    /// none.
+    public func coverArt(for game: GameID) async throws -> CoverSource? {
+        guard let igdb, let id = try journal.game(game).igdbGameId.map(Int.init), let imageID = try await igdb.coverImageID(game: id)
+        else { return nil }
+        return .igdb(try await igdb.cover(imageID: imageID), imageID: imageID)
     }
 
     /// One source's Box art for the Game on its own, as it would be with no other source: by the Game's names, else by

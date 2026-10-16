@@ -506,6 +506,19 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
+    @Test func igdbsCoverArtIsShownWhicheverTheCoverIs() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+        try covers.upload(testImage(width: 60, height: 80), for: game)
+        let byHand = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
+
+        guard case .igdb(_, "co1") = try await covers.coverArt(for: game) else {
+            Issue.record("expected IGDB's Cover art")
+            return
+        }
+        #expect(try await covers.coverArt(for: byHand) == nil)
+    }
+
     @Test func aSourceWithNoBoxForAGameHasNone() async throws {
         h.internet.addLibretro(Self.snes, ["Super Mario World (USA)"])
         h.internet.setLaunchBox([
