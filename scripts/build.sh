@@ -9,5 +9,5 @@ DERIVED="$ROOT/.build/xcode"
 cd "$ROOT"
 xcodegen -q
 xcodebuild -project Ludeum.xcodeproj -scheme Ludeum -configuration Debug \
-  -destination 'platform=macOS' -derivedDataPath "$DERIVED" build -quiet >&2
+  -destination "platform=macOS,arch=$(uname -m)" -derivedDataPath "$DERIVED" build -quiet >&2
 echo "$DERIVED/Build/Products/Debug/Ludeum.app"
