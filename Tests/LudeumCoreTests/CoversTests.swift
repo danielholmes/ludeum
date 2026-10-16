@@ -492,14 +492,15 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         let game = try await superMetroid(["Super Metroid (USA).sfc"])
         try covers.upload(testImage(width: 60, height: 80), for: game)
 
-        let boxArt = try await covers.boxArtBySource(for: game)
+        let libretro = try await covers.boxArt(for: game, from: .libretro)
+        let launchBox = try await covers.boxArt(for: game, from: .launchBox)
 
-        guard case .libretro(_, "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (USA).png") = boxArt.libretro
+        guard case .libretro(_, "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (USA).png") = libretro
         else {
             Issue.record("expected libretro's Box art")
             return
         }
-        guard case .launchBox(_, file: "sm.jpg") = boxArt.launchBox else {
+        guard case .launchBox(_, file: "sm.jpg") = launchBox else {
             Issue.record("expected LaunchBox's Box art")
             return
         }
@@ -513,10 +514,11 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         try await h.launchBox.refresh()
         let game = try await superMetroid(["Super Metroid (USA).sfc"])
 
-        let boxArt = try await covers.boxArtBySource(for: game)
+        let libretro = try await covers.boxArt(for: game, from: .libretro)
+        let launchBox = try await covers.boxArt(for: game, from: .launchBox)
 
-        #expect(boxArt.libretro == nil)
-        guard case .launchBox(_, file: "sm.jpg") = boxArt.launchBox else {
+        #expect(libretro == nil)
+        guard case .launchBox(_, file: "sm.jpg") = launchBox else {
             Issue.record("expected LaunchBox's Box art")
             return
         }
@@ -534,13 +536,14 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         let game = try j.journal.addGame(
             platformId: 6, name: "Command & Conquer: Renegade", igdbGameId: 2008, igdbName: "Command & Conquer: Renegade")
 
-        let boxArt = try await covers.boxArtBySource(for: game)
+        let libretro = try await covers.boxArt(for: game, from: .libretro)
+        let launchBox = try await covers.boxArt(for: game, from: .launchBox)
 
-        guard case .libretro(_, "DOS/Named_Boxarts/Commando (1986).png") = boxArt.libretro else {
+        guard case .libretro(_, "DOS/Named_Boxarts/Commando (1986).png") = libretro else {
             Issue.record("expected libretro's box for Commando")
             return
         }
-        guard case .launchBox(_, file: "renegade.jpg") = boxArt.launchBox else {
+        guard case .launchBox(_, file: "renegade.jpg") = launchBox else {
             Issue.record("expected LaunchBox's Box art")
             return
         }

@@ -2,33 +2,31 @@ import AppKit
 import LudeumCore
 import SwiftUI
 
-/// For now, while it's decided whether Box art needs both libretro and LaunchBox: Game detail's Cover, then each
-/// source's own Box art for the Game (`Covers.boxArtBySource`), labelled, so a box the Cover order hides can be seen.
-/// The Library still shows only the Cover.
+/// For now, while it's decided whether Box art needs both libretro and LaunchBox: Game detail's Cover, labelled with
+/// where it came from, then each source's own Box art for the Game (`Covers.boxArt(for:from:)`), so a box the Cover
+/// order hides can be seen. The Library still shows only the Cover.
 struct CoverComparison: View {
     let services: Services
     let game: GameID
     let name: String
-    /// Each source's box, once looked up; nil until then.
-    @State private var boxes: [SourceBox]?
+    @State private var coverOrigin: String?
+    @State private var boxArt: [BoxArtSource: SourceBoxArt] = [:]
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            column("Cover") { CoverView(services: services, game: game, name: name, fitsImage: true) }
-            ForEach(boxes ?? SourceBox.loading) { box in
-                column(box.source) { SourceBoxView(box: box, loading: boxes == nil, name: name) }
+            column(["Cover", coverOrigin].compactMap { $0 }.joined(separator: " · ")) {
+                CoverView(services: services, game: game, name: name, fitsImage: true)
+            }
+            ForEach(BoxArtSource.allCases, id: \.self) { source in
+                column(source.rawValue) { SourceBoxArtView(state: boxArt[source] ?? .loading, name: "\(name), \(source.rawValue)") }
             }
         }
-        .task(id: LoadKey(game: game, revision: services.changes.coverRevision, pixels: CoverTileSize.pixels)) {
-            boxes = nil
-            boxes = await load()
+        .task(id: CoverKey(game: game, revision: services.changes.coverRevision, pixels: CoverTileSize.pixels)) {
+            boxArt = [:]
+            coverOrigin = (try? await services.covers?.cover(for: game))?.origin
+            // Each on its own, so one that can't be read doesn't hide the other.
+            for source in BoxArtSource.allCases { boxArt[source] = await load(source) }
         }
-    }
-
-    private struct LoadKey: Equatable {
-        let game: GameID
-        let revision: Int
-        let pixels: Int
     }
 
     private func column(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
@@ -38,74 +36,55 @@ struct CoverComparison: View {
         }
     }
 
-    private func load() async -> [SourceBox] {
-        // A source that couldn't be read (a failed download) shows as having none, as the Cover's placeholder does.
-        let boxArt = try? await services.covers?.boxArtBySource(for: game)
-        var boxes: [SourceBox] = []
-        for (source, found) in [("libretro", boxArt?.libretro), ("LaunchBox", boxArt?.launchBox)] {
-            let image: NSImage? = if let found { await decodeCover(found, pixels: CoverTileSize.pixels) } else { nil }
-            boxes.append(SourceBox(source: source, cover: found, image: image))
-        }
-        return boxes
-    }
-}
-
-/// One source's Box art for a Game, or none.
-private struct SourceBox: Identifiable {
-    let source: String
-    let cover: CoverSource?
-    let image: NSImage?
-
-    var id: String { source }
-
-    static let loading = ["libretro", "LaunchBox"].map { SourceBox(source: $0, cover: nil, image: nil) }
-
-    /// Where it came from: libretro's path, or LaunchBox's file name.
-    var detail: String? {
-        switch cover {
-        case .libretro(_, let path): path
-        case .launchBox(_, let file): file
-        default: nil
+    private func load(_ source: BoxArtSource) async -> SourceBoxArt {
+        guard let covers = services.covers else { return .none }
+        do {
+            guard let found = try await covers.boxArt(for: game, from: source) else { return .none }
+            guard let image = await decodeImage(found, pixels: CoverTileSize.pixels) else { return .failed }
+            return .found(found, image)
+        } catch {
+            return .failed
         }
     }
 }
 
-/// A source's box at tile size, opening full size when clicked, or a note that it has none.
-private struct SourceBoxView: View {
-    let box: SourceBox
-    let loading: Bool
+/// One source's Box art for a Game, as far as it's been looked up.
+private enum SourceBoxArt {
+    case loading
+    /// The source has no box for the Game.
+    case none
+    /// It couldn't be downloaded or read: not the same as having none.
+    case failed
+    case found(CoverSource, NSImage)
+}
+
+/// A source's box at tile size, opening full size when clicked, or what stands in for it.
+private struct SourceBoxArtView: View {
+    let state: SourceBoxArt
     let name: String
     @State private var enlarged = false
-    @State private var full: NSImage?
 
     var body: some View {
-        if let image = box.image {
+        switch state {
+        case .found(let boxArt, let image):
             Image(nsImage: image).resizable().interpolation(.high).antialiased(true).scaledToFit()
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .onTapGesture { enlarged = true }
-                .help(box.detail ?? "")
+                .help(boxArt.location.map { "\($0) (click to show full size)" } ?? "Show full size")
                 .sheet(isPresented: $enlarged) {
-                    let screen = NSScreen.main?.visibleFrame.size ?? CGSize(width: 1200, height: 900)
-                    Image(nsImage: full ?? image).resizable().interpolation(.high).antialiased(true).scaledToFit()
-                        .frame(maxWidth: screen.width * 0.9, maxHeight: screen.height * 0.9)
-                        .accessibilityLabel("\(name), \(box.source)")
-                        .contentShape(Rectangle())
-                        .onTapGesture { enlarged = false }
-                        .onExitCommand { enlarged = false }
-                        .task {
-                            if let cover = box.cover { full = await decodeCover(cover, pixels: nil) }
-                        }
+                    EnlargedImage(name: name, tileSized: image) { await decodeImage(boxArt, pixels: nil) }
                 }
-        } else {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6).fill(.quaternary)
-                if loading {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text("No box").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 150, height: 200)
+        case .loading: placeholder { ProgressView().controlSize(.small) }
+        case .none: placeholder { Text("No box").font(.caption).foregroundStyle(.secondary) }
+        case .failed: placeholder { Text("Couldn't load").font(.caption).foregroundStyle(.red) }
         }
+    }
+
+    private func placeholder(@ViewBuilder _ content: () -> some View) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6).fill(.quaternary)
+            content()
+        }
+        .frame(width: 150, height: 200)
     }
 }

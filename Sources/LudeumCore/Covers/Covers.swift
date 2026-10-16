@@ -130,10 +130,10 @@ struct BoxArtLookup {
     func titled(_ titles: [String]) -> BoxArtLookup { BoxArtLookup(platform: platform, titles: titles, regions: regions) }
 }
 
-/// Each source's Box art for a Game, nil where it has none (`Covers.boxArtBySource`).
-public struct BoxArtBySource: Sendable, Equatable {
-    public let libretro: CoverSource?
-    public let launchBox: CoverSource?
+/// Where Box art comes from, in the Cover order.
+public enum BoxArtSource: String, CaseIterable, Sendable {
+    case libretro = "libretro"
+    case launchBox = "LaunchBox"
 }
 
 /// What a Game shows as its Cover.
@@ -177,9 +177,7 @@ public struct Covers: Sendable {
         // Only once neither finds a box by the Game's own names: IGDB's alternative names reach further (Commander Keen
         // in Invasion of the Vorticons: Marooned on Mars is `Commander Keen 1 - Marooned on Mars`), but can be a working
         // title another game has (Command & Conquer: Renegade was Commando).
-        let alternatives = (record?.alternativeNames ?? []).filter { !lookup.titles.contains($0) }
-        if !alternatives.isEmpty {
-            let byAlternatives = lookup.titled(alternatives)
+        if let byAlternatives = byAlternatives(lookup, record) {
             if let found = try await libretroBoxArt(roms: roms, byAlternatives) { return found }
             if let found = try await launchBoxBoxArt(byAlternatives, year: record?.releaseYear) { return found }
         }
@@ -194,20 +192,28 @@ public struct Covers: Sendable {
         return .placeholder
     }
 
-    /// Each source's Box art for the Game on its own, as it would be with no other source: by the Game's names, else by
+    /// One source's Box art for the Game on its own, as it would be with no other source: by the Game's names, else by
     /// IGDB's alternative names for it. For comparing them, beside the Cover, while it's decided whether both are
-    /// needed; uploads and Bundles play no part.
-    public func boxArtBySource(for game: GameID) async throws -> BoxArtBySource {
+    /// needed; uploads and Bundles play no part. Nil when the source has none; a failed download throws.
+    public func boxArt(for game: GameID, from source: BoxArtSource) async throws -> CoverSource? {
         let roms = try journal.coverROMs(game)
         let lookup = try journal.boxArtLookup(game)
         let record = try await igdbGame(game)
+        for lookup in [lookup, byAlternatives(lookup, record)].compactMap({ $0 }) {
+            let found =
+                switch source {
+                case .libretro: try await libretroBoxArt(roms: roms, lookup)
+                case .launchBox: try await launchBoxBoxArt(lookup, year: record?.releaseYear)
+                }
+            if let found { return found }
+        }
+        return nil
+    }
+
+    /// The lookup by IGDB's alternative names for the Game that aren't among its own, or nil when there are none.
+    private func byAlternatives(_ lookup: BoxArtLookup, _ record: IGDBGame?) -> BoxArtLookup? {
         let alternatives = (record?.alternativeNames ?? []).filter { !lookup.titles.contains($0) }
-        let byAlternatives = alternatives.isEmpty ? nil : lookup.titled(alternatives)
-        var libretro = try await libretroBoxArt(roms: roms, lookup)
-        if libretro == nil, let byAlternatives { libretro = try await libretroBoxArt(roms: roms, byAlternatives) }
-        var launchBox = try await launchBoxBoxArt(lookup, year: record?.releaseYear)
-        if launchBox == nil, let byAlternatives { launchBox = try await launchBoxBoxArt(byAlternatives, year: record?.releaseYear) }
-        return BoxArtBySource(libretro: libretro, launchBox: launchBox)
+        return alternatives.isEmpty ? nil : lookup.titled(alternatives)
     }
 
     /// Its ROMs' Box art, whatever its names, or for a Game with no ROM, a title match on `lookup` in its Platform's

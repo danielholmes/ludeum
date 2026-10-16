@@ -29,7 +29,9 @@ struct CoverView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .onTapGesture { enlarged = true }
                     .help("Show the Cover full size")
-                    .sheet(isPresented: $enlarged) { EnlargedCover(services: services, game: game, name: name, tileSized: image) }
+                    .sheet(isPresented: $enlarged) {
+                        EnlargedImage(name: name, tileSized: image) { await loadFullCover(services, game) }
+                    }
             } else {
                 tile
             }
@@ -55,20 +57,22 @@ struct CoverView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
-    private struct CoverKey: Equatable {
-        let game: GameID
-        let revision: Int
-        let pixels: Int
-    }
 }
 
-/// The Cover as large as the screen allows; a click or Escape closes it. It opens on the tile-sized image and swaps in
-/// the full one once that's read.
-private struct EnlargedCover: View {
-    let services: Services
+/// What a Cover's image is loaded for: reloaded when the Game's Cover changes or the tiles grow past the size it was
+/// decoded at.
+struct CoverKey: Equatable {
     let game: GameID
+    let revision: Int
+    let pixels: Int
+}
+
+/// An image (a Cover, or a source's Box art) as large as the screen allows; a click or Escape closes it. It opens on
+/// the tile-sized image and swaps in the full one once `loadFull` has read it.
+struct EnlargedImage: View {
     let name: String
     let tileSized: NSImage
+    let loadFull: () async -> NSImage?
     @State private var full: NSImage?
     @Environment(\.dismiss) private var dismiss
 
@@ -80,7 +84,7 @@ private struct EnlargedCover: View {
             .contentShape(Rectangle())
             .onTapGesture { dismiss() }
             .onExitCommand { dismiss() }
-            .task { full = await loadFullCover(services, game) }
+            .task { full = await loadFull() }
     }
 }
 
@@ -105,7 +109,7 @@ enum CoverTileSize {
     let revision = services.changes.coverRevision
     if let cached = services.memory.cover(game, revision: revision, pixels: pixels) { return cached }
     guard let source = try? await services.covers?.cover(for: game) else { return nil }  // a failed download: try again later
-    let image = await decodeCover(source, pixels: pixels)
+    let image = await decodeImage(source, pixels: pixels)
     services.memory.store(cover: image, for: game, revision: revision, pixels: pixels)
     return image
 }
@@ -113,12 +117,12 @@ enum CoverTileSize {
 /// The Cover's image as it is, for looking at full size. Not kept: only tile-sized Covers are.
 @MainActor func loadFullCover(_ services: Services, _ game: GameID) async -> NSImage? {
     guard let source = try? await services.covers?.cover(for: game) else { return nil }
-    return await decodeCover(source, pixels: nil)
+    return await decodeImage(source, pixels: nil)
 }
 
-/// A Cover's image, decoded off the main thread, there and then rather than at first draw: no larger than `pixels` on
-/// its long edge, or as it is when that's nil. Nil for the placeholder.
-func decodeCover(_ source: CoverSource, pixels: Int?) async -> NSImage? {
+/// The image of a Cover or a source's Box art, decoded off the main thread, there and then rather than at first draw:
+/// no larger than `pixels` on its long edge, or as it is when that's nil. Nil for the placeholder.
+func decodeImage(_ source: CoverSource, pixels: Int?) async -> NSImage? {
     await Task.detached(priority: .userInitiated) { () -> NSImage? in
         guard let imageSource = coverImageSource(source) else { return nil }
         guard let pixels else {
@@ -134,6 +138,28 @@ func decodeCover(_ source: CoverSource, pixels: Int?) async -> NSImage? {
         guard let tile = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else { return nil }
         return NSImage(cgImage: tile, size: NSSize(width: tile.width, height: tile.height))
     }.value
+}
+
+extension CoverSource {
+    /// Where the image came from, for a label: "upload", "libretro", "LaunchBox" or "IGDB". Nil for the placeholder.
+    var origin: String? {
+        switch self {
+        case .upload: "upload"
+        case .libretro: BoxArtSource.libretro.rawValue
+        case .launchBox: BoxArtSource.launchBox.rawValue
+        case .igdb: "IGDB"
+        case .placeholder: nil
+        }
+    }
+
+    /// Which image it is at its source: libretro's path or LaunchBox's file name. Nil for the rest.
+    var location: String? {
+        switch self {
+        case .libretro(_, let path): path
+        case .launchBox(_, let file): file
+        default: nil
+        }
+    }
 }
 
 private nonisolated func coverImageSource(_ source: CoverSource) -> CGImageSource? {
