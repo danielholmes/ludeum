@@ -143,7 +143,7 @@ import Testing
     @Test func aStrayFileRecordedAsAROMWhileTheImportRanIsntStray() async throws {
         try ps2.add("Okami (USA).7z")
         let file = try #require(try ps2.folder.scan().first)
-        try j.journal.recordAddedROM(
+        _ = try j.journal.recordAddedROM(
             file, checksum: nil, on: ROMPlatform.ps2, reusing: nil, regions: [], match: .byHand(name: "Okami"))
         var plan = ImportPlan()
         plan.strayFiles = [ROMPlatform.ps2: [file]]
@@ -159,7 +159,7 @@ import Testing
         try await importNow()
         let file = try #require(try ps2.folder.scan().first)
 
-        try j.journal.recordAddedROM(
+        _ = try j.journal.recordAddedROM(
             file, checksum: nil, on: ROMPlatform.ps2, reusing: nil, regions: [], match: .byHand(name: "Okami"))
 
         #expect(try strays().isEmpty)
