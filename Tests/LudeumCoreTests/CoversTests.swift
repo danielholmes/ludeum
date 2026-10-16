@@ -70,7 +70,7 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     }
 }
 
-/// The Cover order: upload, libretro Box art, IGDB Cover art, placeholder.
+/// The Cover order: upload, libretro Box art, LaunchBox Box art, a Bundle's Cover, IGDB Cover art, placeholder.
 @Suite struct CoverOrderTests {
     let h: Harness
     let j: LudeumHarness
@@ -359,6 +359,57 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
 
         guard case .igdb(_, "co9") = try await covers.cover(for: game) else {
             Issue.record("expected IGDB's Cover art")
+            return
+        }
+    }
+
+    @Test func aGameWithNoLibretroBoxArtShowsLaunchBoxsBeforeItsBundlesCoverAndItsCoverArt() async throws {
+        h.internet.addGame(2003, "Command & Conquer: Red Alert 2", fields: ["cover": ["image_id": "co9"]])
+        h.internet.addGame(2004, "Command & Conquer: The First Decade", fields: ["cover": ["image_id": "co8"]])
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Command & Conquer: Red Alert 2", platform: "Windows", boxes: [(nil, "ra2.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
+        let bundle = try j.journal.addBundle(
+            platformId: 6, name: "Command & Conquer: The First Decade", igdbGameId: 2004,
+            igdbName: "Command & Conquer: The First Decade")
+        let game = try j.journal.addGame(
+            platformId: 6, name: "Command & Conquer: Red Alert 2", igdbGameId: 2003, igdbName: "Command & Conquer: Red Alert 2")
+        try j.journal.addToBundle(bundle, game)
+
+        guard case .launchBox(_, file: "ra2.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's Box art")
+            return
+        }
+    }
+
+    @Test func libretroBoxArtComesBeforeLaunchBoxs() async throws {
+        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System", boxes: [(nil, "sm.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+
+        guard case .libretro = try await covers.cover(for: game) else {
+            Issue.record("expected libretro's Box art")
+            return
+        }
+    }
+
+    @Test func aGameFindsLaunchBoxsBoxForItsIGDBYear() async throws {
+        h.internet.addGame(2005, "Doom", fields: ["first_release_date": 1_463_097_600])  // 13 May 2016
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Doom", platform: "Windows", released: "1993-12-10", boxes: [(nil, "doom93.jpg")]),
+            LaunchBoxGame(id: 2, name: "Doom", platform: "Windows", released: "2016-05-13", boxes: [(nil, "doom16.jpg")]),
+        ])
+        try await h.launchBox.refresh()
+        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
+        let game = try j.journal.addGame(platformId: 6, name: "Doom", igdbGameId: 2005, igdbName: "Doom")
+
+        guard case .launchBox(_, file: "doom16.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's Box art for 2016's Doom")
             return
         }
     }

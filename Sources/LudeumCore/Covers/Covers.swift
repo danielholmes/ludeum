@@ -125,23 +125,28 @@ public enum CoverSource: Sendable, Equatable {
     case upload(NormalisedCover)
     /// libretro-thumbnails' Box art (a PNG) in the cache, by its path on the CDN.
     case libretro(URL, path: String)
+    /// The LaunchBox Games Database's Box art in the cache, by its file name there.
+    case launchBox(URL, file: String)
     /// IGDB's Cover art in the cache.
     case igdb(URL, imageID: String)
     case placeholder
 }
 
-/// A Game's Cover: my upload, else libretro Box art, else the Cover of the first Bundle that contains it, else IGDB's Cover
-/// art, else a placeholder. Everything but uploads lives in the cache, downloaded the first time it's shown.
+/// A Game's Cover: my upload, else libretro Box art, else LaunchBox's, else the Cover of the first Bundle that contains
+/// it, else IGDB's Cover art, else a placeholder. Everything but uploads lives in the cache, downloaded the first time
+/// it's shown.
 public struct Covers: Sendable {
     let journal: LudeumStore
     let igdb: IGDBClient?
     let libretro: LibretroThumbnails?
+    let launchBox: LaunchBoxGamesDB?
 
     /// Without a client (no cache, no credentials) its source is skipped.
-    public init(journal: LudeumStore, igdb: IGDBClient?, libretro: LibretroThumbnails?) {
+    public init(journal: LudeumStore, igdb: IGDBClient?, libretro: LibretroThumbnails?, launchBox: LaunchBoxGamesDB? = nil) {
         self.journal = journal
         self.igdb = igdb
         self.libretro = libretro
+        self.launchBox = launchBox
     }
 
     /// The Cover to show, downloading it on demand. A failed download throws rather than falling
@@ -151,6 +156,9 @@ public struct Covers: Sendable {
         let roms = try journal.coverROMs(game)
         if let libretro, let path = try await boxArt(game, roms: roms, libretro) {
             return .libretro(try await libretro.image(path), path: path)
+        }
+        if let launchBox, let file = try await launchBoxBoxArt(game, launchBox) {
+            return .launchBox(try await launchBox.image(file), file: file)
         }
         // A Game a Bundle contains, with no Box art, shows the first Bundle's Cover: the box it came in.
         if let bundle = try journal.bundles(containing: game).first {
@@ -169,6 +177,15 @@ public struct Covers: Sendable {
         guard roms.isEmpty else { return roms.compactMap { $0 }.first }
         let lookup = try journal.boxArtLookup(game)
         return try? await libretro.boxart(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions)
+    }
+
+    /// A title match in LaunchBox, for any Game libretro has no Box art for, with or without a ROM: by the Game's names,
+    /// its Copies' Regions and IGDB's year for it, which tells games of the same name apart (Doom in 1993 and 2016).
+    private func launchBoxBoxArt(_ game: GameID, _ launchBox: LaunchBoxGamesDB) async throws -> String? {
+        let lookup = try journal.boxArtLookup(game)
+        var year: Int?
+        if let igdb, let id = try journal.game(game).igdbGameId.map(Int.init) { year = try? await igdb.releaseYear(game: id) }
+        return try launchBox.boxart(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions, year: year)
     }
 
     /// Looks the Game's ROMs up in libretro again straight away, as after renaming it, rather than at the next Import.

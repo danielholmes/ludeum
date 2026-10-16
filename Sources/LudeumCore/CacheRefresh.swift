@@ -7,18 +7,20 @@ public struct CacheRefreshResult: Sendable {
 }
 
 /// The low-priority refresh at launch: re-fetches every expired cache entry, one request (or IGDB
-/// batch) at a time, waiting whenever an Import holds the rate limiters. An entry that
-/// fails to refresh keeps its expired copy and is tried again next launch.
+/// batch) at a time, waiting whenever an Import holds the rate limiters, then reads LaunchBox's dump if it's stale. An
+/// entry that fails to refresh keeps its expired copy and is tried again next launch.
 public struct CacheRefresh: Sendable {
     let cache: CacheStore
     let igdb: IGDBClient?
     let hasheous: HasheousClient
+    let launchBox: LaunchBoxGamesDB?
     let gate: WorkGate
 
-    public init(cache: CacheStore, igdb: IGDBClient?, hasheous: HasheousClient, gate: WorkGate) {
+    public init(cache: CacheStore, igdb: IGDBClient?, hasheous: HasheousClient, launchBox: LaunchBoxGamesDB? = nil, gate: WorkGate) {
         self.cache = cache
         self.igdb = igdb
         self.hasheous = hasheous
+        self.launchBox = launchBox
         self.gate = gate
     }
 
@@ -70,6 +72,10 @@ public struct CacheRefresh: Sendable {
                         { _ = try await igdb.games(ids: batch, servesStale: false) }
                     ))
             }
+        }
+        // Last, as it's by far the longest: a 110 MB download, then a minute or so reading it.
+        if let launchBox, (try? launchBox.isStale()) ?? false {
+            steps.append((1, "LaunchBox Games Database", { try await launchBox.refresh() }))
         }
         let total = steps.reduce(0) { $0 + $1.count }
         var done = 0

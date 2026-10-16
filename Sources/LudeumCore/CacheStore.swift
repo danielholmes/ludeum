@@ -36,6 +36,23 @@ public final class CacheStore: Sendable {
         migrator.registerMigration("v2") { db in
             try db.create(index: "entry_on_fetched_at", on: "entry", columns: ["fetched_at", "key"])
         }
+        // What's kept of the LaunchBox Games Database's dump (`LaunchBoxGamesDB`): each game's names, by the title keys a
+        // Game's are matched on, and its images.
+        migrator.registerMigration("v3") { db in
+            try db.execute(
+                sql: """
+                    CREATE TABLE launchbox_game (id INTEGER PRIMARY KEY, platform TEXT NOT NULL, year INTEGER);
+                    CREATE TABLE launchbox_name (
+                        game_id INTEGER NOT NULL, own BOOLEAN NOT NULL, length INTEGER NOT NULL,
+                        title_key TEXT NOT NULL, loose_title_key TEXT NOT NULL);
+                    CREATE INDEX launchbox_name_on_title_key ON launchbox_name (title_key);
+                    CREATE INDEX launchbox_name_on_loose_title_key ON launchbox_name (loose_title_key);
+                    CREATE TABLE launchbox_image (
+                        position INTEGER PRIMARY KEY, game_id INTEGER NOT NULL, type TEXT NOT NULL, region TEXT,
+                        file_name TEXT NOT NULL);
+                    CREATE INDEX launchbox_image_on_game_id ON launchbox_image (game_id);
+                    """)
+        }
         try migrator.migrate(db)
     }
 

@@ -122,6 +122,23 @@ import Testing
         gate.endImport()
         #expect(await running.value.refreshed == 1)
     }
+
+    @Test func readsLaunchBoxsDumpWhenThereIsNoneOrItsOlderThan30Days() async throws {
+        h.internet.setLaunchBox([LaunchBoxGame(id: 1, name: "Half-Life", platform: "Windows", boxes: [(nil, "hl.jpg")])])
+        let refresh = CacheRefresh(cache: h.cache, igdb: h.igdb, hasheous: h.hasheous, launchBox: h.launchBox, gate: WorkGate())
+
+        #expect(await refresh.run().refreshed == 1)
+        #expect(try h.launchBox.boxart(platform: 6, titles: ["Half-Life"], regions: [], year: nil) == "hl.jpg")
+
+        h.clock.advance(days: 29)
+        h.internet.resetSent()
+        #expect(await refresh.run().refreshed == 0)
+        #expect(h.internet.sent.isEmpty)
+
+        h.clock.advance(days: 2)
+        #expect(await refresh.run().refreshed == 1)
+        #expect(h.internet.sent(to: FakeInternet.Hosts.launchBox).count == 1)
+    }
 }
 
 @Suite struct WorkGateTests {

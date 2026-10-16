@@ -167,6 +167,14 @@ public final class IGDBClient: Sendable {
         return imageID
     }
 
+    /// The year of the game's first release (in UTC), from its cached record: what tells LaunchBox's games of the same
+    /// name apart.
+    public func releaseYear(game id: Int) async throws -> Int? {
+        try await cachedGames(ids: [id])[id]?.record["first_release_date"]?.int.map {
+            Calendar(identifier: .gregorian).dateComponents(in: .gmt, from: Date(timeIntervalSince1970: TimeInterval($0))).year!
+        }
+    }
+
     /// IGDB game ids matching each name search on its platform, best match first.
     /// One request per search: IGDB's multiquery endpoint silently ignores `search`.
     public func search(_ searches: [IGDBSearch]) async throws -> [IGDBSearch: [Int]] {

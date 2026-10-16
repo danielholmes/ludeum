@@ -37,6 +37,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         var libretroCDNMissing: Set<String> = []
         // Paths that are per-disc symlinks in the repo: raw GitHub serves the link's target as text
         var libretroSymlinks: Set<String> = []
+        // The LaunchBox Games Database's daily dump, `Metadata.zip`
+        var launchBoxDump: Data?
         // Failure injection, keyed by host
         var down: Set<String> = []
         var rateLimitOnce: [String: Int] = [:]  // host → Retry-After seconds
@@ -96,6 +98,12 @@ final class FakeInternet: HTTPTransport, Sendable {
         state.withLock { s in s.libretro[repo, default: []] += folders.flatMap { f in names.map { "\(f)/\($0).png" } } }
     }
 
+    /// The LaunchBox Games Database's dump, `Metadata.zip` holding `games` as its `Metadata.xml`.
+    func setLaunchBox(_ games: [LaunchBoxGame]) {
+        let dump = LaunchBoxGame.zip(games)
+        state.withLock { $0.launchBoxDump = dump }
+    }
+
     /// GitHub and libretro's own server together, so no listing can be read from either.
     func setLibretroDown(_ isDown: Bool) {
         setDown(Hosts.github, isDown)
@@ -148,6 +156,10 @@ final class FakeInternet: HTTPTransport, Sendable {
             case Hosts.github: return Self.githubTree(request, s)
             case Hosts.libretro: return Self.libretroImage(request, s)
             case Hosts.githubRaw: return Self.githubRaw(request, s)
+            case Hosts.launchBox:
+                guard request.url?.path() == "/Metadata.zip", let dump = s.launchBoxDump else { return (404, [:], Data()) }
+                return (200, [:], dump)
+            case Hosts.launchBoxImages: return (200, [:], Self.boxartPNG)
             default: return (404, [:], Data())
             }
         }
@@ -169,6 +181,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         static let github = "api.github.com"
         static let libretro = "thumbnails.libretro.com"
         static let githubRaw = "raw.githubusercontent.com"
+        static let launchBox = "gamesdb.launchbox-app.com"
+        static let launchBoxImages = "images.launchbox-app.com"
     }
 
     // MARK: - Fake services

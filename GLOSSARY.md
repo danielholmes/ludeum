@@ -120,11 +120,11 @@ A note on a Game or Bundle that I want to see first whenever I open it (a tip, a
 _Avoid_: Pinned note, comment
 
 **Cover**:
-The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else the Cover of the first Bundle that contains it (the box it came in), else IGDB's Cover art. A Game can have no Cover at all. A Bundle has a Cover the same way.
+The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else its LaunchBox Box art, else the Cover of the first Bundle that contains it (the box it came in), else IGDB's Cover art. A Game can have no Cover at all. A Bundle has a Cover the same way.
 _Avoid_: Artwork, box image, thumbnail
 
 **Box art**:
-A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe). It comes from libretro-thumbnails, and only exists for Platforms it has a repo for, whether or not they have a ROM folder.
+A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe, the Xbox One's green bar). It comes from libretro-thumbnails, for the Platforms it has a repo for, whether or not they have a ROM folder, else from the LaunchBox Games Database, which has boxes for nearly every Platform, Windows and the newer consoles among them.
 _Avoid_: Cover (that's what's shown, whatever its source)
 
 **Cover art**:

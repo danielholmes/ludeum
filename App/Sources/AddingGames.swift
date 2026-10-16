@@ -40,6 +40,7 @@ import SwiftUI
     let cache: CacheStore?
     /// Made once: it holds GitHub's rate limiter.
     let libretro: LibretroThumbnails?
+    let launchBox: LaunchBoxGamesDB?
     private let clients = Clients()
 
     init(settings: AppSettings, journal: LudeumStore?) {
@@ -47,6 +48,7 @@ import SwiftUI
         self.journal = journal
         cache = try? CacheStore(directory: CacheStore.defaultDirectory)
         libretro = cache.map { LibretroThumbnails(cache: $0) }
+        launchBox = cache.map { LaunchBoxGamesDB(cache: $0) }
     }
 
     /// Nil until IGDB credentials are set in Settings. The same client until they change, as it holds IGDB's rate
@@ -79,7 +81,7 @@ import SwiftUI
         return GameSearch(igdb: igdb, journal: journal)
     }
 
-    var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb, libretro: libretro) } }
+    var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb, libretro: libretro, launchBox: launchBox) } }
 
     var attachments: Attachments? { journal.map { Attachments(journal: $0, root: settings.folder.attachments) } }
 

@@ -135,7 +135,7 @@ enum CoverTileSize {
 private nonisolated func coverImageSource(_ source: CoverSource) -> CGImageSource? {
     switch source {
     case .upload(let cover): CGImageSourceCreateWithData(cover.jpeg as CFData, nil)
-    case .libretro(let file, _), .igdb(let file, _): CGImageSourceCreateWithURL(file as CFURL, nil)
+    case .libretro(let file, _), .launchBox(let file, _), .igdb(let file, _): CGImageSourceCreateWithURL(file as CFURL, nil)
     case .placeholder: nil
     }
 }
