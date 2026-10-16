@@ -157,15 +157,27 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(try await covers.cover(for: hand) == .placeholder)
     }
 
-    @Test func aGameWithNoCoverOfItsOwnShowsItsFirstBundlesCover() async throws {
-        let bundle = try j.journal.addBundle(platformId: 19, name: "Metroid Pack", igdbGameId: 1103, igdbName: "Super Metroid")
-        let other = try j.journal.addBundle(platformId: 19, name: "Hermano Pack")
-        let game = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
+    @Test func aGameWithNoBoxArtShowsItsFirstBundlesCoverBeforeItsOwnCoverArt() async throws {
+        h.internet.addGame(1104, "Metroid Collection", fields: ["cover": ["image_id": "co9"]])
+        let bundle = try j.journal.addBundle(platformId: 19, name: "Metroid Collection", igdbGameId: 1104, igdbName: "Metroid Collection")
+        let other = try j.journal.addBundle(platformId: 19, name: "Metroid Deluxe")
+        let game = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
         try j.journal.addToBundle(bundle, game)
         try j.journal.addToBundle(other, game)
 
-        guard case .igdb(_, "co1") = try await covers.cover(for: game) else {
+        guard case .igdb(_, "co9") = try await covers.cover(for: game) else {
             Issue.record("expected its Bundle's Cover")
+            return
+        }
+    }
+
+    @Test func aGameWhoseBundleHasNoCoverShowsItsOwnCoverArt() async throws {
+        let bundle = try j.journal.addBundle(platformId: 19, name: "Metroid Deluxe")
+        let game = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
+        try j.journal.addToBundle(bundle, game)
+
+        guard case .igdb(_, "co1") = try await covers.cover(for: game) else {
+            Issue.record("expected its own Cover art")
             return
         }
     }
