@@ -122,7 +122,7 @@ struct IGDBGameDetailView: View {
                 }
             }
             if !facts.screenshots.isEmpty, let igdb = services.igdb {
-                ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots)
+                ScreenshotsSection(loader: ScreenshotLoader(igdb: igdb), screenshots: facts.screenshots.map { .igdb(imageID: $0) })
             }
         }
         .formStyle(.grouped)

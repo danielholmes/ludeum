@@ -169,7 +169,9 @@ struct GameDetailView: View {
                 }
             }
             if !facts.screenshots.isEmpty, let igdb = services.igdb {
-                ScreenshotsSection(igdb: igdb, screenshots: facts.screenshots, title: "IGDB Screenshots")
+                ScreenshotsSection(
+                    loader: ScreenshotLoader(igdb: igdb), screenshots: facts.screenshots.map { .igdb(imageID: $0) },
+                    title: "IGDB Screenshots")
             }
             // For now, each source's Screenshots too, to compare them.
             ForEach(ImageSource.allCases, id: \.self) { source in

@@ -91,11 +91,11 @@ struct IGDBFactsRows: View {
     }
 }
 
-/// IGDB's screenshots in two rows of three (three rows of two in a narrow panel), then a tile to show the rest. Click
-/// one to see it full size.
+/// Screenshots in two rows of three (three rows of two in a narrow panel), then a tile to show the rest. Click one to
+/// see it full size.
 struct ScreenshotsSection: View {
-    let igdb: IGDBClient
-    let screenshots: [String]
+    let loader: ScreenshotLoader
+    let screenshots: [ShownScreenshot]
     /// "IGDB Screenshots" on Game detail, for now, beside libretro's and LaunchBox's.
     var title = "Screenshots"
     @State private var showingAll = false
@@ -112,19 +112,19 @@ struct ScreenshotsSection: View {
             let collapsed = !showingAll && screenshots.count > limit
             let shown = collapsed ? Array(screenshots.prefix(limit - 1)) : screenshots
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columns), spacing: Self.spacing) {
-                ForEach(shown, id: \.self) { imageID in
-                    ScreenshotImage(igdb: igdb, imageID: imageID)
+                ForEach(shown, id: \.self) { screenshot in
+                    ScreenshotImage(loader: loader, screenshot: screenshot)
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .frame(minWidth: 0)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
-                        .onTapGesture { viewing = Screenshot(id: imageID) }
+                        .onTapGesture { viewing = Screenshot(id: screenshot) }
                 }
                 if collapsed {
                     Button {
                         showingAll = true
                     } label: {
                         // The next screenshot, dimmed, under "+N more".
-                        ScreenshotImage(igdb: igdb, imageID: screenshots[shown.count])
+                        ScreenshotImage(loader: loader, screenshot: screenshots[shown.count])
                             .aspectRatio(16 / 9, contentMode: .fit)
                             .frame(minWidth: 0)
                             .overlay(Color.black.opacity(0.55))
@@ -145,31 +145,31 @@ struct ScreenshotsSection: View {
         }
         .onChange(of: screenshots) { showingAll = false }
         .sheet(item: $viewing) { shot in
-            ScreenshotGallery(igdb: igdb, screenshots: screenshots, showing: shot.id)
+            ScreenshotGallery(loader: loader, screenshots: screenshots, showing: shot.id)
         }
     }
 }
 
-/// IGDB's screenshots one at a time, whole, over a strip of them all. ← and → or the arrows on the image go
+/// Screenshots one at a time, whole, over a strip of them all. ← and → or the arrows on the image go
 /// back and on, round from the last to the first; click one in the strip to see it.
 struct ScreenshotGallery: View {
-    let igdb: IGDBClient
-    let screenshots: [String]
+    let loader: ScreenshotLoader
+    let screenshots: [ShownScreenshot]
     @State private var index: Int
     @Environment(\.dismiss) private var dismiss
 
     private nonisolated static let thumbnailWidth: CGFloat = 112
 
-    init(igdb: IGDBClient, screenshots: [String], showing imageID: String) {
-        self.igdb = igdb
+    init(loader: ScreenshotLoader, screenshots: [ShownScreenshot], showing screenshot: ShownScreenshot) {
+        self.loader = loader
         self.screenshots = screenshots
-        _index = State(initialValue: screenshots.firstIndex(of: imageID) ?? 0)
+        _index = State(initialValue: screenshots.firstIndex(of: screenshot) ?? 0)
     }
 
     var body: some View {
         let stage = stageSize
         VStack(spacing: 12) {
-            WholeScreenshot(igdb: igdb, imageID: screenshots[index])
+            WholeScreenshot(loader: loader, screenshot: screenshots[index])
                 // A spinner while the next one downloads, not the last one.
                 .id(screenshots[index])
                 .frame(width: stage.width, height: stage.height)
@@ -222,7 +222,7 @@ struct ScreenshotGallery: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(screenshots.indices, id: \.self) { i in
-                        ScreenshotImage(igdb: igdb, imageID: screenshots[i])
+                        ScreenshotImage(loader: loader, screenshot: screenshots[i])
                             .frame(width: Self.thumbnailWidth, height: Self.thumbnailWidth * 9 / 16)
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                             .overlay {

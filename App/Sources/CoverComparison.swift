@@ -120,8 +120,7 @@ private struct SourceImageView: View {
 }
 
 /// For now, beside IGDB's: one source's Screenshots for the Game (`Covers.screenshots(for:from:)`), title screens
-/// first, each whole in a 4:3 tile and full size when clicked, to compare the sources while it's decided whether both
-/// are needed.
+/// first, shown as IGDB's are, to compare the sources while it's decided whether both are needed.
 struct SourceScreenshotsSection: View {
     let services: Services
     let game: GameID
@@ -130,19 +129,21 @@ struct SourceScreenshotsSection: View {
     @State private var failed = false
 
     var body: some View {
-        Section("\(source.rawValue) Screenshots") {
+        let title = "\(source.rawValue) Screenshots"
+        Group {
             if let screenshots, !screenshots.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                    ForEach(screenshots, id: \.self) { screenshot in
-                        SourceScreenshotTile(services: services, screenshot: screenshot)
+                ScreenshotsSection(
+                    loader: ScreenshotLoader(covers: services.covers), screenshots: screenshots.map { .source($0) }, title: title)
+            } else {
+                Section(title) {
+                    if failed {
+                        Text("Couldn't load").foregroundStyle(.red)
+                    } else if screenshots == nil {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("None").foregroundStyle(.secondary)
                     }
                 }
-            } else if failed {
-                Text("Couldn't load").foregroundStyle(.red)
-            } else if screenshots == nil {
-                ProgressView().controlSize(.small)
-            } else {
-                Text("None").foregroundStyle(.secondary)
             }
         }
         // Again when the Game's Covers change: its names or IGDB link, which the Screenshots are found by.
@@ -155,25 +156,5 @@ struct SourceScreenshotsSection: View {
                 failed = true
             }
         }
-    }
-}
-
-/// One of a source's Screenshots, whole in a 4:3 tile, downloaded on first view; full size when clicked.
-private struct SourceScreenshotTile: View {
-    let services: Services
-    let screenshot: SourceScreenshot
-    @State private var image: SourceImage = .loading
-
-    var body: some View {
-        SourceImageView(state: image, name: "\(screenshot.source.rawValue) Screenshot")
-            .aspectRatio(4 / 3, contentMode: .fit)
-            .frame(minWidth: 0)
-            .task(id: screenshot) {
-                do {
-                    image = await SourceImage(try await services.covers?.image(of: screenshot), pixels: 600)
-                } catch {
-                    image = .failed
-                }
-            }
     }
 }

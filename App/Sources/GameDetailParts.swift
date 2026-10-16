@@ -123,14 +123,41 @@ private func pillWidth(_ text: String) -> CGFloat {
     return (text as NSString).size(withAttributes: [.font: font]).width.rounded(.up) + 2 * pillPadding
 }
 
-struct Screenshot: Identifiable {
-    let id: String
+/// A Screenshot from any source: IGDB's by its image id, libretro's or LaunchBox's (for now, beside IGDB's on Game
+/// detail) by their reference.
+enum ShownScreenshot: Hashable {
+    case igdb(imageID: String)
+    case source(SourceScreenshot)
 }
 
-/// An IGDB screenshot filling its frame, cropped to it, downloaded on first view; a grey box until then.
+struct Screenshot: Identifiable {
+    let id: ShownScreenshot
+}
+
+/// Downloads Screenshots from wherever they're from: IGDB's through `igdb`, libretro's and LaunchBox's through `covers`.
+struct ScreenshotLoader {
+    var igdb: IGDBClient?
+    var covers: Covers?
+
+    /// The file for a tile, or with `original`, the whole image: IGDB has both; libretro and LaunchBox have one, used
+    /// for both. Nil when it can't be downloaded.
+    func file(_ screenshot: ShownScreenshot, original: Bool) async -> URL? {
+        switch screenshot {
+        case .igdb(let imageID):
+            return try? await igdb?.screenshot(imageID: imageID, original: original)
+        case .source(let shot):
+            switch try? await covers?.image(of: shot) {
+            case .libretro(let file, _), .launchBox(let file, _): return file
+            default: return nil
+            }
+        }
+    }
+}
+
+/// A screenshot filling its frame, cropped to it, downloaded on first view; a grey box until then.
 struct ScreenshotImage: View {
-    let igdb: IGDBClient
-    let imageID: String
+    let loader: ScreenshotLoader
+    let screenshot: ShownScreenshot
     @State private var image: NSImage?
 
     var body: some View {
@@ -140,18 +167,18 @@ struct ScreenshotImage: View {
                 if let image { Image(nsImage: image).resizable().interpolation(.high).scaledToFill() }
             }
             .clipped()
-            .task(id: imageID) {
-                if let file = try? await igdb.screenshot(imageID: imageID) { image = NSImage(contentsOf: file) }
+            .task(id: screenshot) {
+                if let file = await loader.file(screenshot, original: false) { image = NSImage(contentsOf: file) }
             }
     }
 }
 
-/// IGDB's original of a screenshot, whole: as large as its frame allows without going over its own size in pixels, and
-/// never cropped. One under 200 pixels either way has its own size scaled up by a whole amount (`screenshotScale`).
-/// A spinner until it's downloaded.
+/// A screenshot's original, whole: as large as its frame allows without going over its own size in pixels, and never
+/// cropped. One under 200 pixels either way has its own size scaled up by a whole amount (`screenshotScale`). A
+/// spinner until it's downloaded.
 struct WholeScreenshot: View {
-    let igdb: IGDBClient
-    let imageID: String
+    let loader: ScreenshotLoader
+    let screenshot: ShownScreenshot
     @State private var image: NSImage?
     @State private var failed = false
 
@@ -172,8 +199,8 @@ struct WholeScreenshot: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: imageID) {
-            if let file = try? await igdb.screenshot(imageID: imageID, original: true), let image = NSImage(contentsOf: file) {
+        .task(id: screenshot) {
+            if let file = await loader.file(screenshot, original: true), let image = NSImage(contentsOf: file) {
                 self.image = image
             } else {
                 failed = true
