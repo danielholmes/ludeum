@@ -19,7 +19,7 @@ import Testing
         h.internet.addPlatform(19, "Super Nintendo Entertainment System")
     }
 
-    /// Imports the ROM folder, then the No suggestion item named `name`.
+    /// Imports the ROM folder, then the unmatched ROM named `name`.
     func item(_ name: String) async throws -> ReviewItem {
         _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [snes.folder])
         return try #require(try j.journal.reviewQueue().unmatched.first { $0.romName == name })

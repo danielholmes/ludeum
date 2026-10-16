@@ -396,7 +396,7 @@ public struct ReviewQueue: Sendable {
         let game = try journal.match(
             item, igdbGameId: suggested, igdbName: record.name ?? cleanName(item.romName), platform: try await platform(item.platformId),
             kind: "confirmed")
-        await lookUpBoxArt([item])
+        await lookUpBoxArt(item)
         return game
     }
 
@@ -411,13 +411,13 @@ public struct ReviewQueue: Sendable {
     @discardableResult
     public func choose(_ item: ReviewItem, igdbGameId: Int64, name: String, platform: IGDBPlatform) async throws -> GameID {
         let game = try journal.match(item, igdbGameId: igdbGameId, igdbName: name, platform: platform, kind: "manual")
-        await lookUpBoxArt([item])
+        await lookUpBoxArt(item)
         return game
     }
 
-    /// The Matched ROMs looked up in libretro again; if they can't be, the next Import does it.
-    private func lookUpBoxArt(_ items: [ReviewItem]) async {
-        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(items.map(\.romId))
+    /// The Matched ROM looked up in libretro again; if it can't be, the next Import does it.
+    private func lookUpBoxArt(_ item: ReviewItem) async {
+        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp([item.romId])
     }
 
     private func platform(_ id: Int64) async throws -> IGDBPlatform {

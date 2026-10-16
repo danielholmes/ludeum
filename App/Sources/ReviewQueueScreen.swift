@@ -215,7 +215,7 @@ struct ReviewQueueScreen: View {
     }
 }
 
-/// A ROM item: why it's here, its suggestion, and Confirm / Search IGDB… / Assign to Game… / Make by hand….
+/// A ROM item: why it's here, its suggestion, and Confirm / Search IGDB… / Assign to Game… / Make by hand… / Delete ROM….
 private struct ReviewItemDetail: View {
     let services: Services
     let item: ReviewItem
@@ -458,8 +458,8 @@ private struct ReviewItemDetail: View {
         }
     }
 
-    /// A ROM with no suggestion's Emulator, to Play it and see what it is: none for a missing ROM, a Platform with no
-    /// Emulator, or one the launch check found isn't installed.
+    /// The Emulator of a ROM with nothing suggested, to Play it and see what it is: none for a missing ROM, a Platform
+    /// with no Emulator, or one the launch check found isn't installed.
     private var playableEmulator: Emulator? {
         guard item.suggestedIgdbGameId == nil, !item.missing, let emulator = Emulator.of(platformId: item.platformId),
             !services.versions.notInstalled.contains(emulator.bundleIdentifier)
@@ -726,7 +726,7 @@ private struct DuplicateVersionsDetail: View {
                         Button("Keep only this Version") { keeping = version }
                             .help("Sends the other Versions' ROMs to the Trash, and deletes them")
                         Button("Split into its own Game") { split(version) }
-                            .help("Takes it off this Game, to be Matched again from No suggestion")
+                            .help("Takes it off this Game, to be Matched again from Unmatched ROMs")
                     }
                     .disabled(busy)
                 }

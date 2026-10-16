@@ -129,6 +129,8 @@ import Testing
         let play = Play(platformId: 7, platformName: "PlayStation", roms: [rom], settings: EmulatorSettings())
 
         #expect(play.availability == .refused(.needsPlaylist))
-        #expect(play.availability.refusal?.message == "Its Discs have no playlist: put an .m3u naming them in its folder")
+        #expect(
+            play.availability.refusal?.message
+                == "Its Discs have no playlist: put an .m3u naming them in its folder, and it's seen at the next Import")
     }
 }

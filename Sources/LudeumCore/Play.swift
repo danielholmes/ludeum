@@ -36,7 +36,7 @@ public struct Play: Sendable {
             case .noROM: "No ROM in its ROM folder"
             case .archived: "Archived: unarchive to play"
             case .archivedNeedsCompacting: "Archived: compact to play"
-            case .needsPlaylist: "Its Discs have no playlist: put an .m3u naming them in its folder"
+            case .needsPlaylist: "Its Discs have no playlist: put an .m3u naming them in its folder, and it's seen at the next Import"
             case .busy: "Waiting for Archive, Unarchive or Compact to finish"
             case .tooOld(let message): message
             case .notInstalled(let emulator): "\(emulator.name) isn't installed."
