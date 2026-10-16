@@ -130,13 +130,6 @@ import Testing
                 == ["Super Metroid": true, "A Link to the Past": true, "Doom": false, "Chrono Trigger": false])
     }
 
-    @Test func filtersByList() throws {
-        let list = try h.journal.createList("Favourites")
-        try h.journal.addToList(list, doom)
-
-        #expect(try names(LibraryFilter(listId: list)) == ["Doom"])
-    }
-
     @Test func filtersByPlayerOrSolo() throws {
         let alex = try h.journal.addPlayer(PlayerDraft(firstName: "Alex", lastName: "Smith", colour: .red))
         try h.journal.addPlaythrough(zelda, PlaythroughDraft(start: PartialDate("2020")!, players: [alex]))
@@ -187,11 +180,10 @@ import Testing
         try rom("Resident Evil 2 (Japan).chd", missing: true)
         try h.journal.setRating(game, Rating(tenths: 90))
         try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
-        try h.journal.addToList(try h.journal.createList("Horror"), game)
 
         let summary = try h.journal.deletionSummary(game)
 
-        #expect(summary == DeletionSummary(ratingEntries: 1, playthroughs: 1, lists: 1, roms: 1, copies: 0, attachments: 0))
+        #expect(summary == DeletionSummary(ratingEntries: 1, playthroughs: 1, roms: 1, copies: 0, attachments: 0))
         // A missing ROM is a Copy, so it blocks deletion like any other.
         #expect(!summary.canDelete)
         try h.journal.deleteMissingROMs(of: game)
@@ -199,7 +191,7 @@ import Testing
         try h.journal.addCopy(game, CopyDraft(kind: .physical))
         #expect(
             try h.journal.deletionSummary(game)
-                == DeletionSummary(ratingEntries: 1, playthroughs: 1, lists: 1, roms: 0, copies: 1, attachments: 0))
+                == DeletionSummary(ratingEntries: 1, playthroughs: 1, roms: 0, copies: 1, attachments: 0))
         #expect(try !h.journal.deletionSummary(game).canDelete)
     }
 }

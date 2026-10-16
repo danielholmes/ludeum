@@ -6,7 +6,6 @@ public typealias GameID = Int64
 public enum LudeumError: Error, Equatable {
     case igdbLinkTaken
     case endBeforeStart
-    case listNameTaken
     case playerNameTaken
     /// A Game can't be deleted while it has any Copy: its ROMs and hand-recorded Copies are deleted first.
     case gameHasCopies
@@ -64,7 +63,7 @@ public final class LudeumStore: Sendable {
     let db: DatabaseQueue
     let clock: TimeSource
     let calendar: Calendar
-    /// Where a backup is taken before every deletion of a Game, List or Playthrough.
+    /// Where a backup is taken before every deletion of a Game or Playthrough.
     let backups: Backups?
 
     /// Opens the journal, migrating it as far as it can go: a journal that still has OpenEmu ROMs stays at

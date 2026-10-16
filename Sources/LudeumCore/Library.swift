@@ -9,7 +9,6 @@ public struct LibraryFilter: Sendable, Equatable {
     public var rating: RatingFilter?
     /// `.some(nil)` is "no Intent"; `nil` is any.
     public var intent: Intent??
-    public var listId: Int64?
     public var player: PlayerFilter?
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
@@ -29,7 +28,7 @@ public struct LibraryFilter: Sendable, Equatable {
 
     public init(
         platformId: Int64? = nil, archivablePlatforms: Bool = false, rating: RatingFilter? = nil, intent: Intent?? = nil,
-        listId: Int64? = nil, player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
+        player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
         roms: ROMFilter? = nil, copies: CopiesFilter? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         name: String = ""
@@ -44,7 +43,6 @@ public struct LibraryFilter: Sendable, Equatable {
         self.archivablePlatforms = archivablePlatforms
         self.rating = rating
         self.intent = intent
-        self.listId = listId
         self.player = player
         self.outcome = outcome
         self.childhood = childhood
@@ -58,7 +56,7 @@ extension LibraryFilter {
     /// necessarily together: "streets rage" finds Streets of Rage.
     public var searchWords: [String] { name.split(whereSeparator: \.isWhitespace).map(String.init) }
 
-    /// These filters within a screen's fixed scope (a Platform, a List, Finished…): whatever the scope
+    /// These filters within a screen's fixed scope (a Platform, a theme, Finished…): whatever the scope
     /// sets wins, and the rest combine with it.
     public func scoped(by scope: LibraryFilter) -> LibraryFilter {
         var f = self
@@ -66,7 +64,6 @@ extension LibraryFilter {
         if scope.archivablePlatforms { f.archivablePlatforms = true }
         if let v = scope.rating { f.rating = v }
         if let v = scope.intent { f.intent = v }
-        if let v = scope.listId { f.listId = v }
         if let v = scope.player { f.player = v }
         if let v = scope.outcome { f.outcome = v }
         if let v = scope.childhood { f.childhood = v }
@@ -254,10 +251,6 @@ extension LudeumStore {
             arguments.append(intent.rawValue)
         case .some(.none): conditions.append("g.intent IS NULL")
         case .none: break
-        }
-        if let listId = filter.listId {
-            conditions.append("EXISTS (SELECT 1 FROM listGame l WHERE l.gameId = g.id AND l.listId = ?)")
-            arguments.append(listId)
         }
         switch filter.player {
         case .player(let id):

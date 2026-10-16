@@ -735,7 +735,6 @@ private func deletionMessage(_ s: DeletionSummary) -> String {
     var parts: [String] = []
     if s.ratingEntries > 0 { parts.append("its Rating history (\(s.ratingEntries))") }
     if s.playthroughs > 0 { parts.append("\(s.playthroughs) Playthrough\(s.playthroughs == 1 ? "" : "s")") }
-    if s.lists > 0 { parts.append("its place in \(s.lists) List\(s.lists == 1 ? "" : "s")") }
     if s.attachments > 0 { parts.append("\(s.attachments) Attachment\(s.attachments == 1 ? "" : "s"), whose files go to the Trash") }
     parts.append("its Intent, Childhood, IGDB link and any uploaded Cover")
     return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
@@ -772,7 +771,6 @@ func journalErrorText(_ error: Error) -> String {
     if let error = error as? ReviewError { return reviewErrorText(error) }
     return switch error as? LudeumError {
     case .endBeforeStart: "The end date can't come before the start date."
-    case .listNameTaken: "There's already a List with that name."
     case .playerNameTaken: "There's already a Player with that name."
     case .gameHasCopies: "This Game has Copies. Delete them first, under Copies."
     case .goneBeforeAcquired: "A Copy can't be gone before it was acquired."

@@ -14,7 +14,6 @@ struct YearInReviewScreen: View {
     @State private var year: Int?
     @State private var review: YearInReview?
     @State private var platforms: [IGDBPlatform] = []
-    @State private var lists: [GameList] = []
     @State private var players: [Player] = []
     @State private var error: String?
 
@@ -33,7 +32,7 @@ struct YearInReviewScreen: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             FilterBar(
-                filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms, lists: lists,
+                filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms,
                 players: players)
         }
         .navigationTitle("Year in review")
@@ -63,7 +62,7 @@ struct YearInReviewScreen: View {
             years = reviewed.years
             finished = reviewed.finished
             review = reviewed.shown
-            (platforms, lists, players) = choices
+            (platforms, players) = choices
             error = nil
         } catch is CancellationError {
         } catch {

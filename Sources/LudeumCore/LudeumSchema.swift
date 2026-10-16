@@ -665,6 +665,12 @@ enum LudeumSchema {
         migrator.registerMigration("v33 no held openemu data") { db in
             try db.drop(table: "heldOpenEmuData")
         }
+        // Lists went: pinned themes, franchises, series and companies took their place. The ones in my journal were exported
+        // to Lists.md in the Data folder before this came in.
+        migrator.registerMigration("v34 no lists") { db in
+            try db.drop(table: "listGame")
+            try db.drop(table: "list")
+        }
         return migrator
     }
 

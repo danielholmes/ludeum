@@ -4,7 +4,7 @@ import SwiftUI
 /// The kinds of filter the Add filter menu offers. A screen offers the ones it applies, less the
 /// ones its scope already fixes.
 enum FilterKind: CaseIterable {
-    case platform, rating, intent, list, player, genre, theme, played, childhood, roms, copies
+    case platform, rating, intent, player, genre, theme, played, childhood, roms, copies
 
     /// What every Library-shaped screen offers.
     static let library = Set(allCases)
@@ -15,7 +15,6 @@ enum FilterKind: CaseIterable {
         if scope.platformId != nil || scope.archivablePlatforms { k.insert(.platform) }
         if scope.rating != nil { k.insert(.rating) }
         if scope.intent != nil { k.insert(.intent) }
-        if scope.listId != nil { k.insert(.list) }
         if scope.player != nil { k.insert(.player) }
         if scope.genre != nil { k.insert(.genre) }
         if scope.theme != nil { k.insert(.theme) }
@@ -39,7 +38,6 @@ struct FilterBar<Trailing: View>: View {
     @Binding var filter: LibraryFilter
     var kinds = FilterKind.library
     let platforms: [IGDBPlatform]
-    let lists: [GameList]
     var players: [Player] = []
     var genres: [String] = []
     var themes: [String] = []
@@ -75,7 +73,7 @@ struct FilterBar<Trailing: View>: View {
                             .background(Color.accentColor.opacity(0.15), in: .capsule)
                             .help("What this screen shows")
                     }
-                    ForEach(filterChips(filter, platforms: platforms, lists: lists, players: players), id: \.text) { chip in
+                    ForEach(filterChips(filter, platforms: platforms, players: players), id: \.text) { chip in
                         HStack(spacing: 4) {
                             Text(chip.text)
                             Button("Remove filter", systemImage: "xmark") { chip.clear(&filter) }
@@ -86,8 +84,7 @@ struct FilterBar<Trailing: View>: View {
                     }
                     if !kinds.isEmpty {
                         AddFilterMenu(
-                            filter: $filter, kinds: kinds, platforms: platforms, lists: lists, players: players, genres: genres,
-                            themes: themes)
+                            filter: $filter, kinds: kinds, platforms: platforms, players: players, genres: genres, themes: themes)
                     }
                 }
             }
@@ -102,10 +99,10 @@ struct FilterBar<Trailing: View>: View {
 extension FilterBar where Trailing == EmptyView {
     init(
         count: Int? = nil, busy: Bool = false, scope: String? = nil, filter: Binding<LibraryFilter>, kinds: Set<FilterKind>,
-        platforms: [IGDBPlatform], lists: [GameList], players: [Player] = []
+        platforms: [IGDBPlatform], players: [Player] = []
     ) {
         self.init(
-            count: count, busy: busy, scope: scope, filter: filter, kinds: kinds, platforms: platforms, lists: lists,
+            count: count, busy: busy, scope: scope, filter: filter, kinds: kinds, platforms: platforms,
             players: players, trailing: { EmptyView() })
     }
 }
@@ -115,7 +112,6 @@ private struct AddFilterMenu: View {
     @Binding var filter: LibraryFilter
     let kinds: Set<FilterKind>
     let platforms: [IGDBPlatform]
-    let lists: [GameList]
     let players: [Player]
     let genres: [String]
     let themes: [String]
@@ -151,9 +147,6 @@ private struct AddFilterMenu: View {
                     Button("None") { filter.intent = .some(nil) }
                     ForEach(Intent.allCases, id: \.self) { intent in Button(intentText(intent)) { filter.intent = intent } }
                 }
-            }
-            if kinds.contains(.list), !lists.isEmpty {
-                Menu("List") { ForEach(lists, id: \.id) { l in Button(l.name) { filter.listId = l.id } } }
             }
             if kinds.contains(.player), !players.isEmpty {
                 Menu("Player") {
@@ -242,7 +235,7 @@ struct FilterChip {
     let clear: (inout LibraryFilter) -> Void
 }
 
-func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [GameList], players: [Player]) -> [FilterChip] {
+func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], players: [Player]) -> [FilterChip] {
     typealias Chip = FilterChip
     var c: [Chip] = []
     if let id = filter.platformId {
@@ -258,9 +251,6 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], lists: [Gam
     case .some(nil): c.append(Chip(text: "No Intent") { $0.intent = nil })
     case .some(.some(let i)): c.append(Chip(text: intentText(i)) { $0.intent = nil })
     case nil: break
-    }
-    if let id = filter.listId {
-        c.append(Chip(text: "In \(lists.first { $0.id == id }?.name ?? "a List")") { $0.listId = nil })
     }
     switch filter.player {
     case .solo: c.append(Chip(text: "Solo") { $0.player = nil })

@@ -13,7 +13,6 @@ enum Screen: Hashable, Codable {
     case yearInReview
     /// Searching IGDB to add Games.
     case igdb
-    case list(id: Int64, name: String)
     case platform(id: Int64, name: String)
     /// A pinned franchise or series: the Library filtered to it.
     case pinned(Pin)
@@ -30,7 +29,6 @@ enum Screen: Hashable, Codable {
         case .faceOff: "Face-off"
         case .yearInReview: "Year in review"
         case .igdb: "IGDB"
-        case .list(_, let name): name
         case .platform(_, let name): name
         case .pinned(let pin): pin.name
         case .reviewQueue: "Review queue"
@@ -48,7 +46,6 @@ enum Screen: Hashable, Codable {
         case .faceOff: "rectangle.on.rectangle"
         case .yearInReview: "calendar"
         case .igdb: "magnifyingglass"
-        case .list: "list.bullet"
         case .platform: "gamecontroller"
         case .pinned(let pin):
             switch pin.kind {

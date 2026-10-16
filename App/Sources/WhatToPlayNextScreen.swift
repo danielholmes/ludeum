@@ -12,7 +12,6 @@ struct WhatToPlayNextScreen: View {
     @State private var ascending = true
     @State private var next = PlayNext<LibraryRow>(playing: [], upNext: [], backlog: [])
     @State private var platforms: [IGDBPlatform] = []
-    @State private var lists: [GameList] = []
     @State private var players: [Player] = []
     @State private var error: String?
     // Shared with the Library: one choice of view and Cover size everywhere.
@@ -57,7 +56,7 @@ struct WhatToPlayNextScreen: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             FilterBar(
-                filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms, lists: lists,
+                filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms,
                 players: players
             ) {
                 LibrarySortMenu(
@@ -123,7 +122,7 @@ struct WhatToPlayNextScreen: View {
         guard let journal = services.journal else { return }
         do {
             next = try journal.whatToPlayNext(filter, sort: sort, ascending: ascending)
-            (platforms, lists, players) = try filterChoices(journal)
+            (platforms, players) = try filterChoices(journal)
             error = nil
         } catch {
             self.error = error.localizedDescription

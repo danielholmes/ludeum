@@ -65,47 +65,6 @@ import Testing
     }
 }
 
-@Suite struct ListTests {
-    let h: LudeumHarness
-
-    init() throws { h = try LudeumHarness() }
-
-    @Test func aGameCanBeInManyLists() throws {
-        let metroid = try h.addGame("Super Metroid")
-        let castlevania = try h.journal.createList("Castlevania")
-        let favourites = try h.journal.createList("Favourites")
-
-        try h.journal.addToList(favourites, metroid)
-        try h.journal.addToList(castlevania, metroid)
-        try h.journal.addToList(favourites, metroid)
-
-        #expect(try h.journal.lists().map(\.name) == ["Castlevania", "Favourites"])
-        #expect(try h.journal.lists(containing: metroid).map(\.name) == ["Castlevania", "Favourites"])
-        #expect(try h.journal.games(in: favourites) == [metroid])
-    }
-
-    @Test func namesAreUnique() throws {
-        _ = try h.journal.createList("Zelda")
-        let other = try h.journal.createList("Zelda games")
-
-        #expect(throws: LudeumError.listNameTaken) { try h.journal.createList("Zelda") }
-        #expect(throws: LudeumError.listNameTaken) { try h.journal.renameList(other, "Zelda") }
-    }
-
-    @Test func deletingAListLeavesItsGames() throws {
-        let metroid = try h.addGame("Super Metroid")
-        let list = try h.journal.createList("Metroid")
-        try h.journal.addToList(list, metroid)
-        try h.journal.removeFromList(list, metroid)
-        try h.journal.addToList(list, metroid)
-
-        try h.journal.deleteList(list)
-
-        #expect(try h.journal.lists().isEmpty)
-        #expect(try h.journal.game(metroid).name == "Super Metroid")
-    }
-}
-
 /// The migration that lets a Game's Intent be Want to buy.
 @Suite struct WantToBuyMigrationTests {
     @Test func gamesKeepEverythingAndANewGameDoesntTakeADeletedOnesId() throws {
@@ -166,5 +125,35 @@ import Testing
         let journal = try LudeumStore(directory: directory)
 
         #expect(try journal.addGame(platformId: 19, name: "New") == 6)
+    }
+}
+
+/// The migration that removes Lists.
+@Suite struct NoListsMigrationTests {
+    @Test func theGamesInListsStayWhenListsGo() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: "v33 no held openemu data")
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform (id, name) VALUES (19, 'SNES');
+                    INSERT INTO game (id, platformId, name) VALUES (1, 19, 'Super Metroid');
+                    INSERT INTO list (id, name) VALUES (1, 'Metroid');
+                    INSERT INTO listGame (listId, gameId) VALUES (1, 1);
+                    """)
+        }
+        try db.close()
+
+        let journal = try LudeumStore(directory: directory)
+
+        #expect(try journal.game(1).name == "Super Metroid")
+        let tables = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false)).read { db in
+            [try db.tableExists("list"), try db.tableExists("listGame")]
+        }
+        #expect(tables == [false, false])
     }
 }

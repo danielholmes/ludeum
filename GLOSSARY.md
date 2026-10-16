@@ -119,10 +119,6 @@ _Avoid_: Childhood Played
 A note on a Game or Bundle that I want to see first whenever I open it (a tip, a warning, where I got to), shown at the top of its page. A Bundle's also shows on each Game it contains. Each has at most one; clearing its text removes it.
 _Avoid_: Pinned note, comment
 
-**List**:
-A named, unordered group of Games that I curate, e.g. "Castlevania" or "Light Gun Games". A Game can be in many Lists.
-_Avoid_: Tag
-
 **Cover**:
 The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else IGDB's Cover art, else the Cover of the first Bundle that contains it. A Game can have no Cover at all. A Bundle has a Cover the same way.
 _Avoid_: Artwork, box image, thumbnail

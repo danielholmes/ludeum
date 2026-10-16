@@ -1,7 +1,7 @@
 import LudeumCore
 import SwiftUI
 
-/// The Library, or a scoped view of it (a Platform, a List, a Pinned item, Finished, Childhood): every
+/// The Library, or a scoped view of it (a Platform, a Pinned item, Finished, Childhood): every
 /// Game, as a table or as covers, filtered and sorted.
 struct LibraryScreen: View {
     let services: Services
@@ -11,7 +11,7 @@ struct LibraryScreen: View {
     @Binding var selection: GameID?
     @State private var filter: LibraryFilter
     @FocusState private var textFilterFocused: Bool
-    // Remembered across screens and launches, shared by the Library and every List.
+    // Remembered across screens and launches, shared by the Library and every scoped view of it.
     @AppStorage("librarySort") private var sort = LibrarySort.name
     @AppStorage("librarySortAscending") private var ascending = true
     @AppStorage("libraryShowsCovers") private var showCovers = false
@@ -19,7 +19,6 @@ struct LibraryScreen: View {
     @AppStorage(CoverTileSize.widthKey) private var coverWidth = CoverTileSize.defaultWidth
     @State private var rows: [LibraryRow] = []
     @State private var platforms: [IGDBPlatform] = []
-    @State private var lists: [GameList] = []
     @State private var players: [Player] = []
     @State private var error: String?
     /// IGDB facts by IGDB game id, for genre, theme and company filters and searches.
@@ -109,7 +108,7 @@ struct LibraryScreen: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             FilterBar(
                 count: rows.count, busy: busy, scope: scope == LibraryFilter() ? nil : title, filter: $filter,
-                kinds: FilterKind.library.subtracting(FilterKind.fixed(by: scope)), platforms: platforms, lists: lists, players: players,
+                kinds: FilterKind.library.subtracting(FilterKind.fixed(by: scope)), platforms: platforms, players: players,
                 genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted(),
                 text: $filter.name, textFocused: $textFilterFocused
             ) {
@@ -206,7 +205,7 @@ struct LibraryScreen: View {
                 rows = found
                 loaded = true
             }
-            (platforms, lists, players) = try filterChoices(journal)
+            (platforms, players) = try filterChoices(journal)
             error = nil
         } catch {
             // A newer reload replaced this one, and its search stopped early with `CancellationError`: not
@@ -218,8 +217,8 @@ struct LibraryScreen: View {
 }
 
 /// The Platforms, Lists and Players the filter menu offers.
-func filterChoices(_ journal: LudeumStore) throws -> ([IGDBPlatform], [GameList], [Player]) {
-    (try journal.shownPlatforms(), try journal.lists(), try journal.players())
+func filterChoices(_ journal: LudeumStore) throws -> ([IGDBPlatform], [Player]) {
+    (try journal.shownPlatforms(), try journal.players())
 }
 
 func sortText(_ sort: LibrarySort) -> String {

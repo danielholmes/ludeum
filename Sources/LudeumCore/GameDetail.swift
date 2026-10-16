@@ -30,7 +30,6 @@ public struct LudeumROM: Sendable, Equatable, Identifiable {
 public struct DeletionSummary: Sendable, Equatable {
     public let ratingEntries: Int
     public let playthroughs: Int
-    public let lists: Int
     /// A Game with any Copy can't be deleted: its ROMs, present or missing, and its hand-recorded Copies are deleted first.
     public let roms: Int
     public let copies: Int
@@ -38,10 +37,9 @@ public struct DeletionSummary: Sendable, Equatable {
     public let attachments: Int
     public var canDelete: Bool { roms == 0 && copies == 0 }
 
-    public init(ratingEntries: Int, playthroughs: Int, lists: Int, roms: Int, copies: Int, attachments: Int) {
+    public init(ratingEntries: Int, playthroughs: Int, roms: Int, copies: Int, attachments: Int) {
         self.ratingEntries = ratingEntries
         self.playthroughs = playthroughs
-        self.lists = lists
         self.roms = roms
         self.copies = copies
         self.attachments = attachments
@@ -111,7 +109,6 @@ extension LudeumStore {
             return DeletionSummary(
                 ratingEntries: try count("SELECT COUNT(*) FROM ratingEntry WHERE gameId = ?"),
                 playthroughs: try count("SELECT COUNT(*) FROM playthrough WHERE gameId = ?"),
-                lists: try count("SELECT COUNT(*) FROM listGame WHERE gameId = ?"),
                 roms: try count("SELECT COUNT(*) FROM rom WHERE gameId = ?"),
                 copies: try count("SELECT COUNT(*) FROM copy WHERE gameId = ?"),
                 attachments: try db.tableExists("attachment") ? count("SELECT COUNT(*) FROM attachment WHERE gameId = ?") : 0)
