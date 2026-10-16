@@ -65,7 +65,7 @@ private func describe(_ plan: IntoFoldersPlan) -> String {
         multiDisc.map { f in
             var line = "\(f.name): \(f.forgottenROMs.count + (f.keptROM == nil ? 0 : 1)) ROMs become one"
             if f.renamed { line += ", renamed from its first Disc" }
-            if f.needsPlaylist { line += "; no playlist, so it waits in the Review queue" }
+            if f.needsPlaylist { line += "; no playlist, so it can't be Played until one is put in its folder" }
             return line
         })
     section("Left where they are", plan.leftLoose)

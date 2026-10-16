@@ -660,6 +660,11 @@ enum LudeumSchema {
                 try keepTimestamps(db, on: table)
             }
         }
+        // The OpenEmu data held for ROMs left unmatched by the first Import went once none were left: an answer no
+        // longer applies any.
+        migrator.registerMigration("v33 no held openemu data") { db in
+            try db.drop(table: "heldOpenEmuData")
+        }
         return migrator
     }
 

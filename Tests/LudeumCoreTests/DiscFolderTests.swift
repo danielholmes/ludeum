@@ -102,49 +102,25 @@ import Testing
         for n in [2, 1] { try ps1.add("Fear Effect (USA)/Disc \(n)/Fear Effect (USA) (Disc \(n)).cue") }
     }
 
-    @Test func discsWithNoPlaylistWaitInTheReviewQueue() async throws {
+    @Test func discsWithNoPlaylistAreOneROMOpeningAtDisc1() async throws {
         try addDiscs()
 
         try await importNow()
 
-        let items = try j.journal.reviewQueue()
-        #expect(items.noPlaylist == [NoPlaylistItem(romId: try rom()["id"], romName: "Fear Effect (USA)", platformId: 7)])
-        #expect(items.count == 2)  // and, unmatched, in No suggestion
+        #expect(try rom()["needsPlaylist"] as Bool)
         #expect(try rom()["fileName"] as String == "Fear Effect (USA)/Disc 1/Fear Effect (USA) (Disc 1).cue")
+        #expect(try j.journal.reviewQueue().count == 1)  // unmatched, and nothing more
     }
 
-    @Test func makePlaylistWritesOneLoadingTheDiscsInOrder() async throws {
-        try addDiscs()
-        try await importNow()
-        let item = try #require(try j.journal.reviewQueue().noPlaylist.first)
-
-        try j.journal.makePlaylist(item, romFolders: [ps1.folder])
-
-        let playlist = ps1.url.appending(path: "Fear Effect (USA)/Fear Effect (USA).m3u")
-        #expect(
-            try String(contentsOf: playlist, encoding: .utf8)
-                == "Disc 1/Fear Effect (USA) (Disc 1).cue\nDisc 2/Fear Effect (USA) (Disc 2).cue\n")
-        #expect(try rom()["fileName"] as String == "Fear Effect (USA)/Fear Effect (USA).m3u")
-        #expect(try j.journal.reviewQueue().noPlaylist.isEmpty)
-    }
-
-    @Test func makePlaylistTwiceIsRefused() async throws {
-        try addDiscs()
-        try await importNow()
-        let item = try #require(try j.journal.reviewQueue().noPlaylist.first)
-        try j.journal.makePlaylist(item, romFolders: [ps1.folder])
-
-        #expect(throws: ReviewError.noDiscsWithoutPlaylist) { try j.journal.makePlaylist(item, romFolders: [ps1.folder]) }
-    }
-
-    @Test func aPlaylistAddedByHandClearsTheItemOnTheNextImport() async throws {
+    @Test func aPlaylistAddedByHandIsOpenedFromTheNextImport() async throws {
         try addDiscs()
         try await importNow()
         try ps1.add("Fear Effect (USA)/Fear Effect (USA).m3u", "Disc 1/Fear Effect (USA) (Disc 1).cue\n")
 
         try await importNow()
 
-        #expect(try j.journal.reviewQueue().noPlaylist.isEmpty)
+        #expect(try !(rom()["needsPlaylist"] as Bool))
+        #expect(try rom()["fileName"] as String == "Fear Effect (USA)/Fear Effect (USA).m3u")
     }
 
     @Test func playWaitsForThePlaylist() {
@@ -153,6 +129,6 @@ import Testing
         let play = Play(platformId: 7, platformName: "PlayStation", roms: [rom], settings: EmulatorSettings())
 
         #expect(play.availability == .refused(.needsPlaylist))
-        #expect(play.availability.refusal?.message == "Its Discs have no playlist: make one in the Review queue")
+        #expect(play.availability.refusal?.message == "Its Discs have no playlist: put an .m3u naming them in its folder")
     }
 }

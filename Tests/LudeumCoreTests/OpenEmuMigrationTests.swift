@@ -148,7 +148,6 @@ import Testing
             try await j.journal.db.read {
                 try Bool.fetchOne($0, sql: "SELECT EXISTS (SELECT 1 FROM game WHERE id = ?)", arguments: [discsOnly])
             } == true)
-        #expect(try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM heldOpenEmuData") } == 0)
         #expect(try await j.journal.db.read { try Row.fetchAll($0, sql: "PRAGMA foreign_key_check").isEmpty })
     }
 
@@ -174,9 +173,8 @@ import Testing
         try await migration().run()
 
         #expect(exists("Game Boy/1-Tetris.gb", in: roms))
-        let item = try #require(try j.journal.reviewQueue().noSuggestion.first)
+        let item = try #require(try j.journal.reviewQueue().unmatched.first)
         #expect(item.platformId == 33)
-        #expect(try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM heldOpenEmuData") } == 1)
     }
 
     @Test func aMissingROMIsKeyedByItsOpenEmuFileNameAndStaysMissing() async throws {
@@ -289,7 +287,7 @@ import Testing
         for table in ["syncedCollection", "syncedCover", "openEmuLibrary"] {
             #expect(try await j.journal.db.read { try $0.tableExists(table) } == false)
         }
-        #expect(try await j.journal.db.read { try $0.tableExists("heldOpenEmuData") })
+        #expect(try await j.journal.db.read { try $0.tableExists("heldOpenEmuData") } == false)
     }
 
     @Test func afterwardsTheJournalNoLongerUsesOpenEmu() async throws {

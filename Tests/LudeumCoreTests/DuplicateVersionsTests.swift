@@ -29,7 +29,7 @@ import Testing
     func duplicates(on platform: Int64, _ name: String) async throws -> DuplicateVersionsGame {
         _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: romFolders)
         let game = try j.journal.addGame(platformId: platform, name: name)
-        for item in try j.journal.reviewQueue().noSuggestion where item.platformId == platform {
+        for item in try j.journal.reviewQueue().unmatched where item.platformId == platform {
             try j.journal.assign(item, to: game)
         }
         return try #require(try j.journal.reviewQueue().duplicateVersions.first { $0.game.id == game })
@@ -72,7 +72,7 @@ import Testing
 
         let queue = try j.journal.reviewQueue()
         #expect(queue.duplicateVersions.isEmpty)
-        #expect(queue.noSuggestion.map(\.romName) == ["Double Dragon III (USA)"])
+        #expect(queue.unmatched.map(\.romName) == ["Double Dragon III (USA)"])
         #expect(try j.journal.roms(of: item.game.id).map(\.fileName) == ["Double Dragon III (Japan).7z"])
         #expect(try snes.folder.scan().count == 2)
     }
@@ -85,7 +85,7 @@ import Testing
 
         try j.journal.splitOff(try version(item, containing: "Disc"), from: item)
 
-        #expect(try j.journal.reviewQueue().noSuggestion.count == 2)
+        #expect(try j.journal.reviewQueue().unmatched.count == 2)
         #expect(try j.journal.roms(of: item.game.id).map(\.fileName) == ["Tales of Symphonia (Europe).rvz"])
     }
 

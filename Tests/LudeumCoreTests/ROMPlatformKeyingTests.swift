@@ -34,7 +34,7 @@ import Testing
 
         #expect(try journal.roms(of: 1).map(\.platformId) == [22])
         #expect(try journal.roms(of: 2).map(\.platformId) == [8])
-        let review = try #require(try journal.reviewQueue().noSuggestion.first)
+        let review = try #require(try journal.reviewQueue().unmatched.first)
         #expect(review.platformId == 33)
         #expect(try journal.platform(33)?.name == "Game Boy")
         let columns = try journal.db.read { try $0.columns(in: "rom").map(\.name) }

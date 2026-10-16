@@ -227,7 +227,7 @@ Putting a game from elsewhere (its file, an archive of it, its folder, or its Di
 _Avoid_: Import (that only reads the ROM folders), upload
 
 **Review queue**:
-Things the journal won't decide on its own and waits for me to resolve: ROMs with no match, suggested matches (by name, or from a checksum whose names don't agree), Duplicate Versions, Games whose ROMs are all missing, old missing ROMs of Games that still have a present one, ROMs whose Discs have no playlist, ROMs kept in both forms, ROMs that could be Compacted but aren't, and Attachments whose file is missing.
+Things the journal won't decide on its own and waits for me to resolve: unmatched ROMs (each with a suggested match, by name or from a checksum whose names don't agree, or none), Duplicate Versions, Games whose ROMs are all missing, old missing ROMs of Games that still have a present one, ROMs kept in both forms, ROMs that could be Compacted but aren't, and Attachments whose file is missing.
 _Avoid_: Inbox, conflicts
 
 **Duplicate Versions**:
