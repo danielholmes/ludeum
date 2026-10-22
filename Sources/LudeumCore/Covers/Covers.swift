@@ -105,7 +105,7 @@ extension LudeumStore {
     }
 
     /// What a Game's Box art is looked up by, by title: its Platform, its names (the one shown, then IGDB's, then its
-    /// own) and its Copies' Regions, Gone ones included, as the box is the one I had.
+    /// own) and its Copies' Regions, Gone ones and its ROMs' included, as the box is the one I had.
     func boxArtLookup(_ game: GameID) throws -> BoxArtLookup {
         try db.read { db in
             let row = try Row.fetchOne(
@@ -114,8 +114,10 @@ extension LudeumStore {
             for title in [row["nameOverride"], row["igdbName"], row["name"]] as [String?] {
                 if let title, !titles.contains(title) { titles.append(title) }
             }
-            let regions = try String?.fetchAll(db, sql: "SELECT regions FROM copy WHERE gameId = ?", arguments: [game])
-                .flatMap(Regions.decode)
+            let regions = try String?.fetchAll(
+                db, sql: "SELECT regions FROM copy WHERE gameId = ? UNION ALL SELECT regions FROM rom WHERE gameId = ?",
+                arguments: [game, game]
+            ).flatMap(Regions.decode)
             return BoxArtLookup(platform: row["platformId"], titles: titles, regions: ROMName.regions(named: regions) ?? [])
         }
     }
@@ -286,8 +288,8 @@ public struct Covers: Sendable {
     }
 
     /// A title match on `lookup` in LaunchBox, for any Game libretro has no Box art for, with or without a ROM: for its
-    /// Copies' Regions, preferring IGDB's `year` for it, which picks the right one of games of the same name (Doom in
-    /// 1993 or 2016).
+    /// Copies' Regions (its ROMs' included), preferring the game released closest to IGDB's `year` for it, which picks the right one of games
+    /// of the same name (Doom in 1993 or 2016).
     private func launchBoxBoxArt(_ lookup: BoxArtLookup, year: Int?) async throws -> CoverSource? {
         guard let launchBox,
             let file = try launchBox.boxart(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions, year: year)

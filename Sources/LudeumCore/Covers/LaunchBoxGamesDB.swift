@@ -54,10 +54,10 @@ public final class LaunchBoxGamesDB: Sendable {
 
     /// The file name of a game's Box - Front, matched by title on the Platform as libretro's are (`LibretroLookup`), each
     /// of `titles` in turn, by title key, then by loose title key. Of several, a game's own name beats another's
-    /// alternate name, then the game released in `year` is preferred (one of another year still matches), then the box
-    /// for `regions`, else North America's, the World's,
-    /// one with no region, Europe's, Japan's; then the shortest name, then the first in the dump. Nil when nothing
-    /// matches, before any dump has been read, or for a Platform LaunchBox has none for.
+    /// alternate name, then the game released closest to `year` is preferred (one with no year last), then the box for
+    /// `regions`, else North America's, the World's, one with no region, Europe's, Japan's; then the shortest name, then
+    /// the first in the dump. Nil when nothing matches, before any dump has been read, or for a Platform LaunchBox has
+    /// none for.
     public func boxart(platform: Int64, titles: [String], regions: Set<NameRegion>, year: Int?) throws -> String? {
         guard let platforms = Self.platforms[platform] else { return nil }
         let regionOrder = Self.regionOrder(regions)
@@ -65,7 +65,7 @@ public final class LaunchBoxGamesDB: Sendable {
         return boxes.min { a, b in
             func rank(_ box: LaunchBoxImage) -> (Int, Int, Int, Int, Int) {
                 (
-                    box.own ? 0 : 1, year == nil || box.year == year ? 0 : 1,
+                    box.own ? 0 : 1, Self.yearsApart(box.year, from: year),
                     regionOrder.firstIndex { $0.contains(box.region) } ?? regionOrder.count, box.nameLength, box.position
                 )
             }
@@ -74,19 +74,28 @@ public final class LaunchBoxGamesDB: Sendable {
     }
 
     /// The file names of a game's Screenshots, title screens first, all of the one game matched by title as for its Box
-    /// art: its own name beats another's alternate name, then the game released in `year` is preferred, then the
-    /// shortest name, then the lowest LaunchBox id. Empty when nothing matches.
+    /// art: its own name beats another's alternate name, then the game released closest to `year` is preferred, then
+    /// the shortest name, then the lowest LaunchBox id. Empty when nothing matches.
     public func screenshots(platform: Int64, titles: [String], year: Int?) throws -> [String] {
         guard let platforms = Self.platforms[platform] else { return [] }
         let shots = try images(of: LaunchBoxImageType.screenshots, platforms: platforms, titles: titles)
         func rank(_ shot: LaunchBoxImage) -> (Int, Int, Int, Int) {
-            (shot.own ? 0 : 1, year == nil || shot.year == year ? 0 : 1, shot.nameLength, shot.gameID)
+            (shot.own ? 0 : 1, Self.yearsApart(shot.year, from: year), shot.nameLength, shot.gameID)
         }
         guard let best = shots.min(by: { rank($0) < rank($1) }) else { return [] }
         var seen: Set<String> = []
         return shots.filter { $0.gameID == best.gameID && seen.insert($0.fileName).inserted }
             .sorted { ($0.type.rawValue, $0.position) < ($1.type.rawValue, $1.position) }
             .map(\.fileName)
+    }
+
+    /// How many years a game released in `released` is from `year`, for ranking: a regional release or a port can be a
+    /// year or two from IGDB's year for the Game, and a reboot of the same name many. A game with no year comes after any
+    /// that has one; with no `year`, every game is as near as any other.
+    static func yearsApart(_ released: Int?, from year: Int?) -> Int {
+        guard let year else { return 0 }
+        guard let released else { return Int.max }
+        return abs(released - year)
     }
 
     /// Every image of `types` of the games on `platforms` that the first title to match any finds: each of `titles` in
@@ -137,9 +146,10 @@ public final class LaunchBoxGamesDB: Sendable {
 
     /// LaunchBox's platforms for each IGDB platform it has games for. IGDB splits some it doesn't (the Famicom and NES,
     /// the Super Famicom and SNES, the DSi and DS, the New 3DS and 3DS), and LaunchBox splits some IGDB doesn't
-    /// (Windows 3.x, MSX2+, PSP minis).
+    /// (Windows 3.x, MSX2+, PSP minis). PC looks in MS-DOS too, where LaunchBox files the games IGDB has as PC ones from
+    /// before Windows 95: its Windows Syndicate is only 2012's reboot, and its Windows Descent 2014's re-release.
     static let platforms: [Int64: [String]] = [
-        3: ["Linux"], 4: ["Nintendo 64"], 5: ["Nintendo Wii"], 6: ["Windows", "Windows 3.X"], 7: ["Sony Playstation"],
+        3: ["Linux"], 4: ["Nintendo 64"], 5: ["Nintendo Wii"], 6: ["Windows", "Windows 3.X", "MS-DOS"], 7: ["Sony Playstation"],
         8: ["Sony Playstation 2"], 9: ["Sony Playstation 3"], 11: ["Microsoft Xbox"], 12: ["Microsoft Xbox 360"],
         13: ["MS-DOS"], 14: ["Apple Mac OS"], 15: ["Commodore 64", "Commodore 128", "Commodore MAX Machine"],
         16: ["Commodore Amiga"], 18: ["Nintendo Entertainment System"], 19: ["Super Nintendo Entertainment System"],

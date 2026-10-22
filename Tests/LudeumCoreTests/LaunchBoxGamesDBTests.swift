@@ -129,6 +129,19 @@ import Testing
         #expect(try boxart(6, ["Descent"]) == "d1.jpg")
     }
 
+    @Test func aGamesOwnNameBeatsAnothersAlternateNameWhateverTheirYears() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Shadow Warrior Classic", platform: "Windows", released: "1997-05-13", alternateNames: ["Shadow Warrior"],
+                boxes: [(nil, "classic.jpg")]),
+            LaunchBoxGame(id: 2, name: "Shadow Warrior", platform: "Windows", released: "2013-09-25", boxes: [(nil, "sw13.jpg")]),
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(try boxart(6, ["Shadow Warrior"], year: 1997) == "sw13.jpg")
+    }
+
     @Test func theYearPicksBetweenGamesOfTheSameName() async throws {
         h.internet.setLaunchBox([
             LaunchBoxGame(id: 1, name: "Doom", platform: "Windows", released: "1993-12-10", boxes: [(nil, "doom93.jpg")]),
@@ -140,6 +153,45 @@ import Testing
         #expect(try boxart(6, ["Doom"], year: 2016) == "doom16.jpg")
         #expect(try boxart(6, ["Doom"], year: 1993) == "doom93.jpg")
         #expect(try boxart(6, ["Doom"]) == "doom93.jpg")
+    }
+
+    @Test func theClosestYearPicksWhenNoneIsTheYearAndAGameWithNoYearComesLast() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Monopoly", platform: "Super Nintendo Entertainment System", boxes: [(nil, "undated.jpg")],
+                otherImages: [("Screenshot - Gameplay", "undated-shot.jpg")]),
+            LaunchBoxGame(
+                id: 2, name: "Monopoly", platform: "Super Nintendo Entertainment System", released: "1995-01-01",
+                boxes: [(nil, "m95.jpg")], otherImages: [("Screenshot - Gameplay", "m95-shot.jpg")]),
+            LaunchBoxGame(
+                id: 3, name: "Monopoly", platform: "Super Nintendo Entertainment System", released: "1992-01-01",
+                boxes: [(nil, "m92.jpg")], otherImages: [("Screenshot - Gameplay", "m92-shot.jpg")]),
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(try boxart(19, ["Monopoly"], year: 1991) == "m92.jpg")
+        #expect(try boxart(19, ["Monopoly"], year: 1994) == "m95.jpg")
+        #expect(try launchBox.screenshots(platform: 19, titles: ["Monopoly"], year: 1991) == ["m92-shot.jpg"])
+    }
+
+    @Test func aPCGameFindsItsMSDOSBoxAndTheYearPicksTheOriginalOverAWindowsRebootOfTheSameName() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Syndicate", platform: "Windows", released: "2012-02-21", boxes: [(nil, "s12.jpg")],
+                otherImages: [("Screenshot - Gameplay", "s12-shot.jpg")]),
+            LaunchBoxGame(
+                id: 2, name: "Syndicate", platform: "MS-DOS", released: "1993-06-05", boxes: [(nil, "s93.jpg")],
+                otherImages: [("Screenshot - Gameplay", "s93-shot.jpg")]),
+            LaunchBoxGame(id: 3, name: "Syndicate Wars", platform: "MS-DOS", released: "1996-10-23", boxes: [(nil, "sw.jpg")]),
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(try boxart(6, ["Syndicate"], year: 1993) == "s93.jpg")
+        #expect(try boxart(6, ["Syndicate"], year: 2012) == "s12.jpg")
+        #expect(try launchBox.screenshots(platform: 6, titles: ["Syndicate"], year: 1993) == ["s93-shot.jpg"])
+        #expect(try boxart(6, ["Syndicate Wars"]) == "sw.jpg")
     }
 
     @Test func aDumpIsStaleOnceItsOlderThan30DaysAndANewOneReplacesIt() async throws {

@@ -398,6 +398,21 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
+    @Test func launchBoxsBoxIsForTheRegionsOfItsROMsAsWellAsItsOtherCopies() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System",
+                boxes: [("North America", "sm-na.jpg"), ("Europe", "sm-eu.jpg"), ("Japan", "sm-jp.jpg")])
+        ])
+        try await h.launchBox.refresh()
+        let game = try await superMetroid(["Super Metroid (Europe).sfc"])
+
+        guard case .launchBox(_, file: "sm-eu.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's box for the ROM's Region")
+            return
+        }
+    }
+
     @Test func aGameFindsLaunchBoxsBoxForItsIGDBYear() async throws {
         h.internet.addGame(2005, "Doom", fields: ["first_release_date": 1_463_097_600])  // 13 May 2016
         h.internet.setLaunchBox([
