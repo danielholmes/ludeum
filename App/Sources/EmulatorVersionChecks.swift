@@ -82,13 +82,21 @@ struct SystemToolsOnLaunch: ViewModifier {
                 Self.started = true
                 warning = SystemTool.warning(missing: SystemTool.missing())
             }
-            .alert(
-                warning?.title ?? "", isPresented: Binding(get: { warning != nil }, set: { if !$0 { warning = nil } })
-            ) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(warning?.message ?? "")
-            }
+            .launchWarning($warning)
+    }
+}
+
+extension View {
+    /// An alert showing `warning` while there is one, cleared when it's dismissed: what a launch check found.
+    func launchWarning(_ warning: Binding<(title: String, message: String)?>) -> some View {
+        alert(
+            warning.wrappedValue?.title ?? "",
+            isPresented: Binding(get: { warning.wrappedValue != nil }, set: { if !$0 { warning.wrappedValue = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(warning.wrappedValue?.message ?? "")
+        }
     }
 }
 

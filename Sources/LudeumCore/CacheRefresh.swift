@@ -1,9 +1,11 @@
 import Foundation
 
-/// What a background refresh did. Errors are for the log, not alerts.
+/// What a background refresh did. Errors are for the log, not alerts, except LaunchBox's dump not being downloaded or
+/// read, which is its own warning.
 public struct CacheRefreshResult: Sendable {
     public var refreshed = 0
     public var errors: [String] = []
+    public var launchBoxWarning: (title: String, message: String)?
 }
 
 /// The low-priority refresh at launch: re-fetches every expired cache entry, one request (or IGDB
@@ -90,6 +92,7 @@ public struct CacheRefresh: Sendable {
                 break
             } catch {
                 result.errors.append("\(step.label): \(error.localizedDescription)")
+                if let error = error as? LaunchBoxDumpError { result.launchBoxWarning = launchBox?.warning(error) }
             }
             done += step.count
             progress(done, total)

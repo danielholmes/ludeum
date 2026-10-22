@@ -87,6 +87,7 @@ import Testing
 
         #expect(result.refreshed == 1)
         #expect(result.errors.count == 1)
+        #expect(result.launchBoxWarning == nil)
         // Still served from the expired copy, and still expired, so the next launch tries again.
         #expect(try await h.igdb.games(ids: [1])[1]?.name == "Super Metroid")
         h.internet.setDown(FakeInternet.Hosts.igdb, false)
@@ -138,6 +139,31 @@ import Testing
         h.clock.advance(days: 2)
         #expect(await refresh.run().refreshed == 1)
         #expect(h.internet.sent(to: FakeInternet.Hosts.launchBox).count == 1)
+    }
+
+    @Test func aLaunchBoxDumpThatCantBeDownloadedOrReadIsAWarningSayingWhatShowsMeanwhile() async throws {
+        let refresh = CacheRefresh(cache: h.cache, igdb: h.igdb, hasheous: h.hasheous, launchBox: h.launchBox, gate: WorkGate())
+        h.internet.setDown(FakeInternet.Hosts.launchBox, true)
+
+        let first = try #require(await refresh.run().launchBoxWarning)
+
+        #expect(first.title == "LaunchBox's games database couldn't be updated")
+        #expect(first.message.hasPrefix("LaunchBox's Metadata.zip couldn't be downloaded: HTTP 503.\n\n"))
+        #expect(first.message.contains("Until one is read"))
+
+        h.internet.setDown(FakeInternet.Hosts.launchBox, false)
+        h.internet.setLaunchBox([LaunchBoxGame(id: 1, name: "Half-Life", platform: "Windows", boxes: [(nil, "hl.jpg")])])
+        h.clock.advance(days: 1)
+        #expect(await refresh.run().launchBoxWarning == nil)
+        h.internet.state.withLock { $0.launchBoxDump = Data("not a zip".utf8) }
+        h.clock.advance(days: 31)
+
+        let second = try #require(await refresh.run().launchBoxWarning)
+
+        #expect(second.message.contains("couldn't be read"))
+        #expect(!second.message.contains(".."))
+        let readOn = h.clock.now().addingTimeInterval(-31 * 86_400).formatted(date: .long, time: .omitted)
+        #expect(second.message.contains("keeps using the one read on \(readOn)."))
     }
 }
 

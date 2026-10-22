@@ -37,19 +37,46 @@ public final class LaunchBoxGamesDB: Sendable {
         return now.timeIntervalSince(read.fetchedAt) > Self.maxAge
     }
 
-    /// Downloads the dump and replaces what's kept of the last one. One that can't be downloaded or read throws and
-    /// leaves the last one in place, to be tried again a day later.
+    /// Downloads the dump and replaces what's kept of the last one. One that can't be downloaded or read throws
+    /// `LaunchBoxDumpError` and leaves the last one in place, to be tried again a day later.
     public func refresh() async throws {
         let zip = FileManager.default.temporaryDirectory.appending(path: "ludeum-launchbox-\(UUID().uuidString).zip")
         defer { try? FileManager.default.removeItem(at: zip) }
         do {
-            let response = try await transport.download(URLRequest(url: Self.dumpURL), to: zip)
-            guard response.statusCode == 200 else { throw HTTPStatusError(status: response.statusCode, url: Self.dumpURL) }
+            let response: HTTPURLResponse
+            do {
+                response = try await transport.download(URLRequest(url: Self.dumpURL), to: zip)
+            } catch let error as URLError where error.code == .cancelled {
+                throw CancellationError()
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw LaunchBoxDumpError.notDownloaded(error.localizedDescription)
+            }
+            guard response.statusCode == 200 else { throw LaunchBoxDumpError.notDownloaded("HTTP \(response.statusCode)") }
             try cache.replaceLaunchBox(try LaunchBoxDump.read(zip: zip))
         } catch {
             try? cache.store([Self.failedKey: Data()])
             throw error
         }
+    }
+
+    /// The launch warning about a dump that couldn't be downloaded or read: what went wrong, and what Box art shows until
+    /// one is read: the last dump kept, when there is one (with when it was read, unless what's kept has changed since),
+    /// else what it would without LaunchBox.
+    public func warning(_ error: LaunchBoxDumpError) -> (title: String, message: String) {
+        let meanwhile: String
+        if (try? cache.hasLaunchBoxGames()) == false {
+            meanwhile = "Until one is read, a Game LaunchBox would have a box for shows what it would without LaunchBox."
+        } else if let read = try? cache.entries([Self.readKey])[Self.readKey]?.fetchedAt {
+            meanwhile = "Box art from LaunchBox keeps using the one read on \(read.formatted(date: .long, time: .omitted))."
+        } else {
+            meanwhile = "Box art from LaunchBox keeps using the last one read."
+        }
+        return (
+            "LaunchBox's games database couldn't be updated",
+            [error.description, meanwhile, "It's tried again tomorrow."].joined(separator: "\n\n")
+        )
     }
 
     /// The file name of a game's Box - Front, matched by title on the Platform as libretro's are (`LibretroLookup`), each
@@ -269,7 +296,7 @@ struct LaunchBoxDump: Sendable {
         let pipe = Pipe()
         unzip.standardOutput = pipe
         unzip.standardError = FileHandle.nullDevice
-        try unzip.run()
+        do { try unzip.run() } catch { throw LaunchBoxDumpError.unreadable("unzip couldn't run: \(error.localizedDescription)") }
         try? pipe.fileHandleForWriting.close()
         let dump: LaunchBoxDump
         do {
@@ -295,22 +322,37 @@ struct LaunchBoxDump: Sendable {
         let parser = XMLParser(stream: stream)
         parser.delegate = reader
         guard parser.parse() else {
-            throw LaunchBoxDumpError.unreadable(parser.parserError?.localizedDescription ?? "it isn't XML")
+            throw LaunchBoxDumpError.unreadable(
+                "it isn't the XML expected, so LaunchBox may have changed its format (\(parser.parserError?.localizedDescription ?? "no reason given"))"
+            )
         }
         let dump = reader.kept()
-        guard !dump.games.isEmpty else { throw LaunchBoxDumpError.unreadable("it has no games") }
+        guard !dump.games.isEmpty else {
+            throw LaunchBoxDumpError.unreadable("it has no games on the platforms looked in, so LaunchBox may have changed its format")
+        }
         return dump
     }
 }
 
-enum LaunchBoxDumpError: Error, CustomStringConvertible {
+/// Why a dump couldn't be kept: the two failures the launch refresh warns about.
+public enum LaunchBoxDumpError: LocalizedError, CustomStringConvertible {
+    /// It couldn't be downloaded: no connection, or LaunchBox didn't serve it.
+    case notDownloaded(String)
+    /// It was downloaded but couldn't be read: not a zip, not the XML expected, or no games in it, as when LaunchBox
+    /// changes its format.
     case unreadable(String)
 
-    var description: String {
+    public var description: String {
         switch self {
-        case .unreadable(let why): "LaunchBox's Metadata.zip couldn't be read: \(why)"
+        case .notDownloaded(let why): "LaunchBox's Metadata.zip couldn't be downloaded: \(Self.sentence(why))"
+        case .unreadable(let why): "LaunchBox's Metadata.zip was downloaded but couldn't be read: \(Self.sentence(why))"
         }
     }
+
+    /// `why` ending in one full stop, as a system error's description often already does.
+    private static func sentence(_ why: String) -> String { why.hasSuffix(".") ? why : why + "." }
+
+    public var errorDescription: String? { description }
 }
 
 /// Collects the fields wanted from each `Game`, `GameAlternateName` and `GameImage`, skipping the rest (overviews and
@@ -420,6 +462,11 @@ extension CacheStore {
                 sql: "INSERT OR REPLACE INTO entry (key, payload, fetched_at) VALUES (?, ?, ?)",
                 arguments: [LaunchBoxGamesDB.readKey, Data(), readAt])
         }
+    }
+
+    /// Whether any dump's games are kept.
+    func hasLaunchBoxGames() throws -> Bool {
+        try db.read { try Bool.fetchOne($0, sql: "SELECT EXISTS (SELECT 1 FROM launchbox_game)") ?? false }
     }
 
     /// Every image of `types` of the games on `platforms` with a name whose `titleKey` is `key`.

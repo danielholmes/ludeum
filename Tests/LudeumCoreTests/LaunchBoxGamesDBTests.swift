@@ -216,14 +216,31 @@ import Testing
         try await launchBox.refresh()
 
         h.internet.setDown(FakeInternet.Hosts.launchBox, true)
-        await #expect(throws: (any Error).self) { try await launchBox.refresh() }
+        await #expect { try await launchBox.refresh() } throws: { Self.isNotDownloaded($0) }
         h.internet.setDown(FakeInternet.Hosts.launchBox, false)
         h.internet.state.withLock { $0.launchBoxDump = Data("not a zip".utf8) }
-        await #expect(throws: (any Error).self) { try await launchBox.refresh() }
+        await #expect { try await launchBox.refresh() } throws: { Self.isUnreadable($0) }
         h.internet.setLaunchBox([LaunchBoxGame(id: 1, name: "Half-Life", platform: "Windows")])
-        await #expect(throws: (any Error).self) { try await launchBox.refresh() }
+        await #expect { try await launchBox.refresh() } throws: { Self.isUnreadable($0) }
+        h.internet.state.withLock { $0.launchBoxDump = LaunchBoxGame.zip(xml: "<LaunchBox><Game><Name>Half") }
+        await #expect { try await launchBox.refresh() } throws: { Self.isUnreadable($0) }
 
         #expect(try boxart(6, ["Command & Conquer: Red Alert 2"]) == "ra2.jpg")
+    }
+
+    @Test func aDumpErrorSaysWhyInOneSentenceWhetherOrNotTheReasonEndsInAFullStop() {
+        #expect(
+            LaunchBoxDumpError.notDownloaded("The Internet connection appears to be offline.").description
+                == "LaunchBox's Metadata.zip couldn't be downloaded: The Internet connection appears to be offline.")
+        #expect(LaunchBoxDumpError.notDownloaded("HTTP 503").description == "LaunchBox's Metadata.zip couldn't be downloaded: HTTP 503.")
+    }
+
+    static func isNotDownloaded(_ error: any Error) -> Bool {
+        if case .notDownloaded = error as? LaunchBoxDumpError { true } else { false }
+    }
+
+    static func isUnreadable(_ error: any Error) -> Bool {
+        if case .unreadable = error as? LaunchBoxDumpError { true } else { false }
     }
 
     @Test func aDumpThatCantBeFetchedIsTriedAgainADayLaterNotAtEveryLaunch() async throws {

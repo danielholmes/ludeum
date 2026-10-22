@@ -13,6 +13,8 @@ import os
     private(set) var journalLocked = false
     /// Mirrors `gate.isImporting`, for views.
     private(set) var importing = false
+    /// The refresh's warning that LaunchBox's dump couldn't be downloaded or read, until it's dismissed.
+    var launchBoxWarning: (title: String, message: String)?
 
     private static let log = Logger(subsystem: "org.danielholmes.Ludeum", category: "refresh")
 
@@ -41,7 +43,8 @@ import os
 
     private var finished = false
 
-    /// The low-priority refresh of expired cache entries, once per launch. Errors are logged.
+    /// The low-priority refresh of expired cache entries, once per launch. Errors are logged; LaunchBox's dump not being
+    /// downloaded or read is a warning too.
     func refreshCache(services: Services) async {
         guard let cache = services.cache, let hasheous = services.hasheous else { return }
         let refresh = CacheRefresh(
@@ -54,6 +57,7 @@ import os
         finished = true
         refreshing = nil
         for error in result.errors { Self.log.error("Cache refresh: \(error, privacy: .public)") }
+        launchBoxWarning = result.launchBoxWarning
         if result.refreshed > 0 {
             Self.log.info("Cache refresh: \(result.refreshed) entries refreshed")
             services.changes.coverChanged()
@@ -61,17 +65,20 @@ import os
     }
 }
 
-/// Starts the cache refresh once per launch, not for every new main window.
+/// Starts the cache refresh once per launch, not for every new main window, and shows its warning when LaunchBox's
+/// dump couldn't be downloaded or read.
 struct CacheRefreshOnLaunch: ViewModifier {
     let services: Services
     @MainActor private static var started = false
 
     func body(content: Content) -> some View {
-        content.task {
-            guard !Self.started else { return }
-            Self.started = true
-            // Not tied to the window: closing it mustn't stop the refresh.
-            Task { await services.work.refreshCache(services: services) }
-        }
+        content
+            .task {
+                guard !Self.started else { return }
+                Self.started = true
+                // Not tied to the window: closing it mustn't stop the refresh.
+                Task { await services.work.refreshCache(services: services) }
+            }
+            .launchWarning(Bindable(services.work).launchBoxWarning)
     }
 }

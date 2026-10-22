@@ -43,11 +43,14 @@ struct LaunchBoxGame {
     }
 
     /// `Metadata.zip`, made with the system's `zip`.
-    static func zip(_ games: [LaunchBoxGame]) -> Data {
+    static func zip(_ games: [LaunchBoxGame]) -> Data { zip(xml: xml(games)) }
+
+    /// `Metadata.zip` holding `xml` as its `Metadata.xml`, whatever it says.
+    static func zip(xml: String) -> Data {
         let folder = FileManager.default.temporaryDirectory.appending(path: "launchbox-\(UUID().uuidString)")
         try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        try! Data(xml(games).utf8).write(to: folder.appending(path: "Metadata.xml"))
+        try! Data(xml.utf8).write(to: folder.appending(path: "Metadata.xml"))
         let zip = Process()
         zip.executableURL = URL(filePath: "/usr/bin/zip")
         zip.currentDirectoryURL = folder
