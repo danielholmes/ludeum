@@ -67,7 +67,7 @@ struct CoverKey: Equatable {
     let pixels: Int
 }
 
-/// An image (a Cover, or a source's Box art) as large as the screen allows; a click or Escape closes it. It opens on
+/// A Cover's image as large as the screen allows; a click or Escape closes it. It opens on
 /// the tile-sized image and swaps in the full one once `loadFull` has read it.
 struct EnlargedImage: View {
     let name: String
@@ -120,9 +120,9 @@ enum CoverTileSize {
     return await decodeImage(source, pixels: nil)
 }
 
-/// The image of a Cover or a source's Box art, decoded off the main thread, there and then rather than at first draw:
+/// A Cover's image, decoded off the main thread, there and then rather than at first draw:
 /// no larger than `pixels` on its long edge, or as it is when that's nil. Nil for the placeholder.
-func decodeImage(_ source: CoverSource, pixels: Int?) async -> NSImage? {
+private func decodeImage(_ source: CoverSource, pixels: Int?) async -> NSImage? {
     await Task.detached(priority: .userInitiated) { () -> NSImage? in
         guard let imageSource = coverImageSource(source) else { return nil }
         guard let pixels else {
@@ -140,32 +140,10 @@ func decodeImage(_ source: CoverSource, pixels: Int?) async -> NSImage? {
     }.value
 }
 
-extension CoverSource {
-    /// Where the image came from, for a label: "upload", "libretro", "LaunchBox" or "IGDB". Nil for the placeholder.
-    var origin: String? {
-        switch self {
-        case .upload: "upload"
-        case .libretro: ImageSource.libretro.rawValue
-        case .launchBox: ImageSource.launchBox.rawValue
-        case .igdb: "IGDB"
-        case .placeholder: nil
-        }
-    }
-
-    /// Which image it is at its source: libretro's path or LaunchBox's file name. Nil for the rest.
-    var location: String? {
-        switch self {
-        case .libretro(_, let path): path
-        case .launchBox(_, let file): file
-        default: nil
-        }
-    }
-}
-
 private nonisolated func coverImageSource(_ source: CoverSource) -> CGImageSource? {
     switch source {
     case .upload(let cover): CGImageSourceCreateWithData(cover.jpeg as CFData, nil)
-    case .libretro(let file, _), .launchBox(let file, _), .igdb(let file, _): CGImageSourceCreateWithURL(file as CFURL, nil)
+    case .launchBox(let file, _), .igdb(let file, _): CGImageSourceCreateWithURL(file as CFURL, nil)
     case .placeholder: nil
     }
 }

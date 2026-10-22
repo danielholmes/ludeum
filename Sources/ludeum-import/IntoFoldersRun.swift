@@ -27,8 +27,7 @@ func intoFoldersRun(_ arguments: [String]) async throws {
         url: options["--journal"] ?? LudeumFolder.standard.url, data: options["--data"] ?? LudeumFolder.standard.data)
     let data = requireDataFolder(folder)
     let journal = try LudeumStore(directory: folder.url, backups: Backups(folder: folder.backups))
-    let intoFolders = IntoFolders(
-        journal: journal, folder: folder, libretro: LibretroThumbnails(cache: try CacheStore(directory: cacheDirectory)))
+    let intoFolders = IntoFolders(journal: journal, folder: folder)
 
     print("Data folder: \(folder.data.path(percentEncoded: false)), which is \(data.path(percentEncoded: false))")
     let plan: IntoFoldersPlan

@@ -123,32 +123,57 @@ private func pillWidth(_ text: String) -> CGFloat {
     return (text as NSString).size(withAttributes: [.font: font]).width.rounded(.up) + 2 * pillPadding
 }
 
-/// A Screenshot from any source: IGDB's by its image id, libretro's or LaunchBox's (for now, beside IGDB's on Game
-/// detail) by their reference.
+/// A Screenshot from either source: IGDB's by its image id, LaunchBox's by its file name there.
 enum ShownScreenshot: Hashable {
     case igdb(imageID: String)
-    case source(SourceScreenshot)
+    case launchBox(file: String)
 }
 
 struct Screenshot: Identifiable {
     let id: ShownScreenshot
 }
 
-/// Downloads Screenshots from wherever they're from: IGDB's through `igdb`, libretro's and LaunchBox's through `covers`.
+/// Downloads Screenshots from wherever they're from: IGDB's through `igdb`, LaunchBox's through `covers`.
 struct ScreenshotLoader {
     var igdb: IGDBClient?
     var covers: Covers?
 
-    /// The file for a tile, or with `original`, the whole image: IGDB has both; libretro and LaunchBox have one, used
-    /// for both. Nil when it can't be downloaded.
+    /// The file for a tile, or with `original`, the whole image: IGDB has both; LaunchBox has one, used for both. Nil
+    /// when it can't be downloaded.
     func file(_ screenshot: ShownScreenshot, original: Bool) async -> URL? {
         switch screenshot {
-        case .igdb(let imageID):
-            return try? await igdb?.screenshot(imageID: imageID, original: original)
-        case .source(let shot):
-            switch try? await covers?.image(of: shot) {
-            case .libretro(let file, _), .launchBox(let file, _): return file
-            default: return nil
+        case .igdb(let imageID): try? await igdb?.screenshot(imageID: imageID, original: original)
+        case .launchBox(let file): (try? await covers?.launchBoxScreenshot(file)) ?? nil
+        }
+    }
+}
+
+/// LaunchBox's Screenshots for the Game (`Covers.launchBoxScreenshots(for:)`), title screens first, below IGDB's and
+/// shown as they are: nothing while they're looked for, or when LaunchBox has none.
+struct LaunchBoxScreenshotsSection: View {
+    let services: Services
+    let game: GameID
+    @State private var screenshots: [String] = []
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            let title = "LaunchBox Screenshots"
+            if !screenshots.isEmpty {
+                ScreenshotsSection(
+                    loader: ScreenshotLoader(covers: services.covers), screenshots: screenshots.map { .launchBox(file: $0) }, title: title)
+            } else if failed {
+                Section(title) { Text("Couldn't load").foregroundStyle(.red) }
+            }
+        }
+        // Again when the Game's Covers change: its names or IGDB link, which the Screenshots are found by.
+        .task(id: "\(game) \(services.changes.coverRevision)") {
+            failed = false
+            do {
+                screenshots = try await services.covers?.launchBoxScreenshots(for: game) ?? []
+            } catch {
+                screenshots = []
+                failed = true
             }
         }
     }
@@ -294,9 +319,8 @@ struct EditGameSheet: View {
         do {
             if name != ((try services.journal?.nameOverride(game.id)) ?? nil ?? "") {
                 try services.journal?.setNameOverride(game.id, name.isEmpty ? nil : name)
-                // A Game with no ROM finds its Box art by its name; its ROMs, if it has any, are looked up by the new name.
+                // Its Box art is found by its name.
                 services.changes.coverChanged()
-                services.lookUpBoxArt(forROMsOf: game.id)
             }
             if highlightNote.trimmed != (game.highlightNote ?? "") {
                 try services.journal?.setHighlightNote(game.id, highlightNote)

@@ -158,6 +158,8 @@ struct ArchivedROMChecksumTests {
         #expect(result.matched.map(\.romName) == ["Tetris (World)"])
         #expect(result.sentToReview.isEmpty)
         #expect(!result.changedSomething)
+        // Its Game's box is for its Regions.
+        #expect(result.coversChanged)
         let row = try #require(try rom("Tetris (World)"))
         #expect(row["matchKind"] as String? == "automatic")
         #expect(row["md5"] as String? == helloMD5)
@@ -174,6 +176,7 @@ struct ArchivedROMChecksumTests {
         let result = try await importNow()
 
         #expect(result.sentToReview.map(\.romName) == ["Tetris (World)"])
+        #expect(!result.coversChanged)
         let item = try #require(try j.journal.reviewQueue().unmatched.first)
         #expect(item.suggestedIgdbGameId == 2)
         #expect(item.suggestionKind == .checksum)

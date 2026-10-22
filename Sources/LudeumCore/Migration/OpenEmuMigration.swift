@@ -10,8 +10,7 @@ import GRDB
 /// everything (the dry run stops there); take a `before-migration` backup; copy OpenEmu's battery saves, unchanged, into
 /// `OpenEmu Battery Saves archive/` in the Data folder; move the files into the Data folder's ROM folders, logging each
 /// old path → new path beside the backup; then rewrite the ROM rows in one
-/// transaction, after which the journal drops OpenEmu's columns and link tables; last, delete OpenEmu's cached Box art and look each
-/// moved ROM up in libretro again (a miss keeps its old Box art; a failed lookup never fails the migration).
+/// transaction, after which the journal drops OpenEmu's columns and link tables; last, delete OpenEmu's cached Box art.
 /// A failed move stops before that transaction: restore nothing, and the log says what moved. Undo is restoring the backup and moving the logged files back.
 public struct OpenEmuMigration {
     let journal: LudeumStore
@@ -20,7 +19,8 @@ public struct OpenEmuMigration {
     let folder: LudeumFolder
     let backups: Backups
     let isOpenEmuRunning: () -> Bool
-    let libretro: LibretroThumbnails?
+    /// Where OpenEmu's Box art was kept, if it's to hand.
+    let cache: CacheStore?
 
     /// OpenEmu's Application Support folder, where it keeps each core's battery saves wherever its library is.
     public static var standardSupport: URL {
@@ -31,7 +31,7 @@ public struct OpenEmuMigration {
     /// `folder`'s Data folder gets the ROM folders, the backup and the battery-save archive.
     public init(
         journal: LudeumStore, library: URL, support: URL, folder: LudeumFolder, isOpenEmuRunning: @escaping () -> Bool,
-        libretro: LibretroThumbnails?
+        cache: CacheStore?
     ) {
         self.journal = journal
         self.library = library
@@ -39,7 +39,7 @@ public struct OpenEmuMigration {
         self.folder = folder
         backups = Backups(folder: folder.backups, clock: journal.clock, timeZone: journal.calendar.timeZone)
         self.isOpenEmuRunning = isOpenEmuRunning
-        self.libretro = libretro
+        self.cache = cache
     }
 
     /// The dry run: everything the migration would do, and anything that stops it. Changes nothing but the `ROMs/` and
@@ -138,8 +138,6 @@ public struct OpenEmuMigration {
 
         try OpenEmuMoves.move(plan.roms.flatMap(\.moves), log: log)
 
-        // Each ROM is to be looked up in libretro again by its new name: one whose lookup doesn't run below waits
-        // for the next Import.
         try await journal.db.write { db in
             // A duplicate disc is forgotten, with what hangs off its row (held OpenEmu data); its Game stays.
             for duplicate in plan.duplicateDiscs {
@@ -149,8 +147,7 @@ public struct OpenEmuMigration {
                 try ROMPlatform.ensureKnown(db, rom.platformId)
                 try db.execute(
                     sql: """
-                        UPDATE rom SET openEmuPk = NULL, platformId = ?, folderName = ?, fileName = ?, name = ?, missing = ?,
-                            libretroLookedUp = 0
+                        UPDATE rom SET openEmuPk = NULL, platformId = ?, folderName = ?, fileName = ?, name = ?, missing = ?
                         WHERE id = ?
                         """,
                     arguments: [rom.platformId, rom.folderName, rom.fileName, rom.folderName, rom.missing, rom.romId])
@@ -158,9 +155,8 @@ public struct OpenEmuMigration {
         }
         // No ROM is OpenEmu's now, so the journal takes the migrations it held back: OpenEmu's columns and tables go.
         try journal.completeMigrations()
-        // Box art: OpenEmu's cached copies go, and libretro is looked up again by the new names.
-        libretro?.cache.removeOpenEmuBoxArt()
-        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(plan.roms.map(\.romId))
+        // Box art: OpenEmu's cached copies go.
+        cache?.removeOpenEmuBoxArt()
         return OpenEmuMigrationResult(plan: plan, backup: backup.url, log: log, batterySaveArchive: archive)
     }
 

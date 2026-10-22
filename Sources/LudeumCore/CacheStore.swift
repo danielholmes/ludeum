@@ -24,6 +24,11 @@ public final class CacheStore: Sendable {
         self.directory = directory
         self.clock = clock
         db = try DatabaseQueue(path: directory.appending(path: "cache.sqlite").path(percentEncoded: false))
+        try Self.migrator(directory: directory).migrate(db)
+    }
+
+    /// The schema of the cache in `directory`, by version.
+    static func migrator(directory: URL) -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in
             try db.create(table: "entry") { t in
@@ -65,7 +70,12 @@ public final class CacheStore: Sendable {
                     CREATE INDEX launchbox_image_on_game_id ON launchbox_image (game_id);
                     """)
         }
-        try migrator.migrate(db)
+        // Box art no longer comes from libretro-thumbnails (ADR 0020): its listings and images go.
+        migrator.registerMigration("v5") { db in
+            try db.execute(sql: "DELETE FROM entry WHERE key LIKE 'libretro:%'")
+            try? FileManager.default.removeItem(at: directory.appending(path: "images/libretro", directoryHint: .isDirectory))
+        }
+        return migrator
     }
 
     /// Payloads for `items`, served from the cache where fresh (younger than `maxAge`),

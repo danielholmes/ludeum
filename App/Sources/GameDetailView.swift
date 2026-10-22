@@ -72,10 +72,10 @@ struct GameDetailView: View {
         Form {
             // Identity and actions: what the Game is, and playing it.
             Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    // For now, the Cover beside each source's Box art, to compare them; each in its own shape (SNES
-                    // boxes are wide).
-                    CoverComparison(services: services, game: id, name: game.name)
+                HStack(alignment: .top, spacing: 16) {
+                    // The Cover in its own shape (SNES boxes are wide), at the top of its column.
+                    CoverView(services: services, game: id, name: game.name, fitsImage: true)
+                        .frame(width: 150).frame(maxHeight: 200, alignment: .top)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(game.name).font(.title).bold().textSelection(.enabled)
@@ -169,14 +169,9 @@ struct GameDetailView: View {
                 }
             }
             if !facts.screenshots.isEmpty, let igdb = services.igdb {
-                ScreenshotsSection(
-                    loader: ScreenshotLoader(igdb: igdb), screenshots: facts.screenshots.map { .igdb(imageID: $0) },
-                    title: "IGDB Screenshots")
+                ScreenshotsSection(loader: ScreenshotLoader(igdb: igdb), screenshots: facts.screenshots.map { .igdb(imageID: $0) })
             }
-            // For now, each source's Screenshots too, to compare them.
-            ForEach(ImageSource.allCases, id: \.self) { source in
-                SourceScreenshotsSection(services: services, game: id, source: source)
-            }
+            LaunchBoxScreenshotsSection(services: services, game: id)
 
             // Copies: the ROMs (checked now and then), then the ones recorded by hand.
             Section("Copies") {
@@ -284,9 +279,8 @@ struct GameDetailView: View {
         .sheet(isPresented: $linking) {
             if let search = services.gameSearch, let platform {
                 LinkGameSheet(search: search, game: game, platform: platform, canChangePlatform: roms.isEmpty) {
-                    // The new link can bring IGDB's Cover art, and its ROMs Box art found by the new IGDB name.
+                    // The new link can bring IGDB's Cover art, and Box art found by the new IGDB name.
                     services.changes.coverChanged()
-                    services.lookUpBoxArt(forROMsOf: game.id)
                 }
             }
         }

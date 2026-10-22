@@ -20,8 +20,8 @@ public struct ImportResult: Sendable, Equatable {
     /// The names of files that turned up in a ROM folder without being ROMs: Stray files, waiting in the Review queue
     /// (ADR 0017).
     public var strayFiles: [String] = []
-    /// Whether any Game's Cover may have changed: a ROM's Box art did, or the ROMs a Game takes its Box art from did.
-    /// When not, the Covers already shown stand.
+    /// Whether any Game's Cover may have changed: a ROM was given Regions, or was Matched to a Game, and a Game's Box art
+    /// is for its ROMs' Regions. When not, the Covers already shown stand.
     public var coversChanged = false
 
     /// Whether the summary has anything to say: ROMs sent to review or gone missing, or new Stray files.
@@ -41,17 +41,13 @@ public final class Import: Sendable {
     let igdb: IGDBClient
     let journal: LudeumStore
     let backups: Backups?
-    let boxArt: BoxArtImport
     let regions: RegionsImport
     let sevenZip: SevenZip?
 
-    /// Without `libretro`, no ROM is looked up in libretro-thumbnails. Without `sevenZip`, a ROM in an archive has no
-    /// checksum, so it's only ever suggested by name.
+    /// Without `sevenZip`, a ROM in an archive has no checksum, so it's only ever suggested by name.
     public init(
-        igdb: IGDBClient, hasheous: HasheousClient, journal: LudeumStore, backups: Backups?, libretro: LibretroThumbnails? = nil,
-        sevenZip: SevenZip? = SevenZip.find()
+        igdb: IGDBClient, hasheous: HasheousClient, journal: LudeumStore, backups: Backups?, sevenZip: SevenZip? = SevenZip.find()
     ) {
-        boxArt = BoxArtImport(journal: journal, libretro: libretro)
         regions = RegionsImport(journal: journal, hasheous: hasheous)
         matcher = Matcher(igdb: igdb, hasheous: hasheous)
         self.igdb = igdb
@@ -64,7 +60,7 @@ public final class Import: Sendable {
     /// each automatically or sending it to the Review queue: those Add ROM put in without a Match, or that I Add from the
     /// Review queue, and no others. A folder that can't be read is left alone, Stray files and all. `writing` is awaited
     /// just before the write step (the backup and the one transaction), so the app can stop journal edits first; `wrote`
-    /// just after it, before the Box art and Regions steps, which never change what I've edited.
+    /// just after it, before the Regions step, which never changes what I've edited.
     public func run(
         romFolders: [ROMFolder], adding: Set<StrayFile.Key> = [], writing: @Sendable () async -> Void = {},
         wrote: @Sendable () async -> Void = {}
@@ -139,13 +135,9 @@ public final class Import: Sendable {
         if touchesROMs { try backups?.backUp(journal, operation: .beforeImport) }
         var result = try journal.applyImport(plan)
         await wrote()
-        let boxArtChanged = await boxArt.run()
-        // A ROM given Regions counts: its Game's LaunchBox box is for them.
+        // A ROM given Regions counts, as does one Matched to a Game: its Game's box is for its ROMs' Regions.
         let regionsChanged = await regions.run()
-        // A ROM's file changing counts: which of a Game's ROMs its Box art comes from can follow (a playlist comes first).
-        result.coversChanged =
-            boxArtChanged || regionsChanged || !(result.matched.isEmpty && result.returned.isEmpty && result.goneMissing.isEmpty)
-            || plan.seen.contains { known, file in known.fileState.fileName != file.fileName }
+        result.coversChanged = regionsChanged || !result.matched.isEmpty
         return result
     }
 }

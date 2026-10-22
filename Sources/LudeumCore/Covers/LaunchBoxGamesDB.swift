@@ -1,8 +1,8 @@
 import Foundation
 import GRDB
 
-/// The LaunchBox Games Database: retail box scans for nearly every Platform, Windows and the ones libretro-thumbnails has
-/// no repo for among them. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB unzipped), made daily.
+/// The LaunchBox Games Database: retail box scans for nearly every Platform, and Screenshots: the source of every Game's
+/// Box art. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB unzipped), made daily.
 /// It's read at most every 30 days, by the launch refresh, downloaded to a file and streamed out of the zip without
 /// unpacking it, and only what finds a Game's images is kept, in the cache: each game on a Platform `platforms` maps, with
 /// its year, names and their title keys, and its Box - Front and Screenshot images (about 73 MB). Images come from
@@ -79,12 +79,11 @@ public final class LaunchBoxGamesDB: Sendable {
         )
     }
 
-    /// The file name of a game's Box - Front, matched by title on the Platform as libretro's are (`LibretroLookup`), each
-    /// of `titles` in turn, by title key, then by loose title key. Of several, a game's own name beats another's
-    /// alternate name, then the game released closest to `year` is preferred (one with no year last), then the box for
-    /// `regions`, else North America's, the World's, one with no region, Europe's, Japan's; then the shortest name, then
-    /// the first in the dump. Nil when nothing matches, before any dump has been read, or for a Platform LaunchBox has
-    /// none for.
+    /// The file name of a game's Box - Front, matched by title on the Platform (`TitleKey`), each of `titles` in turn, by
+    /// title key, then by loose title key. Of several, a game's own name beats another's alternate name, then the game
+    /// released closest to `year` is preferred (one with no year last), then the box for `regions`, else North
+    /// America's, the World's, one with no region, Europe's, Japan's; then the shortest name, then the first in the dump.
+    /// Nil when nothing matches, before any dump has been read, or for a Platform LaunchBox has none for.
     public func boxart(platform: Int64, titles: [String], regions: Set<NameRegion>, year: Int?) throws -> String? {
         guard let platforms = Self.platforms[platform] else { return nil }
         let regionOrder = Self.regionOrder(regions)
@@ -126,9 +125,9 @@ public final class LaunchBoxGamesDB: Sendable {
     }
 
     /// Every image of `types` of the games on `platforms` that the first title to match any finds: each of `titles` in
-    /// turn (then spelled out), by title key, then by loose title key, as libretro's are matched.
+    /// turn (then spelled out), by title key, then by loose title key.
     private func images(of types: [LaunchBoxImageType], platforms: [String], titles: [String]) throws -> [LaunchBoxImage] {
-        let spelled = titles.map(LibretroLookup.spelledOut).filter { !titles.contains($0) }
+        let spelled = titles.map(TitleKey.spelledOut).filter { !titles.contains($0) }
         for tier in TitleKey.allCases {
             for title in titles + spelled {
                 let key = tier.of(title)
@@ -210,19 +209,6 @@ public final class LaunchBoxGamesDB: Sendable {
         480: ["Funtech Super Acan"], 481: ["Tomy Tutor"], 482: ["Sega CD 32X"], 487: ["Pioneer LaserActive"],
         504: ["Uzebox"], 506: ["Amstrad GX4000"], 508: ["Nintendo Switch 2"],
     ]
-}
-
-/// A name's two title keys, each a column of `launchbox_name`, tried in turn as libretro's fuzzy match does.
-enum TitleKey: String, CaseIterable {
-    case title = "title_key"
-    case loose = "loose_title_key"
-
-    func of(_ title: String) -> String {
-        switch self {
-        case .title: LibretroLookup.titleKey(title)
-        case .loose: LibretroLookup.looseTitleKey(title)
-        }
-    }
 }
 
 /// The image types kept from a dump, each stored as its raw value; Screenshots in the order they're shown, title screens

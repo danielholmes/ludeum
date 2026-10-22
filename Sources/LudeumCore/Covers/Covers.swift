@@ -73,37 +73,6 @@ extension LudeumStore {
         try db.write { db in try db.execute(sql: "DELETE FROM cover WHERE gameId = ?", arguments: [game]) }
     }
 
-    /// Flags the Game's ROMs to be looked up in libretro again at the next Import, as its names have changed.
-    static func lookUpBoxArtAgain(_ db: Database, romsOf game: GameID) throws {
-        try db.execute(sql: "UPDATE rom SET libretroLookedUp = 0 WHERE gameId = ?", arguments: [game])
-    }
-
-    func romIDs(of game: GameID) throws -> [Int64] {
-        try db.read { try Int64.fetchAll($0, sql: "SELECT id FROM rom WHERE gameId = ?", arguments: [game]) }
-    }
-
-    /// The libretro names of the ROMs whose Box art (and Screenshots) a Game shows, best first: its present ROMs (the
-    /// playlist, then Disc 1), or when none is present, the most recently added missing one.
-    func coverROMs(_ game: GameID) throws -> [LibretroNames] {
-        try db.read { db in
-            let rows = try Row.fetchAll(
-                db,
-                sql: "SELECT id, fileName, missing, discNumber, libretroBoxart, libretroSnap, libretroTitle FROM rom WHERE gameId = ?",
-                arguments: [game])
-            let present = rows.filter { !($0["missing"] as Bool) }
-            let chosen: [Row] =
-                present.isEmpty
-                ? rows.max { ($0["id"] as Int64) < ($1["id"] as Int64) }.map { [$0] } ?? []
-                : present.sorted {
-                    func key(_ r: Row) -> (Int, Int, Int64) {
-                        ((r["fileName"] as String).lowercased().hasSuffix(".m3u") ? 0 : 1, r["discNumber"] ?? 0, r["id"])
-                    }
-                    return key($0) < key($1)
-                }
-            return chosen.map { LibretroNames(boxart: $0["libretroBoxart"], snap: $0["libretroSnap"], title: $0["libretroTitle"]) }
-        }
-    }
-
     /// What a Game's Box art is looked up by, by title: its Platform, its names (the one shown, then IGDB's, then its
     /// own) and its Copies' Regions, Gone ones and its ROMs' included, as the box is the one I had.
     func boxArtLookup(_ game: GameID) throws -> BoxArtLookup {
@@ -133,24 +102,9 @@ struct BoxArtLookup {
     func titled(_ titles: [String]) -> BoxArtLookup { BoxArtLookup(platform: platform, titles: titles, regions: regions) }
 }
 
-/// One of a source's Screenshots for a Game (`Covers.screenshots(for:from:)`): libretro's path or LaunchBox's file
-/// name.
-public struct SourceScreenshot: Sendable, Hashable {
-    public let source: ImageSource
-    public let reference: String
-}
-
-/// Where Box art and Screenshots come from besides IGDB, in the Cover order.
-public enum ImageSource: String, CaseIterable, Sendable {
-    case libretro = "libretro"
-    case launchBox = "LaunchBox"
-}
-
 /// What a Game shows as its Cover.
 public enum CoverSource: Sendable, Equatable {
     case upload(NormalisedCover)
-    /// libretro-thumbnails' Box art (a PNG) in the cache, by its path on the CDN.
-    case libretro(URL, path: String)
     /// The LaunchBox Games Database's Box art in the cache, by its file name there.
     case launchBox(URL, file: String)
     /// IGDB's Cover art in the cache.
@@ -158,20 +112,17 @@ public enum CoverSource: Sendable, Equatable {
     case placeholder
 }
 
-/// A Game's Cover: my upload, else libretro Box art, else LaunchBox's, else the Cover of the first Bundle that contains
-/// it, else IGDB's Cover art, else a placeholder. Everything but uploads lives in the cache, downloaded the first time
-/// it's shown.
+/// A Game's Cover: my upload, else LaunchBox's Box art, else the Cover of the first Bundle that contains it, else IGDB's
+/// Cover art, else a placeholder. Everything but uploads lives in the cache, downloaded the first time it's shown.
 public struct Covers: Sendable {
     let journal: LudeumStore
     let igdb: IGDBClient?
-    let libretro: LibretroThumbnails?
     let launchBox: LaunchBoxGamesDB?
 
     /// Without a client (no cache, no credentials) its source is skipped.
-    public init(journal: LudeumStore, igdb: IGDBClient?, libretro: LibretroThumbnails?, launchBox: LaunchBoxGamesDB?) {
+    public init(journal: LudeumStore, igdb: IGDBClient?, launchBox: LaunchBoxGamesDB?) {
         self.journal = journal
         self.igdb = igdb
-        self.libretro = libretro
         self.launchBox = launchBox
     }
 
@@ -179,17 +130,16 @@ public struct Covers: Sendable {
     /// down the order, so a Game never flickers between sources.
     public func cover(for game: GameID) async throws -> CoverSource {
         if let upload = try journal.uploadedCover(game) { return .upload(upload) }
-        let roms = try journal.coverROMs(game)
-        let lookup = try journal.boxArtLookup(game)
-        if let found = try await libretroBoxArt(roms: roms, lookup) { return found }
-        let record = try await igdbGame(game)
-        if let found = try await launchBoxBoxArt(lookup, year: record?.releaseYear) { return found }
-        // Only once neither finds a box by the Game's own names: IGDB's alternative names reach further (Commander Keen
-        // in Invasion of the Vorticons: Marooned on Mars is `Commander Keen 1 - Marooned on Mars`), but can be a working
+        // By the Game's own names, else by IGDB's alternative names for it: they reach further (Commander Keen in
+        // Invasion of the Vorticons: Marooned on Mars is `Commander Keen 1 - Marooned on Mars`), but can be a working
         // title another game has (Command & Conquer: Renegade was Commando).
-        if let byAlternatives = byAlternatives(lookup, record) {
-            if let found = try await libretroBoxArt(roms: roms, byAlternatives) { return found }
-            if let found = try await launchBoxBoxArt(byAlternatives, year: record?.releaseYear) { return found }
+        if let found = try await byNamesThenAlternatives(
+            game,
+            { lookup, record in
+                try await launchBoxBoxArt(lookup, year: record?.releaseYear)
+            })
+        {
+            return found
         }
         // A Game a Bundle contains, with no Box art, shows the first Bundle's Cover: the box it came in.
         if let bundle = try journal.bundles(containing: game).first {
@@ -207,63 +157,31 @@ public struct Covers: Sendable {
         return .igdb(try await igdb.cover(imageID: imageID), imageID: imageID)
     }
 
-    /// One source's Box art for the Game on its own, as it would be with no other source: by the Game's names, else by
-    /// IGDB's alternative names for it. For comparing them, beside the Cover, while it's decided whether both are
-    /// needed; uploads and Bundles play no part. Nil when the source has none; a failed download throws.
-    public func boxArt(for game: GameID, from source: ImageSource) async throws -> CoverSource? {
-        try await byNamesThenAlternatives(game) { roms, lookup, record in
-            switch source {
-            case .libretro: try await libretroBoxArt(roms: roms, lookup)
-            case .launchBox: try await launchBoxBoxArt(lookup, year: record?.releaseYear)
-            }
-        }
-    }
-
-    /// One source's Screenshots for the Game, title screens first, found as `boxArt(for:from:)` finds its Box art: by the
-    /// Game's names, else IGDB's alternative names. libretro has one title screen and one gameplay snap at most, for a
-    /// Game with a ROM the first of its ROMs to have each; LaunchBox has any number, all of the one game matched.
-    public func screenshots(for game: GameID, from source: ImageSource) async throws -> [SourceScreenshot] {
-        let found = try await byNamesThenAlternatives(game) { roms, lookup, record -> [String]? in
-            let found: [String]
-            switch source {
-            case .libretro:
-                guard let libretro else { return nil }
-                found =
-                    roms.isEmpty
-                    ? (try? await libretro.screenshots(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions)) ?? []
-                    : [roms.compactMap(\.title).first, roms.compactMap(\.snap).first].compactMap { $0 }
-            case .launchBox:
-                guard let launchBox else { return nil }
-                found = try launchBox.screenshots(platform: lookup.platform, titles: lookup.titles, year: record?.releaseYear)
-            }
+    /// LaunchBox's Screenshots for the Game, title screens first, by their file names there: all of the one game matched,
+    /// found as its Box art is, by the Game's names, else IGDB's alternative names.
+    public func launchBoxScreenshots(for game: GameID) async throws -> [String] {
+        guard let launchBox else { return [] }
+        return try await byNamesThenAlternatives(game) { lookup, record -> [String]? in
+            let found = try launchBox.screenshots(platform: lookup.platform, titles: lookup.titles, year: record?.releaseYear)
             return found.isEmpty ? nil : found
-        }
-        return (found ?? []).map { SourceScreenshot(source: source, reference: $0) }
+        } ?? []
     }
 
-    /// A Screenshot's image, downloaded the first time: nil when its source isn't to hand (no cache).
-    public func image(of screenshot: SourceScreenshot) async throws -> CoverSource? {
-        let reference = screenshot.reference
-        switch screenshot.source {
-        case .libretro:
-            guard let libretro else { return nil }
-            return .libretro(try await libretro.image(reference), path: reference)
-        case .launchBox:
-            guard let launchBox else { return nil }
-            return .launchBox(try await launchBox.image(reference), file: reference)
-        }
+    /// One of LaunchBox's Screenshots, by its file name there, downloaded the first time: nil when LaunchBox isn't to
+    /// hand (no cache).
+    public func launchBoxScreenshot(_ file: String) async throws -> URL? {
+        try await launchBox?.image(file)
     }
 
-    /// What `find` finds by the Game's names, else by IGDB's alternative names for it: how each source's own Box art and
-    /// Screenshots are found.
+    /// What `find` finds by the Game's names, else by IGDB's alternative names for it: how its Box art and Screenshots
+    /// are found.
     private func byNamesThenAlternatives<Found>(
-        _ game: GameID, _ find: ([LibretroNames], BoxArtLookup, IGDBGame?) async throws -> Found?
+        _ game: GameID, _ find: (BoxArtLookup, IGDBGame?) async throws -> Found?
     ) async throws -> Found? {
-        let roms = try journal.coverROMs(game)
         let lookup = try journal.boxArtLookup(game)
         let record = try await igdbGame(game)
         for lookup in [lookup, byAlternatives(lookup, record)].compactMap({ $0 }) {
-            if let found = try await find(roms, lookup, record) { return found }
+            if let found = try await find(lookup, record) { return found }
         }
         return nil
     }
@@ -274,22 +192,9 @@ public struct Covers: Sendable {
         return alternatives.isEmpty ? nil : lookup.titled(alternatives)
     }
 
-    /// Its ROMs' Box art, whatever its names, or for a Game with no ROM, a title match on `lookup` in its Platform's
-    /// libretro listing. A listing that can't be read finds nothing, as for a ROM not yet looked up: IGDB's Cover art
-    /// shows until it can be.
-    private func libretroBoxArt(roms: [LibretroNames], _ lookup: BoxArtLookup) async throws -> CoverSource? {
-        guard let libretro else { return nil }
-        let path =
-            roms.isEmpty
-            ? try? await libretro.boxart(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions)
-            : roms.compactMap(\.boxart).first
-        guard let path else { return nil }
-        return .libretro(try await libretro.image(path), path: path)
-    }
-
-    /// A title match on `lookup` in LaunchBox, for any Game libretro has no Box art for, with or without a ROM: for its
-    /// Copies' Regions (its ROMs' included), preferring the game released closest to IGDB's `year` for it, which picks the right one of games
-    /// of the same name (Doom in 1993 or 2016).
+    /// A title match on `lookup` in LaunchBox: for its Copies' Regions (its ROMs' included),
+    /// preferring the game released closest to IGDB's `year` for it, which picks the right one of games of the same name
+    /// (Doom in 1993 or 2016).
     private func launchBoxBoxArt(_ lookup: BoxArtLookup, year: Int?) async throws -> CoverSource? {
         guard let launchBox,
             let file = try launchBox.boxart(platform: lookup.platform, titles: lookup.titles, regions: lookup.regions, year: year)
@@ -302,13 +207,6 @@ public struct Covers: Sendable {
     private func igdbGame(_ game: GameID) async throws -> IGDBGame? {
         guard let igdb, let id = try journal.game(game).igdbGameId.map(Int.init) else { return nil }
         return try? await igdb.cachedGame(id: id)
-    }
-
-    /// Looks the Game's ROMs up in libretro again straight away, as after renaming it, rather than at the next Import.
-    /// One that can't be looked up now still is then.
-    public func lookUpBoxArt(forROMsOf game: GameID) async {
-        guard let roms = try? journal.romIDs(of: game) else { return }
-        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(roms)
     }
 
     /// Uploads win over everything, on any Game.

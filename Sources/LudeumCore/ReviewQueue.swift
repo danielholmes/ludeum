@@ -341,12 +341,11 @@ extension LudeumStore {
         return game
     }
 
-    /// Sets the ROM's Match and clears its suggestion. The ROM is looked up in libretro again, as its Game's IGDB name may
-    /// now find Box art its file name didn't.
+    /// Sets the ROM's Match and clears its suggestion.
     static func match(_ db: Database, rom: Int64, to game: GameID, kind: String, day: String, now: Date) throws {
         try db.execute(
             sql: """
-                UPDATE rom SET gameId = ?, matchKind = ?, matchedAt = ?, libretroLookedUp = 0,
+                UPDATE rom SET gameId = ?, matchKind = ?, matchedAt = ?,
                     suggestedIgdbGameId = NULL, suggestionKind = NULL, checksumIgdbGameId = NULL, namesAgree = NULL
                 WHERE id = ? AND gameId IS NULL
                 """, arguments: [game, kind, now, rom])
@@ -386,14 +385,10 @@ private func isPlaylist(_ fileName: String) -> Bool { (fileName as NSString).pat
 public struct ReviewQueue: Sendable {
     let journal: LudeumStore
     let igdb: IGDBClient
-    let libretro: LibretroThumbnails?
 
-    /// With `libretro`, a Matched ROM is looked up there again by its Game's IGDB name straight away; without, at the
-    /// next Import.
-    public init(journal: LudeumStore, igdb: IGDBClient, libretro: LibretroThumbnails? = nil) {
+    public init(journal: LudeumStore, igdb: IGDBClient) {
         self.journal = journal
         self.igdb = igdb
-        self.libretro = libretro
     }
 
     /// Confirm: Matches the ROM to its suggestion, on the ROM's Platform.
@@ -401,11 +396,9 @@ public struct ReviewQueue: Sendable {
     public func confirm(_ item: ReviewItem) async throws -> GameID {
         guard let suggested = item.suggestedIgdbGameId else { throw ReviewError.suggestionGone }
         guard let record = try await igdb.games(ids: [Int(suggested)])[Int(suggested)] else { throw ReviewError.suggestionGone }
-        let game = try journal.match(
+        return try journal.match(
             item, igdbGameId: suggested, igdbName: record.name ?? cleanName(item.romName), platform: try await platform(item.platformId),
             kind: "confirmed")
-        await lookUpBoxArt(item)
-        return game
     }
 
     /// Whether confirming would give an existing Game Duplicate Versions. It warns, never blocks.
@@ -418,14 +411,7 @@ public struct ReviewQueue: Sendable {
     /// A result from Search IGDB…: a manual Match.
     @discardableResult
     public func choose(_ item: ReviewItem, igdbGameId: Int64, name: String, platform: IGDBPlatform) async throws -> GameID {
-        let game = try journal.match(item, igdbGameId: igdbGameId, igdbName: name, platform: platform, kind: "manual")
-        await lookUpBoxArt(item)
-        return game
-    }
-
-    /// The Matched ROM looked up in libretro again; if it can't be, the next Import does it.
-    private func lookUpBoxArt(_ item: ReviewItem) async {
-        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp([item.romId])
+        try journal.match(item, igdbGameId: igdbGameId, igdbName: name, platform: platform, kind: "manual")
     }
 
     private func platform(_ id: Int64) async throws -> IGDBPlatform {

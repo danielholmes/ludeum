@@ -120,11 +120,11 @@ A note on a Game or Bundle that I want to see first whenever I open it (a tip, a
 _Avoid_: Pinned note, comment
 
 **Cover**:
-The one image a Game shows. In order: an image I uploaded, else its libretro Box art, else its LaunchBox Box art, else the Cover of the first Bundle that contains it (the box it came in), else IGDB's Cover art. A Game can have no Cover at all. A Bundle has a Cover the same way.
+The one image a Game shows. In order: an image I uploaded, else its Box art, else the Cover of the first Bundle that contains it (the box it came in), else IGDB's Cover art. A Game can have no Cover at all. A Bundle has a Cover the same way.
 _Avoid_: Artwork, box image, thumbnail
 
 **Box art**:
-A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe, the Xbox One's green bar). It comes from libretro-thumbnails, for the Platforms it has a repo for, whether or not they have a ROM folder, else from the LaunchBox Games Database, which has boxes for nearly every Platform, Windows and the newer Xboxes, PlayStations and Switches among them.
+A scan of a game's retail box, with the platform's branding (the NES banner, the Game Boy stripe, the Xbox One's green bar). It comes from the LaunchBox Games Database, which has boxes for nearly every Platform, Windows and the newer Xboxes, PlayStations and Switches among them, found by the Game's names, for its Copies' Regions.
 _Avoid_: Cover (that's what's shown, whatever its source)
 
 **Cover art**:
@@ -132,7 +132,7 @@ IGDB's clean artwork for a game, without the box's branding. Kept for every link
 _Avoid_: Box art
 
 **Screenshot**:
-An image of a game being played, or its title screen. From IGDB (several per game), libretro-thumbnails (one gameplay shot and one title screen) and the LaunchBox Games Database (any number of each).
+An image of a game being played, or its title screen. From IGDB (several per game) and the LaunchBox Games Database (any number of gameplay shots and title screens).
 
 ### Copies
 

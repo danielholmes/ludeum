@@ -10,8 +10,8 @@ import GRDB
 ///
 /// Order: refuse on a journal still waiting for `migrate-openemu`, while OpenEmu is running, and without the Data folder;
 /// plan and check everything (the dry run stops there); take a `before-recovery` Backup; move the files, logging each
-/// old path → new path beside it; then re-key each ROM to its file's name in one transaction, to be looked up in libretro
-/// again, forgetting the disc ROMs a recovered playlist now loads. Each stays missing until the next Import finds it.
+/// old path → new path beside it; then re-key each ROM to its file's name in one transaction, forgetting the disc ROMs a
+/// recovered playlist now loads. Each stays missing until the next Import finds it.
 /// A failed move stops before the transaction.
 public struct OpenEmuRecovery {
     let journal: LudeumStore
@@ -179,7 +179,7 @@ public struct OpenEmuRecovery {
             folderROMs[into.folderROM] = try romFolder.scan().first { $0.name == row["folderName"] as String }
         }
         let scanned = folderROMs
-        // Still missing, under its real name: the next Import finds its file, and looks it up in libretro again.
+        // Still missing, under its real name: the next Import finds its file.
         try await journal.db.write { db in
             // A ROM a recovered playlist now stands for is forgotten, with what hangs off its row; its Game stays.
             for disc in plan.forgottenDiscs { try db.execute(sql: "DELETE FROM rom WHERE id = ?", arguments: [disc.romId]) }
@@ -189,7 +189,7 @@ public struct OpenEmuRecovery {
             }
             for rom in plan.roms {
                 try db.execute(
-                    sql: "UPDATE rom SET folderName = ?, fileName = ?, name = ?, libretroLookedUp = 0 WHERE id = ?",
+                    sql: "UPDATE rom SET folderName = ?, fileName = ?, name = ? WHERE id = ?",
                     arguments: [rom.folderName, rom.fileName, rom.folderName, rom.romId])
             }
         }

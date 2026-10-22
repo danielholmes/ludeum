@@ -26,7 +26,7 @@ import Testing
         let openEmu = openEmu ?? self.openEmu
         return OpenEmuMigration(
             journal: j.journal, library: openEmu.folder, support: openEmu.support, folder: LudeumFolder(url: j.directory, data: data),
-            isOpenEmuRunning: { openEmuRunning }, libretro: h.libretro)
+            isOpenEmuRunning: { openEmuRunning }, cache: h.cache)
     }
 
     func game(_ name: String, platform: Int64) throws -> GameID {
@@ -378,18 +378,6 @@ import Testing
 
     // MARK: Box art
 
-    /// Super Metroid, Matched and already looked up in libretro, with `old` as its Box art.
-    func lookedUpMetroid(old: String) throws {
-        try j.journal.addPlatform(id: 19, name: "SNES")
-        let metroid = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
-        try matched("Super Metroid", system: "openemu.system.snes", fileName: "Super Metroid (USA).sfc", to: metroid)
-        try j.journal.db.write { try $0.execute(sql: "UPDATE rom SET libretroLookedUp = 1, libretroBoxart = ?", arguments: [old]) }
-    }
-
-    func boxArt() throws -> String? {
-        try j.journal.db.read { try String.fetchOne($0, sql: "SELECT libretroBoxart FROM rom") }
-    }
-
     @Test func aMovedROMsNameIsItsNewFileNames() async throws {
         let gold = try game("Pokemon Gold", platform: 22)
         try matched("Pokemon Gold", system: "openemu.system.gb", fileName: "Pokemon Gold (USA).gbc", to: gold)
@@ -397,46 +385,6 @@ import Testing
         try await migration().run()
 
         #expect(try await j.journal.db.read { try String.fetchOne($0, sql: "SELECT name FROM rom") } == "1-Pokemon Gold (USA)")
-    }
-
-    @Test func libretroIsLookedUpAgainAndANewMatchReplacesTheOld() async throws {
-        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Metroid (USA)"])
-        try lookedUpMetroid(old: "old.png")
-
-        try await migration().run()
-
-        #expect(try boxArt() == "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (USA).png")
-    }
-
-    @Test func aLibretroMissKeepsTheOldBoxArt() async throws {
-        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Mario World (USA)"])
-        try lookedUpMetroid(old: "old.png")
-
-        try await migration().run()
-
-        #expect(try boxArt() == "old.png")
-    }
-
-    func lookedUp() throws -> Bool {
-        try j.journal.db.read { try Bool.fetchOne($0, sql: "SELECT libretroLookedUp FROM rom")! }
-    }
-
-    @Test func aLookupThatFailsIsLeftForTheNextImportWhichStillKeepsTheOldBoxArtOnAMiss() async throws {
-        h.internet.addLibretro("Nintendo_-_Super_Nintendo_Entertainment_System", ["Super Mario World (USA)"])
-        try lookedUpMetroid(old: "old.png")
-        h.internet.setLibretroDown(true)
-
-        try await migration().run()
-
-        #expect(try !lookedUp())
-        #expect(try boxArt() == "old.png")
-
-        h.internet.setLibretroDown(false)
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: h.libretro)
-            .run(romFolders: [])
-
-        #expect(try lookedUp())
-        #expect(try boxArt() == "old.png")
     }
 
     @Test func openEmusCachedBoxArtIsDeleted() async throws {

@@ -36,7 +36,7 @@ import os
         }
         Self.isRunning = true
         let run = Import(
-            igdb: igdb, hasheous: hasheous, journal: journal, backups: services.settings.backups(), libretro: services.libretro)
+            igdb: igdb, hasheous: hasheous, journal: journal, backups: services.settings.backups())
         let romFolders = services.settings.romFolders
         Task {
             do {

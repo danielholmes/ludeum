@@ -183,13 +183,10 @@ import Testing
 
     @Test func aMissingROMCanTakeAStrayFileAsItsOwn() async throws {
         let okami = try await renamedOkami()
-        try await j.journal.db.write { try $0.execute(sql: "UPDATE rom SET libretroLookedUp = 1") }
 
         try j.journal.giveStrayFile(okami.stray, to: okami.rom, in: ps2.folder)
 
         let row = try #require(try rom(okami.rom))
-        // Looked up again by its new name.
-        #expect(row["libretroLookedUp"] as Bool == false)
         #expect(row["folderName"] as String == "Okami (USA) (Rev 1)")
         #expect(row["fileName"] as String == "Okami (USA) (Rev 1).7z")
         #expect(row["missing"] as Bool == false)

@@ -11,9 +11,8 @@ import GRDB
 ///
 /// Order: refuse on a journal still waiting for `migrate-openemu`, and without the Data folder; plan and check
 /// everything (the dry run stops there); take a `before-into-folders` backup; move the files, logging each
-/// old path → new path beside the backup; then rewrite the ROM rows in one transaction, and look each renamed ROM up in
-/// libretro again (a failed lookup never fails the run). A failed move stops before that transaction: restore nothing,
-/// and the log says what moved. Undo is restoring the backup and moving the logged files back.
+/// old path → new path beside the backup; then rewrite the ROM rows in one transaction. A failed move stops before that
+/// transaction: restore nothing, and the log says what moved. Undo is restoring the backup and moving the logged files back.
 public struct IntoFolders {
     /// The Platforms whose ROMs are cue sheets with their tracks, or disc images.
     public static let platforms: [Int64] = [7, 78, 32, 150]
@@ -21,13 +20,11 @@ public struct IntoFolders {
     let journal: LudeumStore
     let folder: LudeumFolder
     let backups: Backups
-    let libretro: LibretroThumbnails?
 
-    public init(journal: LudeumStore, folder: LudeumFolder, libretro: LibretroThumbnails?) {
+    public init(journal: LudeumStore, folder: LudeumFolder) {
         self.journal = journal
         self.folder = folder
         backups = Backups(folder: folder.backups, clock: journal.clock, timeZone: journal.calendar.timeZone)
-        self.libretro = libretro
     }
 
     /// The dry run: everything the run would do, and anything that stops it. Changes nothing.
@@ -173,16 +170,13 @@ public struct IntoFolders {
                 if f.renamed {
                     try db.execute(
                         sql: """
-                            UPDATE rom SET folderName = ?, name = ?, version = ?, discNumber = NULL, discLabel = NULL,
-                                libretroLookedUp = 0
+                            UPDATE rom SET folderName = ?, name = ?, version = ?, discNumber = NULL, discLabel = NULL
                             WHERE id = ?
                             """, arguments: [f.name, f.name, ROMName(f.name).version, kept])
                 }
                 try LudeumStore.setFolderROM(db, kept, to: scanned[f.platformId]?.first { $0.name == f.name })
             }
         }
-        // Box art: a renamed ROM is looked up in libretro by its new name.
-        try? await BoxArtImport(journal: journal, libretro: libretro).lookUp(plan.folders.filter(\.renamed).compactMap(\.keptROM))
         return IntoFoldersResult(plan: plan, backup: backup.url, log: log)
     }
 }

@@ -23,8 +23,7 @@ import Testing
         try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
     }
 
-    /// A ROM OpenEmu recorded at `location` (under `roms/`), Matched to a Game on `platform` and already looked up in
-    /// libretro, as the first Import left it: missing when there's no file there. Returns its journal id.
+    /// A ROM OpenEmu recorded at `location` (under `roms/`), Matched to a Game on `platform`, as the first Import left it: missing when there's no file there. Returns its journal id.
     @discardableResult
     func recorded(
         _ location: String, system: String, platform: Int64, archiveFileName: String? = nil, game: GameID? = nil
@@ -38,8 +37,8 @@ import Testing
         return try j.journal.db.write { db in
             try db.execute(
                 sql: """
-                    INSERT INTO rom (openEmuPk, md5, fileName, platformId, missing, gameId, matchKind, matchedAt, libretroLookedUp)
-                    VALUES (?, ?, ?, ?, ?, ?, 'manual', 0, 1)
+                    INSERT INTO rom (openEmuPk, md5, fileName, platformId, missing, gameId, matchKind, matchedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, 'manual', 0)
                     """,
                 arguments: [pk, "md5-\(location)", (location as NSString).lastPathComponent, platform, missing, game])
             return db.lastInsertedRowID
@@ -50,7 +49,7 @@ import Testing
     func migrateOpenEmu() async throws {
         try await OpenEmuMigration(
             journal: j.journal, library: openEmu.folder, support: openEmu.support, folder: folder, isOpenEmuRunning: { false },
-            libretro: nil
+            cache: nil
         ).run()
     }
 
@@ -64,13 +63,12 @@ import Testing
         let folderName: String
         let fileName: String
         let missing: Bool
-        let lookedUp: Bool
     }
 
     func rom(_ id: Int64) throws -> Keyed? {
         try j.journal.db.read { db in
             try Row.fetchOne(db, sql: "SELECT * FROM rom WHERE id = ?", arguments: [id]).map {
-                Keyed(folderName: $0["folderName"], fileName: $0["fileName"], missing: $0["missing"], lookedUp: $0["libretroLookedUp"])
+                Keyed(folderName: $0["folderName"], fileName: $0["fileName"], missing: $0["missing"])
             }
         }
     }
@@ -88,9 +86,9 @@ import Testing
 
         #expect(exists("Game Boy/Tetris (World).7z", in: roms))
         #expect(!exists("roms/Game Boy/Tetris (World).7z", in: openEmu.folder))
-        #expect(try rom(tetris) == Keyed(folderName: "Tetris (World)", fileName: "Tetris (World).7z", missing: true, lookedUp: false))
+        #expect(try rom(tetris) == Keyed(folderName: "Tetris (World)", fileName: "Tetris (World).7z", missing: true))
 
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: nil)
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil)
             .run(romFolders: folder.romFolders)
 
         #expect(try rom(tetris)?.missing == false)
@@ -106,9 +104,7 @@ import Testing
         #expect(exists("Game Boy/Avenging Spirit (USA, Europe).7z", in: roms))
         #expect(
             try rom(spirit)
-                == Keyed(
-                    folderName: "Avenging Spirit (USA, Europe)", fileName: "Avenging Spirit (USA, Europe).7z", missing: true,
-                    lookedUp: false))
+                == Keyed(folderName: "Avenging Spirit (USA, Europe)", fileName: "Avenging Spirit (USA, Europe).7z", missing: true))
     }
 
     @Test func anArchiveUnpackedUnderTheNameOfTheFileInsideIsFound() async throws {
@@ -140,9 +136,9 @@ import Testing
         #expect(result.plan.roms.first?.moves.first?.from == found)
         #expect(exists("PS1/\(name)/\(name).cue", in: roms))
         #expect(exists("PS1/\(name)/\(name).bin", in: roms))
-        #expect(try rom(wuTang) == Keyed(folderName: name, fileName: "\(name)/\(name).cue", missing: true, lookedUp: false))
+        #expect(try rom(wuTang) == Keyed(folderName: name, fileName: "\(name)/\(name).cue", missing: true))
 
-        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, libretro: nil)
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil)
             .run(romFolders: folder.romFolders)
 
         #expect(try rom(wuTang)?.missing == false)
@@ -305,7 +301,7 @@ import Testing
     /// `into-folders`, as already run on the live journal: the loose discs become one ROM, Disc 1's row, in
     /// `PS1/Fear Effect 2 (Europe)/`, waiting for a playlist.
     func intoFolders() async throws {
-        let plan = try await IntoFolders(journal: j.journal, folder: folder, libretro: nil).run().plan
+        let plan = try await IntoFolders(journal: j.journal, folder: folder).run().plan
         #expect(plan.folders.map(\.name) == ["Fear Effect 2 (Europe)"])
     }
 
@@ -406,7 +402,7 @@ import Testing
         #expect(try romIds() == [fearEffect.playlist])
         #expect(
             try rom(fearEffect.playlist)
-                == Keyed(folderName: "Fear Effect 2", fileName: "Fear Effect 2.m3u", missing: true, lookedUp: false))
+                == Keyed(folderName: "Fear Effect 2", fileName: "Fear Effect 2.m3u", missing: true))
         #expect(exists("roms/Playstation (PSX)/Fear Effect 2/Fear Effect 2 (Europe) (Disc 1).bin", in: openEmu.folder))
     }
 

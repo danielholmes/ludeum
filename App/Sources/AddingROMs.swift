@@ -45,7 +45,7 @@ func readPicked(_ urls: [URL]) async throws -> PickedROM {
     guard let journal = services.journal,
         let folder = services.settings.romFolders.first(where: { $0.platformId == platformId })
     else { return }
-    let adder = AddROM(journal: journal, libretro: services.libretro, hasheous: services.hasheous)
+    let adder = AddROM(journal: journal, hasheous: services.hasheous)
     // The name it'll have, by which it's found once it's in.
     let name: String =
         if case .standard(let dropping) = naming, let offer = try? adder.standardName(of: source, matching: match, in: folder) {
@@ -476,7 +476,7 @@ func romCount(_ count: Int) -> String { count == 1 ? "1 ROM" : "\(count) ROMs" }
     guard let journal = services.journal else { return }
     let folders = services.settings.romFolders
     let items = roms.compactMap { rom in folders.first { $0.platformId == rom.platformId }.map { (source: rom.source, folder: $0) } }
-    let adder = AddROM(journal: journal, libretro: services.libretro, hasheous: services.hasheous)
+    let adder = AddROM(journal: journal, hasheous: services.hasheous)
     let wentIn = Mutex<Set<StrayFile.Key>>([])
     services.tasks.enqueue("Adding \(romCount(items.count))") { progress in
         try await adder.add(

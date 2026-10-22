@@ -76,7 +76,6 @@ struct FakeROMFolder {
         #expect(try xbox.folder.scan() == [FolderROMFile(name: "Halo - Combat Evolved (USA)", ready: rom, archive: nil)])
         #expect(ROMPlatform.all[ROMPlatform.xbox]?.folderName == "Xbox")
         #expect(ROMPlatform.all[ROMPlatform.xbox]?.naming == .redump)
-        #expect(LibretroThumbnails.boxartRepo(platform: ROMPlatform.xbox) == "Microsoft_-_Xbox")
         #expect(Emulator.of(platformId: ROMPlatform.xbox) == .xemu)
     }
 
@@ -289,6 +288,16 @@ struct FakeROMFolder {
         #expect(!result.changedSomething)
         #expect(result.returned == [ImportedROM(romName: "Okami (USA)", game: game)])
         #expect(try j.journal.roms(of: game).map(\.missing) == [false])
+    }
+
+    @Test func aROMGoingMissingOrComingBackInAnotherFormLeavesTheCoversShownAlone() async throws {
+        _ = try await okamiInTheJournal()
+        try ps2.remove("Okami (USA).7z")
+
+        #expect(try await !importNow().coversChanged)
+
+        try ps2.add("Okami (USA).iso")
+        #expect(try await !importNow().coversChanged)
     }
 
     @Test func nothingNewSaysNothing() async throws {

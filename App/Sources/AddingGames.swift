@@ -38,8 +38,6 @@ import SwiftUI
     let sheets = AppSheets()
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
-    /// Made once: it holds GitHub's rate limiter.
-    let libretro: LibretroThumbnails?
     let launchBox: LaunchBoxGamesDB?
     private let clients = Clients()
 
@@ -47,7 +45,6 @@ import SwiftUI
         self.settings = settings
         self.journal = journal
         cache = try? CacheStore(directory: CacheStore.defaultDirectory)
-        libretro = cache.map { LibretroThumbnails(cache: $0) }
         launchBox = cache.map { LaunchBoxGamesDB(cache: $0) }
     }
 
@@ -73,7 +70,7 @@ import SwiftUI
 
     var reviewQueue: ReviewQueue? {
         guard let igdb, let journal else { return nil }
-        return ReviewQueue(journal: journal, igdb: igdb, libretro: libretro)
+        return ReviewQueue(journal: journal, igdb: igdb)
     }
 
     var gameSearch: GameSearch? {
@@ -81,20 +78,9 @@ import SwiftUI
         return GameSearch(igdb: igdb, journal: journal)
     }
 
-    var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb, libretro: libretro, launchBox: launchBox) } }
+    var covers: Covers? { journal.map { Covers(journal: $0, igdb: igdb, launchBox: launchBox) } }
 
     var attachments: Attachments? { journal.map { Attachments(journal: $0, root: settings.folder.attachments) } }
-
-    /// Looks the Game's ROMs up in libretro again in the background, as after renaming or relinking it, then shows any
-    /// Box art they find.
-    func lookUpBoxArt(forROMsOf game: GameID) {
-        let covers = covers
-        let changes = changes
-        Task {
-            await covers?.lookUpBoxArt(forROMsOf: game)
-            changes.coverChanged()
-        }
-    }
 }
 
 /// The IGDB and Hasheous clients last made, kept while their settings stay the same. A client holds its service's rate

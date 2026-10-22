@@ -21,7 +21,7 @@ import Testing
         try j.journal.addPlatform(id: 7, name: "PlayStation")
     }
 
-    var intoFolders: IntoFolders { IntoFolders(journal: j.journal, folder: LudeumFolder(url: j.directory, data: data), libretro: nil) }
+    var intoFolders: IntoFolders { IntoFolders(journal: j.journal, folder: LudeumFolder(url: j.directory, data: data)) }
 
     /// A cue sheet and its one track, loose.
     func addCue(_ name: String) throws {

@@ -707,6 +707,15 @@ enum LudeumSchema {
                 try db.execute(sql: "UPDATE rom SET regions = ? WHERE id = ?", arguments: [regions, row["id"]])
             }
         }
+        // Box art no longer comes from libretro-thumbnails (ADR 0020): what each ROM kept of it goes. Its `updatedAt`
+        // trigger watches those columns, so it goes first and comes back watching the rest; no row's timestamps change.
+        migrator.registerMigration("v38 no libretro") { db in
+            try db.execute(sql: "DROP TRIGGER rom_updatedAt")
+            try db.alter(table: "rom") { t in
+                for column in ["libretroLookedUp", "libretroBoxart", "libretroSnap", "libretroTitle"] { t.drop(column: column) }
+            }
+            try keepTimestamps(db, on: "rom")
+        }
         return migrator
     }
 

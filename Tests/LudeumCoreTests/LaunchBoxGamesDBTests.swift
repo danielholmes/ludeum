@@ -49,7 +49,7 @@ import Testing
         #expect(try boxart(7, ["Biohazard"]) == "re.jpg")
     }
 
-    @Test func titlesMatchAsLibretrosDoAndPlatformsIGDBSplitsShareLaunchBoxs() async throws {
+    @Test func titlesMatchWhereverTheirArticleIsAndPlatformsIGDBSplitsShareLaunchBoxs() async throws {
         h.internet.setLaunchBox([
             LaunchBoxGame(
                 id: 1, name: "The Legend of Zelda: A Link to the Past", platform: "Super Nintendo Entertainment System",

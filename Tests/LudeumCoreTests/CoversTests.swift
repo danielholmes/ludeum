@@ -70,11 +70,11 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     }
 }
 
-/// The Cover order: upload, libretro Box art, LaunchBox Box art, a Bundle's Cover, IGDB Cover art, placeholder.
+/// The Cover order: upload, LaunchBox Box art, a Bundle's Cover, IGDB Cover art, placeholder.
 @Suite struct CoverOrderTests {
     let h: Harness
     let j: LudeumHarness
-    static let snes = "Nintendo_-_Super_Nintendo_Entertainment_System"
+    static let snes = "Super Nintendo Entertainment System"
 
     init() throws {
         h = try Harness()
@@ -87,30 +87,34 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
 
     var covers: Covers { h.covers(j.journal) }
 
-    /// Super Metroid, linked to IGDB, with these ROM files (present unless `missing`) looked up in libretro.
-    func superMetroid(_ roms: [String], missing: Set<String> = []) async throws -> GameID {
+    /// Super Metroid, linked to IGDB, with these ROM files (present unless `missing`).
+    func superMetroid(_ roms: [String], missing: Set<String> = []) throws -> GameID {
         let game = try j.journal.addGame(platformId: 19, name: "Super Metroid", igdbGameId: 1103, igdbName: "Super Metroid")
         for file in roms { try j.journal.recordROM(game: game, fileName: file, missing: missing.contains(file)) }
-        await BoxArtImport(journal: j.journal, libretro: h.libretro).run()
         return game
     }
 
-    @Test func libretroBoxArtComesFirst() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan, USA) (En)"])
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+    /// LaunchBox's dump holding `games`, read.
+    func launchBox(_ games: [LaunchBoxGame]) async throws {
+        h.internet.setLaunchBox(games)
+        try await h.launchBox.refresh()
+    }
+
+    @Test func launchBoxsBoxArtComesFirst() async throws {
+        try await launchBox([LaunchBoxGame(id: 1, name: "Super Metroid", platform: Self.snes, boxes: [(nil, "sm.jpg")])])
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
 
         let cover = try await covers.cover(for: game)
 
-        let path = "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (Japan, USA) (En).png"
-        guard case .libretro(let file, path) = cover else {
-            Issue.record("expected libretro's Box art, got \(cover)")
+        guard case .launchBox(let file, file: "sm.jpg") = cover else {
+            Issue.record("expected LaunchBox's Box art, got \(cover)")
             return
         }
         #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
     }
 
     @Test func withNoBoxArtIGDBsCoverArtShows() async throws {
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
 
         guard case .igdb(let file, "co1") = try await covers.cover(for: game) else {
             Issue.record("expected IGDB's Cover art")
@@ -120,7 +124,7 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     }
 
     @Test func aCoverWhoseIGDBRecordHasExpiredShowsWithoutWaitingOnIGDB() async throws {
-        let game = try await superMetroid([])
+        let game = try superMetroid([])
         _ = try await covers.cover(for: game)
         h.clock.advance(days: 61)
         h.internet.resetSent()
@@ -133,7 +137,7 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     }
 
     @Test func aRecordFetchedAgainGivesItsNewCoverArt() async throws {
-        let game = try await superMetroid([])
+        let game = try superMetroid([])
         _ = try await covers.cover(for: game)
         h.internet.addGame(1103, "Super Metroid", fields: ["cover": ["image_id": "co2"]])
         h.clock.advance(days: 61)
@@ -183,8 +187,8 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
     }
 
     @Test func anUploadWinsOnAnyGameAndRemovingItFallsBack() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+        try await launchBox([LaunchBoxGame(id: 1, name: "Super Metroid", platform: Self.snes, boxes: [(nil, "sm.jpg")])])
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
 
         try covers.upload(testImage(width: 600, height: 800), for: game)
         guard case .upload(let upload) = try await covers.cover(for: game) else {
@@ -194,99 +198,68 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(upload.width == 600)
 
         try covers.remove(for: game)
-        guard case .libretro = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
+        guard case .launchBox = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's Box art")
             return
         }
-    }
-
-    @Test func thePresentVersionsBoxArtWinsOverAMissingOnes() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan)", "Super Metroid (Europe)"])
-        let game = try await superMetroid(
-            ["Super Metroid (Japan).sfc", "Super Metroid (Europe).sfc"], missing: ["Super Metroid (Japan).sfc"])
-
-        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-        #expect(path.hasSuffix("Super Metroid (Europe).png"))
-    }
-
-    @Test func withNothingPresentTheMostRecentlyAddedMissingROMsBoxArtShows() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan)", "Super Metroid (Europe)"])
-        let roms = ["Super Metroid (Japan).sfc", "Super Metroid (Europe).sfc"]
-        let game = try await superMetroid(roms, missing: Set(roms))
-
-        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-        #expect(path.hasSuffix("Super Metroid (Europe).png"))
-    }
-
-    @Test func aMultiDiscGameShowsItsDisclessBoxArt() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)", "Super Metroid (USA) (Disc 2)"])
-        let game = try await superMetroid(["Super Metroid (USA) (Disc 2).cue", "Super Metroid (USA) (Disc 1).cue"])
-
-        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-        #expect(path.hasSuffix("/Super Metroid (USA).png"))
     }
 
     @Test func aFailedDownloadThrowsRatherThanFallingBack() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
-        h.internet.setDown(FakeInternet.Hosts.libretro, true)
+        try await launchBox([LaunchBoxGame(id: 1, name: "Super Metroid", platform: Self.snes, boxes: [(nil, "sm.jpg")])])
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
+        h.internet.setDown(FakeInternet.Hosts.launchBoxImages, true)
 
         await #expect(throws: (any Error).self) { try await covers.cover(for: game) }
     }
 
-    @Test func aGameWithNoROMShowsBoxArtFoundByItsName() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan, USA) (En)"])
-        let game = try await superMetroid([])
+    @Test func theBoxIsForTheRegionsOfItsCopiesElseNorthAmericas() async throws {
+        try await launchBox([
+            LaunchBoxGame(
+                id: 1, name: "Super Metroid", platform: Self.snes,
+                boxes: [("Japan", "sm-jp.jpg"), ("Europe", "sm-eu.jpg"), ("North America", "sm-na.jpg")])
+        ])
+        let game = try superMetroid([])
 
-        guard case .libretro(let file, let path) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
+        guard case .launchBox(_, file: "sm-na.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected North America's box")
             return
         }
-        #expect(path == "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (Japan, USA) (En).png")
-        #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
-    }
-
-    @Test func aGameWithNoROMGetsTheBoxForItsCopysRegionsElseUSAs() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (Japan)", "Super Metroid (Europe)", "Super Metroid (USA)"])
-        let game = try await superMetroid([])
-
-        guard case .libretro(_, let usa) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-        #expect(usa.hasSuffix("/Super Metroid (USA).png"))
 
         try j.journal.addCopy(game, CopyDraft(kind: .physical, details: CopyDetails(regions: ["Australia"]), gone: Gone()))
-        guard case .libretro(_, let pal) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
+        guard case .launchBox(_, file: "sm-eu.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected Europe's box, for the Copy's Region")
             return
         }
-        #expect(pal.hasSuffix("/Super Metroid (Europe).png"))
     }
 
-    @Test func aGameWithNoROMIsFoundByIGDBsNameWhenItsShownNameDiffers() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        let game = try await superMetroid([])
+    @Test func theBoxIsForTheRegionsOfItsROMsAsWellAsItsOtherCopies() async throws {
+        try await launchBox([
+            LaunchBoxGame(
+                id: 1, name: "Super Metroid", platform: Self.snes,
+                boxes: [("North America", "sm-na.jpg"), ("Europe", "sm-eu.jpg"), ("Japan", "sm-jp.jpg")])
+        ])
+        let game = try superMetroid(["Super Metroid (Europe).sfc"])
+
+        guard case .launchBox(_, file: "sm-eu.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's box for the ROM's Region")
+            return
+        }
+    }
+
+    @Test func aGameIsFoundByIGDBsNameWhenItsShownNameDiffers() async throws {
+        try await launchBox([LaunchBoxGame(id: 1, name: "Super Metroid", platform: Self.snes, boxes: [(nil, "sm.jpg")])])
+        let game = try superMetroid([])
         try j.journal.setNameOverride(game, "Metroid 3")
 
-        guard case .libretro = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
+        guard case .launchBox = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's Box art")
             return
         }
     }
 
-    @Test func aGameWithNoROMAndNoMatchShowsIGDBsCoverArt() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Mario World (USA)"])
-        let game = try await superMetroid([])
+    @Test func aGameLaunchBoxDoesntHaveShowsIGDBsCoverArt() async throws {
+        try await launchBox([LaunchBoxGame(id: 1, name: "Super Mario World", platform: Self.snes, boxes: [(nil, "smw.jpg")])])
+        let game = try superMetroid([])
 
         guard case .igdb(_, "co1") = try await covers.cover(for: game) else {
             Issue.record("expected IGDB's Cover art")
@@ -294,82 +267,24 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
-    @Test func aGameWithNoROMWhoseListingCantBeReadShowsIGDBsCoverArtAndTriesAgainNextTime() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        let game = try await superMetroid([])
-        h.internet.setLibretroDown(true)
-
-        guard case .igdb = try await covers.cover(for: game) else {
-            Issue.record("expected IGDB's Cover art")
-            return
-        }
-
-        h.internet.setLibretroDown(false)
-        guard case .libretro = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-    }
-
     @Test func aGameOnAPlatformWithNoROMFolderShowsBoxArtFoundByItsName() async throws {
         h.internet.addGame(2001, "Max Payne", fields: ["cover": ["image_id": "co8"]])
-        h.internet.addLibretro("Microsoft_-_Xbox", ["Max Payne (USA)"])
+        try await launchBox([LaunchBoxGame(id: 1, name: "Max Payne", platform: "Microsoft Xbox", boxes: [(nil, "mp.jpg")])])
         try j.journal.addPlatform(id: 11, name: "Xbox")
         let game = try j.journal.addGame(platformId: 11, name: "Max Payne", igdbGameId: 2001, igdbName: "Max Payne")
 
-        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-        #expect(path == "Microsoft - Xbox/Named_Boxarts/Max Payne (USA).png")
-    }
-
-    @Test func aGameOnAPlatformLibretroHasNoBoxesForNeverAsksLibretro() async throws {
-        h.internet.addGame(2000, "Myst", fields: ["cover": ["image_id": "co9"]])
-        try j.journal.addPlatform(id: 14, name: "Mac")
-        let game = try j.journal.addGame(platformId: 14, name: "Myst", igdbGameId: 2000, igdbName: "Myst")
-
-        guard case .igdb(_, "co9") = try await covers.cover(for: game) else {
-            Issue.record("expected IGDB's Cover art")
-            return
-        }
-        #expect(h.internet.sent(to: FakeInternet.Hosts.github).isEmpty)
-    }
-
-    @Test func aPCGameShowsItsDOSBoxArt() async throws {
-        h.internet.addGame(2002, "Command & Conquer: Red Alert", fields: ["cover": ["image_id": "co9"]])
-        h.internet.addLibretro("DOS", ["Command and Conquer - Red Alert (1997)"])
-        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
-        let game = try j.journal.addGame(
-            platformId: 6, name: "Command & Conquer: Red Alert", igdbGameId: 2002,
-            igdbName: "Command & Conquer: Red Alert")
-
-        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's DOS Box art")
-            return
-        }
-        #expect(path == "DOS/Named_Boxarts/Command and Conquer - Red Alert (1997).png")
-    }
-
-    @Test func aPCGameDOSHasNoBoxForShowsIGDBsCoverArt() async throws {
-        h.internet.addGame(2000, "Half-Life", fields: ["cover": ["image_id": "co9"]])
-        h.internet.addLibretro("DOS", ["Command and Conquer - Red Alert (1997)"])
-        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
-        let game = try j.journal.addGame(platformId: 6, name: "Half-Life", igdbGameId: 2000, igdbName: "Half-Life")
-
-        guard case .igdb(_, "co9") = try await covers.cover(for: game) else {
-            Issue.record("expected IGDB's Cover art")
+        guard case .launchBox(_, file: "mp.jpg") = try await covers.cover(for: game) else {
+            Issue.record("expected LaunchBox's Box art")
             return
         }
     }
 
-    @Test func aGameWithNoLibretroBoxArtShowsLaunchBoxsBeforeItsBundlesCoverAndItsCoverArt() async throws {
+    @Test func launchBoxsBoxArtComesBeforeItsBundlesCoverAndItsCoverArt() async throws {
         h.internet.addGame(2003, "Command & Conquer: Red Alert 2", fields: ["cover": ["image_id": "co9"]])
         h.internet.addGame(2004, "Command & Conquer: The First Decade", fields: ["cover": ["image_id": "co8"]])
-        h.internet.setLaunchBox([
+        try await launchBox([
             LaunchBoxGame(id: 1, name: "Command & Conquer: Red Alert 2", platform: "Windows", boxes: [(nil, "ra2.jpg")])
         ])
-        try await h.launchBox.refresh()
         try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
         let bundle = try j.journal.addBundle(
             platformId: 6, name: "Command & Conquer: The First Decade", igdbGameId: 2004,
@@ -384,42 +299,12 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
-    @Test func libretroBoxArtComesBeforeLaunchBoxs() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        h.internet.setLaunchBox([
-            LaunchBoxGame(id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System", boxes: [(nil, "sm.jpg")])
-        ])
-        try await h.launchBox.refresh()
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
-
-        guard case .libretro = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-    }
-
-    @Test func launchBoxsBoxIsForTheRegionsOfItsROMsAsWellAsItsOtherCopies() async throws {
-        h.internet.setLaunchBox([
-            LaunchBoxGame(
-                id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System",
-                boxes: [("North America", "sm-na.jpg"), ("Europe", "sm-eu.jpg"), ("Japan", "sm-jp.jpg")])
-        ])
-        try await h.launchBox.refresh()
-        let game = try await superMetroid(["Super Metroid (Europe).sfc"])
-
-        guard case .launchBox(_, file: "sm-eu.jpg") = try await covers.cover(for: game) else {
-            Issue.record("expected LaunchBox's box for the ROM's Region")
-            return
-        }
-    }
-
     @Test func aGameFindsLaunchBoxsBoxForItsIGDBYear() async throws {
         h.internet.addGame(2005, "Doom", fields: ["first_release_date": 1_463_097_600])  // 13 May 2016
-        h.internet.setLaunchBox([
+        try await launchBox([
             LaunchBoxGame(id: 1, name: "Doom", platform: "Windows", released: "1993-12-10", boxes: [(nil, "doom93.jpg")]),
             LaunchBoxGame(id: 2, name: "Doom", platform: "Windows", released: "2016-05-13", boxes: [(nil, "doom16.jpg")]),
         ])
-        try await h.launchBox.refresh()
         try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
         let game = try j.journal.addGame(platformId: 6, name: "Doom", igdbGameId: 2005, igdbName: "Doom")
 
@@ -429,45 +314,13 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
-    @Test func aGameNeitherSourceFindsByItsOwnNamesIsFoundByIGDBsAlternativeNames() async throws {
-        h.internet.addGame(
-            2006, "Commander Keen in Invasion of the Vorticons: Marooned on Mars",
-            fields: ["alternative_names": [["name": "Commander Keen 1: Marooned on Mars"]], "cover": ["image_id": "co9"]])
-        h.internet.addLibretro("DOS", ["Commander Keen 1 - Marooned on Mars (1990)"])
-        try j.journal.addPlatform(id: 13, name: "DOS")
-        let game = try j.journal.addGame(
-            platformId: 13, name: "Commander Keen in Invasion of the Vorticons: Marooned on Mars", igdbGameId: 2006,
-            igdbName: "Commander Keen in Invasion of the Vorticons: Marooned on Mars")
-
-        guard case .libretro(_, let path) = try await covers.cover(for: game) else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-        #expect(path == "DOS/Named_Boxarts/Commander Keen 1 - Marooned on Mars (1990).png")
-    }
-
-    @Test func aGameWithAROMHasItsROMsLibretroBoxArtOrNoneWhateverItsAlternativeNames() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        h.internet.addGame(2009, "Metroid 3", fields: ["alternative_names": [["name": "Super Metroid"]], "cover": ["image_id": "co9"]])
-        let game = try j.journal.addGame(platformId: 19, name: "Metroid 3", igdbGameId: 2009, igdbName: "Metroid 3")
-        try j.journal.recordROM(game: game, fileName: "Metroid 3 (Hack).sfc", missing: false)
-        await BoxArtImport(journal: j.journal, libretro: h.libretro).run()
-
-        guard case .igdb(_, "co9") = try await covers.cover(for: game) else {
-            Issue.record("expected IGDB's Cover art")
-            return
-        }
-    }
-
-    @Test func launchBoxFindsAGameByIGDBsAlternativeNames() async throws {
+    @Test func aGameItsOwnNamesDontFindIsFoundByIGDBsAlternativeNames() async throws {
         h.internet.addGame(
             2007, "Commander Keen in Goodbye, Galaxy!: Secret of the Oracle",
             fields: ["alternative_names": [["name": "Commander Keen 4: Secret of the Oracle"]], "cover": ["image_id": "co9"]])
-        h.internet.addLibretro("DOS", ["Doom (1993)"])
-        h.internet.setLaunchBox([
+        try await launchBox([
             LaunchBoxGame(id: 1, name: "Commander Keen 4: Secret of the Oracle", platform: "MS-DOS", boxes: [(nil, "keen4.jpg")])
         ])
-        try await h.launchBox.refresh()
         try j.journal.addPlatform(id: 13, name: "DOS")
         let game = try j.journal.addGame(
             platformId: 13, name: "Commander Keen in Goodbye, Galaxy!: Secret of the Oracle", igdbGameId: 2007,
@@ -479,15 +332,14 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
-    @Test func launchBoxsBoxForAGamesOwnNameBeatsLibretrosForAnAlternativeName() async throws {
-        // IGDB keeps Renegade's working title, Commando, which libretro's DOS set has a different game's box for.
+    @Test func aBoxForAGamesOwnNameBeatsOneForAnAlternativeName() async throws {
+        // IGDB keeps Renegade's working title, Commando, a different game's name.
         h.internet.addGame(
             2008, "Command & Conquer: Renegade", fields: ["alternative_names": [["name": "Commando"]], "cover": ["image_id": "co9"]])
-        h.internet.addLibretro("DOS", ["Commando (1986)"])
-        h.internet.setLaunchBox([
-            LaunchBoxGame(id: 1, name: "Command & Conquer: Renegade", platform: "Windows", boxes: [(nil, "renegade.jpg")])
+        try await launchBox([
+            LaunchBoxGame(id: 1, name: "Commando", platform: "MS-DOS", boxes: [(nil, "commando.jpg")]),
+            LaunchBoxGame(id: 2, name: "Command & Conquer: Renegade", platform: "Windows", boxes: [(nil, "renegade.jpg")]),
         ])
-        try await h.launchBox.refresh()
         try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
         let game = try j.journal.addGame(
             platformId: 6, name: "Command & Conquer: Renegade", igdbGameId: 2008, igdbName: "Command & Conquer: Renegade")
@@ -498,32 +350,8 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         }
     }
 
-    @Test func eachSourcesBoxArtIsShownWhicheverTheCoverIs() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        h.internet.setLaunchBox([
-            LaunchBoxGame(id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System", boxes: [(nil, "sm.jpg")])
-        ])
-        try await h.launchBox.refresh()
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
-        try covers.upload(testImage(width: 60, height: 80), for: game)
-
-        let libretro = try await covers.boxArt(for: game, from: .libretro)
-        let launchBox = try await covers.boxArt(for: game, from: .launchBox)
-
-        guard case .libretro(_, "Nintendo - Super Nintendo Entertainment System/Named_Boxarts/Super Metroid (USA).png") = libretro
-        else {
-            Issue.record("expected libretro's Box art")
-            return
-        }
-        guard case .launchBox(_, file: "sm.jpg") = launchBox else {
-            Issue.record("expected LaunchBox's Box art")
-            return
-        }
-    }
-
     @Test func igdbsCoverArtIsShownWhicheverTheCoverIs() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
         try covers.upload(testImage(width: 60, height: 80), for: game)
         let byHand = try j.journal.addGameByHand(name: "Hermano", platformId: 19)
 
@@ -534,100 +362,32 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(try await covers.coverArt(for: byHand) == nil)
     }
 
-    @Test func eachSourcesScreenshotsAreFound() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"])
-        h.internet.setLaunchBox([
-            LaunchBoxGame(
-                id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System",
-                otherImages: [("Screenshot - Gameplay", "sm1.jpg")])
+    @Test func launchBoxsScreenshotsAreFoundAndDownloaded() async throws {
+        try await launchBox([
+            LaunchBoxGame(id: 1, name: "Super Metroid", platform: Self.snes, otherImages: [("Screenshot - Gameplay", "sm1.jpg")])
         ])
-        try await h.launchBox.refresh()
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
 
-        #expect(
-            try await covers.screenshots(for: game, from: .libretro).map(\.reference) == [
-                "Nintendo - Super Nintendo Entertainment System/Named_Titles/Super Metroid (USA).png",
-                "Nintendo - Super Nintendo Entertainment System/Named_Snaps/Super Metroid (USA).png",
-            ])
-        #expect(try await covers.screenshots(for: game, from: .launchBox).map(\.reference) == ["sm1.jpg"])
-        let image = try await covers.image(of: SourceScreenshot(source: .launchBox, reference: "sm1.jpg"))
-        guard case .launchBox(let file, file: "sm1.jpg") = image else {
-            Issue.record("expected LaunchBox's image")
-            return
-        }
+        #expect(try await covers.launchBoxScreenshots(for: game) == ["sm1.jpg"])
+        let file = try #require(try await covers.launchBoxScreenshot("sm1.jpg"))
         #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
     }
 
-    @Test func aGameWithROMsHasTheFirstTitleScreenAndSnapOfItsROMs() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Metroid (USA)"], folders: ["Named_Titles"])
-        h.internet.addLibretro(Self.snes, ["Super Metroid (Europe)"], folders: ["Named_Snaps"])
-        let game = try await superMetroid(["Super Metroid (USA).sfc", "Super Metroid (Europe).sfc"])
-
-        #expect(
-            try await covers.screenshots(for: game, from: .libretro).map(\.reference) == [
-                "Nintendo - Super Nintendo Entertainment System/Named_Titles/Super Metroid (USA).png",
-                "Nintendo - Super Nintendo Entertainment System/Named_Snaps/Super Metroid (Europe).png",
-            ])
-    }
-
-    @Test func aGameWithNoROMsScreenshotsAreFoundByIGDBsAlternativeNamesWhenItsOwnFindNone() async throws {
+    @Test func screenshotsAreFoundByIGDBsAlternativeNamesWhenItsOwnFindNone() async throws {
         h.internet.addGame(
             2006, "Commander Keen in Invasion of the Vorticons: Marooned on Mars",
             fields: ["alternative_names": [["name": "Commander Keen 1: Marooned on Mars"]]])
-        h.internet.addLibretro("DOS", ["Commander Keen 1 - Marooned on Mars (1990)"], folders: ["Named_Snaps"])
+        try await launchBox([
+            LaunchBoxGame(
+                id: 1, name: "Commander Keen 1: Marooned on Mars", platform: "MS-DOS",
+                otherImages: [("Screenshot - Gameplay", "keen1.jpg")])
+        ])
         try j.journal.addPlatform(id: 13, name: "DOS")
         let game = try j.journal.addGame(
             platformId: 13, name: "Commander Keen in Invasion of the Vorticons: Marooned on Mars", igdbGameId: 2006,
             igdbName: "Commander Keen in Invasion of the Vorticons: Marooned on Mars")
 
-        #expect(
-            try await covers.screenshots(for: game, from: .libretro).map(\.reference) == [
-                "DOS/Named_Snaps/Commander Keen 1 - Marooned on Mars (1990).png"
-            ])
-        #expect(try await covers.screenshots(for: game, from: .launchBox).map(\.reference) == [])
-    }
-
-    @Test func aSourceWithNoBoxForAGameHasNone() async throws {
-        h.internet.addLibretro(Self.snes, ["Super Mario World (USA)"])
-        h.internet.setLaunchBox([
-            LaunchBoxGame(id: 1, name: "Super Metroid", platform: "Super Nintendo Entertainment System", boxes: [(nil, "sm.jpg")])
-        ])
-        try await h.launchBox.refresh()
-        let game = try await superMetroid(["Super Metroid (USA).sfc"])
-
-        let libretro = try await covers.boxArt(for: game, from: .libretro)
-        let launchBox = try await covers.boxArt(for: game, from: .launchBox)
-
-        #expect(libretro == nil)
-        guard case .launchBox(_, file: "sm.jpg") = launchBox else {
-            Issue.record("expected LaunchBox's Box art")
-            return
-        }
-    }
-
-    @Test func eachSourceLooksAGameUpByIGDBsAlternativeNamesWhenItsOwnFindNothing() async throws {
-        // What the Cover order hides: libretro's box for Renegade's working title is a 1986 game's.
-        h.internet.addGame(2008, "Command & Conquer: Renegade", fields: ["alternative_names": [["name": "Commando"]]])
-        h.internet.addLibretro("DOS", ["Commando (1986)"])
-        h.internet.setLaunchBox([
-            LaunchBoxGame(id: 1, name: "Command & Conquer: Renegade", platform: "Windows", boxes: [(nil, "renegade.jpg")])
-        ])
-        try await h.launchBox.refresh()
-        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
-        let game = try j.journal.addGame(
-            platformId: 6, name: "Command & Conquer: Renegade", igdbGameId: 2008, igdbName: "Command & Conquer: Renegade")
-
-        let libretro = try await covers.boxArt(for: game, from: .libretro)
-        let launchBox = try await covers.boxArt(for: game, from: .launchBox)
-
-        guard case .libretro(_, "DOS/Named_Boxarts/Commando (1986).png") = libretro else {
-            Issue.record("expected libretro's box for Commando")
-            return
-        }
-        guard case .launchBox(_, file: "renegade.jpg") = launchBox else {
-            Issue.record("expected LaunchBox's Box art")
-            return
-        }
+        #expect(try await covers.launchBoxScreenshots(for: game) == ["keen1.jpg"])
     }
 
     @Test func aCoverGoesWithItsGame() async throws {

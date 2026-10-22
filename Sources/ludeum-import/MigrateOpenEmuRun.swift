@@ -34,7 +34,7 @@ func migrateOpenEmuRun(_ arguments: [String]) async throws {
         journal: journal, library: options["--library"] ?? settings.openEmuLibrary,
         support: options["--openemu-support"] ?? OpenEmuMigration.standardSupport, folder: folder,
         isOpenEmuRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: "org.openemu.OpenEmu").isEmpty },
-        libretro: LibretroThumbnails(cache: try CacheStore(directory: cacheDirectory)))
+        cache: try CacheStore(directory: cacheDirectory))
 
     print("Data folder: \(folder.data.path(percentEncoded: false)), which is \(data.path(percentEncoded: false))")
     let plan: OpenEmuMigrationPlan

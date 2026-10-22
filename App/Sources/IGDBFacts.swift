@@ -96,7 +96,7 @@ struct IGDBFactsRows: View {
 struct ScreenshotsSection: View {
     let loader: ScreenshotLoader
     let screenshots: [ShownScreenshot]
-    /// "IGDB Screenshots" on Game detail, for now, beside libretro's and LaunchBox's.
+    /// Its heading, as LaunchBox's have their own.
     var title = "Screenshots"
     @State private var showingAll = false
     /// Three across while each gets at least `narrowest` points (in Game detail, a panel of about 400 points), else two.

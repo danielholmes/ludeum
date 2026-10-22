@@ -33,12 +33,6 @@ final class FakeInternet: HTTPTransport, Sendable {
         var hashes: [String: (game: Int, platform: Int)] = [:]  // "md5/<hash>" or "crc/<hash>"
         var signatures: [String: (romName: String?, country: [String: String])] = [:]  // the DAT entry's, keyed as `hashes`
         var failingHashes: Set<String> = []  // answered with a 500, keyed as `hashes`
-        // libretro-thumbnails: repo → file paths ("Named_Boxarts/X (USA).png")
-        var libretro: [String: [String]] = [:]
-        // Paths ("Sony - PlayStation/Named_Boxarts/X.png") thumbnails.libretro.com hasn't caught up with
-        var libretroCDNMissing: Set<String> = []
-        // Paths that are per-disc symlinks in the repo: raw GitHub serves the link's target as text
-        var libretroSymlinks: Set<String> = []
         // The LaunchBox Games Database's daily dump, `Metadata.zip`
         var launchBoxDump: Data?
         // Failure injection, keyed by host
@@ -102,22 +96,10 @@ final class FakeInternet: HTTPTransport, Sendable {
         }
     }
 
-    /// libretro-thumbnails images: `repo` like "Nintendo_-_Game_Boy", each name in every folder
-    /// unless `folders` says otherwise.
-    func addLibretro(_ repo: String, _ names: [String], folders: [String] = ["Named_Boxarts", "Named_Snaps", "Named_Titles"]) {
-        state.withLock { s in s.libretro[repo, default: []] += folders.flatMap { f in names.map { "\(f)/\($0).png" } } }
-    }
-
     /// The LaunchBox Games Database's dump, `Metadata.zip` holding `games` as its `Metadata.xml`.
     func setLaunchBox(_ games: [LaunchBoxGame]) {
         let dump = LaunchBoxGame.zip(games)
         state.withLock { $0.launchBoxDump = dump }
-    }
-
-    /// GitHub and libretro's own server together, so no listing can be read from either.
-    func setLibretroDown(_ isDown: Bool) {
-        setDown(Hosts.github, isDown)
-        setDown(Hosts.libretro, isDown)
     }
 
     func setDown(_ host: String, _ isDown: Bool) {
@@ -163,9 +145,6 @@ final class FakeInternet: HTTPTransport, Sendable {
             case Hosts.igdb: return Self.igdb(request, s)
             case Hosts.igdbImages: return (200, [:], Self.coverJPEG)
             case Hosts.hasheous: return Self.hasheous(request, s)
-            case Hosts.github: return Self.githubTree(request, s)
-            case Hosts.libretro: return Self.libretroImage(request, s)
-            case Hosts.githubRaw: return Self.githubRaw(request, s)
             case Hosts.launchBox:
                 guard request.url?.path() == "/Metadata.zip", let dump = s.launchBoxDump else { return (404, [:], Data()) }
                 return (200, [:], dump)
@@ -177,7 +156,7 @@ final class FakeInternet: HTTPTransport, Sendable {
         return (body, response)
     }
 
-    /// What libretro's image host serves: a real (tiny) PNG, 12 × 16.
+    /// What LaunchBox's image host serves: a real (tiny) PNG, 12 × 16.
     static let boxartPNG = testImage(width: 12, height: 16, type: .png)
 
     /// What IGDB's image host serves: a real (tiny) JPEG, 10 × 14.
@@ -188,9 +167,6 @@ final class FakeInternet: HTTPTransport, Sendable {
         static let igdb = "api.igdb.com"
         static let igdbImages = "images.igdb.com"
         static let hasheous = "hasheous.org"
-        static let github = "api.github.com"
-        static let libretro = "thumbnails.libretro.com"
-        static let githubRaw = "raw.githubusercontent.com"
         static let launchBox = "gamesdb.launchbox-app.com"
         static let launchBoxImages = "images.launchbox-app.com"
     }
@@ -295,47 +271,6 @@ final class FakeInternet: HTTPTransport, Sendable {
         let name = body.components(separatedBy: "search \"")[1].components(separatedBy: "\"")[0]
         let platform = ids(after: "platforms = (", in: body).first.map(String.init) ?? "any"
         return (s.searches["\(platform):\(name)"] ?? []).map { ["id": $0] }
-    }
-
-    private static func githubTree(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
-        let parts = request.url!.path().split(separator: "/")
-        guard parts.count >= 3, let paths = s.libretro[String(parts[2])] else { return (404, [:], Data()) }
-        let tree = paths.map { ["path": $0, "type": "blob"] } + [["path": "README.md", "type": "blob"]]
-        return (200, [:], try! JSONSerialization.data(withJSONObject: ["tree": tree, "truncated": false]))
-    }
-
-    private static func libretroImage(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
-        let path = request.url!.path(percentEncoded: false).dropFirst()
-        if path.hasSuffix("/") { return libretroFolderIndex(path.split(separator: "/").map(String.init), s) }
-        let parts = path.split(separator: "/", maxSplits: 1).map(String.init)
-        guard parts.count == 2, s.libretro[parts[0].replacingOccurrences(of: " ", with: "_")]?.contains(parts[1]) == true,
-            !s.libretroCDNMissing.contains(String(path))
-        else {
-            return (404, [:], Data())
-        }
-        return (200, [:], boxartPNG)
-    }
-
-    /// The server's index of one folder, `[repo, folder]`, as Apache writes it: sorting links, the parent, then each
-    /// image, percent-encoded.
-    private static func libretroFolderIndex(_ parts: [String], _ s: State) -> (Int, [String: String], Data) {
-        guard parts.count == 2, let paths = s.libretro[parts[0].replacingOccurrences(of: " ", with: "_")] else {
-            return (404, [:], Data())
-        }
-        let images = paths.filter { $0.hasPrefix("\(parts[1])/") }.map { $0.dropFirst(parts[1].count + 1) }
-        let links = ["?C=N;O=D", "/\(parts[0])/"] + images.map { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)! }
-        let html = "<html><body><pre>" + links.map { #"<a href="\#($0)">x</a>"# }.joined(separator: "\n") + "</pre></body></html>"
-        return (200, [:], Data(html.utf8))
-    }
-
-    /// GitHub's raw files: `/libretro-thumbnails/<repo>/master/<folder>/<name>.png`.
-    private static func githubRaw(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
-        let parts = request.url!.path(percentEncoded: false).split(separator: "/", maxSplits: 3).map(String.init)
-        guard parts.count == 4, parts[0] == "libretro-thumbnails", parts[2] == "master", s.libretro[parts[1]]?.contains(parts[3]) == true
-        else { return (404, [:], Data()) }
-        let path = "\(parts[1].replacingOccurrences(of: "_", with: " "))/\(parts[3])"
-        if s.libretroSymlinks.contains(path) { return (200, [:], Data("X (USA) (Disc 1).png".utf8)) }
-        return (200, [:], boxartPNG)
     }
 
     private static func hasheous(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {

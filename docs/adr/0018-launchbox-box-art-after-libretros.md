@@ -1,5 +1,7 @@
 # LaunchBox Box art after libretro's
 
+Superseded in part by [0020](0020-launchbox-is-the-only-source-of-box-art.md): libretro-thumbnails is gone, so LaunchBox is the only source of Box art, for every Game, and its Screenshots are shown below IGDB's on Game detail rather than compared with libretro's.
+
 libretro-thumbnails has no repo for Windows, the Switch or the Xbox One and later, and only a few dozen boxes for the Xbox 360, PS3 and PS4, so those Games showed IGDB's clean Cover art, or a Bundle's box (Command & Conquer: Red Alert 2 showed The First Decade's). The DOS repo covers PC Games from the Windows 95 era, but nothing newer. Now a Game libretro has no Box art for looks in the LaunchBox Games Database by title, before a Bundle's Cover and IGDB's Cover art: its boxes are retail scans with the platform's branding, like libretro's, which is the look [0006](0006-box-art-before-igdb-cover-art.md) chose Box art for. Matched against my journal, it has a box for 63 of my 75 PC Games and 51 of my 78 Xbox One Games.
 
 We considered TheGamesDB (an API key, a monthly request quota, no terms for its images), ScreenScraper (a developer id to request, tight rate limits), MobyGames (the best PC scans, but its API is now paid) and SteamGridDB (community artwork, not box scans). LaunchBox needs no account: its whole database is one public dump, `Metadata.zip`, and its images are public by file name. There's no published licence for using either outside LaunchBox; this is a personal app, and an upload still fixes or replaces any Cover.
