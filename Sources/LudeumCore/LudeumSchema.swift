@@ -696,6 +696,17 @@ enum LudeumSchema {
             }
             try keepTimestamps(db, on: "strayFile")
         }
+        // A ROM whose name has no region tag takes its Regions from its checksum, at the next Import: every ROM with
+        // none is to be looked up, the ones already in the journal included. One whose name has tags `v22` couldn't
+        // read, and the name reader now can (GoodTools' `(UEJ)`), takes them from its name first, as `v22` would now.
+        migrator.registerMigration("v37 regions looked up") { db in
+            try db.alter(table: "rom") { t in t.add(column: "regionsLookedUp", .boolean).notNull().defaults(to: false) }
+            try keepTimestamps(db, on: "rom")
+            for row in try Row.fetchAll(db, sql: "SELECT id, name FROM rom WHERE regions IS NULL") {
+                guard let regions = Regions.encode(ROMName(row["name"] ?? "").regionNames) else { continue }
+                try db.execute(sql: "UPDATE rom SET regions = ? WHERE id = ?", arguments: [regions, row["id"]])
+            }
+        }
         return migrator
     }
 

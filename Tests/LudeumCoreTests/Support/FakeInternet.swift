@@ -31,6 +31,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         var firstValidToken = 1  // tokens numbered below this are rejected
         // Hasheous
         var hashes: [String: (game: Int, platform: Int)] = [:]  // "md5/<hash>" or "crc/<hash>"
+        var signatures: [String: (romName: String?, country: [String: String])] = [:]  // the DAT entry's, keyed as `hashes`
+        var failingHashes: Set<String> = []  // answered with a 500, keyed as `hashes`
         // libretro-thumbnails: repo → file paths ("Named_Boxarts/X (USA).png")
         var libretro: [String: [String]] = [:]
         // Paths ("Sony - PlayStation/Named_Boxarts/X.png") thumbnails.libretro.com hasn't caught up with
@@ -84,12 +86,20 @@ final class FakeInternet: HTTPTransport, Sendable {
         state.withLock { $0.companies.append(["id": id, "name": name, "developed": developed]) }
     }
 
-    func addHash(md5: String, game: Int, platform: Int) {
-        state.withLock { $0.hashes["md5/\(md5.lowercased())"] = (game, platform) }
+    /// A checksum Hasheous knows, with its DAT entry's name and countries in its signature when given.
+    func addHash(md5: String, game: Int, platform: Int, romName: String? = nil, country: [String: String] = [:]) {
+        addHash("md5/\(md5.lowercased())", game, platform, romName, country)
     }
 
-    func addHash(crc: String, game: Int, platform: Int) {
-        state.withLock { $0.hashes["crc/\(crc.lowercased())"] = (game, platform) }
+    func addHash(crc: String, game: Int, platform: Int, romName: String? = nil, country: [String: String] = [:]) {
+        addHash("crc/\(crc.lowercased())", game, platform, romName, country)
+    }
+
+    private func addHash(_ key: String, _ game: Int, _ platform: Int, _ romName: String?, _ country: [String: String]) {
+        state.withLock {
+            $0.hashes[key] = (game, platform)
+            if romName != nil || !country.isEmpty { $0.signatures[key] = (romName, country) }
+        }
     }
 
     /// libretro-thumbnails images: `repo` like "Nintendo_-_Game_Boy", each name in every folder
@@ -331,10 +341,12 @@ final class FakeInternet: HTTPTransport, Sendable {
     private static func hasheous(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
         let prefix = "/api/v1/Lookup/ByHash/"
         let path = request.url!.path()
-        guard path.hasPrefix(prefix), let hit = s.hashes[String(path.dropFirst(prefix.count)).lowercased()] else {
+        let key = String(path.dropFirst(prefix.count)).lowercased()
+        if s.failingHashes.contains(key) { return (500, [:], Data()) }
+        guard path.hasPrefix(prefix), let hit = s.hashes[key] else {
             return (404, [:], Data("The provided hash was not found in any signature database.".utf8))
         }
-        let json: [String: Any] = [
+        var json: [String: Any] = [
             "id": 1, "name": "Some Game",
             "platform": [
                 "name": "Some Platform",
@@ -347,6 +359,11 @@ final class FakeInternet: HTTPTransport, Sendable {
                 ["objectType": "Game", "id": "77", "immutableId": "77", "source": "RetroAchievements", "status": "Mapped"],
             ],
         ]
+        if let signature = s.signatures[key] {
+            var rom: [String: Any] = ["country": signature.country, "signatureSource": "NoIntros"]
+            if let name = signature.romName { rom["name"] = name }
+            json["signature"] = ["game": ["name": "Some Game", "country": [:] as [String: String]], "rom": rom]
+        }
         return (200, [:], try! JSONSerialization.data(withJSONObject: json))
     }
 

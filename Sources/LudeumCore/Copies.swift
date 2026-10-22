@@ -188,11 +188,16 @@ extension LudeumStore {
 
     // MARK: ROM Copies
 
-    /// Sets a ROM's Copy details: the fields it shares with every other Copy.
+    /// Sets a ROM's Copy details: the fields it shares with every other Copy. Its Regions are then mine, so they're never
+    /// looked up by its checksum, even when I leave none.
     public func setROMDetails(_ rom: Int64, _ details: CopyDetails) throws {
         try db.write { db in
             try db.execute(
-                sql: "UPDATE rom SET regions = ?, acquiredOn = ?, acquiredFrom = ?, price = ?, currency = ?, notes = ? WHERE id = ?",
+                sql: """
+                    UPDATE rom SET regions = ?, acquiredOn = ?, acquiredFrom = ?, price = ?, currency = ?, notes = ?,
+                        regionsLookedUp = 1
+                    WHERE id = ?
+                    """,
                 arguments: Self.arguments(details) + [rom])
         }
     }

@@ -110,9 +110,7 @@ public final class Matcher: Sendable {
 
     /// Hasheous by the ROM's MD5, else its CRC32, when it has one.
     private func checksumGameID(_ rom: ROMToMatch) async throws -> Int? {
-        if let md5 = rom.md5, !md5.isEmpty { return try await hasheous.lookup(md5: md5).match?.igdbGameID }
-        if let crc = rom.crc, !crc.isEmpty { return try await hasheous.lookup(crc: crc).match?.igdbGameID }
-        return nil
+        try await hasheous.lookup(md5: rom.md5, crc: rom.crc)?.match?.igdbGameID
     }
 
     /// The first non-empty IGDB name search for the ROM's cleaned name, trying each of its platforms.

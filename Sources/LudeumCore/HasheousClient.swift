@@ -15,6 +15,24 @@ public struct HasheousMatch: Sendable, Hashable {
     public var igdbGameID: Int? { Self.igdbID(in: record["metadata"]) }
     public var igdbPlatformID: Int? { Self.igdbID(in: record["platform"]?["metadata"]) }
 
+    /// The Regions of the DAT entry the checksum is, in their shown order: its name's region tags, read as a ROM's are
+    /// (`ROMName`), else the countries its signature lists for it. Its name is more faithful where it has tags No-Intro's or
+    /// GoodTools' way, as the countries can leave one out ("(USA, Europe)" is listed as the United States); the countries
+    /// cover the rest, TOSEC's `(EU-US)` among them. No-Intro's `(Unknown)` says nothing, as with a ROM (ADR 0012). None
+    /// when it says neither.
+    public var regions: [String] {
+        let rom = record["signature"]?["rom"]
+        let named = ROMName(((rom?["name"]?.string ?? "") as NSString).deletingPathExtension).regionNames.filter { $0 != "Unknown" }
+        var countries: [String] = []
+        if case .object(let listed)? = rom?["country"] {
+            countries = listed.values.compactMap(\.string).map { Self.countryRegions[$0] ?? $0 }
+        }
+        return Regions.ordered((named.isEmpty ? countries : named).filter { !$0.isEmpty })
+    }
+
+    /// Hasheous's names for countries that a ROM's Regions name otherwise, as No-Intro's tags do.
+    private static let countryRegions = ["United States": "USA", "Worldwide": "World", "United Kingdom": "UK"]
+
     /// The `immutableId` of the mapped IGDB entry (`id` can be a slug).
     private static func igdbID(in metadata: JSONValue?) -> Int? {
         metadata?.array?
@@ -47,6 +65,13 @@ public final class HasheousClient: Sendable {
     /// Looks up a ROM by CRC32, as an archive's index gives it, the way `lookup(md5:)` does by MD5.
     public func lookup(crc: String) async throws -> HasheousResult {
         try await lookup(crc: crc, servesStale: true)
+    }
+
+    /// Looks up a ROM by its MD5, else its CRC32: nil when it has neither.
+    func lookup(md5: String?, crc: String?) async throws -> HasheousResult? {
+        if let md5, !md5.isEmpty { return try await lookup(md5: md5) }
+        if let crc, !crc.isEmpty { return try await lookup(crc: crc) }
+        return nil
     }
 
     func lookup(md5: String, servesStale: Bool) async throws -> HasheousResult {

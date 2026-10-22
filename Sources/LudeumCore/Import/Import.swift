@@ -42,6 +42,7 @@ public final class Import: Sendable {
     let journal: LudeumStore
     let backups: Backups?
     let boxArt: BoxArtImport
+    let regions: RegionsImport
     let sevenZip: SevenZip?
 
     /// Without `libretro`, no ROM is looked up in libretro-thumbnails. Without `sevenZip`, a ROM in an archive has no
@@ -51,6 +52,7 @@ public final class Import: Sendable {
         sevenZip: SevenZip? = SevenZip.find()
     ) {
         boxArt = BoxArtImport(journal: journal, libretro: libretro)
+        regions = RegionsImport(journal: journal, hasheous: hasheous)
         matcher = Matcher(igdb: igdb, hasheous: hasheous)
         self.igdb = igdb
         self.journal = journal
@@ -62,7 +64,7 @@ public final class Import: Sendable {
     /// each automatically or sending it to the Review queue: those Add ROM put in without a Match, or that I Add from the
     /// Review queue, and no others. A folder that can't be read is left alone, Stray files and all. `writing` is awaited
     /// just before the write step (the backup and the one transaction), so the app can stop journal edits first; `wrote`
-    /// just after it, before the Box art step, which never touches what I edit.
+    /// just after it, before the Box art and Regions steps, which never change what I've edited.
     public func run(
         romFolders: [ROMFolder], adding: Set<StrayFile.Key> = [], writing: @Sendable () async -> Void = {},
         wrote: @Sendable () async -> Void = {}
@@ -138,9 +140,11 @@ public final class Import: Sendable {
         var result = try journal.applyImport(plan)
         await wrote()
         let boxArtChanged = await boxArt.run()
+        // A ROM given Regions counts: its Game's LaunchBox box is for them.
+        let regionsChanged = await regions.run()
         // A ROM's file changing counts: which of a Game's ROMs its Box art comes from can follow (a playlist comes first).
         result.coversChanged =
-            boxArtChanged || !(result.matched.isEmpty && result.returned.isEmpty && result.goneMissing.isEmpty)
+            boxArtChanged || regionsChanged || !(result.matched.isEmpty && result.returned.isEmpty && result.goneMissing.isEmpty)
             || plan.seen.contains { known, file in known.fileState.fileName != file.fileName }
         return result
     }

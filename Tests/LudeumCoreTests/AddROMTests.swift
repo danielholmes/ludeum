@@ -164,6 +164,22 @@ struct AddROMTests {
         #expect(try j.journal.game(game).igdbGameId == 1)
     }
 
+    @Test func aROMWithNoRegionTagTakesItsDumpsRegionsWhenItsAdded() async throws {
+        let h = try Harness()
+        h.internet.addHash(md5: "9dd4e461268c8034f5c8564e155c67a6", game: 1, platform: 33, romName: "Tetris (Japan).gb")
+        h.internet.addHash(crc: "8cdc1683", game: 1, platform: 33, romName: "Tetris (Japan).gb")
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let trash = trash
+        let adder = AddROM(
+            journal: j.journal, sevenZip: sevenZip, hasheous: h.hasheous,
+            moveToTrash: { try FileManager.default.moveItem(at: $0, to: trash.appending(path: $0.lastPathComponent)) })
+
+        try await adder.add(
+            ROMSource([try pick("Tetris.gb")]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true)
+
+        #expect(try romRow("Tetris")?["regions"] as String? == #"["Japan"]"#)
+    }
+
     @Test func movingSendsThePickedFileToTheTrashOnceItsIn() async throws {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         let original = try pick("Tetris (World).gb", "GB")

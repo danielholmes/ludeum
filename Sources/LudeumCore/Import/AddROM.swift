@@ -180,15 +180,19 @@ public struct AddROM: Sendable {
     let journal: LudeumStore
     let sevenZip: SevenZip?
     let libretro: LibretroThumbnails?
+    let hasheous: HasheousClient?
     let moveToTrash: @Sendable (URL) throws -> Void
 
+    /// Without `hasheous`, a ROM whose name has no region tag gets its Regions from its checksum at the next Import instead.
     public init(
         journal: LudeumStore, sevenZip: SevenZip? = SevenZip.find(), libretro: LibretroThumbnails? = nil,
+        hasheous: HasheousClient? = nil,
         moveToTrash: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
     ) {
         self.journal = journal
         self.sevenZip = sevenZip
         self.libretro = libretro
+        self.hasheous = hasheous
         self.moveToTrash = moveToTrash
     }
 
@@ -239,6 +243,7 @@ public struct AddROM: Sendable {
         if !keepingOriginals { trashOriginals(of: source) }
         if let rom = try journal.romID(named: named.name, on: folder.platformId) {
             try? await BoxArtImport(journal: journal, libretro: libretro).lookUp([rom])
+            if let hasheous { await RegionsImport(journal: journal, hasheous: hasheous).run(only: [rom]) }
         }
         return game
     }

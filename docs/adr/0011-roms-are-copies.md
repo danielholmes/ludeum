@@ -1,5 +1,7 @@
 # A ROM is a Copy, so a ROM carries journal data
 
+Amended by [0019](0019-a-rom-with-no-region-tag-takes-its-regions-from-hasheous.md): a ROM whose name has no region tag takes its Regions from its checksum's DAT entry in Hasheous.
+
 A Copy is one instance of a Game I have or once had: a ROM, or one I record by hand (Physical, Digital, or Physical + digital). Every Copy has the same fields (Regions, where, when and for how much it was acquired), ROM Copies included, and the four Kinds share one list in Game detail and one Delete. The journal's ownership statuses (Owned, Owned as a ROM, Owned only as a non-ROM Copy, Not owned) and its Owned filter are read over all of them together.
 
 That reverses an earlier rule, "journal data never belongs to a ROM, so removing or replacing the file loses nothing". What stays true is the half that matters: removing or replacing the *file* loses nothing, because the ROM only goes missing and keeps its details. What's new is that deleting a ROM from the journal (by hand, or by Keeping only another Version) deletes a Copy and its details. Nothing deletes a ROM on its own: a missing file is an alert until I put one back or delete the Copy.
