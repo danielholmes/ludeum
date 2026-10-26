@@ -25,6 +25,8 @@ public enum LudeumError: Error, Equatable {
     case runAheadOutOfRange
     /// DuckStation's CD read speedup is 1–6 times, or 0 for as fast as it can.
     case cdReadSpeedupOutOfRange
+    /// DuckStation's CD seek speedup is 1–6 times, or 0 for as fast as it can.
+    case cdSeekSpeedupOutOfRange
     /// A Copy a Playthrough was played on can't be deleted, or leave its Game, until the Playthrough says otherwise.
     case copyPlayedOn
     /// A Playthrough's Copy is one of its own Game's.

@@ -202,6 +202,10 @@ _Avoid_: Forced platform, hardware mode
 An Emulator setting for PlayStation Games: how much faster than a real drive DuckStation reads the disc, to shorten loading. It is Off, 2x to 6x or Maximum, and defaults to whatever DuckStation itself is set to, so the usual choice is made once in DuckStation and a Game sets its own only to differ.
 _Avoid_: Fast loading, CD-ROM speed
 
+**CD seek speedup**:
+An Emulator setting for PlayStation Games: how much faster than a real drive DuckStation moves to another part of the disc. It is Off, 2x to 6x or Maximum, and defaults to whatever DuckStation itself is set to. It breaks more games than the CD read speedup.
+_Avoid_: Fast seeking, CD-ROM speed
+
 **Save state**:
 A snapshot of a game mid-play that DuckStation saves and loads, in one of a disc's slots (1 to 10), or as its Resume state, saved on closing the game, or as the Previous one of a slot, kept when it's saved over. Save states are made and managed in DuckStation, which names them by the disc's Serial; Ludeum lists a PlayStation Game's, Plays from one, deletes one, and keeps a backup of each in the Data folder, which stays when DuckStation's goes. A save state has no name: it's its slot, when it was saved and its screenshot. Not a battery save, which the game writes itself.
 _Avoid_: Snapshot, save (alone), quick save

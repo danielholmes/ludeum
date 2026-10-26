@@ -29,7 +29,7 @@ struct EmulatorSettingRow: Identifiable {
                     defaultLabel: "0 frames", summary: { "Run-ahead \($0)" })
             ]
                 + (emulator == .mesenCE && GameBoyModel.applies(to: platformId) ? [gameBoyModel] : [])
-                + (emulator == .duckStation ? [cdReadSpeedup] : [])
+                + (emulator == .duckStation ? [cdReadSpeedup, cdSeekSpeedup] : [])
         case .ares:
             [
                 EmulatorSettingRow(
@@ -64,6 +64,18 @@ struct EmulatorSettingRow: Identifiable {
             choices: [("Off", 1)] + (2...6).map { ("\($0)x", $0) } + [("Maximum", 0)],
             defaultLabel: "DuckStation's own",
             summary: { $0 == 1 ? "CD speedup off" : $0 == 0 ? "CD maximum" : "CD \($0)x" })
+    }
+
+    private static var cdSeekSpeedup: EmulatorSettingRow {
+        EmulatorSettingRow(
+            title: "CD seek speedup",
+            explanation: "How much faster DuckStation moves to another part of the disc, to shorten loading. It's riskier than "
+                + "the read speedup: games that expect a real drive's timing can crash, and Maximum is safer than 2x to 6x. "
+                + "DuckStation keeps it off for the ones it knows, whatever is chosen here.",
+            value: \.cdSeekSpeedup,
+            choices: [("Off", 1)] + (2...6).map { ("\($0)x", $0) } + [("Maximum", 0)],
+            defaultLabel: "DuckStation's own",
+            summary: { $0 == 1 ? "Seek speedup off" : $0 == 0 ? "Seek maximum" : "Seek \($0)x" })
     }
 }
 

@@ -14,3 +14,4 @@ Writing the file needs the disc's Serial, so each ROM now has its **Serials**, o
 - DuckStation's per-game files now hold Ludeum's settings: changing run-ahead in DuckStation's Game Properties lasts only until the next Play from Ludeum.
 - The first Import after `v40` reads every PlayStation ROM's Discs: about 9 minutes for my 113, once, during which the background refresh waits. A ROM kept online only by Dropbox is left until it's downloaded.
 - The `-settings` copy in the Ludeum folder is deleted at the next PlayStation Play.
+- Later, every Play also writes fast boot into the file (`[BIOS] PatchFastBoot` and `FastForwardBoot`), not a setting of the Game's own, so a Game with none of its own still gets a file. DuckStation has `-fastboot`, but it overrides the game database's `ForceFullBoot` for the games fast boot breaks, and fast-forwarding the boot has no flag, so the file is the one place for both. A Disc 1 with no Serial boots in full.

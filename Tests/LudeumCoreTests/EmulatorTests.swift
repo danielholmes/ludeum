@@ -144,6 +144,8 @@ import Testing
     var settings: DuckStationSettings { DuckStationSettings(dataFolder: folder, oldCopy: folder.appending(path: "old copy.ini")) }
 
     func gameSettings(_ serial: String) -> URL { folder.appending(path: "gamesettings/\(serial).ini") }
+    /// What every Play writes, the Game's own settings or none.
+    let fastBoot = "[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n"
 
     func write(_ text: String, to file: URL) throws {
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -158,52 +160,76 @@ import Testing
         let rom = URL(filePath: "/Games/PSX/Resident Evil - Director's Cut (USA)/Resident Evil - Director's Cut (USA).cue")
 
         let arguments = try Emulator.duckStation.arguments(
-            rom: rom, platformId: 7, settings: EmulatorSettings(runAheadFrames: 2, cdReadSpeedup: 4), serials: .read(["SLUS-00551"]),
+            rom: rom, platformId: 7, settings: EmulatorSettings(runAheadFrames: 2, cdReadSpeedup: 4, cdSeekSpeedup: 0),
+            serials: .read(["SLUS-00551"]),
             duckStation: settings)
 
         #expect(arguments == ["--", rom.path(percentEncoded: false)])
         #expect(
             contents(gameSettings("SLUS-00551"))
-                == "[CDROM]\nReadSpeedup = 4\n\n[Main]\nRunaheadFrameCount = 2\n\n[GPU]\nResolutionScale = 4\n")
+                == fastBoot + "[CDROM]\nSeekSpeedup = 0\nReadSpeedup = 4\n\n[Main]\nRunaheadFrameCount = 2\n\n[GPU]\nResolutionScale = 4\n")
         // DuckStation's own settings are left alone.
         #expect(contents(folder.appending(path: "settings.ini")) == "[Main]\nRewindEnable = false\n\n[Pad1]\nUp = Keyboard/Up\n")
     }
 
     @Test func aSettingTheGameHasntGotIsTakenOutSoDuckStationsOwnApplies() {
-        let ini = "[Main]\nRunaheadFrameCount = 3\nRewindEnable = false\n\n[CDROM]\nReadSpeedup = 4\n\n[GPU]\nResolutionScale = 4\n"
-        #expect(DuckStationSettings.applying(EmulatorSettings(), to: ini) == "[Main]\nRewindEnable = false\n\n[GPU]\nResolutionScale = 4\n")
+        let ini = """
+            [Main]
+            RunaheadFrameCount = 3
+            RewindEnable = false
+
+            [CDROM]
+            ReadSpeedup = 4
+            SeekSpeedup = 2
+
+            [BIOS]
+            PatchFastBoot = true
+            FastForwardBoot = true
+
+            [GPU]
+            ResolutionScale = 4
+
+            """
         #expect(
-            DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 0), to: ini)
-                == "[Main]\nRunaheadFrameCount = 0\nRewindEnable = false\n\n[GPU]\nResolutionScale = 4\n")
+            DuckStationSettings.applying(EmulatorSettings(), to: ini)
+                == "[Main]\nRewindEnable = false\n\n[BIOS]\nPatchFastBoot = true\nFastForwardBoot = true\n\n[GPU]\nResolutionScale = 4\n")
+        #expect(
+            DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 0, cdSeekSpeedup: 1), to: ini)
+                == "[Main]\nRunaheadFrameCount = 0\nRewindEnable = false\n\n[CDROM]\nSeekSpeedup = 1\n\n[BIOS]\nPatchFastBoot = true\n"
+                + "FastForwardBoot = true\n\n[GPU]\nResolutionScale = 4\n")
     }
 
     @Test func aFileWithCRLFLineEndingsIsMergedLineByLine() {
-        let ini = "[Main]\r\nRunaheadFrameCount = 3\r\nRewindEnable = false\r\n\r\n[CDROM]\r\nReadSpeedup = 4\r\n"
+        let ini =
+            "[BIOS]\r\nPatchFastBoot = false\r\n\r\n[Main]\r\nRunaheadFrameCount = 3\r\nRewindEnable = false\r\n\r\n[CDROM]\r\nReadSpeedup = 4\r\n"
         #expect(
             DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 1), to: ini)
-                == "[Main]\r\nRunaheadFrameCount = 1\nRewindEnable = false\r\n\r\n")
+                == "[BIOS]\r\nFastForwardBoot = true\nPatchFastBoot = true\n\r\n[Main]\r\nRunaheadFrameCount = 1\nRewindEnable = false\r\n\r\n"
+        )
         #expect(Ini.value("ReadSpeedup", in: "CDROM", of: ini) == "4")
     }
 
-    @Test func aGameWithNoSettingsOfItsOwnMakesNoFileAndTakesAwayOneLeftEmpty() throws {
+    @Test func everyGameFastBootsEvenWithNoSettingsOfItsOwn() throws {
         try settings.write(EmulatorSettings(), serials: .read(["SLUS-00551"]))
-        #expect(!FileManager.default.fileExists(atPath: gameSettings("SLUS-00551").path(percentEncoded: false)))
+        #expect(contents(gameSettings("SLUS-00551")) == fastBoot)
 
         try write("[Main]\nRunaheadFrameCount = 1\n", to: gameSettings("SCUS-94900"))
         try settings.write(EmulatorSettings(), serials: .read(["SCUS-94900"]))
-        #expect(!FileManager.default.fileExists(atPath: gameSettings("SCUS-94900").path(percentEncoded: false)))
+        #expect(contents(gameSettings("SCUS-94900")) == fastBoot)
     }
 
     @Test func aMultiDiscVersionsSettingsAreDisc1sUnlessItKeepsEachDiscApart() throws {
         let serials = Serials.read(["SCUS-94163", "SCUS-94164", nil])
         try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
-        #expect(contents(gameSettings("SCUS-94163")) == "[Main]\nRunaheadFrameCount = 1\n\n")
+        #expect(contents(gameSettings("SCUS-94163")) == fastBoot + "[Main]\nRunaheadFrameCount = 1\n\n")
         #expect(contents(gameSettings("SCUS-94164")) == nil)
 
         try write("[Main]\nUseSeparateConfigForDiscSet = true\n", to: gameSettings("SCUS-94163"))
         try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
-        #expect(contents(gameSettings("SCUS-94163")) == "[Main]\nRunaheadFrameCount = 1\nUseSeparateConfigForDiscSet = true\n")
-        #expect(contents(gameSettings("SCUS-94164")) == "[Main]\nRunaheadFrameCount = 1\n\n")
+        #expect(
+            contents(gameSettings("SCUS-94163"))
+                == fastBoot + "[Main]\nRunaheadFrameCount = 1\nUseSeparateConfigForDiscSet = true\n")
+        #expect(contents(gameSettings("SCUS-94164")) == fastBoot + "[Main]\nRunaheadFrameCount = 1\n\n")
     }
 
     @Test func withoutDisc1sSerialNothingIsWritten() throws {
@@ -225,15 +251,18 @@ import Testing
         #expect(contents(folder.appending(path: "old copy.ini")) == nil)
     }
 
-    @Test func aGamesCDReadSpeedupIsKeptAndChecked() throws {
+    @Test func aGamesCDSpeedupsAreKeptAndChecked() throws {
         let h = try LudeumHarness()
         let game = try h.addGame("Resident Evil")
 
-        try h.journal.setEmulatorSettings(game, EmulatorSettings(cdReadSpeedup: 0))
+        try h.journal.setEmulatorSettings(game, EmulatorSettings(cdReadSpeedup: 0, cdSeekSpeedup: 4))
         try h.reopen()
-        #expect(try h.journal.emulatorSettings(game) == EmulatorSettings(cdReadSpeedup: 0))
+        #expect(try h.journal.emulatorSettings(game) == EmulatorSettings(cdReadSpeedup: 0, cdSeekSpeedup: 4))
         #expect(throws: LudeumError.cdReadSpeedupOutOfRange) {
             try h.journal.setEmulatorSettings(game, EmulatorSettings(cdReadSpeedup: 7))
+        }
+        #expect(throws: LudeumError.cdSeekSpeedupOutOfRange) {
+            try h.journal.setEmulatorSettings(game, EmulatorSettings(cdSeekSpeedup: -1))
         }
         try h.journal.setEmulatorSettings(game, EmulatorSettings())
         #expect(try h.journal.emulatorSettings(game) == EmulatorSettings())

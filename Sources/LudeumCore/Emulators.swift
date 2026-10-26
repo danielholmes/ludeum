@@ -86,7 +86,9 @@ public struct Emulator: Sendable, Equatable {
 
 /// A DuckStation Play's settings, merged into DuckStation's own per-game settings file for the disc, named by its
 /// Serial (`gamesettings/SLUS-00551.ini`), where its Game Properties keeps them too (ADR 0021). Ludeum's win: a setting
-/// the Game has is set, and one it hasn't is taken out, so DuckStation's own applies. The file's other settings stay, and
+/// the Game has is set, and one it hasn't is taken out, so DuckStation's own applies. Every Game fast boots, skipping the
+/// BIOS logo and running unthrottled to its first frame, unless DuckStation's game database says that breaks it (its
+/// `ForceFullBoot`, which `-fastboot` would override). The file's other settings stay, and
 /// so does what's changed in DuckStation during the Play. A multi-disc Version's file is Disc 1's, unless that keeps each
 /// Disc's settings apart (`UseSeparateConfigForDiscSet`), when every Disc's file is written. Without Disc 1's Serial,
 /// nothing is: Play is refused if the Game has any (`Play.Refusal.noSerial`).
@@ -128,13 +130,9 @@ public struct DuckStationSettings: Sendable {
             let url = file(serial)
             let original = try? String(contentsOf: url, encoding: .utf8)
             let updated = Self.applying(settings, to: original ?? "")
-            guard updated != (original ?? "") else { continue }
-            if updated.allSatisfy(\.isWhitespace) {
-                try FileManager.default.removeItem(at: url)
-            } else {
-                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                try updated.write(to: url, atomically: true, encoding: .utf8)
-            }
+            guard updated != original else { continue }
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try updated.write(to: url, atomically: true, encoding: .utf8)
         }
     }
 
@@ -152,14 +150,17 @@ public struct DuckStationSettings: Sendable {
             ? URL(filePath: path, directoryHint: .isDirectory) : dataFolder.appending(path: path, directoryHint: .isDirectory)
     }
 
-    /// `ini` with `[Main] RunaheadFrameCount` set to the Game's run-ahead and `[CDROM] ReadSpeedup` to its CD read
-    /// speedup, each taken out where it has none.
+    /// `ini` with `[Main] RunaheadFrameCount` set to the Game's run-ahead, `[CDROM] ReadSpeedup` and `SeekSpeedup` to
+    /// its CD read and seek speedups, each taken out where it has none, and `[BIOS] PatchFastBoot` and `FastForwardBoot`
+    /// on.
     static func applying(_ settings: EmulatorSettings, to ini: String) -> String {
         func apply(_ value: Int?, _ key: String, in section: String, of ini: String) -> String {
             value.map { Ini.setting(key, to: "\($0)", in: section, of: ini) } ?? Ini.removing(key, in: section, of: ini)
         }
-        let ini = apply(settings.runAheadFrames, "RunaheadFrameCount", in: "Main", of: ini)
-        return apply(settings.cdReadSpeedup, "ReadSpeedup", in: "CDROM", of: ini)
+        var ini = apply(settings.runAheadFrames, "RunaheadFrameCount", in: "Main", of: ini)
+        ini = apply(settings.cdReadSpeedup, "ReadSpeedup", in: "CDROM", of: ini)
+        ini = apply(settings.cdSeekSpeedup, "SeekSpeedup", in: "CDROM", of: ini)
+        return ["PatchFastBoot", "FastForwardBoot"].reduce(ini) { Ini.setting($1, to: "true", in: "BIOS", of: $0) }
     }
 }
 
@@ -276,17 +277,24 @@ public struct EmulatorSettings: Sendable, Equatable {
     /// DuckStation's `ReadSpeedup`: 1 is off (the PlayStation's own double speed), 2–6 that many times faster, 0 as fast
     /// as it can. Nil is DuckStation's own setting.
     public var cdReadSpeedup: Int?
+    /// DuckStation's `SeekSpeedup`, as `cdReadSpeedup` is its `ReadSpeedup`: 1 is off, 2–6 that many times faster, 0 as
+    /// fast as it can. Nil is DuckStation's own setting.
+    public var cdSeekSpeedup: Int?
 
     public static let runAheadRange = 0...10
     public static let cdReadSpeedupRange = 0...6
+    public static let cdSeekSpeedupRange = 0...6
 
-    /// Whether it has any setting DuckStation's Play writes into its per-game file.
-    var hasDuckStationSettings: Bool { runAheadFrames != nil || cdReadSpeedup != nil }
+    /// Whether it has any setting of its own DuckStation's Play writes into its per-game file.
+    var hasDuckStationSettings: Bool { runAheadFrames != nil || cdReadSpeedup != nil || cdSeekSpeedup != nil }
 
-    public init(runAheadFrames: Int? = nil, gameBoyModel: GameBoyModel? = nil, cdReadSpeedup: Int? = nil) {
+    public init(
+        runAheadFrames: Int? = nil, gameBoyModel: GameBoyModel? = nil, cdReadSpeedup: Int? = nil, cdSeekSpeedup: Int? = nil
+    ) {
         self.runAheadFrames = runAheadFrames
         self.gameBoyModel = gameBoyModel
         self.cdReadSpeedup = cdReadSpeedup
+        self.cdSeekSpeedup = cdSeekSpeedup
     }
 }
 
@@ -311,11 +319,13 @@ extension LudeumStore {
     public func emulatorSettings(_ game: GameID) throws -> EmulatorSettings {
         try db.read { db in
             let row = try Row.fetchOne(
-                db, sql: "SELECT runAheadFrames, gameBoyModel, cdReadSpeedup FROM game WHERE id = ?", arguments: [game])
+                db, sql: "SELECT runAheadFrames, gameBoyModel, cdReadSpeedup, cdSeekSpeedup FROM game WHERE id = ?",
+                arguments: [game])
             return EmulatorSettings(
                 runAheadFrames: row?["runAheadFrames"],
                 gameBoyModel: (row?["gameBoyModel"] as String?).flatMap(GameBoyModel.init(rawValue:)),
-                cdReadSpeedup: row?["cdReadSpeedup"])
+                cdReadSpeedup: row?["cdReadSpeedup"],
+                cdSeekSpeedup: row?["cdSeekSpeedup"])
         }
     }
 
@@ -326,10 +336,15 @@ extension LudeumStore {
         if let speedup = settings.cdReadSpeedup, !EmulatorSettings.cdReadSpeedupRange.contains(speedup) {
             throw LudeumError.cdReadSpeedupOutOfRange
         }
+        if let speedup = settings.cdSeekSpeedup, !EmulatorSettings.cdSeekSpeedupRange.contains(speedup) {
+            throw LudeumError.cdSeekSpeedupOutOfRange
+        }
         try db.write { db in
             try db.execute(
-                sql: "UPDATE game SET runAheadFrames = ?, gameBoyModel = ?, cdReadSpeedup = ? WHERE id = ?",
-                arguments: [settings.runAheadFrames, settings.gameBoyModel?.rawValue, settings.cdReadSpeedup, game])
+                sql: "UPDATE game SET runAheadFrames = ?, gameBoyModel = ?, cdReadSpeedup = ?, cdSeekSpeedup = ? WHERE id = ?",
+                arguments: [
+                    settings.runAheadFrames, settings.gameBoyModel?.rawValue, settings.cdReadSpeedup, settings.cdSeekSpeedup, game,
+                ])
         }
     }
 }
