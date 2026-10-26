@@ -85,7 +85,8 @@ public struct Emulator: Sendable, Equatable {
 
 /// The settings file a DuckStation Play starts with: a copy of DuckStation's own `settings.ini`
 /// with the Game's settings written over it, so its controllers, BIOS and video settings carry over.
-/// Changes made in DuckStation during that Play go to the copy and are lost.
+/// A Game with no CD read speedup of its own keeps DuckStation's. Changes made in DuckStation during
+/// that Play go to the copy and are lost.
 public struct DuckStationSettings: Sendable {
     let base: URL
     let copy: URL
@@ -106,9 +107,12 @@ public struct DuckStationSettings: Sendable {
         return copy
     }
 
-    /// `ini` with `[Main] RunaheadFrameCount` set to the Game's run-ahead (0 by default).
+    /// `ini` with `[Main] RunaheadFrameCount` set to the Game's run-ahead (0 by default), and `[CDROM] ReadSpeedup`
+    /// to its CD read speedup if it has one.
     static func applying(_ settings: EmulatorSettings, to ini: String) -> String {
-        Ini.setting("RunaheadFrameCount", to: "\(settings.runAheadFrames ?? 0)", in: "Main", of: ini)
+        let ini = Ini.setting("RunaheadFrameCount", to: "\(settings.runAheadFrames ?? 0)", in: "Main", of: ini)
+        guard let speedup = settings.cdReadSpeedup else { return ini }
+        return Ini.setting("ReadSpeedup", to: "\(speedup)", in: "CDROM", of: ini)
     }
 }
 
@@ -175,12 +179,17 @@ public struct EmulatorSettings: Sendable, Equatable {
     public var runAheadFrames: Int?
     /// Nil is Auto: MesenCE picks from the ROM, favouring Game Boy Color.
     public var gameBoyModel: GameBoyModel?
+    /// DuckStation's `ReadSpeedup`: 1 is off (the PlayStation's own double speed), 2–6 that many times faster, 0 as fast
+    /// as it can. Nil is DuckStation's own setting.
+    public var cdReadSpeedup: Int?
 
     public static let runAheadRange = 0...10
+    public static let cdReadSpeedupRange = 0...6
 
-    public init(runAheadFrames: Int? = nil, gameBoyModel: GameBoyModel? = nil) {
+    public init(runAheadFrames: Int? = nil, gameBoyModel: GameBoyModel? = nil, cdReadSpeedup: Int? = nil) {
         self.runAheadFrames = runAheadFrames
         self.gameBoyModel = gameBoyModel
+        self.cdReadSpeedup = cdReadSpeedup
     }
 }
 
@@ -204,10 +213,12 @@ public enum GameBoyModel: String, Sendable, CaseIterable {
 extension LudeumStore {
     public func emulatorSettings(_ game: GameID) throws -> EmulatorSettings {
         try db.read { db in
-            let row = try Row.fetchOne(db, sql: "SELECT runAheadFrames, gameBoyModel FROM game WHERE id = ?", arguments: [game])
+            let row = try Row.fetchOne(
+                db, sql: "SELECT runAheadFrames, gameBoyModel, cdReadSpeedup FROM game WHERE id = ?", arguments: [game])
             return EmulatorSettings(
                 runAheadFrames: row?["runAheadFrames"],
-                gameBoyModel: (row?["gameBoyModel"] as String?).flatMap(GameBoyModel.init(rawValue:)))
+                gameBoyModel: (row?["gameBoyModel"] as String?).flatMap(GameBoyModel.init(rawValue:)),
+                cdReadSpeedup: row?["cdReadSpeedup"])
         }
     }
 
@@ -215,10 +226,13 @@ extension LudeumStore {
         if let frames = settings.runAheadFrames, !EmulatorSettings.runAheadRange.contains(frames) {
             throw LudeumError.runAheadOutOfRange
         }
+        if let speedup = settings.cdReadSpeedup, !EmulatorSettings.cdReadSpeedupRange.contains(speedup) {
+            throw LudeumError.cdReadSpeedupOutOfRange
+        }
         try db.write { db in
             try db.execute(
-                sql: "UPDATE game SET runAheadFrames = ?, gameBoyModel = ? WHERE id = ?",
-                arguments: [settings.runAheadFrames, settings.gameBoyModel?.rawValue, game])
+                sql: "UPDATE game SET runAheadFrames = ?, gameBoyModel = ?, cdReadSpeedup = ? WHERE id = ?",
+                arguments: [settings.runAheadFrames, settings.gameBoyModel?.rawValue, settings.cdReadSpeedup, game])
         }
     }
 }

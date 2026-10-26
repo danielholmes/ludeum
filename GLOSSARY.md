@@ -194,6 +194,10 @@ _Avoid_: Config, overrides
 An Emulator setting for Game Boy and Game Boy Color Games: the hardware the Emulator pretends to be on Play. It is Auto, Game Boy, Game Boy Color or Super Game Boy, and defaults to Auto. It never changes the Game's Platform.
 _Avoid_: Forced platform, hardware mode
 
+**CD read speedup**:
+An Emulator setting for PlayStation Games: how much faster than a real drive DuckStation reads the disc, to shorten loading. It is Off, 2x to 6x or Maximum, and defaults to whatever DuckStation itself is set to, so the usual choice is made once in DuckStation and a Game sets its own only to differ.
+_Avoid_: Fast loading, CD-ROM speed
+
 **Play**:
 Opening a present ROM of a Game, or of a Bundle that contains it, in its Platform's Emulator, with the Game's Emulator settings. Play never changes journal data. A Game can't be Played while a Background task is working on one of its ROMs.
 _Avoid_: Launch, run

@@ -716,6 +716,11 @@ enum LudeumSchema {
             }
             try keepTimestamps(db, on: "rom")
         }
+        // A PlayStation Game can have its own CD read speedup; null is DuckStation's own setting.
+        migrator.registerMigration("v39 cd read speedup") { db in
+            try db.alter(table: "game") { t in t.add(column: "cdReadSpeedup", .integer) }
+            try keepTimestamps(db, on: "game")
+        }
         return migrator
     }
 

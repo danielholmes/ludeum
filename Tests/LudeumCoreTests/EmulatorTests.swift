@@ -169,6 +169,37 @@ import Testing
             DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 3), to: "[Other]\nRunaheadFrameCount = 9\n[Main]\n")
                 == "[Other]\nRunaheadFrameCount = 9\n[Main]\nRunaheadFrameCount = 3\n")
     }
+
+    @Test func aGameWithNoCDReadSpeedupKeepsDuckStationsOwn() {
+        let ini = "[Main]\nRunaheadFrameCount = 0\n\n[CDROM]\nReadSpeedup = 4\n"
+        #expect(DuckStationSettings.applying(EmulatorSettings(), to: ini) == ini)
+        #expect(DuckStationSettings.applying(EmulatorSettings(), to: "[Main]\n").contains("ReadSpeedup") == false)
+    }
+
+    @Test func aGamesCDReadSpeedupReplacesDuckStationsOwn() {
+        let ini = "[Main]\nRunaheadFrameCount = 0\n\n[CDROM]\nReadSpeedup = 4\n"
+        #expect(
+            DuckStationSettings.applying(EmulatorSettings(cdReadSpeedup: 1), to: ini)
+                == "[Main]\nRunaheadFrameCount = 0\n\n[CDROM]\nReadSpeedup = 1\n")
+        // Maximum is 0, and a settings file without [CDROM] gains one.
+        #expect(
+            DuckStationSettings.applying(EmulatorSettings(cdReadSpeedup: 0), to: "[Main]\nRunaheadFrameCount = 0\n")
+                == "[CDROM]\nReadSpeedup = 0\n\n[Main]\nRunaheadFrameCount = 0\n")
+    }
+
+    @Test func aGamesCDReadSpeedupIsKeptAndChecked() throws {
+        let h = try LudeumHarness()
+        let game = try h.addGame("Resident Evil")
+
+        try h.journal.setEmulatorSettings(game, EmulatorSettings(cdReadSpeedup: 0))
+        try h.reopen()
+        #expect(try h.journal.emulatorSettings(game) == EmulatorSettings(cdReadSpeedup: 0))
+        #expect(throws: LudeumError.cdReadSpeedupOutOfRange) {
+            try h.journal.setEmulatorSettings(game, EmulatorSettings(cdReadSpeedup: 7))
+        }
+        try h.journal.setEmulatorSettings(game, EmulatorSettings())
+        #expect(try h.journal.emulatorSettings(game) == EmulatorSettings())
+    }
 }
 
 @Suite struct PPSSPPSettingsTests {
