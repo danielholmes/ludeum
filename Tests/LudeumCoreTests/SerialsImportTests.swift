@@ -31,7 +31,7 @@ import Testing
     }
 
     func importNow(sevenZip: SevenZip? = nil) async throws {
-        try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, sevenZip: sevenZip)
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil, sevenZip: sevenZip)
             .run(addingEveryFileIn: [ps1.folder])
     }
 
@@ -175,7 +175,7 @@ import Testing
         try addDisc("Okami (USA)", booting: "SLUS-00551", in: "Okami (USA)")
         try await importNow()
         try FileManager.default.moveItem(at: ps1.url.appending(path: "Okami (USA)"), to: ps1.url.appending(path: "Okami"))
-        try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [ps1.folder])
+        _ = try await Import(igdb: h.igdb, hasheous: h.hasheous, journal: j.journal, backups: nil).run(romFolders: [ps1.folder])
         let rom = try #require(try await j.journal.db.read { try Int64.fetchOne($0, sql: "SELECT id FROM rom") })
         let stray = try #require(try j.journal.strayFiles().first)
 
