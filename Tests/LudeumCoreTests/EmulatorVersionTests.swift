@@ -27,8 +27,8 @@ import Testing
     }
 
     @Test func duckStationIsComparedByBuildNumber() {
-        #expect(EmulatorVersions.check(found: "DuckStation Version 0.1-12070-g4122fed9a (dev)", for: .duckStation) == .ok)
-        #expect(EmulatorVersions.check(found: "0.1-11894-gabc", for: .duckStation) == .tooOld(found: "11894"))
+        #expect(EmulatorVersions.check(found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)", for: .duckStation) == .ok)
+        #expect(EmulatorVersions.check(found: "0.1-12070-g4122fed9a", for: .duckStation) == .tooOld(found: "12070"))
         #expect(EmulatorVersions.check(found: "0.1-99999-gabc", for: .duckStation) == .ok)
     }
 
@@ -39,7 +39,7 @@ import Testing
         #expect(EmulatorVersions.check(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
         #expect(
             EmulatorVersions.check(
-                found: "DuckStation Version 0.1-12070-g4122fed9a (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)
+                found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)
         #expect(EmulatorVersions.check(found: "v147", for: .ares) == .tooOld(found: "147"))
         // App versions: Ymir and melonDS have no version flag (Ymir's `--version` opens its window), and Dolphin's matches its flag.
         #expect(EmulatorVersions.check(found: "0.3.3", for: .ymir) == .ok)
@@ -53,7 +53,7 @@ import Testing
 
     @Test func theInstalledVersionIsShownTheWayItsCompared() {
         #expect(EmulatorVersions.shown(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == "2.9.103")
-        #expect(EmulatorVersions.shown(found: "DuckStation Version 0.1-12070-g4122fed9a (dev)", for: .duckStation) == "12070")
+        #expect(EmulatorVersions.shown(found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)", for: .duckStation) == "12442")
         #expect(EmulatorVersions.shown(found: nil, for: .pcsx2) == nil)
     }
 

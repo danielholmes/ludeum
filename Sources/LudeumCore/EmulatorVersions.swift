@@ -25,7 +25,7 @@ struct EmulatorVersionSpec: Sendable {
     enum Format: Sendable {
         /// `2.9.103`, `v148`, `2609`: dotted numbers, an optional leading "v".
         case dotted
-        /// DuckStation's rolling builds, `0.1-12070-g4122fed9a`: the build number.
+        /// DuckStation's rolling builds, `0.1-12442-gdd4a0eb77`: the build number.
         case buildNumber
     }
 
@@ -46,7 +46,7 @@ extension Emulator {
         switch self {
         case .mesenCE: EmulatorVersionSpec(expected: "2.2.1", source: .mesenSettings)
         case .duckStation:
-            EmulatorVersionSpec(expected: "12070", source: .commandLine("-version"), format: .buildNumber, warnsOnNewerMajor: false)
+            EmulatorVersionSpec(expected: "12442", source: .commandLine("-version"), format: .buildNumber, warnsOnNewerMajor: false)
         // Its `--version` works, but the app version is the same and needs no process.
         case .dolphin: EmulatorVersionSpec(expected: "2609", source: .appVersion, warnsOnNewerMajor: false)
         case .ares: EmulatorVersionSpec(expected: "148", source: .commandLine("--version"), warnsOnNewerMajor: false)
