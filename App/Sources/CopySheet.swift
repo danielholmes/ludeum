@@ -232,9 +232,11 @@ func priceText(_ price: Price) -> String {
 
 /// What a Copy says about itself on one line: "USA, Europe · Acquired 2019-03 from eBay for A$45.50". Nil when it says
 /// nothing.
-func copyDetailsText(_ d: CopyDetails) -> String? {
+func copyDetailsText(_ d: CopyDetails, serials: [String] = []) -> String? {
     var parts: [String] = []
     if !d.regions.isEmpty { parts.append(d.regions.joined(separator: ", ")) }
+    // A ROM's, read off its Discs.
+    if !serials.isEmpty { parts.append(serials.joined(separator: ", ")) }
     let acquired = [
         d.acquiredOn.map { "Acquired \($0.text)" } ?? (d.acquiredFrom != nil || d.price != nil ? "Acquired" : nil),
         d.acquiredFrom.map { "from \($0)" }, d.price.map { "for \(priceText($0))" },

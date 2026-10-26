@@ -90,7 +90,7 @@ extension LudeumStore {
 
     /// Gives a missing ROM of its Platform a Stray file as its own: its file renamed in Finder, or replaced. It takes the
     /// file's name, and its Version from it, and stays the same ROM with its Match, Copy details and Playthroughs; its
-    /// checksum, its old file's, goes. Refused, with nothing changed,
+    /// checksum and Serials, its old file's, go, and its Serials are read again at the next Import. Refused, with nothing changed,
     /// when the ROM isn't missing any more, the file has left its ROM folder, or another ROM has its name in another case.
     public func giveStrayFile(_ stray: StrayFile, to rom: Int64, in folder: ROMFolder) throws {
         guard folder.platformId == stray.platformId else { throw ReviewError.noROMFolder }
@@ -110,7 +110,8 @@ extension LudeumStore {
             try Self.notStray(db, file.name, on: stray.platformId)
             try db.execute(
                 sql: """
-                    UPDATE rom SET folderName = ?, name = ?, version = ?, discNumber = ?, discLabel = ?, md5 = NULL, crc = NULL
+                    UPDATE rom SET folderName = ?, name = ?, version = ?, discNumber = ?, discLabel = ?, md5 = NULL, crc = NULL,
+                        serials = NULL, serialsLookedUp = 0
                     WHERE id = ?
                     """,
                 arguments: [file.name, file.name, parsed.version, parsed.disc, parsed.discLabel, rom])

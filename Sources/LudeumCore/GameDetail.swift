@@ -20,6 +20,8 @@ public struct LudeumROM: Sendable, Equatable, Identifiable {
     public var needsPlaylist = false
     /// What it says as a Copy: its Regions, and where, when and for how much it was acquired.
     public var details = CopyDetails()
+    /// Its Serials, once read off its Discs (ADR 0021): each Disc's in Disc order, nil for one with none.
+    public var serials: Serials = .notRead
 
     /// The subfolder it's kept in, named after it, when it's a ROM folder subfolder ROM; nil for a loose file
     /// or an archive.
@@ -73,7 +75,8 @@ extension LudeumStore {
                     SELECT r.id, \(Self.folderNameSQL) AS folderName, r.platformId, r.archived, r.fileName,
                         COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
                         \(try Self.hasNeedsPlaylist(db) ? "r.needsPlaylist" : "0") AS needsPlaylist,
-                        \(try Self.hasCopyDetails(db) ? "r.regions, r.acquiredOn, r.acquiredFrom, r.price, r.currency, r.notes" : "NULL AS regions, NULL AS acquiredOn, NULL AS acquiredFrom, NULL AS price, NULL AS currency, NULL AS notes")
+                        \(try Self.hasCopyDetails(db) ? "r.regions, r.acquiredOn, r.acquiredFrom, r.price, r.currency, r.notes" : "NULL AS regions, NULL AS acquiredOn, NULL AS acquiredFrom, NULL AS price, NULL AS currency, NULL AS notes"),
+                        \(try Self.hasSerials(db) ? "r.serials, r.serialsLookedUp" : "NULL AS serials, 0 AS serialsLookedUp")
                     FROM rom r
                     WHERE \(condition)
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
@@ -86,9 +89,14 @@ extension LudeumStore {
                     fileName: fileName,
                     name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
                     missing: row["missing"], archived: row["archived"], needsPlaylist: row["needsPlaylist"],
-                    details: Self.details(row))
+                    details: Self.details(row), serials: Serials(row))
             }
         }
+    }
+
+    /// Whether the journal has `rom.serials` (`v40`).
+    static func hasSerials(_ db: Database) throws -> Bool {
+        try db.columns(in: "rom").contains { $0.name == "serials" }
     }
 
     /// Whether the journal has `rom.needsPlaylist`: one waiting for `migrate-openemu` is held before it, with no ROM

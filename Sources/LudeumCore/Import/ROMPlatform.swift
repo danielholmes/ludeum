@@ -48,6 +48,7 @@ public struct ROMPlatform: Sendable, Equatable {
         compactExtension.map { (fileName as NSString).pathExtension.lowercased() != $0 } ?? false
     }
 
+    public static let ps1: Int64 = 7
     public static let ps2: Int64 = 8
     public static let psp: Int64 = 38
     public static let vita: Int64 = 46

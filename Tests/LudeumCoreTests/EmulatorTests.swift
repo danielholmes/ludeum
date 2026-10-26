@@ -141,50 +141,88 @@ import Testing
 @Suite struct DuckStationSettingsTests {
     let folder = FileManager.default.temporaryDirectory.appending(
         path: "duckstation tests \(UUID().uuidString)", directoryHint: .isDirectory)
+    var settings: DuckStationSettings { DuckStationSettings(dataFolder: folder, oldCopy: folder.appending(path: "old copy.ini")) }
 
-    @Test func aPlayStartsFromACopyOfDuckStationsOwnSettingsWithTheGamesRunAhead() throws {
-        let base = folder.appending(path: "settings.ini")
-        let copy = folder.appending(path: "copy.ini")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try "[Main]\nRewindEnable = false\nRunaheadFrameCount = 0\n\n[Pad1]\nUp = Keyboard/Up\n".write(
-            to: base, atomically: true, encoding: .utf8)
-        let rom = URL(filePath: "/Games/PSX/Parasite Eve II (USA).m3u")
+    func gameSettings(_ serial: String) -> URL { folder.appending(path: "gamesettings/\(serial).ini") }
+
+    func write(_ text: String, to file: URL) throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try text.write(to: file, atomically: true, encoding: .utf8)
+    }
+
+    func contents(_ file: URL) -> String? { try? String(contentsOf: file, encoding: .utf8) }
+
+    @Test func aPlayMergesTheGamesSettingsIntoDuckStationsPerGameFileForItsSerial() throws {
+        try write("[Main]\nRewindEnable = false\n\n[Pad1]\nUp = Keyboard/Up\n", to: folder.appending(path: "settings.ini"))
+        try write("[Main]\nRunaheadFrameCount = 0\n\n[GPU]\nResolutionScale = 4\n", to: gameSettings("SLUS-00551"))
+        let rom = URL(filePath: "/Games/PSX/Resident Evil - Director's Cut (USA)/Resident Evil - Director's Cut (USA).cue")
 
         let arguments = try Emulator.duckStation.arguments(
-            rom: rom, platformId: 7, settings: EmulatorSettings(runAheadFrames: 2), duckStation: DuckStationSettings(base: base, copy: copy)
-        )
+            rom: rom, platformId: 7, settings: EmulatorSettings(runAheadFrames: 2, cdReadSpeedup: 4), serials: .read(["SLUS-00551"]),
+            duckStation: settings)
 
-        #expect(arguments == ["-settings", copy.path(percentEncoded: false), "/Games/PSX/Parasite Eve II (USA).m3u"])
+        #expect(arguments == ["--", rom.path(percentEncoded: false)])
         #expect(
-            try String(contentsOf: copy, encoding: .utf8)
-                == "[Main]\nRewindEnable = false\nRunaheadFrameCount = 2\n\n[Pad1]\nUp = Keyboard/Up\n")
-        #expect(try String(contentsOf: base, encoding: .utf8).contains("RunaheadFrameCount = 0"))
+            contents(gameSettings("SLUS-00551"))
+                == "[CDROM]\nReadSpeedup = 4\n\n[Main]\nRunaheadFrameCount = 2\n\n[GPU]\nResolutionScale = 4\n")
+        // DuckStation's own settings are left alone.
+        #expect(contents(folder.appending(path: "settings.ini")) == "[Main]\nRewindEnable = false\n\n[Pad1]\nUp = Keyboard/Up\n")
     }
 
-    @Test func runAheadIsAddedWhenDuckStationsSettingsDontHaveIt() {
-        #expect(DuckStationSettings.applying(EmulatorSettings(), to: "[Main]\nA = 1\n") == "[Main]\nRunaheadFrameCount = 0\nA = 1\n")
-        #expect(DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 1), to: "") == "[Main]\nRunaheadFrameCount = 1\n\n")
-        // Only [Main]'s setting counts.
+    @Test func aSettingTheGameHasntGotIsTakenOutSoDuckStationsOwnApplies() {
+        let ini = "[Main]\nRunaheadFrameCount = 3\nRewindEnable = false\n\n[CDROM]\nReadSpeedup = 4\n\n[GPU]\nResolutionScale = 4\n"
+        #expect(DuckStationSettings.applying(EmulatorSettings(), to: ini) == "[Main]\nRewindEnable = false\n\n[GPU]\nResolutionScale = 4\n")
         #expect(
-            DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 3), to: "[Other]\nRunaheadFrameCount = 9\n[Main]\n")
-                == "[Other]\nRunaheadFrameCount = 9\n[Main]\nRunaheadFrameCount = 3\n")
+            DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 0), to: ini)
+                == "[Main]\nRunaheadFrameCount = 0\nRewindEnable = false\n\n[GPU]\nResolutionScale = 4\n")
     }
 
-    @Test func aGameWithNoCDReadSpeedupKeepsDuckStationsOwn() {
-        let ini = "[Main]\nRunaheadFrameCount = 0\n\n[CDROM]\nReadSpeedup = 4\n"
-        #expect(DuckStationSettings.applying(EmulatorSettings(), to: ini) == ini)
-        #expect(DuckStationSettings.applying(EmulatorSettings(), to: "[Main]\n").contains("ReadSpeedup") == false)
+    @Test func aFileWithCRLFLineEndingsIsMergedLineByLine() {
+        let ini = "[Main]\r\nRunaheadFrameCount = 3\r\nRewindEnable = false\r\n\r\n[CDROM]\r\nReadSpeedup = 4\r\n"
+        #expect(
+            DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 1), to: ini)
+                == "[Main]\r\nRunaheadFrameCount = 1\nRewindEnable = false\r\n\r\n")
+        #expect(Ini.value("ReadSpeedup", in: "CDROM", of: ini) == "4")
     }
 
-    @Test func aGamesCDReadSpeedupReplacesDuckStationsOwn() {
-        let ini = "[Main]\nRunaheadFrameCount = 0\n\n[CDROM]\nReadSpeedup = 4\n"
-        #expect(
-            DuckStationSettings.applying(EmulatorSettings(cdReadSpeedup: 1), to: ini)
-                == "[Main]\nRunaheadFrameCount = 0\n\n[CDROM]\nReadSpeedup = 1\n")
-        // Maximum is 0, and a settings file without [CDROM] gains one.
-        #expect(
-            DuckStationSettings.applying(EmulatorSettings(cdReadSpeedup: 0), to: "[Main]\nRunaheadFrameCount = 0\n")
-                == "[CDROM]\nReadSpeedup = 0\n\n[Main]\nRunaheadFrameCount = 0\n")
+    @Test func aGameWithNoSettingsOfItsOwnMakesNoFileAndTakesAwayOneLeftEmpty() throws {
+        try settings.write(EmulatorSettings(), serials: .read(["SLUS-00551"]))
+        #expect(!FileManager.default.fileExists(atPath: gameSettings("SLUS-00551").path(percentEncoded: false)))
+
+        try write("[Main]\nRunaheadFrameCount = 1\n", to: gameSettings("SCUS-94900"))
+        try settings.write(EmulatorSettings(), serials: .read(["SCUS-94900"]))
+        #expect(!FileManager.default.fileExists(atPath: gameSettings("SCUS-94900").path(percentEncoded: false)))
+    }
+
+    @Test func aMultiDiscVersionsSettingsAreDisc1sUnlessItKeepsEachDiscApart() throws {
+        let serials = Serials.read(["SCUS-94163", "SCUS-94164", nil])
+        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
+        #expect(contents(gameSettings("SCUS-94163")) == "[Main]\nRunaheadFrameCount = 1\n\n")
+        #expect(contents(gameSettings("SCUS-94164")) == nil)
+
+        try write("[Main]\nUseSeparateConfigForDiscSet = true\n", to: gameSettings("SCUS-94163"))
+        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
+        #expect(contents(gameSettings("SCUS-94163")) == "[Main]\nRunaheadFrameCount = 1\nUseSeparateConfigForDiscSet = true\n")
+        #expect(contents(gameSettings("SCUS-94164")) == "[Main]\nRunaheadFrameCount = 1\n\n")
+    }
+
+    @Test func withoutDisc1sSerialNothingIsWritten() throws {
+        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: .notRead)
+        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: .read([nil, "SCUS-94164"]))
+        #expect(!FileManager.default.fileExists(atPath: folder.appending(path: "gamesettings").path(percentEncoded: false)))
+    }
+
+    @Test func perGameFilesAreWhereDuckStationsSettingsPutThem() throws {
+        try write("[Folders]\nGameSettings = per game\n", to: folder.appending(path: "settings.ini"))
+        #expect(settings.gameSettingsFolder == folder.appending(path: "per game", directoryHint: .isDirectory))
+        try write("[Folders]\nGameSettings = /Volumes/Games/settings\n", to: folder.appending(path: "settings.ini"))
+        #expect(settings.gameSettingsFolder == URL(filePath: "/Volumes/Games/settings", directoryHint: .isDirectory))
+    }
+
+    @Test func theCopyAPlayUsedToWriteGoes() throws {
+        try write("[Main]\n", to: folder.appending(path: "old copy.ini"))
+        try settings.write(EmulatorSettings(), serials: .notRead)
+        #expect(contents(folder.appending(path: "old copy.ini")) == nil)
     }
 
     @Test func aGamesCDReadSpeedupIsKeptAndChecked() throws {

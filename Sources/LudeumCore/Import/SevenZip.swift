@@ -78,6 +78,42 @@ public struct SevenZip: Sendable {
             ["a", "-t\(format)", "-mx=9", "-bsp1", archive.path(percentEncoded: false)] + files, in: folder, progress: progress)
     }
 
+    /// `count` bytes of the file at `path` in the archive, from `offset` (fewer at its end), unpacked as a stream with
+    /// nothing written to disk: what comes before is unpacked and dropped, and 7-Zip is stopped once there's enough.
+    func bytes(of path: String, in archive: URL, from offset: Int = 0, count: Int) async throws -> Data {
+        let process = Process()
+        process.executableURL = executable
+        // `-spd`: the path is a name, not a wildcard.
+        process.arguments = ["e", "-so", "-spd", archive.path(percentEncoded: false), path]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        let running = RunningProcess(process)
+        try Task.checkCancellation()
+        return try await withTaskCancellationHandler {
+            try running.launch()
+            var skipped = 0
+            var data = Data()
+            while data.count < count {
+                let wanted = skipped < offset ? min(8 << 20, offset - skipped) : min(1 << 20, count - data.count)
+                guard let chunk = try out.fileHandleForReading.read(upToCount: wanted), !chunk.isEmpty else { break }
+                try Task.checkCancellation()
+                if skipped < offset { skipped += chunk.count } else { data += chunk }
+            }
+            // Closed first: 7-Zip writing into a full pipe would never see it's been stopped.
+            try? out.fileHandleForReading.close()
+            running.stop()
+            process.waitUntilExit()
+            // Stopped early, it fails: only a file that ran out before there was enough must have unpacked without error.
+            if data.count < count, process.terminationReason == .exit, process.terminationStatus != 0 {
+                throw ArchiveError.sevenZipFailed("couldn't unpack \(path)")
+            }
+            return data
+        } onCancel: {
+            running.stop()
+        }
+    }
+
     /// Throws unless every file in the archive tests as intact.
     func test(_ archive: URL) async throws {
         _ = try await run(["t", archive.path(percentEncoded: false)])

@@ -238,8 +238,9 @@ public struct AddROM: Sendable {
             throw error
         }
         if !keepingOriginals { trashOriginals(of: source) }
-        if let hasheous, let rom = try journal.romID(named: named.name, on: folder.platformId) {
-            await RegionsImport(journal: journal, hasheous: hasheous).run(only: [rom])
+        if let rom = try journal.romID(named: named.name, on: folder.platformId) {
+            if let hasheous { await RegionsImport(journal: journal, hasheous: hasheous).run(only: [rom]) }
+            await SerialsImport(journal: journal, sevenZip: sevenZip).run(in: [folder], only: [rom])
         }
         return game
     }
@@ -483,7 +484,10 @@ extension LudeumStore {
             let rom: Int64
             if let missingRow {
                 rom = missingRow
-                try db.execute(sql: "UPDATE rom SET folderName = ?, name = ? WHERE id = ?", arguments: [file.name, file.name, rom])
+                // A dump of its own, whose Serials are read again.
+                try db.execute(
+                    sql: "UPDATE rom SET folderName = ?, name = ?, serials = NULL, serialsLookedUp = 0 WHERE id = ?",
+                    arguments: [file.name, file.name, rom])
                 try Self.setFolderROM(db, rom, to: file)
             } else {
                 let parsed = ROMName(file.name)

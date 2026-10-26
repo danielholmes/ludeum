@@ -40,14 +40,14 @@ public struct Emulator: Sendable, Equatable {
     /// The command line for a Play. It sets every Emulator setting, with the default where the Game
     /// has none, because a running MesenCE keeps the last Play's settings (ADR 0008). DuckStation
     /// and PPSSPP take settings only as a whole file, so their Plays write one first (`DuckStationSettings`,
-    /// `PPSSPPSettings`).
+    /// `PPSSPPSettings`); DuckStation's is its per-game file, named by `serials`' Disc 1.
     public func arguments(
-        rom: URL, platformId: Int64, settings: EmulatorSettings, duckStation: DuckStationSettings = .init(),
-        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2GameSettings = .init()
+        rom: URL, platformId: Int64, settings: EmulatorSettings, serials: Serials = .notRead,
+        duckStation: DuckStationSettings = .init(), ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2GameSettings = .init()
     ) throws -> [String] {
         switch self {
         case .duckStation:
-            ["-settings", try duckStation.write(settings).path(percentEncoded: false), rom.path(percentEncoded: false)]
+            try duckStation.arguments(rom: rom, settings: settings, serials: serials)
         case .dolphin:
             // Lower input latency for every Game, for this launch only: frames shown as soon as
             // they're ready, with their timing smoothed. Immediately Present XFB stays off: it breaks some Games.
@@ -83,36 +83,78 @@ public struct Emulator: Sendable, Equatable {
     }
 }
 
-/// The settings file a DuckStation Play starts with: a copy of DuckStation's own `settings.ini`
-/// with the Game's settings written over it, so its controllers, BIOS and video settings carry over.
-/// A Game with no CD read speedup of its own keeps DuckStation's. Changes made in DuckStation during
-/// that Play go to the copy and are lost.
+/// A DuckStation Play's settings, merged into DuckStation's own per-game settings file for the disc, named by its
+/// Serial (`gamesettings/SLUS-00551.ini`), where its Game Properties keeps them too (ADR 0021). Ludeum's win: a setting
+/// the Game has is set, and one it hasn't is taken out, so DuckStation's own applies. The file's other settings stay, and
+/// so does what's changed in DuckStation during the Play. A multi-disc Version's file is Disc 1's, unless that keeps each
+/// Disc's settings apart (`UseSeparateConfigForDiscSet`), when every Disc's file is written. Without Disc 1's Serial,
+/// nothing is: Play is refused if the Game has any (`Play.Refusal.noSerial`).
 public struct DuckStationSettings: Sendable {
-    let base: URL
-    let copy: URL
+    /// DuckStation's data folder, holding its `settings.ini`.
+    let dataFolder: URL
+    /// The copy of DuckStation's `settings.ini` a Play wrote for `-settings` before DuckStation dropped it (build 8843).
+    let oldCopy: URL
 
     public init(
-        base: URL = URL.applicationSupportDirectory.appending(path: "DuckStation/settings.ini"),
-        copy: URL = LudeumFolder.standard.url.appending(path: "DuckStation settings.ini")
+        dataFolder: URL = URL.applicationSupportDirectory.appending(path: "DuckStation", directoryHint: .isDirectory),
+        oldCopy: URL = LudeumFolder.standard.url.appending(path: "DuckStation settings.ini")
     ) {
-        self.base = base
-        self.copy = copy
+        self.dataFolder = dataFolder
+        self.oldCopy = oldCopy
     }
 
-    /// Writes the copy and returns where it is.
-    func write(_ settings: EmulatorSettings) throws -> URL {
-        let original = (try? String(contentsOf: base, encoding: .utf8)) ?? ""
-        try FileManager.default.createDirectory(at: copy.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Self.applying(settings, to: original).write(to: copy, atomically: true, encoding: .utf8)
-        return copy
+    /// Writes the settings, then opens the ROM with no others: `--` ends DuckStation's options.
+    func arguments(rom: URL, settings: EmulatorSettings, serials: Serials) throws -> [String] {
+        try write(settings, serials: serials)
+        return ["--", rom.path(percentEncoded: false)]
     }
 
-    /// `ini` with `[Main] RunaheadFrameCount` set to the Game's run-ahead (0 by default), and `[CDROM] ReadSpeedup`
-    /// to its CD read speedup if it has one.
+    /// Writes the Game's settings into each per-game file its Serials name.
+    func write(_ settings: EmulatorSettings, serials: Serials) throws {
+        try? FileManager.default.removeItem(at: oldCopy)
+        guard let first = serials.first else { return }
+        let folder = gameSettingsFolder
+        func file(_ serial: String) -> URL {
+            folder.appending(path: String(serial.map { "/:".contains($0) ? "_" : $0 }) + ".ini")
+        }
+        var toWrite = [first]
+        let disc1 = (try? String(contentsOf: file(first), encoding: .utf8)) ?? ""
+        if Ini.value("UseSeparateConfigForDiscSet", in: "Main", of: disc1).map(Ini.isTrue) == true {
+            for serial in serials.known where !toWrite.contains(serial) { toWrite.append(serial) }
+        }
+        for serial in toWrite {
+            let url = file(serial)
+            let original = try? String(contentsOf: url, encoding: .utf8)
+            let updated = Self.applying(settings, to: original ?? "")
+            guard updated != (original ?? "") else { continue }
+            if updated.allSatisfy(\.isWhitespace) {
+                try FileManager.default.removeItem(at: url)
+            } else {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try updated.write(to: url, atomically: true, encoding: .utf8)
+            }
+        }
+    }
+
+    /// Where DuckStation keeps its per-game files: its settings' `[Folders] GameSettings` (from its data folder when
+    /// relative), else `gamesettings`.
+    var gameSettingsFolder: URL {
+        let ini = (try? String(contentsOf: dataFolder.appending(path: "settings.ini"), encoding: .utf8)) ?? ""
+        guard let path = Ini.value("GameSettings", in: "Folders", of: ini), !path.isEmpty else {
+            return dataFolder.appending(path: "gamesettings", directoryHint: .isDirectory)
+        }
+        return path.hasPrefix("/")
+            ? URL(filePath: path, directoryHint: .isDirectory) : dataFolder.appending(path: path, directoryHint: .isDirectory)
+    }
+
+    /// `ini` with `[Main] RunaheadFrameCount` set to the Game's run-ahead and `[CDROM] ReadSpeedup` to its CD read
+    /// speedup, each taken out where it has none.
     static func applying(_ settings: EmulatorSettings, to ini: String) -> String {
-        let ini = Ini.setting("RunaheadFrameCount", to: "\(settings.runAheadFrames ?? 0)", in: "Main", of: ini)
-        guard let speedup = settings.cdReadSpeedup else { return ini }
-        return Ini.setting("ReadSpeedup", to: "\(speedup)", in: "CDROM", of: ini)
+        func apply(_ value: Int?, _ key: String, in section: String, of ini: String) -> String {
+            value.map { Ini.setting(key, to: "\($0)", in: section, of: ini) } ?? Ini.removing(key, in: section, of: ini)
+        }
+        let ini = apply(settings.runAheadFrames, "RunaheadFrameCount", in: "Main", of: ini)
+        return apply(settings.cdReadSpeedup, "ReadSpeedup", in: "CDROM", of: ini)
     }
 }
 
@@ -154,23 +196,70 @@ enum Ini {
     static func setting(_ key: String, to value: String, in section: String, of ini: String) -> String {
         let setting = "\(key) = \(value)"
         let header = "[\(section)]"
-        var lines = ini.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var lines = lines(of: ini)
         var current = ""
         for (i, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = trimmed(line)
             if trimmed.hasPrefix("[") {
                 current = trimmed
-            } else if current == header, trimmed.split(separator: "=").first?.trimmingCharacters(in: .whitespaces) == key {
+            } else if current == header, Self.key(of: trimmed) == key {
                 lines[i] = setting
                 return lines.joined(separator: "\n")
             }
         }
-        if let start = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == header }) {
+        if let start = lines.firstIndex(where: { trimmed($0) == header }) {
             lines.insert(setting, at: start + 1)
         } else {
             lines.insert(contentsOf: [header, setting, ""], at: 0)
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// `ini` without `key` in `[section]`, and without the section when nothing's left in it.
+    static func removing(_ key: String, in section: String, of ini: String) -> String {
+        let header = "[\(section)]"
+        var lines = lines(of: ini)
+        var start = 0
+        while let found = lines[start...].firstIndex(where: { trimmed($0) == header }) {
+            let end = lines[(found + 1)...].firstIndex { trimmed($0).hasPrefix("[") } ?? lines.count
+            guard let line = lines[(found + 1)..<end].firstIndex(where: { Self.key(of: trimmed($0)) == key }) else {
+                start = end
+                continue
+            }
+            lines.remove(at: line)
+            if lines[(found + 1)..<(end - 1)].allSatisfy({ trimmed($0).isEmpty }) {
+                // The last section keeps what follows the file's last line break.
+                lines.removeSubrange(found..<(end - 1 == lines.count ? max(found + 1, lines.count - 1) : end - 1))
+            }
+            return lines.joined(separator: "\n")
+        }
+        return ini
+    }
+
+    /// The value of `key` in `[section]`, if it's there.
+    static func value(_ key: String, in section: String, of ini: String) -> String? {
+        var current = ""
+        for line in lines(of: ini) {
+            let trimmed = trimmed(line)
+            if trimmed.hasPrefix("[") {
+                current = trimmed
+            } else if current == "[\(section)]", Self.key(of: trimmed) == key, let equals = trimmed.firstIndex(of: "=") {
+                return trimmed[trimmed.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return nil
+    }
+
+    /// Whether a value is true as DuckStation reads a boolean.
+    static func isTrue(_ value: String) -> Bool { ["true", "yes", "on", "1"].contains(value.lowercased()) }
+
+    /// Split at each line feed, so a line ending CRLF keeps its CR (which `trimmed` drops) and is written back as it was.
+    private static func lines(of ini: String) -> [String] { ini.components(separatedBy: "\n") }
+
+    private static func trimmed(_ line: String) -> String { line.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private static func key(of line: String) -> String? {
+        line.split(separator: "=").first?.trimmingCharacters(in: .whitespaces)
     }
 }
 
@@ -185,6 +274,9 @@ public struct EmulatorSettings: Sendable, Equatable {
 
     public static let runAheadRange = 0...10
     public static let cdReadSpeedupRange = 0...6
+
+    /// Whether it has any setting DuckStation's Play writes into its per-game file.
+    var hasDuckStationSettings: Bool { runAheadFrames != nil || cdReadSpeedup != nil }
 
     public init(runAheadFrames: Int? = nil, gameBoyModel: GameBoyModel? = nil, cdReadSpeedup: Int? = nil) {
         self.runAheadFrames = runAheadFrames

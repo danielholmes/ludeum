@@ -177,3 +177,85 @@ import Testing
         #expect(press(file, in: xbox).arguments == ["-dvd_path", file.path(percentEncoded: false)])
     }
 }
+
+/// Plays in DuckStation, whose settings go into its per-game file for the disc's Serial.
+@Suite struct PlayStationPlayTests {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "playstation play \(UUID().uuidString)")
+    let duckStation = URL(filePath: "/Applications/DuckStation.app")
+    var data: URL { directory.appending(path: "DuckStation", directoryHint: .isDirectory) }
+
+    func rom(_ fileName: String, serials: Serials) -> LudeumROM {
+        let name = (fileName as NSString).deletingPathExtension
+        return LudeumROM(
+            id: 1, folderName: name, platformId: ROMPlatform.ps1, fileName: fileName, name: name, version: "", disc: nil,
+            missing: false, archived: false, serials: serials)
+    }
+
+    func press(_ rom: LudeumROM, settings: EmulatorSettings, in folder: FakeROMFolder) -> Play.Outcome {
+        let duckStation = duckStation
+        return Play(platformId: ROMPlatform.ps1, platformName: "PlayStation", roms: [rom], settings: settings)
+            .prepare(
+                locator: ROMLocator(romFolders: [folder.folder]), version: .ok, app: { _ in duckStation },
+                duckStation: DuckStationSettings(dataFolder: data, oldCopy: directory.appending(path: "old.ini")))
+    }
+
+    @Test func aGamesSettingsGoIntoThePerGameFileOfItsSerialAndDuckStationOpensTheROM() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let cue = try ps1.add("Resident Evil - Director's Cut (USA).cue")
+
+        let outcome = press(
+            rom("Resident Evil - Director's Cut (USA).cue", serials: .read(["SLUS-00551"])), settings: EmulatorSettings(runAheadFrames: 1),
+            in: ps1)
+
+        #expect(outcome == .open(app: duckStation, arguments: ["--", cue.path(percentEncoded: false)], warning: nil))
+        #expect(
+            try String(contentsOf: data.appending(path: "gamesettings/SLUS-00551.ini"), encoding: .utf8)
+                == "[Main]\nRunaheadFrameCount = 1\n\n")
+    }
+
+    @Test func aGameWithSettingsOfItsOwnIsRefusedWithoutItsSerial() {
+        func refusal(_ fileName: String, _ serials: Serials) -> Play.Refusal? {
+            Play(
+                platformId: ROMPlatform.ps1, platformName: "PlayStation", roms: [rom(fileName, serials: serials)],
+                settings: EmulatorSettings(cdReadSpeedup: 4)
+            ).availability.refusal
+        }
+
+        #expect(
+            refusal("Ape Escape (USA).cue", .notRead)?.message
+                == "Its Serial hasn't been read yet, and DuckStation needs it for this Game's settings: it's read at the next Import.")
+        #expect(
+            refusal("Ape Escape (USA).cue", .read([nil]))?.message
+                == "Its Disc has no Serial DuckStation can use, so this Game's settings can't be applied: set them back to Default to Play it."
+        )
+        // DuckStation goes by Disc 1's.
+        #expect(refusal("Final Fantasy VII (USA).m3u", .read([nil, "SCUS-94164"])) == .noSerial(.noneOnDisc))
+        #expect(
+            refusal("Ape Escape (USA).chd", .notRead)?.message
+                == "Its Serial can't be read from a .chd yet, and DuckStation needs it for this Game's settings: set them back to Default to Play it."
+        )
+        #expect(refusal("Ape Escape (USA).cue", .read(["SCUS-94423"])) == nil)
+    }
+
+    @Test func aPlaylistOfDiscsInAFormNotReadYetSaysSoWhenPressed() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        try ps1.add("Final Fantasy IX (USA)/Final Fantasy IX (USA) (Disc 1).chd")
+        try ps1.add("Final Fantasy IX (USA)/Final Fantasy IX (USA).m3u", "Final Fantasy IX (USA) (Disc 1).chd\n")
+        let rom = LudeumROM(
+            id: 1, folderName: "Final Fantasy IX (USA)", platformId: ROMPlatform.ps1,
+            fileName: "Final Fantasy IX (USA)/Final Fantasy IX (USA).m3u", name: "Final Fantasy IX (USA)", version: "", disc: nil,
+            missing: false, archived: false)
+
+        #expect(press(rom, settings: EmulatorSettings(runAheadFrames: 1), in: ps1) == .refused(.noSerial(.unreadForm("chd"))))
+    }
+
+    @Test func aGameWithNoSettingsOfItsOwnPlaysWithoutItsSerial() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let cue = try ps1.add("Ape Escape (USA).cue")
+
+        #expect(
+            press(rom("Ape Escape (USA).cue", serials: .notRead), settings: EmulatorSettings(), in: ps1)
+                == .open(app: duckStation, arguments: ["--", cue.path(percentEncoded: false)], warning: nil))
+        #expect(!FileManager.default.fileExists(atPath: data.path(percentEncoded: false)))
+    }
+}

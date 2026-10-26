@@ -60,7 +60,7 @@ public final class Import: Sendable {
     /// each automatically or sending it to the Review queue: those Add ROM put in without a Match, or that I Add from the
     /// Review queue, and no others. A folder that can't be read is left alone, Stray files and all. `writing` is awaited
     /// just before the write step (the backup and the one transaction), so the app can stop journal edits first; `wrote`
-    /// just after it, before the Regions step, which never changes what I've edited.
+    /// just after it, before the Regions and Serials steps, which never change what I've edited.
     public func run(
         romFolders: [ROMFolder], adding: Set<StrayFile.Key> = [], writing: @Sendable () async -> Void = {},
         wrote: @Sendable () async -> Void = {}
@@ -138,6 +138,7 @@ public final class Import: Sendable {
         // A ROM given Regions counts, as does one Matched to a Game: its Game's box is for its ROMs' Regions.
         let regionsChanged = await regions.run()
         result.coversChanged = regionsChanged || !result.matched.isEmpty
+        await SerialsImport(journal: journal, sevenZip: sevenZip).run(in: romFolders)
         return result
     }
 }

@@ -490,7 +490,7 @@ struct GameDetailView: View {
                             .labelStyle(.iconOnly).buttonStyle(.hover).disabled(services.tasks.isActive(.rom(rom.id)))
                             .help(rom.missing ? "Delete this missing ROM from the journal" : "Send its files to the Trash and delete it")
                     }
-                    if let details = copyDetailsText(rom.details) {
+                    if let details = copyDetailsText(rom.details, serials: rom.serials.known) {
                         Text(details).font(.callout).foregroundStyle(.secondary)
                     }
                     if let notes = rom.details.notes { Text(notes).font(.callout).foregroundStyle(.secondary) }

@@ -721,6 +721,15 @@ enum LudeumSchema {
             try db.alter(table: "game") { t in t.add(column: "cdReadSpeedup", .integer) }
             try keepTimestamps(db, on: "game")
         }
+        // A ROM's Serials, read off its Discs: each one's in Disc order, null for a Disc with none, or null for a ROM
+        // whose Discs have none. Every PlayStation ROM's are read at the next Import (ADR 0021).
+        migrator.registerMigration("v40 serials") { db in
+            try db.alter(table: "rom") { t in
+                t.add(column: "serials", .text)
+                t.add(column: "serialsLookedUp", .boolean).notNull().defaults(to: false)
+            }
+            try keepTimestamps(db, on: "rom")
+        }
         return migrator
     }
 

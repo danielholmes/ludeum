@@ -22,7 +22,12 @@ public enum ROMFiles {
     /// A playlist's lines, less blanks and comments.
     static func playlistEntries(_ m3u: URL) -> [String] {
         guard let text = try? String(contentsOf: m3u, encoding: .utf8) else { return [] }
-        return text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        return playlistEntries(text: text)
+    }
+
+    /// A playlist's text's lines, as `playlistEntries(_:)`.
+    static func playlistEntries(text: String) -> [String] {
+        text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !$0.hasPrefix("#") }
     }
 }

@@ -169,7 +169,8 @@ extension LudeumStore {
                 db,
                 sql: """
                     SELECT id, folderName, platformId, archived, fileName, COALESCE(name, fileName) AS displayName, version,
-                        discNumber, gameId
+                        discNumber, gameId,
+                        \(try Self.hasSerials(db) ? "serials, serialsLookedUp" : "NULL AS serials, 0 AS serialsLookedUp")
                     FROM rom
                     WHERE folderName IS NOT NULL AND NOT missing AND \(condition)
                     ORDER BY displayName COLLATE NOCASE, id
@@ -181,7 +182,7 @@ extension LudeumStore {
                 let rom = LudeumROM(
                     id: row["id"], folderName: row["folderName"], platformId: row["platformId"], fileName: fileName,
                     name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
-                    missing: false, archived: row["archived"])
+                    missing: false, archived: row["archived"], serials: Serials(row))
                 return (rom, row["gameId"])
             }
         }

@@ -144,6 +144,10 @@ _Avoid_: Ownership (that's the Game's status), purchase, edition, licence, forge
 Where a Copy was released for, e.g. Europe, USA, World, Australia or Japan: the usual ones are offered, but any is allowed. A Copy can have any number of Regions, or none. A ROM's Regions are read from its name's tags when it first appears, else, when its name has none, from the DAT entry its checksum is in Hasheous; they can be edited after.
 _Avoid_: Territory, locale
 
+**Serial**:
+The product code a disc is pressed with, e.g. SLUS-00551, as the disc itself says it: for a PlayStation disc, the executable its `SYSTEM.CNF` boots, named as DuckStation names it. A ROM has one per Disc, in Disc order, read off its Discs once (only PlayStation's so far); a Disc can have none. They tell exactly which version a ROM is, and name DuckStation's per-game settings file for it. They're never typed in or taken from a ROM's name.
+_Avoid_: Product code, game ID, catalogue number, serial number
+
 **Gone**:
 A hand-recorded Copy I no longer have, with (optionally) where it went and when, a Partial date that can't come before the Copy was acquired. A Gone Copy is kept, not deleted, and can be made Owned again. A ROM is never Gone: it leaves only by being Deleted.
 _Avoid_: Sold, disposed, lost, deleted
