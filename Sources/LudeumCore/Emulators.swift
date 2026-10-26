@@ -40,14 +40,15 @@ public struct Emulator: Sendable, Equatable {
     /// The command line for a Play. It sets every Emulator setting, with the default where the Game
     /// has none, because a running MesenCE keeps the last Play's settings (ADR 0008). DuckStation
     /// and PPSSPP take settings only as a whole file, so their Plays write one first (`DuckStationSettings`,
-    /// `PPSSPPSettings`); DuckStation's is its per-game file, named by `serials`' Disc 1.
+    /// `PPSSPPSettings`); DuckStation's is its per-game file, named by `serials`' Disc 1. Only DuckStation starts from a
+    /// `saveState`.
     public func arguments(
-        rom: URL, platformId: Int64, settings: EmulatorSettings, serials: Serials = .notRead,
+        rom: URL, platformId: Int64, settings: EmulatorSettings, serials: Serials = .notRead, saveState: URL? = nil,
         duckStation: DuckStationSettings = .init(), ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2GameSettings = .init()
     ) throws -> [String] {
         switch self {
         case .duckStation:
-            try duckStation.arguments(rom: rom, settings: settings, serials: serials)
+            try duckStation.arguments(rom: rom, settings: settings, serials: serials, saveState: saveState)
         case .dolphin:
             // Lower input latency for every Game, for this launch only: frames shown as soon as
             // they're ready, with their timing smoothed. Immediately Present XFB stays off: it breaks some Games.
@@ -103,10 +104,11 @@ public struct DuckStationSettings: Sendable {
         self.oldCopy = oldCopy
     }
 
-    /// Writes the settings, then opens the ROM with no others: `--` ends DuckStation's options.
-    func arguments(rom: URL, settings: EmulatorSettings, serials: Serials) throws -> [String] {
+    /// Writes the settings, then opens the ROM, from `saveState` if given (`-statefile`): `--` ends DuckStation's options.
+    /// When the disc the state was saved with isn't where it was (a renamed ROM), DuckStation boots the ROM instead.
+    func arguments(rom: URL, settings: EmulatorSettings, serials: Serials, saveState: URL? = nil) throws -> [String] {
         try write(settings, serials: serials)
-        return ["--", rom.path(percentEncoded: false)]
+        return (saveState.map { ["-statefile", $0.path(percentEncoded: false)] } ?? []) + ["--", rom.path(percentEncoded: false)]
     }
 
     /// Writes the Game's settings into each per-game file its Serials name.
@@ -136,12 +138,15 @@ public struct DuckStationSettings: Sendable {
         }
     }
 
-    /// Where DuckStation keeps its per-game files: its settings' `[Folders] GameSettings` (from its data folder when
-    /// relative), else `gamesettings`.
-    var gameSettingsFolder: URL {
+    /// Where DuckStation keeps its per-game files.
+    var gameSettingsFolder: URL { folder("GameSettings", default: "gamesettings") }
+
+    /// One of DuckStation's folders: its settings' `[Folders] <key>` (from its data folder when relative), else `name`
+    /// in its data folder.
+    func folder(_ key: String, default name: String) -> URL {
         let ini = (try? String(contentsOf: dataFolder.appending(path: "settings.ini"), encoding: .utf8)) ?? ""
-        guard let path = Ini.value("GameSettings", in: "Folders", of: ini), !path.isEmpty else {
-            return dataFolder.appending(path: "gamesettings", directoryHint: .isDirectory)
+        guard let path = Ini.value(key, in: "Folders", of: ini), !path.isEmpty else {
+            return dataFolder.appending(path: name, directoryHint: .isDirectory)
         }
         return path.hasPrefix("/")
             ? URL(filePath: path, directoryHint: .isDirectory) : dataFolder.appending(path: path, directoryHint: .isDirectory)

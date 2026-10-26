@@ -65,7 +65,7 @@ Install the emulator for each platform you want to play. Ludeum checks each emul
 | Platform | Emulator | Version |
 | --- | --- | --- |
 | NES / Famicom, SNES / Super Famicom, Game Boy, Game Boy Color, Game Boy Advance, Master System, Game Gear, PC Engine CD | [MesenCE](https://github.com/nesdev-org/MesenCE) | 2.2.1 |
-| PlayStation | [DuckStation](https://www.duckstation.org) | build 12070 |
+| PlayStation | [DuckStation](https://www.duckstation.org) | build 12442 |
 | PlayStation 2 | [PCSX2](https://pcsx2.net) | 2.9.103 |
 | PlayStation Portable | [PPSSPP](https://www.ppsspp.org) | 1.20.4 |
 | Nintendo 64, Mega Drive / Genesis, Sega CD | [ares](https://ares-emu.net) | v148 |
@@ -79,6 +79,7 @@ PS Vita and MSX2 have ROM folders, but no emulator plays them yet. You can journ
 Ludeum also uses these command-line tools, and warns at launch if one is missing:
 
 - [7-Zip](https://www.7-zip.org) (`brew install sevenzip`) to Archive, Unarchive and Compact ROMs, and to list what's inside an archived one.
+- [Zstandard](https://facebook.github.io/zstd/) (`brew install zstd`) to show the screenshots of DuckStation save states.
 - [xdvdfs](https://github.com/antangelo/xdvdfs) (`cargo install xdvdfs-cli`), only if you have xemu. xemu boots only an XISO, so Play refuses a full Redump Xbox image; make an XISO from it with `xdvdfs pack`.
 
 Cartridge ROMs (and DS) can be kept in a `.7z`, or a `.zip` for N64 and Mega Drive, since their emulators open those directly; the Review queue lists loose ones and compacts them for you. A ROM packed in a format its emulator can't open (for example a `.7z` disc image) shows as archived. Unarchive it in Game detail (PS1, PS2, PSP, Vita, GameCube, Wii, Xbox, Sega CD, Saturn and PC Engine CD) or extract it in its ROM folder to make it playable.

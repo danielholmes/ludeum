@@ -5,10 +5,13 @@ import Foundation
 public enum SystemTool: CaseIterable, Sendable {
     /// 7-Zip's `7zz`.
     case sevenZip
+    /// Zstandard's `zstd`.
+    case zstd
 
     public var name: String {
         switch self {
         case .sevenZip: "7-Zip"
+        case .zstd: "Zstandard"
         }
     }
 
@@ -16,6 +19,7 @@ public enum SystemTool: CaseIterable, Sendable {
     public var neededFor: String {
         switch self {
         case .sevenZip: "Archive, Unarchive and Compact, and seeing what's inside an Archived ROM"
+        case .zstd: "showing DuckStation save states' screenshots"
         }
     }
 
@@ -23,12 +27,14 @@ public enum SystemTool: CaseIterable, Sendable {
     public var install: String {
         switch self {
         case .sevenZip: "brew install sevenzip"
+        case .zstd: "brew install zstd"
         }
     }
 
     public var isInstalled: Bool {
         switch self {
         case .sevenZip: SevenZip.find() != nil
+        case .zstd: Zstd.find() != nil
         }
     }
 

@@ -135,9 +135,10 @@ public struct Play: Sendable {
     }
 
     /// What a press of Play does. It writes the settings files of an Emulator that takes them only
-    /// that way. `app` finds an installed app by its bundle identifier.
+    /// that way. `app` finds an installed app by its bundle identifier. `saveState` starts DuckStation from that state.
     public func prepare(
-        locator: ROMLocator, version: VersionStatus, app: (String) -> URL?, duckStation: DuckStationSettings = .init()
+        locator: ROMLocator, version: VersionStatus, app: (String) -> URL?, saveState: URL? = nil,
+        duckStation: DuckStationSettings = .init()
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -168,7 +169,8 @@ public struct Play: Sendable {
         if emulator == .xemu, XboxDisc.kind(of: file) == .redump { return .refused(.needsXISO) }
         do {
             let arguments = try emulator.arguments(
-                rom: file, platformId: platformId, settings: settings, serials: rom.serials, duckStation: duckStation)
+                rom: file, platformId: platformId, settings: settings, serials: rom.serials, saveState: saveState,
+                duckStation: duckStation)
             if case .warn(let warning) = version { return .open(app: app, arguments: arguments, warning: warning) }
             return .open(app: app, arguments: arguments, warning: nil)
         } catch {

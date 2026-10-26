@@ -34,6 +34,8 @@ struct LudeumApp: App {
             // The Data folder can go (Dropbox quit, the link broken) while Ludeum is open.
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 launch.checkDataFolder()
+                // Back from DuckStation, perhaps, or the Data folder's back.
+                if !launch.blocked { launch.running?.services.saveStates.backUp() }
             }
         }
         .defaultSize(width: 1700, height: 900)
@@ -110,6 +112,7 @@ struct LudeumApp: App {
         }
         let services = Services(settings: settings, journal: journal)
         DockTileProgress.watch(services.tasks)
+        services.saveStates.backUp()
         running = Running(services: services, importModel: ImportModel(services: services))
     }
 

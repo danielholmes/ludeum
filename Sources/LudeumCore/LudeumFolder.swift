@@ -11,6 +11,7 @@ import Foundation
 ///     ROMs/<Platform>/
 ///     Attachments/<Platform>/<Game>/
 ///     Backups/
+///     Emulators/DuckStation/Save States/
 ///     OpenEmu Battery Saves archive/
 /// ```
 public struct LudeumFolder: Sendable, Equatable {
@@ -34,6 +35,11 @@ public struct LudeumFolder: Sendable, Equatable {
 
     /// Where Attachments' files are, in a folder per Game under one per Platform (ADR 0014). Created when first needed.
     public var attachments: URL { data.appending(path: "Attachments", directoryHint: .isDirectory) }
+
+    /// The backup of DuckStation's save states, under DuckStation's own file names. Created when first needed.
+    public var duckStationSaveStates: URL {
+        data.appending(path: "Emulators/DuckStation/Save States", directoryHint: .isDirectory)
+    }
 
     /// Where `migrate-openemu` copies OpenEmu's battery saves, keeping its `<Core>/Battery Saves/` layout.
     public var batterySaveArchive: URL { data.appending(path: "OpenEmu Battery Saves archive", directoryHint: .isDirectory) }

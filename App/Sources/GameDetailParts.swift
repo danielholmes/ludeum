@@ -482,9 +482,9 @@ enum FactStyle {
 
 /// Opens `play`'s ROM in `emulator`, with every Emulator setting on the command line. A running Emulator gets the ROM
 /// in its open window. `refused` gets why it couldn't, then or once the Emulator fails to open; `alert` gets a version
-/// check's title and message.
+/// check's title and message. `saveState` starts DuckStation from that state.
 @MainActor func startPlay(
-    _ play: Play, in emulator: Emulator, services: Services, refused: @escaping @MainActor (String) -> Void,
+    _ play: Play, in emulator: Emulator, services: Services, saveState: URL? = nil, refused: @escaping @MainActor (String) -> Void,
     alert: (_ title: String, _ message: String) -> Void
 ) {
     let version: Play.VersionStatus =
@@ -496,7 +496,9 @@ enum FactStyle {
             .ok
         }
     let locator = ROMLocator(romFolders: services.settings.romFolders)
-    switch play.prepare(locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:)) {
+    switch play.prepare(
+        locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState)
+    {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)
     case .refused(let refusal):

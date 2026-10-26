@@ -182,6 +182,13 @@ struct GameDetailView: View {
                     .buttonStyle(.hover).help("A physical or digital Copy I own, or once owned")
             }
 
+            // Save states: DuckStation's, backed up into the Data folder.
+            if !game.isBundle, emulator == .duckStation, !saveStateSerials.isEmpty {
+                SaveStatesSection(services: services, serials: saveStateSerials, refusal: playing.availability.refusal?.message) {
+                    state in play(in: .duckStation, from: state.file)
+                }
+            }
+
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)
             ForEach(bundles.filter { !$0.attachments.isEmpty }) { BundleAttachmentsSection(share: $0, open: open) }
@@ -654,11 +661,20 @@ struct GameDetailView: View {
 
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
 
-    /// Plays the Game in its Emulator, with every Emulator setting on the command line. A running
-    /// Emulator gets the ROM in its open window.
-    private func play(in emulator: Emulator) {
+    /// Plays the Game in its Emulator, with every Emulator setting on the command line, from `saveState` if given. A
+    /// running Emulator gets the ROM in its open window.
+    private func play(in emulator: Emulator, from saveState: URL? = nil) {
         playError = nil
-        startPlay(playing, in: emulator, services: services, refused: { playError = $0 }, alert: { versionAlert = ($0, $1) })
+        startPlay(
+            playing, in: emulator, services: services, saveState: saveState, refused: { playError = $0 },
+            alert: { versionAlert = ($0, $1) })
+    }
+
+    /// The Serials of the ROMs Play opens, in Disc order: the ones its save states are named by.
+    private var saveStateSerials: [String] {
+        var serials: [String] = []
+        for serial in playROMs.filter({ !$0.missing }).flatMap(\.serials.known) where !serials.contains(serial) { serials.append(serial) }
+        return serials
     }
 
     /// Reveals the ROM's file in its ROM folder.
