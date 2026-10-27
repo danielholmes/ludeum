@@ -88,8 +88,9 @@ public struct Emulator: Sendable, Equatable {
 /// Serial (`gamesettings/SLUS-00551.ini`), where its Game Properties keeps them too (ADR 0021). Ludeum's win: a setting
 /// the Game has is set, and one it hasn't is taken out, so DuckStation's own applies. Every Game fast boots, skipping the
 /// BIOS logo and running unthrottled to its first frame, unless DuckStation's game database says that breaks it (its
-/// `ForceFullBoot`, which `-fastboot` would override). The file's other settings stay, and
-/// so does what's changed in DuckStation during the Play. A multi-disc Version's file is Disc 1's, unless that keeps each
+/// `ForceFullBoot`, which `-fastboot` would override), and every Game has DuckStation's lowest input latency, presenting
+/// each frame on time and running it as late as it can before then. The file's other settings stay, and so does what's
+/// changed in DuckStation during the Play. A multi-disc Version's file is Disc 1's, unless that keeps each
 /// Disc's settings apart (`UseSeparateConfigForDiscSet`), when every Disc's file is written. Without Disc 1's Serial,
 /// nothing is: Play is refused if the Game has any (`Play.Refusal.noSerial`).
 public struct DuckStationSettings: Sendable {
@@ -152,7 +153,7 @@ public struct DuckStationSettings: Sendable {
 
     /// `ini` with `[Main] RunaheadFrameCount` set to the Game's run-ahead, `[CDROM] ReadSpeedup` and `SeekSpeedup` to
     /// its CD read and seek speedups, each taken out where it has none, and `[BIOS] PatchFastBoot` and `FastForwardBoot`
-    /// on.
+    /// and `[Display] OptimalFramePacing` and `PreFrameSleep` on (the sleep needs the pacing).
     static func applying(_ settings: EmulatorSettings, to ini: String) -> String {
         func apply(_ value: Int?, _ key: String, in section: String, of ini: String) -> String {
             value.map { Ini.setting(key, to: "\($0)", in: section, of: ini) } ?? Ini.removing(key, in: section, of: ini)
@@ -160,7 +161,8 @@ public struct DuckStationSettings: Sendable {
         var ini = apply(settings.runAheadFrames, "RunaheadFrameCount", in: "Main", of: ini)
         ini = apply(settings.cdReadSpeedup, "ReadSpeedup", in: "CDROM", of: ini)
         ini = apply(settings.cdSeekSpeedup, "SeekSpeedup", in: "CDROM", of: ini)
-        return ["PatchFastBoot", "FastForwardBoot"].reduce(ini) { Ini.setting($1, to: "true", in: "BIOS", of: $0) }
+        ini = ["PatchFastBoot", "FastForwardBoot"].reduce(ini) { Ini.setting($1, to: "true", in: "BIOS", of: $0) }
+        return ["OptimalFramePacing", "PreFrameSleep"].reduce(ini) { Ini.setting($1, to: "true", in: "Display", of: $0) }
     }
 }
 

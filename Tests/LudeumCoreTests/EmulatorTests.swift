@@ -145,7 +145,8 @@ import Testing
 
     func gameSettings(_ serial: String) -> URL { folder.appending(path: "gamesettings/\(serial).ini") }
     /// What every Play writes, the Game's own settings or none.
-    let fastBoot = "[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n"
+    let everyPlay = "[Display]\nPreFrameSleep = true\nOptimalFramePacing = true\n\n[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n"
+    let lowLatency = "[Display]\nPreFrameSleep = true\nOptimalFramePacing = true\n\n"
 
     func write(_ text: String, to file: URL) throws {
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -167,7 +168,8 @@ import Testing
         #expect(arguments == ["--", rom.path(percentEncoded: false)])
         #expect(
             contents(gameSettings("SLUS-00551"))
-                == fastBoot + "[CDROM]\nSeekSpeedup = 0\nReadSpeedup = 4\n\n[Main]\nRunaheadFrameCount = 2\n\n[GPU]\nResolutionScale = 4\n")
+                == everyPlay + "[CDROM]\nSeekSpeedup = 0\nReadSpeedup = 4\n\n[Main]\nRunaheadFrameCount = 2\n\n[GPU]\nResolutionScale = 4\n"
+        )
         // DuckStation's own settings are left alone.
         #expect(contents(folder.appending(path: "settings.ini")) == "[Main]\nRewindEnable = false\n\n[Pad1]\nUp = Keyboard/Up\n")
     }
@@ -192,11 +194,12 @@ import Testing
             """
         #expect(
             DuckStationSettings.applying(EmulatorSettings(), to: ini)
-                == "[Main]\nRewindEnable = false\n\n[BIOS]\nPatchFastBoot = true\nFastForwardBoot = true\n\n[GPU]\nResolutionScale = 4\n")
+                == lowLatency + "[Main]\nRewindEnable = false\n\n[BIOS]\nPatchFastBoot = true\nFastForwardBoot = true\n\n[GPU]\n"
+                + "ResolutionScale = 4\n")
         #expect(
             DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 0, cdSeekSpeedup: 1), to: ini)
-                == "[Main]\nRunaheadFrameCount = 0\nRewindEnable = false\n\n[CDROM]\nSeekSpeedup = 1\n\n[BIOS]\nPatchFastBoot = true\n"
-                + "FastForwardBoot = true\n\n[GPU]\nResolutionScale = 4\n")
+                == lowLatency + "[Main]\nRunaheadFrameCount = 0\nRewindEnable = false\n\n[CDROM]\nSeekSpeedup = 1\n\n[BIOS]\n"
+                + "PatchFastBoot = true\nFastForwardBoot = true\n\n[GPU]\nResolutionScale = 4\n")
     }
 
     @Test func aFileWithCRLFLineEndingsIsMergedLineByLine() {
@@ -204,32 +207,40 @@ import Testing
             "[BIOS]\r\nPatchFastBoot = false\r\n\r\n[Main]\r\nRunaheadFrameCount = 3\r\nRewindEnable = false\r\n\r\n[CDROM]\r\nReadSpeedup = 4\r\n"
         #expect(
             DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 1), to: ini)
-                == "[BIOS]\r\nFastForwardBoot = true\nPatchFastBoot = true\n\r\n[Main]\r\nRunaheadFrameCount = 1\nRewindEnable = false\r\n\r\n"
+                == lowLatency
+                + "[BIOS]\r\nFastForwardBoot = true\nPatchFastBoot = true\n\r\n[Main]\r\nRunaheadFrameCount = 1\nRewindEnable = false\r\n\r\n"
         )
         #expect(Ini.value("ReadSpeedup", in: "CDROM", of: ini) == "4")
     }
 
-    @Test func everyGameFastBootsEvenWithNoSettingsOfItsOwn() throws {
+    @Test func everyGameFastBootsWithDuckStationsLowestLatencyEvenWithNoSettingsOfItsOwn() throws {
         try settings.write(EmulatorSettings(), serials: .read(["SLUS-00551"]))
-        #expect(contents(gameSettings("SLUS-00551")) == fastBoot)
+        #expect(contents(gameSettings("SLUS-00551")) == everyPlay)
 
         try write("[Main]\nRunaheadFrameCount = 1\n", to: gameSettings("SCUS-94900"))
         try settings.write(EmulatorSettings(), serials: .read(["SCUS-94900"]))
-        #expect(contents(gameSettings("SCUS-94900")) == fastBoot)
+        #expect(contents(gameSettings("SCUS-94900")) == everyPlay)
+
+        // Turned off in DuckStation's Game Properties, they're turned back on.
+        try write("[Display]\nPreFrameSleep = false\n", to: gameSettings("SCES-00001"))
+        try settings.write(EmulatorSettings(), serials: .read(["SCES-00001"]))
+        #expect(
+            contents(gameSettings("SCES-00001"))
+                == "[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n[Display]\nOptimalFramePacing = true\nPreFrameSleep = true\n")
     }
 
     @Test func aMultiDiscVersionsSettingsAreDisc1sUnlessItKeepsEachDiscApart() throws {
         let serials = Serials.read(["SCUS-94163", "SCUS-94164", nil])
         try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
-        #expect(contents(gameSettings("SCUS-94163")) == fastBoot + "[Main]\nRunaheadFrameCount = 1\n\n")
+        #expect(contents(gameSettings("SCUS-94163")) == everyPlay + "[Main]\nRunaheadFrameCount = 1\n\n")
         #expect(contents(gameSettings("SCUS-94164")) == nil)
 
         try write("[Main]\nUseSeparateConfigForDiscSet = true\n", to: gameSettings("SCUS-94163"))
         try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
         #expect(
             contents(gameSettings("SCUS-94163"))
-                == fastBoot + "[Main]\nRunaheadFrameCount = 1\nUseSeparateConfigForDiscSet = true\n")
-        #expect(contents(gameSettings("SCUS-94164")) == fastBoot + "[Main]\nRunaheadFrameCount = 1\n\n")
+                == everyPlay + "[Main]\nRunaheadFrameCount = 1\nUseSeparateConfigForDiscSet = true\n")
+        #expect(contents(gameSettings("SCUS-94164")) == everyPlay + "[Main]\nRunaheadFrameCount = 1\n\n")
     }
 
     @Test func withoutDisc1sSerialNothingIsWritten() throws {

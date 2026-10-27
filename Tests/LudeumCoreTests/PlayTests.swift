@@ -210,7 +210,8 @@ import Testing
         #expect(outcome == .open(app: duckStation, arguments: ["--", cue.path(percentEncoded: false)], warning: nil))
         #expect(
             try String(contentsOf: data.appending(path: "gamesettings/SLUS-00551.ini"), encoding: .utf8)
-                == "[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n[Main]\nRunaheadFrameCount = 1\n\n")
+                == "[Display]\nPreFrameSleep = true\nOptimalFramePacing = true\n\n[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n"
+                + "[Main]\nRunaheadFrameCount = 1\n\n")
     }
 
     @Test func aGameWithSettingsOfItsOwnIsRefusedWithoutItsSerial() {
