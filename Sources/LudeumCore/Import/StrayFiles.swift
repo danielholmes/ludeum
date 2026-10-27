@@ -33,11 +33,10 @@ public struct StrayFile: Sendable, Equatable, Identifiable {
 }
 
 extension LudeumStore {
-    /// Every Stray file, by Platform then name. None in a journal waiting for `migrate-openemu`, which has no table for them.
+    /// Every Stray file, by Platform then name.
     func strayFiles() throws -> [StrayFile] {
         try db.read { db in
-            guard try db.tableExists("strayFile") else { return [] }
-            return try Row.fetchAll(
+            try Row.fetchAll(
                 db, sql: "SELECT id, platformId, name, fileName FROM strayFile ORDER BY platformId, name COLLATE NOCASE"
             )
             .map { StrayFile(id: $0["id"], platformId: $0["platformId"], name: $0["name"], fileName: $0["fileName"]) }

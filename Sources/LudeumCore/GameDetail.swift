@@ -72,11 +72,10 @@ extension LudeumStore {
             try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT r.id, \(Self.folderNameSQL) AS folderName, r.platformId, r.archived, r.fileName,
+                    SELECT r.id, r.folderName, r.platformId, r.archived, r.fileName,
                         COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
-                        \(try Self.hasNeedsPlaylist(db) ? "r.needsPlaylist" : "0") AS needsPlaylist,
-                        \(try Self.hasCopyDetails(db) ? "r.regions, r.acquiredOn, r.acquiredFrom, r.price, r.currency, r.notes" : "NULL AS regions, NULL AS acquiredOn, NULL AS acquiredFrom, NULL AS price, NULL AS currency, NULL AS notes"),
-                        \(try Self.hasSerials(db) ? "r.serials, r.serialsLookedUp" : "NULL AS serials, 0 AS serialsLookedUp")
+                        r.needsPlaylist, r.regions, r.acquiredOn, r.acquiredFrom, r.price, r.currency, r.notes, r.serials,
+                        r.serialsLookedUp
                     FROM rom r
                     WHERE \(condition)
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
@@ -94,26 +93,6 @@ extension LudeumStore {
         }
     }
 
-    /// Whether the journal has `rom.serials` (`v40`).
-    static func hasSerials(_ db: Database) throws -> Bool {
-        try db.columns(in: "rom").contains { $0.name == "serials" }
-    }
-
-    /// Whether the journal has `rom.needsPlaylist`: one waiting for `migrate-openemu` is held before it, with no ROM
-    /// that could need a playlist.
-    static func hasNeedsPlaylist(_ db: Database) throws -> Bool {
-        try db.columns(in: "rom").contains { $0.name == "needsPlaylist" }
-    }
-
-    /// Whether the journal's ROMs have Copy details (`v22`), which one waiting for `migrate-openemu` doesn't yet.
-    static func hasCopyDetails(_ db: Database) throws -> Bool {
-        try db.columns(in: "rom").contains { $0.name == "regions" }
-    }
-
-    /// A ROM's folder name. Only an OpenEmu ROM waiting for `migrate-openemu` has none: its OpenEmu file name
-    /// stands in, which no ROM folder ROM's name has (they have no extension).
-    private static let folderNameSQL = "COALESCE(r.folderName, r.fileName)"
-
     public func deletionSummary(_ game: GameID) throws -> DeletionSummary {
         try db.read { db in
             func count(_ sql: String) throws -> Int { try Int.fetchOne(db, sql: sql, arguments: [game]) ?? 0 }
@@ -122,8 +101,8 @@ extension LudeumStore {
                 playthroughs: try count("SELECT COUNT(*) FROM playthrough WHERE gameId = ?"),
                 roms: try count("SELECT COUNT(*) FROM rom WHERE gameId = ?"),
                 copies: try count("SELECT COUNT(*) FROM copy WHERE gameId = ?"),
-                attachments: try db.tableExists("attachment") ? count("SELECT COUNT(*) FROM attachment WHERE gameId = ?") : 0,
-                containingBundles: try db.tableExists("bundleGame") ? count("SELECT COUNT(*) FROM bundleGame WHERE gameId = ?") : 0)
+                attachments: try count("SELECT COUNT(*) FROM attachment WHERE gameId = ?"),
+                containingBundles: try count("SELECT COUNT(*) FROM bundleGame WHERE gameId = ?"))
         }
     }
 }

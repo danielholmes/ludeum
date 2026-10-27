@@ -28,14 +28,9 @@ public struct ImportResult: Sendable, Equatable {
     public var changedSomething: Bool { !(sentToReview.isEmpty && goneMissing.isEmpty && strayFiles.isEmpty) }
 }
 
-public enum ImportError: Error, Equatable {
-    /// The journal still has OpenEmu ROMs: `migrate-openemu` has to move them into ROM folders first.
-    case openEmuMigrationNeeded
-}
-
 /// Reading the ROM folders against the journal: at launch, and by hand. It never changes the folders. The journal says
 /// which ROMs there are (ADR 0017): the Import reads how their files are now, and lists any other file as a Stray file,
-/// recording it as a new ROM only when asked to add it. Refused until `migrate-openemu` has run.
+/// recording it as a new ROM only when asked to add it.
 public final class Import: Sendable {
     let matcher: Matcher
     let igdb: IGDBClient
@@ -65,7 +60,6 @@ public final class Import: Sendable {
         romFolders: [ROMFolder], adding: Set<StrayFile.Key> = [], writing: @Sendable () async -> Void = {},
         wrote: @Sendable () async -> Void = {}
     ) async throws -> ImportResult {
-        guard try !journal.needsOpenEmuMigration() else { throw ImportError.openEmuMigrationNeeded }
         var plan = ImportPlan()
         var newROMs: [(platformId: Int64, file: FolderROMFile)] = []
         // Unmatched ROMs with no checksum yet: one imported before ROMs had them, or online-only until now.

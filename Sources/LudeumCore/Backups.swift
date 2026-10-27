@@ -64,9 +64,9 @@ public enum BackupName {
 }
 
 /// The backups to delete: every backup from the last 7 days is kept, then the newest of each
-/// day up to 30 days old, then the newest of each month forever. The `before-migration`, `before-into-folders` and
-/// `before-recovery` backups are kept whatever their age, as the one way back from `migrate-openemu`, `into-folders` and
-/// `recover-openemu-renamed`; none counts as nor stands in for the newest of its day or month.
+/// day up to 30 days old, then the newest of each month forever. The `before-migration`, `before-recovery`,
+/// `before-into-folders` and `before-into-bundles` backups are kept whatever their age, as the one way back from the
+/// since-removed one-off commands that took them; none counts as nor stands in for the newest of its day or month.
 public func backupsToPrune(_ backups: [Backup], now: Date, calendar: Calendar) -> [Backup] {
     var keep = Set<URL>()
     var newestPerPeriod: [String: Backup] = [:]

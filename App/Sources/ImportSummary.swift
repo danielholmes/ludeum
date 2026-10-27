@@ -69,20 +69,6 @@ struct ImportSummaryBanner: View {
     }
 }
 
-/// Until `migrate-openemu` has moved the journal's OpenEmu ROMs into ROM folders, the main window says to run it,
-/// and Import is refused with the same words.
-struct OpenEmuMigrationBanner: View {
-    static let message =
-        "This journal still uses OpenEmu. Quit Ludeum, run `ludeum-import migrate-openemu` (try `--dry-run` first), then reopen."
-
-    var body: some View {
-        Label(LocalizedStringKey(Self.message), systemImage: "exclamationmark.triangle.fill")
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .background(.orange.opacity(0.15))
-    }
-}
-
 /// Why the last Import failed. Dismissible.
 struct ImportErrorBanner: View {
     let message: String
@@ -100,18 +86,13 @@ struct ImportErrorBanner: View {
     }
 }
 
-/// The main window's Import banners: `migrate-openemu` still to run across the top, and the last Import's
-/// failure and summary at the bottom.
+/// The main window's Import banners: the last Import's failure and summary at the bottom.
 struct ImportBanners: ViewModifier {
     @Bindable var model: ImportModel
-    let needsOpenEmuMigration: Bool
     let open: (GameID) -> Void
 
     func body(content: Content) -> some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if needsOpenEmuMigration { OpenEmuMigrationBanner() }
-            }
             .overlay(alignment: .bottom) {
                 VStack(spacing: 0) {
                     if let error = model.error {

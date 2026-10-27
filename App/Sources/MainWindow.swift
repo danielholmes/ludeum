@@ -24,8 +24,6 @@ struct MainWindow: View {
     @State private var reviewQueueCount = 0
     @State private var platformCounts: [PlatformCount] = []
     @State private var pins: [Pin] = []
-    /// The journal still has OpenEmu ROMs: `migrate-openemu` hasn't run.
-    @State private var needsOpenEmuMigration = false
     /// Picked in Add ROM, until its game is chosen.
     @State private var addingROM: PickedROM?
     /// Several picked in Add ROM at once, until each has its Platform.
@@ -142,7 +140,7 @@ struct MainWindow: View {
             }
             .navigationSplitViewColumnWidth(min: 360, ideal: 600, max: 900)
         }
-        .modifier(ImportBanners(model: importModel, needsOpenEmuMigration: needsOpenEmuMigration) { selectedGame = $0 })
+        .modifier(ImportBanners(model: importModel) { selectedGame = $0 })
         .onChange(of: selection) {
             if selection != .library { libraryFilter = LibraryFilter() }
             savedScreen = (try? JSONEncoder().encode(selection)) ?? Data()
@@ -193,7 +191,6 @@ struct MainWindow: View {
             reviewQueueCount = (try? services.journal?.reviewQueue().count) ?? 0
             platformCounts = (try? services.journal?.platformCounts()) ?? []
             pins = (try? services.journal?.pins()) ?? []
-            needsOpenEmuMigration = (try? services.journal?.needsOpenEmuMigration()) == true
             if case .pinned(let pin) = selection, !pins.contains(pin) { selection = .library }
             if case .platform(let id, _) = selection, !platformCounts.contains(where: { $0.id == id }) { selection = .library }
             if let game = selectedGame, (try? services.journal?.game(game)) == nil { selectedGame = nil }

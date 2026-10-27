@@ -50,7 +50,8 @@ import Testing
         #expect(ROMArchiving.unarchivesToOneFile(archived))
     }
 
-    @Test(arguments: IntoFolders.platforms)
+    // PS1, Sega CD, Saturn and PC Engine CD: cue sheets with their tracks, or disc images.
+    @Test(arguments: [7, 78, 32, 150] as [Int64])
     func everyDiscPlatformArchivesIntoAFolder(platform: Int64) {
         #expect(ROMPlatform.all[platform]?.archiving == .intoFolder)
     }

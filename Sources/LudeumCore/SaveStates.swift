@@ -248,7 +248,6 @@ extension LudeumStore {
     /// The Serials of every Game's ROMs: the ones whose save states are backed up.
     public func gameSerials() throws -> Set<String> {
         try db.read { db in
-            guard try Self.hasSerials(db) else { return [] }
             let rows = try String.fetchAll(
                 db, sql: "SELECT serials FROM rom WHERE gameId IS NOT NULL AND serialsLookedUp AND serials IS NOT NULL")
             return Set(rows.flatMap { text in (try? JSONDecoder().decode([String?].self, from: Data(text.utf8)))?.compactMap { $0 } ?? [] })

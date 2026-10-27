@@ -3,12 +3,6 @@ import GRDB
 
 /// The journal's migrations. Append-only since the first real Import into the production database.
 enum LudeumSchema {
-    /// The last migration a journal with OpenEmu ROMs can take. `LudeumStore` goes no further until
-    /// `migrate-openemu` has moved them into ROM folders.
-    static let lastWithOpenEmu = "v15 no openemu box art"
-    /// The migration that drops OpenEmu, which waits for `migrate-openemu`.
-    static let withoutOpenEmu = "v16 no openemu"
-
     /// A migration that drops OpenEmu was asked to run while ROMs are still OpenEmu's.
     struct OpenEmuROMsRemain: Error {}
 
@@ -398,10 +392,9 @@ enum LudeumSchema {
             try db.alter(table: "rom") { t in t.drop(column: "openEmuBoxArt") }
         }
         // OpenEmu is gone (ADR 0009): every ROM is a ROM folder's, known by its name, so `openEmuPk` goes and
-        // `folderName` is required; Sync's tables go too. Only once no ROM is OpenEmu's: `LudeumStore` holds a
-        // journal at `lastWithOpenEmu` until `migrate-openemu` has run, and this refuses rather than lose a ROM.
-        // Migrations after this one wait with it.
-        migrator.registerMigration(withoutOpenEmu) { db in
+        // `folderName` is required; Sync's tables go too. Only once no ROM is OpenEmu's (the since-removed
+        // `migrate-openemu` moved them): this refuses rather than lose a ROM.
+        migrator.registerMigration("v16 no openemu") { db in
             if try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE openEmuPk IS NOT NULL)")! {
                 throw OpenEmuROMsRemain()
             }

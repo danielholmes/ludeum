@@ -4,18 +4,6 @@ import LudeumCore
 // ludeum-import: command-line tools on top of LudeumCore.
 //
 //   ludeum-import check                    Live check of IGDB and Hasheous through the real cache.
-//   ludeum-import migrate-openemu [--dry-run] [--journal <folder>] [--library <folder>]
-//                                 [--openemu-support <folder>] [--data <folder>]
-//                                           Moves OpenEmu's ROMs into ROM folders, once (OpenEmu closed).
-//   ludeum-import into-folders [--dry-run] [--journal <folder>] [--data <folder>]
-//                                           Moves loose disc ROMs into a folder each, once (Ludeum closed).
-//   ludeum-import recover-openemu-renamed [--dry-run] [--journal <folder>] [--library <folder>]
-//                                         [--data <folder>] [--backup <before-migration.sqlite>]
-//                                           After migrate-openemu, moves in the ROMs it left missing
-//                                           whose files had been renamed, once (OpenEmu closed).
-//   ludeum-import into-bundles [--dry-run] [--journal <folder>] [--data <folder>]
-//                                           Makes the Games that were really Bundles into Bundles, once
-//                                           (Ludeum closed).
 //
 // Every command first needs the Data folder, and refuses without it in the app's words.
 // Credentials come from the environment or a .env file in the current directory
@@ -38,11 +26,10 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-/// Where the Data folder resolves to; without it, refuses with the same words as the app's sheet.
-@discardableResult
-func requireDataFolder(_ folder: LudeumFolder = .standard) -> URL {
+/// Without the Data folder, refuses with the same words as the app's sheet.
+func requireDataFolder() {
     do {
-        return try folder.checkData()
+        try LudeumFolder.standard.checkData()
     } catch {
         fail(error.remedy)
     }
@@ -70,14 +57,6 @@ func check() async throws {
 
 switch CommandLine.arguments.dropFirst().first {
 case "check": try await check()
-case "migrate-openemu":
-    try await migrateOpenEmuRun(Array(CommandLine.arguments.dropFirst(2)))
-case "into-folders":
-    try await intoFoldersRun(Array(CommandLine.arguments.dropFirst(2)))
-case "recover-openemu-renamed":
-    try await recoverOpenEmuRenamedRun(Array(CommandLine.arguments.dropFirst(2)))
-case "into-bundles":
-    try await intoBundlesRun(Array(CommandLine.arguments.dropFirst(2)))
 default:
-    fail("usage: ludeum-import check | \(migrateOpenEmuUsage) | \(intoFoldersUsage) | \(recoverOpenEmuRenamedUsage) | \(intoBundlesUsage)")
+    fail("usage: ludeum-import check")
 }

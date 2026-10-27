@@ -87,7 +87,6 @@ struct LudeumApp: App {
     }
 
     init() {
-        RenameMigration(settings: settings).run()
         checkDataFolder()
     }
 

@@ -11,11 +11,10 @@ final class LudeumHarness {
     let timeZone = TimeZone(identifier: "Australia/Sydney")!
     private(set) var journal: LudeumStore
 
-    /// `beforeOpenEmuMigration` opens it as a journal that still has OpenEmu ROMs, waiting for `migrate-openemu`.
-    init(beforeOpenEmuMigration: Bool = false) throws {
+    init() throws {
         directory = FileManager.default.temporaryDirectory
             .appending(path: "journal tests (with spaces) \(UUID().uuidString)", directoryHint: .isDirectory)
-        journal = try LudeumStore(directory: directory, clock: clock, timeZone: timeZone, beforeOpenEmuMigration: beforeOpenEmuMigration)
+        journal = try LudeumStore(directory: directory, clock: clock, timeZone: timeZone)
     }
 
     func reopen() throws {

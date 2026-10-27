@@ -76,22 +76,11 @@ public final class LudeumStore: Sendable {
     /// Where a backup is taken before every deletion of a Game or Playthrough.
     let backups: Backups?
 
-    /// Opens the journal, migrating it as far as it can go: a journal that still has OpenEmu ROMs stays at
-    /// `LudeumSchema.lastWithOpenEmu` until `migrate-openemu` has moved them (`needsOpenEmuMigration()`).
-    public convenience init(
+    /// Opens the journal, taking every migration it hasn't. A journal with data is backed up first; one just made has
+    /// nothing to lose. One that still has OpenEmu ROMs is refused (`LudeumSchema.OpenEmuROMsRemain`).
+    public init(
         directory: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current, backups: Backups? = nil
     ) throws {
-        try self.init(directory: directory, clock: clock, timeZone: timeZone, backups: backups, beforeOpenEmuMigration: false)
-    }
-
-    /// `beforeOpenEmuMigration` stops at `LudeumSchema.lastWithOpenEmu` whatever the ROMs are, as a journal
-    /// with OpenEmu ROMs does.
-    init(
-        directory: URL, clock: TimeSource = SystemTimeSource(), timeZone: TimeZone = .current, backups: Backups? = nil,
-        beforeOpenEmuMigration: Bool
-    )
-        throws
-    {
         self.backups = backups
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var config = Configuration()
@@ -101,51 +90,12 @@ public final class LudeumStore: Sendable {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         self.calendar = calendar
-        let applied = try db.read { try LudeumSchema.migrator.appliedIdentifiers($0) }
-        // A journal with data is backed up before a migration changes it; one just made has nothing to lose.
-        var backUpFirst = !applied.isEmpty
-        if applied.contains(LudeumSchema.withoutOpenEmu) {
-            try migrate(upTo: nil, backingUpFirst: &backUpFirst)
-        } else {
-            try migrate(upTo: LudeumSchema.lastWithOpenEmu, backingUpFirst: &backUpFirst)
-        }
-        if !beforeOpenEmuMigration { try completeMigrations(backingUpFirst: &backUpFirst) }
-    }
-
-    /// Takes the migrations held back while ROMs were OpenEmu's, once none are. Does nothing while some are.
-    /// `migrate-openemu` calls it straight after its own backup, so it takes none.
-    func completeMigrations() throws {
-        var backUpFirst = false
-        try completeMigrations(backingUpFirst: &backUpFirst)
-    }
-
-    private func completeMigrations(backingUpFirst backUpFirst: inout Bool) throws {
-        let hasOpenEmuROMs = try db.read { db in
-            try db.columns(in: "rom").contains { $0.name == "openEmuPk" }
-                && Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM rom WHERE openEmuPk IS NOT NULL)")!
-        }
-        if !hasOpenEmuROMs { try migrate(upTo: nil, backingUpFirst: &backUpFirst) }
-    }
-
-    /// Migrates the journal up to `target` (nil for every migration). With `backUpFirst`, a journal with a migration
-    /// still to take is backed up before it runs, once: `backUpFirst` is cleared once the backup is taken.
-    private func migrate(upTo target: String?, backingUpFirst backUpFirst: inout Bool) throws {
         let migrator = LudeumSchema.migrator
-        let wanted =
-            target.flatMap { t in migrator.migrations.firstIndex(of: t).map { migrator.migrations.prefix(through: $0) } }
-            ?? migrator.migrations[...]
-        let pending = try db.read { db in try !Set(wanted).isSubset(of: migrator.appliedIdentifiers(db)) }
-        if backUpFirst, pending {
-            try backups?.backUp(self, operation: .beforeSchemaMigration)
-            backUpFirst = false
+        let (applied, completed) = try db.read { db in
+            (try migrator.appliedIdentifiers(db), try migrator.hasCompletedMigrations(db))
         }
-        if let target { try migrator.migrate(db, upTo: target) } else { try migrator.migrate(db) }
-    }
-
-    /// The journal still has OpenEmu ROMs: `migrate-openemu` hasn't moved them into ROM folders yet. Until it has,
-    /// Import is refused.
-    public func needsOpenEmuMigration() throws -> Bool {
-        try db.read { try !LudeumSchema.migrator.hasCompletedMigrations($0) }
+        if !applied.isEmpty, !completed { try backups?.backUp(self, operation: .beforeSchemaMigration) }
+        try migrator.migrate(db)
     }
 
     // MARK: Platforms and Games

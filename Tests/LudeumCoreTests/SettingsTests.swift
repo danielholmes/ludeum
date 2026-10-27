@@ -48,15 +48,6 @@ import Testing
         #expect(settings().hasheousKey == nil)
     }
 
-    @Test func openEmusLibraryHasADefaultAndCanBeChanged() {
-        let s = settings()
-        #expect(s.openEmuLibrary == AppSettings.openEmuDefaultLibrary)
-
-        s.openEmuLibrary = URL(filePath: "/tmp/OpenEmu Library", directoryHint: .isDirectory)
-
-        #expect(settings().openEmuLibrary.path(percentEncoded: false) == "/tmp/OpenEmu Library/")
-    }
-
     @Test func theROMFoldersAndBackupsAreInTheDataFolderWhateverOldSettingsSay() {
         defaults.set("/old/games", forKey: "romFoldersRoot")
         defaults.set("/old/PS2", forKey: "ps2Folder")

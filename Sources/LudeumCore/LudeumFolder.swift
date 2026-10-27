@@ -20,7 +20,7 @@ public struct LudeumFolder: Sendable, Equatable {
     /// The Data folder: normally `Data/` in the Ludeum folder, often a link into Dropbox.
     public let data: URL
 
-    /// `data` stands in for the Data folder, for one run only (`migrate-openemu --data`).
+    /// `data` stands in for the Data folder, in tests.
     public init(url: URL, data: URL? = nil) {
         self.url = url
         self.data = data ?? url.appending(path: "Data", directoryHint: .isDirectory)
@@ -48,7 +48,7 @@ public struct LudeumFolder: Sendable, Equatable {
         data.appending(path: "Emulators/DuckStation/Memory Cards", directoryHint: .isDirectory)
     }
 
-    /// Where `migrate-openemu` copies OpenEmu's battery saves, keeping its `<Core>/Battery Saves/` layout.
+    /// Where the since-removed `migrate-openemu` copied OpenEmu's Game saves, keeping its `<Core>/Battery Saves/` layout.
     public var batterySaveArchive: URL { data.appending(path: "OpenEmu Battery Saves archive", directoryHint: .isDirectory) }
 
     /// A Platform's ROM folder, named for it under `ROMs/`. Nil for a Platform without one. Created when first needed.

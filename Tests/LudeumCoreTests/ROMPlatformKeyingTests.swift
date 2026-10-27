@@ -8,18 +8,29 @@ import Testing
 @Suite struct ROMPlatformKeyingTests {
     let directory = FileManager.default.temporaryDirectory.appending(path: "rom keying \(UUID().uuidString)", directoryHint: .isDirectory)
 
-    /// A journal at "v13 players", with `setUp` run against it, then opened as the current schema.
-    func oldJournal(_ setUp: (Database) throws -> Void) throws -> LudeumStore {
+    /// A journal at "v13 players", with `setUp` run against it, then migrated up to `migration`.
+    func oldDatabase(upTo migration: String, _ setUp: (Database) throws -> Void) throws -> DatabaseQueue {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
         try LudeumSchema.migrator.migrate(db, upTo: "v13 players")
         try db.write(setUp)
-        try db.close()
+        try LudeumSchema.migrator.migrate(db, upTo: migration)
+        return db
+    }
+
+    /// A journal at "v13 players", with `setUp` run against it, then opened as the current schema.
+    func oldJournal(_ setUp: (Database) throws -> Void) throws -> LudeumStore {
+        try oldDatabase(upTo: "v13 players", setUp).close()
         return try LudeumStore(directory: directory)
     }
 
+    /// As `oldJournal`, but migrated only as far as OpenEmu ROMs can go, since `LudeumStore` refuses a journal with any.
+    func oldJournalWithOpenEmuROMs(_ setUp: (Database) throws -> Void) throws -> DatabaseQueue {
+        try oldDatabase(upTo: "v15 no openemu box art", setUp)
+    }
+
     @Test func eachROMTakesItsGamesPlatformElseItsSystemsFirst() throws {
-        let journal = try oldJournal { db in
+        let db = try oldJournalWithOpenEmuROMs { db in
             try db.execute(
                 sql: """
                     INSERT INTO platform VALUES (22, 'Game Boy Color'), (8, 'PlayStation 2');
@@ -32,14 +43,14 @@ import Testing
                     """)
         }
 
-        #expect(try journal.roms(of: 1).map(\.platformId) == [22])
-        #expect(try journal.roms(of: 2).map(\.platformId) == [8])
-        let review = try #require(try journal.reviewQueue().unmatched.first)
-        #expect(review.platformId == 33)
-        #expect(try journal.platform(33)?.name == "Game Boy")
-        let columns = try journal.db.read { try $0.columns(in: "rom").map(\.name) }
+        func platforms(_ sql: String) throws -> [Int64] { try db.read { try Int64.fetchAll($0, sql: sql) } }
+        #expect(try platforms("SELECT platformId FROM rom WHERE gameId = 1") == [22])
+        #expect(try platforms("SELECT platformId FROM rom WHERE gameId = 2") == [8])
+        #expect(try platforms("SELECT platformId FROM rom WHERE gameId IS NULL") == [33])
+        #expect(try db.read { try String.fetchOne($0, sql: "SELECT name FROM platform WHERE id = 33") } == "Game Boy")
+        let columns = try db.read { try $0.columns(in: "rom").map(\.name) }
         #expect(!columns.contains("systemId"))
-        #expect(try journal.db.read { try String.fetchOne($0, sql: "SELECT md5 FROM rom WHERE openEmuPk = 11") } == "bb")
+        #expect(try db.read { try String.fetchOne($0, sql: "SELECT md5 FROM rom WHERE openEmuPk = 11") } == "bb")
     }
 
     @Test func aROMFolderROMKeepsItsFoldersPlatformWhateverItsGames() throws {

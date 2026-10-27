@@ -64,8 +64,7 @@ public struct Attachments: Sendable {
     /// The Game's Attachments: Manuals first, then by name.
     public func attachments(of game: GameID) throws -> [Attachment] {
         try journal.db.read { db in
-            guard try db.tableExists("attachment") else { return [] }
-            return try Row.fetchAll(
+            try Row.fetchAll(
                 db, sql: "\(Self.selectWithFolder) WHERE a.gameId = ? ORDER BY a.manual DESC, a.fileName COLLATE NOCASE, a.id",
                 arguments: [game]
             )
@@ -323,8 +322,7 @@ public struct Attachments: Sendable {
     @discardableResult
     public func checkFiles(_ game: GameID? = nil) throws -> Bool {
         let rows = try journal.db.read { db in
-            guard try db.tableExists("attachment") else { return [Row]() }
-            return try Row.fetchAll(db, sql: "\(Self.selectWithFolder) WHERE ? IS NULL OR a.gameId = ?", arguments: [game, game])
+            try Row.fetchAll(db, sql: "\(Self.selectWithFolder) WHERE ? IS NULL OR a.gameId = ?", arguments: [game, game])
         }
         let changed = rows.map(attachment).filter { $0.missing == exists($0.url) }
         guard !changed.isEmpty else { return false }
@@ -375,8 +373,7 @@ public struct Attachments: Sendable {
     @discardableResult
     public func followAll() throws -> Bool {
         let games = try journal.db.read { db in
-            guard try db.columns(in: "game").contains(where: { $0.name == "attachmentFolder" }) else { return [GameID]() }
-            return try GameID.fetchAll(db, sql: "SELECT id FROM game WHERE attachmentFolder IS NOT NULL ORDER BY id")
+            try GameID.fetchAll(db, sql: "SELECT id FROM game WHERE attachmentFolder IS NOT NULL ORDER BY id")
         }
         var moved = false
         for game in games where try follow(game) { moved = true }
@@ -388,8 +385,7 @@ extension LudeumStore {
     /// Attachments whose files are missing, by Game then name.
     func missingAttachments() throws -> [MissingAttachment] {
         let rows = try db.read { db in
-            guard try db.tableExists("attachment") else { return [Row]() }
-            return try Row.fetchAll(
+            try Row.fetchAll(
                 db,
                 sql: """
                     SELECT a.id, a.fileName, a.gameId FROM attachment a JOIN game g ON g.id = a.gameId

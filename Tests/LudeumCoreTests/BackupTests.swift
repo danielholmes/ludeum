@@ -255,16 +255,17 @@ import Testing
         #expect(try backups().all().isEmpty)
     }
 
-    @Test func oneWaitingForMigrateOpenEmuIsntBackedUpAgainEachLaunch() throws {
-        try oldJournal(at: LudeumSchema.lastWithOpenEmu)
+    @Test func oneThatStillHasOpenEmuROMsIsRefusedWithItsROMsKept() throws {
+        try oldJournal(at: "v15 no openemu box art")
         let db = try DatabaseQueue(path: journalFolder.appending(path: "journal.sqlite").path(percentEncoded: false))
         try db.write {
             try $0.execute(sql: "INSERT INTO rom (openEmuPk, md5, fileName, platformId) VALUES (10, 'aa', 'Super Metroid.sfc', 19)")
         }
+
+        #expect(throws: LudeumSchema.OpenEmuROMsRemain.self) { try open() }
+
+        #expect(try db.read { try LudeumSchema.migrator.appliedIdentifiers($0).contains("v16 no openemu") } == false)
+        #expect(try db.read { try Int.fetchOne($0, sql: "SELECT openEmuPk FROM rom") } == 10)
         try db.close()
-
-        _ = try open()
-
-        #expect(try backups().all().isEmpty)
     }
 }

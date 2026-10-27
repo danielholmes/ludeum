@@ -149,8 +149,6 @@ extension LudeumStore {
 
     /// Present ROMs the last read of their ROM folder found in both forms, Matched or not, by name.
     private func bothForms() throws -> [BothFormsROM] {
-        // A journal waiting for `migrate-openemu` is held before `rom.inBothForms`.
-        guard try db.read({ db in try db.columns(in: "rom").contains { $0.name == "inBothForms" } }) else { return [] }
         return try presentFolderROMs(where: "inBothForms").map { BothFormsROM(rom: $0.rom, game: $0.game) }
     }
 
@@ -169,8 +167,7 @@ extension LudeumStore {
                 db,
                 sql: """
                     SELECT id, folderName, platformId, archived, fileName, COALESCE(name, fileName) AS displayName, version,
-                        discNumber, gameId,
-                        \(try Self.hasSerials(db) ? "serials, serialsLookedUp" : "NULL AS serials, 0 AS serialsLookedUp")
+                        discNumber, gameId, serials, serialsLookedUp
                     FROM rom
                     WHERE folderName IS NOT NULL AND NOT missing AND \(condition)
                     ORDER BY displayName COLLATE NOCASE, id

@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 
-/// The app's settings: secrets in a `SecretStore` (the Keychain), OpenEmu's library in user defaults. Where Ludeum
+/// The app's settings: secrets in a `SecretStore` (the Keychain). Where Ludeum
 /// keeps its own things is fixed, not a setting: the Ludeum folder (ADR 0010).
 /// Sendable because `UserDefaults` and every `SecretStore` are thread-safe.
 public final class AppSettings: @unchecked Sendable {
@@ -69,32 +69,15 @@ public final class AppSettings: @unchecked Sendable {
 
     // MARK: - Folders
 
-    /// Defaults to wherever OpenEmu itself keeps its library.
-    public var openEmuLibrary: URL {
-        get {
-            defaults.string(forKey: Keys.openEmuLibrary).map { URL(filePath: $0, directoryHint: .isDirectory) }
-                ?? Self.openEmuDefaultLibrary
-        }
-        set { defaults.set(newValue.path(percentEncoded: false), forKey: Keys.openEmuLibrary) }
-    }
-
     /// Every ROM folder an Import reads, in the Data folder.
     public var romFolders: [ROMFolder] { folder.romFolders }
 
     /// Backups into `Backups/` in the Data folder.
     public func backups() -> Backups { Backups(folder: folder.backups) }
 
-    static var openEmuDefaultLibrary: URL {
-        let path =
-            (UserDefaults(suiteName: "org.openemu.OpenEmu")?.string(forKey: "databasePath")
-            ?? "~/Library/Application Support/OpenEmu/Game Library") as NSString
-        return URL(filePath: path.expandingTildeInPath, directoryHint: .isDirectory)
-    }
-
     enum Keys {
         static let igdbClientID = "igdb-client-id"
         static let igdbClientSecret = "igdb-client-secret"
         static let hasheousKey = "hasheous-api-key"
-        static let openEmuLibrary = "openEmuLibrary"
     }
 }
