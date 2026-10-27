@@ -188,6 +188,10 @@ struct GameDetailView: View {
                     state in play(in: .duckStation, from: state.file)
                 }
             }
+            // Memory card: each ROM's, in the Data folder where DuckStation's pointed at it.
+            if !game.isBundle, emulator == .duckStation, !memoryCardROMs.isEmpty {
+                MemoryCardSection(services: services, roms: memoryCardROMs)
+            }
 
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)
@@ -675,6 +679,12 @@ struct GameDetailView: View {
         var serials: [String] = []
         for serial in playROMs.filter({ !$0.missing }).flatMap(\.serials.known) where !serials.contains(serial) { serials.append(serial) }
         return serials
+    }
+
+    /// The present ROMs Play opens, one for each Disc 1 Serial, which names its memory card.
+    private var memoryCardROMs: [LudeumROM] {
+        var serials: Set<String> = []
+        return playROMs.filter { rom in !rom.missing && rom.serials.first.map { serials.insert($0).inserted } == true }
     }
 
     /// Reveals the ROM's file in its ROM folder.

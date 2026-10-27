@@ -43,12 +43,12 @@ public struct Emulator: Sendable, Equatable {
     /// `PPSSPPSettings`); DuckStation's is its per-game file, named by `serials`' Disc 1. Only DuckStation starts from a
     /// `saveState`.
     public func arguments(
-        rom: URL, platformId: Int64, settings: EmulatorSettings, serials: Serials = .notRead, saveState: URL? = nil,
+        rom: URL, platformId: Int64, settings: EmulatorSettings, serials: Serials = .notRead, saveState: URL? = nil, app: URL? = nil,
         duckStation: DuckStationSettings = .init(), ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2GameSettings = .init()
     ) throws -> [String] {
         switch self {
         case .duckStation:
-            try duckStation.arguments(rom: rom, settings: settings, serials: serials, saveState: saveState)
+            try duckStation.arguments(rom: rom, settings: settings, serials: serials, saveState: saveState, app: app)
         case .dolphin:
             // Lower input latency for every Game, for this launch only: frames shown as soon as
             // they're ready, with their timing smoothed. Immediately Present XFB stays off: it breaks some Games.
@@ -91,48 +91,64 @@ public struct Emulator: Sendable, Equatable {
 /// `ForceFullBoot`, which `-fastboot` would override), and every Game has DuckStation's lowest input latency, presenting
 /// each frame on time and running it as late as it can before then. The file's other settings stay, and so does what's
 /// changed in DuckStation during the Play. A multi-disc Version's file is Disc 1's, unless that keeps each
-/// Disc's settings apart (`UseSeparateConfigForDiscSet`), when every Disc's file is written. Without Disc 1's Serial,
-/// nothing is: Play is refused if the Game has any (`Play.Refusal.noSerial`).
+/// Disc's settings apart (`UseSeparateConfigForDiscSet`), when every Disc's file is written. Every Disc's file points
+/// card 1 at the ROM's memory card in the Data folder (ADR 0023). Without Disc 1's Serial, nothing is written: Play is
+/// refused (`Play.Refusal.noSerial`).
 public struct DuckStationSettings: Sendable {
     /// DuckStation's data folder, holding its `settings.ini`.
     let dataFolder: URL
     /// The copy of DuckStation's `settings.ini` a Play wrote for `-settings` before DuckStation dropped it (build 8843).
     let oldCopy: URL
+    /// Whose Data folder holds each ROM's memory card.
+    let ludeum: LudeumFolder
 
     public init(
         dataFolder: URL = URL.applicationSupportDirectory.appending(path: "DuckStation", directoryHint: .isDirectory),
-        oldCopy: URL = LudeumFolder.standard.url.appending(path: "DuckStation settings.ini")
+        oldCopy: URL = LudeumFolder.standard.url.appending(path: "DuckStation settings.ini"), ludeum: LudeumFolder = .standard
     ) {
         self.dataFolder = dataFolder
         self.oldCopy = oldCopy
+        self.ludeum = ludeum
     }
 
-    /// Writes the settings, then opens the ROM, from `saveState` if given (`-statefile`): `--` ends DuckStation's options.
-    /// When the disc the state was saved with isn't where it was (a renamed ROM), DuckStation boots the ROM instead.
-    func arguments(rom: URL, settings: EmulatorSettings, serials: Serials, saveState: URL? = nil) throws -> [String] {
+    /// Copies DuckStation's own card into the Data folder if it hasn't the ROM's yet, writes the settings, then opens the
+    /// ROM, from `saveState` if given (`-statefile`): `--` ends DuckStation's options. When the disc the state was saved
+    /// with isn't where it was (a renamed ROM), DuckStation boots the ROM instead. `app` is DuckStation's, whose game
+    /// database names its own cards.
+    func arguments(rom: URL, settings: EmulatorSettings, serials: Serials, saveState: URL? = nil, app: URL? = nil) throws
+        -> [String]
+    {
+        if let first = serials.first {
+            try DuckStationMemoryCards(duckStation: self).moveIn(serial: first, rom: rom, resources: app.map(GameDatabase.resources))
+        }
         try write(settings, serials: serials)
         return (saveState.map { ["-statefile", $0.path(percentEncoded: false)] } ?? []) + ["--", rom.path(percentEncoded: false)]
     }
 
-    /// Writes the Game's settings into each per-game file its Serials name.
+    /// Writes the Game's settings into each per-game file its Serials name, and points every Disc's card 1 at the ROM's
+    /// card in the Data folder, making the folder DuckStation writes it into. Refused while the Data folder is missing,
+    /// so a card is never saved somewhere Dropbox doesn't see.
     func write(_ settings: EmulatorSettings, serials: Serials) throws {
         try? FileManager.default.removeItem(at: oldCopy)
         guard let first = serials.first else { return }
-        let folder = gameSettingsFolder
-        func file(_ serial: String) -> URL {
-            folder.appending(path: String(serial.map { "/:".contains($0) ? "_" : $0 }) + ".ini")
-        }
+        try ludeum.checkData()
+        let cards = DuckStationMemoryCards(duckStation: self)
+        try FileManager.default.createDirectory(at: cards.folder, withIntermediateDirectories: true)
+        let card = cards.card(of: first)
         var toWrite = [first]
-        let disc1 = (try? String(contentsOf: file(first), encoding: .utf8)) ?? ""
+        let disc1 = (try? String(contentsOf: gameSettingsFile(first), encoding: .utf8)) ?? ""
         if Ini.value("UseSeparateConfigForDiscSet", in: "Main", of: disc1).map(Ini.isTrue) == true {
             for serial in serials.known where !toWrite.contains(serial) { toWrite.append(serial) }
         }
-        for serial in toWrite {
-            let url = file(serial)
+        // The other Discs' files have the card alone: DuckStation goes by Disc 1's for a disc set it knows, but by each
+        // Disc's own for one it doesn't.
+        for serial in serials.known.reduce(into: [first], { if !$0.contains($1) { $0.append($1) } }) {
+            let url = gameSettingsFile(serial)
             let original = try? String(contentsOf: url, encoding: .utf8)
-            let updated = Self.applying(settings, to: original ?? "")
+            let ini = toWrite.contains(serial) ? Self.applying(settings, to: original ?? "") : original ?? ""
+            let updated = Self.pointing(at: card, in: ini)
             guard updated != original else { continue }
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: gameSettingsFolder, withIntermediateDirectories: true)
             try updated.write(to: url, atomically: true, encoding: .utf8)
         }
     }
@@ -140,11 +156,17 @@ public struct DuckStationSettings: Sendable {
     /// Where DuckStation keeps its per-game files.
     var gameSettingsFolder: URL { folder("GameSettings", default: "gamesettings") }
 
-    /// One of DuckStation's folders: its settings' `[Folders] <key>` (from its data folder when relative), else `name`
+    /// The per-game file for a disc's Serial.
+    func gameSettingsFile(_ serial: String) -> URL { gameSettingsFolder.appending(path: Self.fileName(serial) + ".ini") }
+
+    /// A Serial as a file's name: `/` and `:` can't be in one.
+    static func fileName(_ serial: String) -> String { String(serial.map { "/:".contains($0) ? "_" : $0 }) }
+
+    /// One of DuckStation's folders: its settings' `[<section>] <key>` (from its data folder when relative), else `name`
     /// in its data folder.
-    func folder(_ key: String, default name: String) -> URL {
+    func folder(_ key: String, in section: String = "Folders", default name: String) -> URL {
         let ini = (try? String(contentsOf: dataFolder.appending(path: "settings.ini"), encoding: .utf8)) ?? ""
-        guard let path = Ini.value(key, in: "Folders", of: ini), !path.isEmpty else {
+        guard let path = Ini.value(key, in: section, of: ini), !path.isEmpty else {
             return dataFolder.appending(path: name, directoryHint: .isDirectory)
         }
         return path.hasPrefix("/")
@@ -163,6 +185,13 @@ public struct DuckStationSettings: Sendable {
         ini = apply(settings.cdSeekSpeedup, "SeekSpeedup", in: "CDROM", of: ini)
         ini = ["PatchFastBoot", "FastForwardBoot"].reduce(ini) { Ini.setting($1, to: "true", in: "BIOS", of: $0) }
         return ["OptimalFramePacing", "PreFrameSleep"].reduce(ini) { Ini.setting($1, to: "true", in: "Display", of: $0) }
+    }
+
+    /// `ini` with card 1 the one shared card at `card`, whatever DuckStation's Game Properties set it to.
+    static func pointing(at card: URL, in ini: String) -> String {
+        Ini.setting(
+            "Card1Path", to: card.path(percentEncoded: false), in: "MemoryCards",
+            of: Ini.setting("Card1Type", to: "Shared", in: "MemoryCards", of: ini))
     }
 }
 
@@ -286,9 +315,6 @@ public struct EmulatorSettings: Sendable, Equatable {
     public static let runAheadRange = 0...10
     public static let cdReadSpeedupRange = 0...6
     public static let cdSeekSpeedupRange = 0...6
-
-    /// Whether it has any setting of its own DuckStation's Play writes into its per-game file.
-    var hasDuckStationSettings: Bool { runAheadFrames != nil || cdReadSpeedup != nil || cdSeekSpeedup != nil }
 
     public init(
         runAheadFrames: Int? = nil, gameBoyModel: GameBoyModel? = nil, cdReadSpeedup: Int? = nil, cdSeekSpeedup: Int? = nil

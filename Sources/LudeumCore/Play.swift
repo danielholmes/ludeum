@@ -29,8 +29,8 @@ public struct Play: Sendable {
         case couldntWriteSettings(Emulator, String)
         /// An Xbox ROM that's a full Redump image, which xemu can't boot.
         case needsXISO
-        /// A PlayStation Game with DuckStation settings of its own, whose ROM's Serial (Disc 1's) isn't known, so its
-        /// per-game file can't be named (ADR 0021).
+        /// A PlayStation Game whose ROM's Serial (Disc 1's) isn't known, so its per-game file can't be named (ADR 0021)
+        /// to point DuckStation at its memory card in the Data folder (ADR 0023).
         case noSerial(SerialMissing)
 
         public enum SerialMissing: Sendable, Equatable {
@@ -57,11 +57,11 @@ public struct Play: Sendable {
             case .couldntWriteSettings(let emulator, let why): "Couldn't write \(emulator.name)'s settings: \(why)"
             case .needsXISO: "It's a full Redump image, and xemu boots only an XISO: make one with `xdvdfs pack`, then put it in its place."
             case .noSerial(.notReadYet):
-                "Its Serial hasn't been read yet, and DuckStation needs it for this Game's settings: it's read at the next Import."
+                "Its Serial hasn't been read yet, and DuckStation needs it to keep its memory card in the Data folder: it's read at the next Import."
             case .noSerial(.noneOnDisc):
-                "Its Disc has no Serial DuckStation can use, so this Game's settings can't be applied: set them back to Default to Play it."
+                "Its Disc has no Serial DuckStation can use, so its memory card can't be kept in the Data folder."
             case .noSerial(.unreadForm(let ext)):
-                "Its Serial can't be read from a .\(ext) yet, and DuckStation needs it for this Game's settings: set them back to Default to Play it."
+                "Its Serial can't be read from a .\(ext) yet, so its memory card can't be kept in the Data folder."
             }
         }
     }
@@ -97,7 +97,7 @@ public struct Play: Sendable {
         }
         if roms.contains(where: { busyROMs.contains($0.id) }) { return .refused(.busy) }
         if rom?.needsPlaylist == true { return .refused(.needsPlaylist) }
-        if emulator == .duckStation, settings.hasDuckStationSettings, let rom, rom.serials.first == nil {
+        if emulator == .duckStation, let rom, rom.serials.first == nil {
             return .refused(.noSerial(Self.serialMissing(rom)))
         }
         return .ready(emulator)
@@ -169,7 +169,7 @@ public struct Play: Sendable {
         if emulator == .xemu, XboxDisc.kind(of: file) == .redump { return .refused(.needsXISO) }
         do {
             let arguments = try emulator.arguments(
-                rom: file, platformId: platformId, settings: settings, serials: rom.serials, saveState: saveState,
+                rom: file, platformId: platformId, settings: settings, serials: rom.serials, saveState: saveState, app: app,
                 duckStation: duckStation)
             if case .warn(let warning) = version { return .open(app: app, arguments: arguments, warning: warning) }
             return .open(app: app, arguments: arguments, warning: nil)

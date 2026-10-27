@@ -141,7 +141,20 @@ import Testing
 @Suite struct DuckStationSettingsTests {
     let folder = FileManager.default.temporaryDirectory.appending(
         path: "duckstation tests \(UUID().uuidString)", directoryHint: .isDirectory)
-    var settings: DuckStationSettings { DuckStationSettings(dataFolder: folder, oldCopy: folder.appending(path: "old copy.ini")) }
+    var ludeum: LudeumFolder { LudeumFolder(url: folder.appending(path: "Ludeum", directoryHint: .isDirectory)) }
+    var settings: DuckStationSettings {
+        DuckStationSettings(dataFolder: folder, oldCopy: folder.appending(path: "old copy.ini"), ludeum: ludeum)
+    }
+
+    init() throws {
+        try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
+    }
+
+    /// What every Play points card 1 at: the ROM's card in the Data folder, named by Disc 1's Serial.
+    func card(_ serial: String) -> String {
+        let path = ludeum.data.appending(path: "Emulators/DuckStation/Memory Cards/\(serial).mcd").path(percentEncoded: false)
+        return "[MemoryCards]\nCard1Path = \(path)\nCard1Type = Shared\n\n"
+    }
 
     func gameSettings(_ serial: String) -> URL { folder.appending(path: "gamesettings/\(serial).ini") }
     /// What every Play writes, the Game's own settings or none.
@@ -168,8 +181,8 @@ import Testing
         #expect(arguments == ["--", rom.path(percentEncoded: false)])
         #expect(
             contents(gameSettings("SLUS-00551"))
-                == everyPlay + "[CDROM]\nSeekSpeedup = 0\nReadSpeedup = 4\n\n[Main]\nRunaheadFrameCount = 2\n\n[GPU]\nResolutionScale = 4\n"
-        )
+                == card("SLUS-00551") + everyPlay
+                + "[CDROM]\nSeekSpeedup = 0\nReadSpeedup = 4\n\n[Main]\nRunaheadFrameCount = 2\n\n[GPU]\nResolutionScale = 4\n")
         // DuckStation's own settings are left alone.
         #expect(contents(folder.appending(path: "settings.ini")) == "[Main]\nRewindEnable = false\n\n[Pad1]\nUp = Keyboard/Up\n")
     }
@@ -215,32 +228,34 @@ import Testing
 
     @Test func everyGameFastBootsWithDuckStationsLowestLatencyEvenWithNoSettingsOfItsOwn() throws {
         try settings.write(EmulatorSettings(), serials: .read(["SLUS-00551"]))
-        #expect(contents(gameSettings("SLUS-00551")) == everyPlay)
+        #expect(contents(gameSettings("SLUS-00551")) == card("SLUS-00551") + everyPlay)
 
         try write("[Main]\nRunaheadFrameCount = 1\n", to: gameSettings("SCUS-94900"))
         try settings.write(EmulatorSettings(), serials: .read(["SCUS-94900"]))
-        #expect(contents(gameSettings("SCUS-94900")) == everyPlay)
+        #expect(contents(gameSettings("SCUS-94900")) == card("SCUS-94900") + everyPlay)
 
         // Turned off in DuckStation's Game Properties, they're turned back on.
         try write("[Display]\nPreFrameSleep = false\n", to: gameSettings("SCES-00001"))
         try settings.write(EmulatorSettings(), serials: .read(["SCES-00001"]))
         #expect(
             contents(gameSettings("SCES-00001"))
-                == "[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n[Display]\nOptimalFramePacing = true\nPreFrameSleep = true\n")
+                == card("SCES-00001")
+                + "[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n[Display]\nOptimalFramePacing = true\nPreFrameSleep = true\n")
     }
 
     @Test func aMultiDiscVersionsSettingsAreDisc1sUnlessItKeepsEachDiscApart() throws {
         let serials = Serials.read(["SCUS-94163", "SCUS-94164", nil])
         try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
-        #expect(contents(gameSettings("SCUS-94163")) == everyPlay + "[Main]\nRunaheadFrameCount = 1\n\n")
-        #expect(contents(gameSettings("SCUS-94164")) == nil)
+        #expect(contents(gameSettings("SCUS-94163")) == card("SCUS-94163") + everyPlay + "[Main]\nRunaheadFrameCount = 1\n\n")
+        // Disc 2's has Disc 1's card alone.
+        #expect(contents(gameSettings("SCUS-94164")) == card("SCUS-94163"))
 
         try write("[Main]\nUseSeparateConfigForDiscSet = true\n", to: gameSettings("SCUS-94163"))
         try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
         #expect(
             contents(gameSettings("SCUS-94163"))
-                == everyPlay + "[Main]\nRunaheadFrameCount = 1\nUseSeparateConfigForDiscSet = true\n")
-        #expect(contents(gameSettings("SCUS-94164")) == everyPlay + "[Main]\nRunaheadFrameCount = 1\n\n")
+                == card("SCUS-94163") + everyPlay + "[Main]\nRunaheadFrameCount = 1\nUseSeparateConfigForDiscSet = true\n")
+        #expect(contents(gameSettings("SCUS-94164")) == everyPlay + "[Main]\nRunaheadFrameCount = 1\n\n" + card("SCUS-94163"))
     }
 
     @Test func withoutDisc1sSerialNothingIsWritten() throws {

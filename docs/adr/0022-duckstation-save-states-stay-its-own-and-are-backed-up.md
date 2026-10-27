@@ -16,4 +16,4 @@ A backup is never deleted because DuckStation's copy is gone: a fresh DuckStatio
 - Play from a state is `-statefile <state> -- <rom>`, with the exact file rather than `-state <slot>`, as a multi-disc game's state is filed under the Disc that was running. A ROM renamed since the state was saved is booted in its place, with DuckStation's warning that this may be unstable.
 - A state deleted in DuckStation stays in the backup until it's deleted in Ludeum, and saving over a slot replaces its backup: the `.bak` is the only history.
 - A Game whose Serials haven't been read shows no save states, and its states aren't backed up until they are.
-- Memory cards are left as they are.
+- Memory cards are left as they are. (Later, a PlayStation Game's card was put in the Data folder instead, which a per-game file can do: [0023](0023-a-playstation-games-memory-card-lives-in-the-data-folder.md).)

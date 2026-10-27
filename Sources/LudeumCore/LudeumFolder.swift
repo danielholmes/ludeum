@@ -12,6 +12,7 @@ import Foundation
 ///     Attachments/<Platform>/<Game>/
 ///     Backups/
 ///     Emulators/DuckStation/Save States/
+///     Emulators/DuckStation/Memory Cards/
 ///     OpenEmu Battery Saves archive/
 /// ```
 public struct LudeumFolder: Sendable, Equatable {
@@ -39,6 +40,12 @@ public struct LudeumFolder: Sendable, Equatable {
     /// The backup of DuckStation's save states, under DuckStation's own file names. Created when first needed.
     public var duckStationSaveStates: URL {
         data.appending(path: "Emulators/DuckStation/Save States", directoryHint: .isDirectory)
+    }
+
+    /// Each PlayStation ROM's memory card, named by Disc 1's Serial, where DuckStation is pointed at it (ADR 0023).
+    /// Made at a PlayStation Play.
+    public var duckStationMemoryCards: URL {
+        data.appending(path: "Emulators/DuckStation/Memory Cards", directoryHint: .isDirectory)
     }
 
     /// Where `migrate-openemu` copies OpenEmu's battery saves, keeping its `<Core>/Battery Saves/` layout.

@@ -183,6 +183,11 @@ import Testing
     let directory = FileManager.default.temporaryDirectory.appending(path: "playstation play \(UUID().uuidString)")
     let duckStation = URL(filePath: "/Applications/DuckStation.app")
     var data: URL { directory.appending(path: "DuckStation", directoryHint: .isDirectory) }
+    var ludeum: LudeumFolder { LudeumFolder(url: directory.appending(path: "Ludeum", directoryHint: .isDirectory)) }
+
+    init() throws {
+        try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
+    }
 
     func rom(_ fileName: String, serials: Serials) -> LudeumROM {
         let name = (fileName as NSString).deletingPathExtension
@@ -196,7 +201,7 @@ import Testing
         return Play(platformId: ROMPlatform.ps1, platformName: "PlayStation", roms: [rom], settings: settings)
             .prepare(
                 locator: ROMLocator(romFolders: [folder.folder]), version: .ok, app: { _ in duckStation },
-                duckStation: DuckStationSettings(dataFolder: data, oldCopy: directory.appending(path: "old.ini")))
+                duckStation: DuckStationSettings(dataFolder: data, oldCopy: directory.appending(path: "old.ini"), ludeum: ludeum))
     }
 
     @Test func aGamesSettingsGoIntoThePerGameFileOfItsSerialAndDuckStationOpensTheROM() throws {
@@ -210,31 +215,30 @@ import Testing
         #expect(outcome == .open(app: duckStation, arguments: ["--", cue.path(percentEncoded: false)], warning: nil))
         #expect(
             try String(contentsOf: data.appending(path: "gamesettings/SLUS-00551.ini"), encoding: .utf8)
-                == "[Display]\nPreFrameSleep = true\nOptimalFramePacing = true\n\n[BIOS]\nFastForwardBoot = true\nPatchFastBoot = true\n\n"
-                + "[Main]\nRunaheadFrameCount = 1\n\n")
+                == "[MemoryCards]\nCard1Path = \(ludeum.duckStationMemoryCards.appending(path: "SLUS-00551.mcd").path(percentEncoded: false))\n"
+                + "Card1Type = Shared\n\n[Display]\nPreFrameSleep = true\nOptimalFramePacing = true\n\n[BIOS]\nFastForwardBoot = true\n"
+                + "PatchFastBoot = true\n\n[Main]\nRunaheadFrameCount = 1\n\n")
     }
 
-    @Test func aGameWithSettingsOfItsOwnIsRefusedWithoutItsSerial() {
-        func refusal(_ fileName: String, _ serials: Serials) -> Play.Refusal? {
+    @Test func aGameIsRefusedWithoutItsSerialWhateverItsSettings() {
+        func refusal(_ fileName: String, _ serials: Serials, _ settings: EmulatorSettings = EmulatorSettings()) -> Play.Refusal? {
             Play(
-                platformId: ROMPlatform.ps1, platformName: "PlayStation", roms: [rom(fileName, serials: serials)],
-                settings: EmulatorSettings(cdReadSpeedup: 4)
+                platformId: ROMPlatform.ps1, platformName: "PlayStation", roms: [rom(fileName, serials: serials)], settings: settings
             ).availability.refusal
         }
 
         #expect(
             refusal("Ape Escape (USA).cue", .notRead)?.message
-                == "Its Serial hasn't been read yet, and DuckStation needs it for this Game's settings: it's read at the next Import.")
+                == "Its Serial hasn't been read yet, and DuckStation needs it to keep its memory card in the Data folder: it's read at the "
+                + "next Import.")
         #expect(
-            refusal("Ape Escape (USA).cue", .read([nil]))?.message
-                == "Its Disc has no Serial DuckStation can use, so this Game's settings can't be applied: set them back to Default to Play it."
-        )
+            refusal("Ape Escape (USA).cue", .read([nil]), EmulatorSettings(cdReadSpeedup: 4))?.message
+                == "Its Disc has no Serial DuckStation can use, so its memory card can't be kept in the Data folder.")
         // DuckStation goes by Disc 1's.
         #expect(refusal("Final Fantasy VII (USA).m3u", .read([nil, "SCUS-94164"])) == .noSerial(.noneOnDisc))
         #expect(
             refusal("Ape Escape (USA).chd", .notRead)?.message
-                == "Its Serial can't be read from a .chd yet, and DuckStation needs it for this Game's settings: set them back to Default to Play it."
-        )
+                == "Its Serial can't be read from a .chd yet, so its memory card can't be kept in the Data folder.")
         #expect(refusal("Ape Escape (USA).cue", .read(["SCUS-94423"])) == nil)
     }
 
@@ -250,13 +254,19 @@ import Testing
         #expect(press(rom, settings: EmulatorSettings(runAheadFrames: 1), in: ps1) == .refused(.noSerial(.unreadForm("chd"))))
     }
 
-    @Test func aGameWithNoSettingsOfItsOwnPlaysWithoutItsSerial() throws {
+    @Test func aPlayCopiesDuckStationsOwnCardIntoTheDataFolderAndPointsAtIt() throws {
         let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
-        let cue = try ps1.add("Ape Escape (USA).cue")
+        try ps1.add("Ape Escape (USA).cue")
+        let own = data.appending(path: "memcards/SCUS-94423_1.mcd")
+        try FileManager.default.createDirectory(at: own.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try memoryCard([("BASCUS-94423APE", "APE ESCAPE", 1, 1)]).write(to: own)
+        try "[MemoryCards]\nCard1Type = PerGame\n".write(to: data.appending(path: "settings.ini"), atomically: true, encoding: .utf8)
 
-        #expect(
-            press(rom("Ape Escape (USA).cue", serials: .notRead), settings: EmulatorSettings(), in: ps1)
-                == .open(app: duckStation, arguments: ["--", cue.path(percentEncoded: false)], warning: nil))
-        #expect(!FileManager.default.fileExists(atPath: data.path(percentEncoded: false)))
+        _ = press(rom("Ape Escape (USA).cue", serials: .read(["SCUS-94423"])), settings: EmulatorSettings(), in: ps1)
+
+        let card = ludeum.duckStationMemoryCards.appending(path: "SCUS-94423.mcd")
+        #expect(try Data(contentsOf: card) == Data(contentsOf: own))
+        let ini = try String(contentsOf: data.appending(path: "gamesettings/SCUS-94423.ini"), encoding: .utf8)
+        #expect(Ini.value("Card1Path", in: "MemoryCards", of: ini) == card.path(percentEncoded: false))
     }
 }
