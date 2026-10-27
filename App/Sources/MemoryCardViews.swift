@@ -50,7 +50,7 @@ struct MemoryCardSection: View {
                     }
                 }
             } else {
-                Text("DuckStation can't read this card: it isn't 128 KB.").foregroundStyle(.red)
+                Text("Couldn't read it as a memory card.").foregroundStyle(.red)
             }
         } else {
             Text("No saves yet. Save in DuckStation and its memory card shows here, kept in the Data folder.")
@@ -80,10 +80,12 @@ struct MemoryCardSection: View {
 /// A Card save's icon, 16 × 16 shown at twice its size, its frames shown in turn as the PlayStation's own menu does.
 struct CardSaveIcon: View {
     let frames: [Data]
+    /// How long each frame shows.
+    private static let frameTime: TimeInterval = 0.27
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.27)) { timeline in
-            let index = frames.count > 1 ? Int(timeline.date.timeIntervalSinceReferenceDate / 0.27) % frames.count : 0
+        TimelineView(.periodic(from: .now, by: Self.frameTime)) { timeline in
+            let index = frames.count > 1 ? Int(timeline.date.timeIntervalSinceReferenceDate / Self.frameTime) % frames.count : 0
             Group {
                 if let image = frames.indices.contains(index) ? Self.image(frames[index]) : nil {
                     Image(nsImage: image).resizable().interpolation(.none)

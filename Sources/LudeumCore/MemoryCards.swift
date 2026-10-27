@@ -34,12 +34,7 @@ public enum MemoryCard {
             let frame = block * 128
             // Where a save starts; its other blocks, and deleted and free ones, are passed over.
             guard u32(frame) == 0x51 else { continue }
-            var blocks = 1
-            var next = u16(frame + 8)
-            while next != 0xFFFF, next < 15, blocks < 15 {
-                blocks += 1
-                next = u16((next + 1) * 128 + 8)
-            }
+            let blocks = min(max(u32(frame + 4) / blockSize, 1), 15)
             let name = card[(frame + 0x0A)..<(frame + 0x0A + 21)].prefix { $0 != 0 }
             let start = block * blockSize
             guard card[start] == 0x53, card[start + 1] == 0x43 else { continue }
@@ -81,7 +76,7 @@ public struct MemoryCardFile: Sendable, Equatable {
     public let inDataFolder: Bool
     /// When the game last saved to it.
     public let saved: Date
-    /// Nil when the file isn't a card DuckStation could read.
+    /// Nil when it couldn't be read as a card.
     public let saves: [CardSave]?
 }
 
@@ -96,7 +91,7 @@ public struct DuckStationMemoryCards: Sendable {
     }
 
     /// The folder in DuckStation's app holding the game database its own cards are named from.
-    public static func resources(of app: URL) -> URL { GameDatabase.resources(of: app) }
+    public static func resources(of app: URL) -> URL { app.appending(path: "Contents/Resources", directoryHint: .isDirectory) }
 
     /// `Emulators/DuckStation/Memory Cards/` in the Data folder.
     public var folder: URL { duckStation.ludeum.duckStationMemoryCards }
@@ -108,9 +103,8 @@ public struct DuckStationMemoryCards: Sendable {
 
     /// The Data folder's card, else DuckStation's own for `serial`'s disc opened from `rom`; nil when neither is there.
     public func memoryCard(serial: String, rom: URL, resources: URL?) -> MemoryCardFile? {
-        let ours = card(of: serial)
-        let own = duckStationsCard(serial: serial, rom: rom, resources: resources)
-        for (file, inDataFolder) in [(ours, true), (own, false)] {
+        let duckStations = duckStationsCard(serial: serial, rom: rom, resources: resources)
+        for (file, inDataFolder) in [(card(of: serial), true), (duckStations, false)] {
             guard let file, let saved = Self.modified(file) else { continue }
             return MemoryCardFile(file: file, inDataFolder: inDataFolder, saved: saved, saves: MemoryCard.saves(of: file))
         }
@@ -118,21 +112,13 @@ public struct DuckStationMemoryCards: Sendable {
     }
 
     /// Copies DuckStation's own card for `serial`'s disc in, when the Data folder hasn't one, keeping when it was saved.
-    /// It's written beside it under a hidden name and renamed into place, so Dropbox never sees half of it.
-    func moveIn(serial: String, rom: URL, resources: URL?) throws {
-        let ours = card(of: serial)
-        guard !Self.exists(ours), let own = duckStationsCard(serial: serial, rom: rom, resources: resources), own != ours,
-            Self.exists(own)
+    /// Its caller has found the Data folder.
+    func copyIn(serial: String, rom: URL, resources: URL?) throws {
+        let card = card(of: serial)
+        guard !Self.exists(card), let duckStations = duckStationsCard(serial: serial, rom: rom, resources: resources),
+            duckStations != card, Self.exists(duckStations)
         else { return }
-        let files = FileManager.default
-        try files.createDirectory(at: folder, withIntermediateDirectories: true)
-        let partial = folder.appending(path: ".\(ours.lastPathComponent).copying")
-        try? files.removeItem(at: partial)
-        try files.copyItem(at: own, to: partial)
-        if let modified = Self.modified(own) {
-            try files.setAttributes([.modificationDate: modified], ofItemAtPath: partial.path(percentEncoded: false))
-        }
-        try files.moveItem(at: partial, to: ours)
+        try FileManager.default.copyIntoDataFolder(duckStations, over: card)
     }
 
     /// The card DuckStation's own settings give card 1 for `serial`'s disc opened from `rom`, the per-game file's over
@@ -180,16 +166,12 @@ public struct DuckStationMemoryCards: Sendable {
 
 /// The game database bundled in DuckStation's app, read only for the titles it names cards by.
 struct GameDatabase {
+    /// The folder in DuckStation's app holding `discdb.yaml` and `discsets.yaml`.
     let resources: URL
-
-    /// The folder in DuckStation's app holding its game database.
-    static func resources(of app: URL) -> URL { app.appending(path: "Contents/Resources", directoryHint: .isDirectory) }
 
     /// A disc's `saveName`, else its `name`; nil for a disc it doesn't know.
     func saveTitle(of serial: String) -> String? {
-        let file = ["discdb.yaml", "gamedb.yaml"].lazy.map { resources.appending(path: $0) }
-            .first { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
-        guard let file, let text = try? String(contentsOf: file, encoding: .utf8),
+        guard let text = try? String(contentsOf: resources.appending(path: "discdb.yaml"), encoding: .utf8),
             let found = text.range(of: "\n\(serial):\n") ?? (text.hasPrefix("\(serial):\n") ? text.range(of: "\(serial):\n") : nil)
         else { return nil }
         // Its fields, up to the next disc's.

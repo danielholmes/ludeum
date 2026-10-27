@@ -497,7 +497,8 @@ enum FactStyle {
         }
     let locator = ROMLocator(romFolders: services.settings.romFolders)
     switch play.prepare(
-        locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState)
+        locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState,
+        duckStation: DuckStationSettings(ludeum: services.settings.folder))
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)

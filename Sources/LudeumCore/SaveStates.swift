@@ -88,7 +88,7 @@ public struct DuckStationSaveStates: Sendable {
             let source = folder.appending(path: name)
             let copy = backup.appending(path: name)
             guard !Self.same(source, copy) else { continue }
-            try Self.copy(source, to: copy)
+            try FileManager.default.copyIntoDataFolder(source, over: copy)
             copied = true
         }
         return copied
@@ -126,7 +126,7 @@ public struct DuckStationSaveStates: Sendable {
 
     /// Copies the backup back into DuckStation's folder, where DuckStation's menus see it again.
     public func restore(_ state: SaveState) throws {
-        try Self.copy(backup.appending(path: state.fileName), to: folder.appending(path: state.fileName))
+        try FileManager.default.copyIntoDataFolder(backup.appending(path: state.fileName), over: folder.appending(path: state.fileName))
     }
 
     /// The names of `serials`' states in `folder`.
@@ -158,21 +158,23 @@ public struct DuckStationSaveStates: Sendable {
         return a.size == b.size && abs(a.modified.timeIntervalSince(b.modified)) < 1
     }
 
+}
+
+extension FileManager {
     /// Copies `source` over `destination` in one step, keeping when it was saved: it's written beside it under a hidden
     /// name, then renamed into place, so Dropbox never sees half of it.
-    private static func copy(_ source: URL, to destination: URL) throws {
-        let files = FileManager.default
+    func copyIntoDataFolder(_ source: URL, over destination: URL) throws {
         let folder = destination.deletingLastPathComponent()
-        try files.createDirectory(at: folder, withIntermediateDirectories: true)
+        try createDirectory(at: folder, withIntermediateDirectories: true)
         let partial = folder.appending(path: ".\(destination.lastPathComponent).copying")
-        try? files.removeItem(at: partial)
-        try files.copyItem(at: source, to: partial)
-        if let modified = modified(source) {
-            try files.setAttributes([.modificationDate: modified], ofItemAtPath: partial.path(percentEncoded: false))
+        try? removeItem(at: partial)
+        try copyItem(at: source, to: partial)
+        if let modified = (try? attributesOfItem(atPath: source.path(percentEncoded: false)))?[.modificationDate] as? Date {
+            try setAttributes([.modificationDate: modified], ofItemAtPath: partial.path(percentEncoded: false))
         }
         guard rename(partial.path(percentEncoded: false), destination.path(percentEncoded: false)) == 0 else {
             let error = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-            try? files.removeItem(at: partial)
+            try? removeItem(at: partial)
             throw error
         }
     }

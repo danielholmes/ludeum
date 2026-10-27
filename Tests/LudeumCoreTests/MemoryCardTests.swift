@@ -178,7 +178,7 @@ func memoryCard(_ saves: [(name: String, title: String, frames: Int, blocks: Int
             [.modificationDate: saved], ofItemAtPath: memcard("Resident Evil - Director's Cut (USA)_1.mcd").path(percentEncoded: false))
 
         #expect(cards.memoryCard(serial: "SLUS-00551", rom: rom, resources: resources)?.inDataFolder == false)
-        try cards.moveIn(serial: "SLUS-00551", rom: rom, resources: resources)
+        try cards.copyIn(serial: "SLUS-00551", rom: rom, resources: resources)
 
         let copy = cards.card(of: "SLUS-00551")
         #expect(try Data(contentsOf: copy) == Data(contentsOf: memcard("Resident Evil - Director's Cut (USA)_1.mcd")))
@@ -188,12 +188,12 @@ func memoryCard(_ saves: [(name: String, title: String, frames: Int, blocks: Int
 
         // Once it's there, it's the card: DuckStation's is never copied over it.
         try memoryCard([]).write(to: memcard("Resident Evil - Director's Cut (USA)_1.mcd"))
-        try cards.moveIn(serial: "SLUS-00551", rom: rom, resources: resources)
+        try cards.copyIn(serial: "SLUS-00551", rom: rom, resources: resources)
         #expect(MemoryCard.saves(in: try Data(contentsOf: copy))?.count == 1)
     }
 
     @Test func aROMWithNoCardAnywhereHasNoneToShowOrCopy() throws {
-        try cards.moveIn(serial: "SLUS-00551", rom: rom, resources: resources)
+        try cards.copyIn(serial: "SLUS-00551", rom: rom, resources: resources)
         #expect(!FileManager.default.fileExists(atPath: cards.card(of: "SLUS-00551").path(percentEncoded: false)))
         #expect(cards.memoryCard(serial: "SLUS-00551", rom: rom, resources: resources) == nil)
     }
@@ -217,7 +217,13 @@ func memoryCard(_ saves: [(name: String, title: String, frames: Int, blocks: Int
 
     @Test func noCardIsPointedAtWhileTheDataFolderIsMissing() throws {
         try FileManager.default.removeItem(at: ludeum.data)
-        #expect(throws: DataFolderMissing.self) { try settings.write(EmulatorSettings(), serials: .read(["SLUS-00551"])) }
+        // Not even to copy DuckStation's own card in.
+        try FileManager.default.createDirectory(at: memcard(""), withIntermediateDirectories: true)
+        try memoryCard([]).write(to: memcard("Resident Evil - Director's Cut (USA)_1.mcd"))
+
+        #expect(throws: DataFolderMissing.self) {
+            try settings.arguments(rom: rom, settings: EmulatorSettings(), serials: .read(["SLUS-00551"]))
+        }
         #expect(!FileManager.default.fileExists(atPath: ludeum.data.path(percentEncoded: false)))
     }
 }

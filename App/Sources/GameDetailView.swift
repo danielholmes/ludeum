@@ -681,10 +681,13 @@ struct GameDetailView: View {
         return serials
     }
 
-    /// The present ROMs Play opens, one for each Disc 1 Serial, which names its memory card.
+    /// The present ROMs, one for each Disc 1 Serial, which names its memory card.
     private var memoryCardROMs: [LudeumROM] {
-        var serials: Set<String> = []
-        return playROMs.filter { rom in !rom.missing && rom.serials.first.map { serials.insert($0).inserted } == true }
+        var roms: [LudeumROM] = []
+        for rom in playROMs where !rom.missing {
+            if let serial = rom.serials.first, !roms.contains(where: { $0.serials.first == serial }) { roms.append(rom) }
+        }
+        return roms
     }
 
     /// Reveals the ROM's file in its ROM folder.

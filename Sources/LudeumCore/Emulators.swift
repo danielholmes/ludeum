@@ -99,7 +99,7 @@ public struct DuckStationSettings: Sendable {
     let dataFolder: URL
     /// The copy of DuckStation's `settings.ini` a Play wrote for `-settings` before DuckStation dropped it (build 8843).
     let oldCopy: URL
-    /// Whose Data folder holds each ROM's memory card.
+    /// The Ludeum folder, whose Data folder holds each ROM's memory card.
     let ludeum: LudeumFolder
 
     public init(
@@ -114,12 +114,14 @@ public struct DuckStationSettings: Sendable {
     /// Copies DuckStation's own card into the Data folder if it hasn't the ROM's yet, writes the settings, then opens the
     /// ROM, from `saveState` if given (`-statefile`): `--` ends DuckStation's options. When the disc the state was saved
     /// with isn't where it was (a renamed ROM), DuckStation boots the ROM instead. `app` is DuckStation's, whose game
-    /// database names its own cards.
+    /// database names its own cards. Refused while the Data folder is missing.
     func arguments(rom: URL, settings: EmulatorSettings, serials: Serials, saveState: URL? = nil, app: URL? = nil) throws
         -> [String]
     {
         if let first = serials.first {
-            try DuckStationMemoryCards(duckStation: self).moveIn(serial: first, rom: rom, resources: app.map(GameDatabase.resources))
+            try ludeum.checkData()
+            try DuckStationMemoryCards(duckStation: self).copyIn(
+                serial: first, rom: rom, resources: app.map(DuckStationMemoryCards.resources(of:)))
         }
         try write(settings, serials: serials)
         return (saveState.map { ["-statefile", $0.path(percentEncoded: false)] } ?? []) + ["--", rom.path(percentEncoded: false)]
@@ -135,17 +137,16 @@ public struct DuckStationSettings: Sendable {
         let cards = DuckStationMemoryCards(duckStation: self)
         try FileManager.default.createDirectory(at: cards.folder, withIntermediateDirectories: true)
         let card = cards.card(of: first)
-        var toWrite = [first]
+        var discs = [first]
+        for serial in serials.known where !discs.contains(serial) { discs.append(serial) }
         let disc1 = (try? String(contentsOf: gameSettingsFile(first), encoding: .utf8)) ?? ""
-        if Ini.value("UseSeparateConfigForDiscSet", in: "Main", of: disc1).map(Ini.isTrue) == true {
-            for serial in serials.known where !toWrite.contains(serial) { toWrite.append(serial) }
-        }
-        // The other Discs' files have the card alone: DuckStation goes by Disc 1's for a disc set it knows, but by each
-        // Disc's own for one it doesn't.
-        for serial in serials.known.reduce(into: [first], { if !$0.contains($1) { $0.append($1) } }) {
+        let separate = Ini.value("UseSeparateConfigForDiscSet", in: "Main", of: disc1).map(Ini.isTrue) == true
+        // Without it, the other Discs' files have the card alone: DuckStation goes by Disc 1's for a disc set it knows,
+        // but by each Disc's own for one it doesn't.
+        for serial in discs {
             let url = gameSettingsFile(serial)
             let original = try? String(contentsOf: url, encoding: .utf8)
-            let ini = toWrite.contains(serial) ? Self.applying(settings, to: original ?? "") : original ?? ""
+            let ini = serial == first || separate ? Self.applying(settings, to: original ?? "") : original ?? ""
             let updated = Self.pointing(at: card, in: ini)
             guard updated != original else { continue }
             try FileManager.default.createDirectory(at: gameSettingsFolder, withIntermediateDirectories: true)
