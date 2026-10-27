@@ -207,8 +207,16 @@ An Emulator setting for PlayStation Games: how much faster than a real drive Duc
 _Avoid_: Fast seeking, CD-ROM speed
 
 **Save state**:
-A snapshot of a game mid-play that DuckStation saves and loads, in one of a disc's slots (1 to 10), or as its Resume state, saved on closing the game, or as the Previous one of a slot, kept when it's saved over. Save states are made and managed in DuckStation, which names them by the disc's Serial; Ludeum lists a PlayStation Game's, Plays from one, deletes one, and keeps a backup of each in the Data folder, which stays when DuckStation's goes. A save state has no name: it's its slot, when it was saved and its screenshot. Not a battery save, which the game writes itself.
+A snapshot of a game mid-play that DuckStation saves and loads, in one of a disc's slots (1 to 10), or as its Resume state, saved on closing the game, or as the Previous one of a slot, kept when it's saved over. Save states are made and managed in DuckStation, which names them by the disc's Serial; Ludeum lists a PlayStation Game's, Plays from one, deletes one, and keeps a backup of each in the Data folder, which stays when DuckStation's goes. A save state has no name: it's its slot, when it was saved and its screenshot. Not a Game save, which the game writes itself.
 _Avoid_: Snapshot, save (alone), quick save
+
+**Game save**:
+The file or folder where an Emulator keeps what one Game has saved itself, as the real hardware would on a memory card or in the cartridge's battery-backed memory, e.g. a PlayStation Game's memory card. A container every game saves into, such as a PS2's shared memory card, is no one Game's Game save. Not a Save state.
+_Avoid_: Save (alone), battery save, save file, SRAM
+
+**Card save**:
+One save inside a memory card, made by a game: its title as the game wrote it, its icon and the blocks it takes. A card can hold another game's Card saves too.
+_Avoid_: Save slot, block, file
 
 **Play**:
 Opening a present ROM of a Game, or of a Bundle that contains it, in its Platform's Emulator, with the Game's Emulator settings, or from one of its Save states. Play never changes journal data. A Game can't be Played while a Background task is working on one of its ROMs.
@@ -225,7 +233,7 @@ The one place on this Mac where Ludeum keeps everything it owns: the live journa
 _Avoid_: App folder, library
 
 **Data folder**:
-The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, and the battery saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
+The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the PlayStation Games' Game saves, and the Game saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
 _Avoid_: Kept folder, backup-worthy, Library folder
 
 **Backup**:
