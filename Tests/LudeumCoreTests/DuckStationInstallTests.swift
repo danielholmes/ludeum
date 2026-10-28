@@ -33,7 +33,10 @@ final class FakeReleases: HTTPTransport, Sendable {
     }
 
     /// A fake DuckStation.app zipped as GitHub serves it, printing `version` for `-version`, and the release that names it.
-    func release(version: String = "DuckStation Version 0.1-12083-g2781502e0 (dev)", build: Int = 12083, sha256: String? = nil) throws
+    func release(
+        version: String = "DuckStation Version 0.1-\(DuckStationRelease.pinned.build)-g2781502e0 (dev)",
+        build: Int = DuckStationRelease.pinned.build, sha256: String? = nil
+    ) throws
         -> (zip: Data, release: DuckStationRelease)
     {
         let staging = root.appending(path: "staging \(UUID().uuidString)", directoryHint: .isDirectory)
@@ -69,7 +72,8 @@ final class FakeReleases: HTTPTransport, Sendable {
 
     @Test func thePinnedReleaseIsVersionedWithItsZipsDigest() {
         let pinned = DuckStationRelease.pinned
-        #expect(pinned.tag == "v0.1-\(pinned.build)")
+        // The rolling `latest` for now, until a versioned release past 12442 (#90); then `v0.1-<build>` again.
+        #expect(pinned.tag == "latest" || pinned.tag == "v0.1-\(pinned.build)")
         #expect(pinned.sha256.count == 64)
         #expect(
             pinned.urls.map(\.absoluteString) == [

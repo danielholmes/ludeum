@@ -65,7 +65,7 @@ Install the emulator for each platform you want to play. Ludeum checks each emul
 | Platform | Emulator | Version |
 | --- | --- | --- |
 | NES / Famicom, SNES / Super Famicom, Game Boy, Game Boy Color, Game Boy Advance, Master System, Game Gear, PC Engine CD | [MesenCE](https://github.com/nesdev-org/MesenCE) | 2.2.1 |
-| PlayStation | [DuckStation](https://www.duckstation.org), installed by Ludeum | build 12083 |
+| PlayStation | [DuckStation](https://www.duckstation.org), installed by Ludeum | build 12442 |
 | PlayStation 2 | [PCSX2](https://pcsx2.net) | 2.9.103 |
 | PlayStation Portable | [PPSSPP](https://www.ppsspp.org) | 1.20.4 |
 | Nintendo 64, Mega Drive / Genesis, Sega CD | [ares](https://ares-emu.net) | v148 |

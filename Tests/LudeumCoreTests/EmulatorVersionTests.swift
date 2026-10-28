@@ -27,14 +27,14 @@ import Testing
     }
 
     @Test func duckStationMustBeTheBuildLudeumInstalls() {
-        #expect(DuckStationRelease.pinned.build == 12083)
-        #expect(Emulator.duckStation.expectedVersion == "12083")
-        #expect(EmulatorVersions.check(found: "DuckStation Version 0.1-12083-g2781502e0 (dev)", for: .duckStation) == .ok)
+        #expect(DuckStationRelease.pinned.build == 12442)
+        #expect(Emulator.duckStation.expectedVersion == "12442")
+        #expect(EmulatorVersions.check(found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)", for: .duckStation) == .ok)
         // Older and newer alike: it's installed again.
-        #expect(EmulatorVersions.check(found: "0.1-12070-g4122fed9a", for: .duckStation) == .wrongBuild(found: "12070"))
+        #expect(EmulatorVersions.check(found: "0.1-12083-g2781502e0", for: .duckStation) == .wrongBuild(found: "12083"))
         #expect(
-            EmulatorVersions.check(found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)", for: .duckStation)
-                == .wrongBuild(found: "12442"))
+            EmulatorVersions.check(found: "DuckStation Version 0.1-12500-gabcdef012 (dev)", for: .duckStation)
+                == .wrongBuild(found: "12500"))
         #expect(EmulatorVersions.check(found: nil, for: .duckStation) == .unreadable)
     }
 
@@ -45,7 +45,7 @@ import Testing
         #expect(EmulatorVersions.check(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
         #expect(
             EmulatorVersions.check(
-                found: "DuckStation Version 0.1-12083-g2781502e0 (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)
+                found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)
         #expect(EmulatorVersions.check(found: "v147", for: .ares) == .tooOld(found: "147"))
         // App versions: Ymir and melonDS have no version flag (Ymir's `--version` opens its window), and Dolphin's matches its flag.
         #expect(EmulatorVersions.check(found: "0.3.3", for: .ymir) == .ok)
