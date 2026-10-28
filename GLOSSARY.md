@@ -141,7 +141,7 @@ One instance of a Game that I have, or once had. A Bundle's Copy is one Copy, an
 _Avoid_: Ownership (that's the Game's status), purchase, edition, licence, forget (for a ROM)
 
 **Region**:
-Where a Copy was released for, e.g. Europe, USA, World, Australia or Japan: the usual ones are offered, but any is allowed. A Copy can have any number of Regions, or none. A ROM's Regions are read from its name's tags when it first appears, else, when its name has none, from the DAT entry its checksum is in Hasheous; they can be edited after.
+Where a Copy was released for, e.g. Europe, USA, World, Australia or Japan: the usual ones are offered, but any is allowed. A Copy can have any number of Regions, or none. A ROM's Regions are read from its name's tags when it first appears, else, when its name has none, from its Serials, else from the DAT entry its checksum is in Hasheous; they can be edited after.
 _Avoid_: Territory, locale
 
 **Serial**:

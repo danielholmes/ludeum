@@ -182,7 +182,8 @@ public struct AddROM: Sendable {
     let hasheous: HasheousClient?
     let moveToTrash: @Sendable (URL) throws -> Void
 
-    /// Without `hasheous`, a ROM whose name has no region tag gets its Regions from its checksum at the next Import instead.
+    /// Without `hasheous`, a ROM whose name has no region tag and whose Serials don't say its Regions gets them from its
+    /// checksum at the next Import instead.
     public init(
         journal: LudeumStore, sevenZip: SevenZip? = SevenZip.find(), hasheous: HasheousClient? = nil,
         moveToTrash: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
@@ -239,8 +240,8 @@ public struct AddROM: Sendable {
         }
         if !keepingOriginals { trashOriginals(of: source) }
         if let rom = try journal.romID(named: named.name, on: folder.platformId) {
-            if let hasheous { await RegionsImport(journal: journal, hasheous: hasheous).run(only: [rom]) }
             await SerialsImport(journal: journal, sevenZip: sevenZip).run(in: [folder], only: [rom])
+            await RegionsImport(journal: journal, hasheous: hasheous).run(only: [rom])
         }
         return game
     }

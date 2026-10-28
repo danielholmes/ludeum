@@ -18,27 +18,47 @@ public enum ROMChecksum: Sendable, Equatable {
     /// a file Dropbox keeps online-only (reading it would download it all), an archive with no 7-Zip to read it, or
     /// a file that can't be read. A large disc image takes seconds; cancelling stops it, giving nil.
     static func of(_ rom: FolderROMFile, platformId: Int64, sevenZip: SevenZip?) async -> ROMChecksum? {
-        guard let file = rom.ready ?? rom.archive, SevenZip.isOnDisk(file) else { return nil }
-        if ["7z", "zip"].contains(file.pathExtension.lowercased()) {
-            guard let sevenZip, let entries = try? await sevenZip.contents(of: file) else { return nil }
-            return crc(of: entries).map(ROMChecksum.crc)
-        }
-        guard let dump = dump(of: file), SevenZip.isOnDisk(dump),
-            let hash = try? md5(of: dump, skipping: headerLength(of: dump, platformId: platformId))
-        else { return nil }
-        return .md5(hash)
+        if case .checksum(let checksum) = await read(rom, platformId: platformId, sevenZip: sevenZip) { checksum } else { nil }
     }
 
-    /// The file a DAT hashes for a ready file: a playlist's first Disc, a cue sheet's first track (the data track),
-    /// else the file itself. Nil for an image no DAT knows.
+    /// What reading a ROM's checksum found.
+    enum Reading: Equatable {
+        case checksum(ROMChecksum)
+        /// It's an image no DAT knows (`chd`, `rvz`, `pbp`, …), so it has no checksum to give, now or ever.
+        case noDump
+        /// Dropbox keeps it online only.
+        case onlineOnly
+        /// It couldn't be read: a file it names isn't there, its archive has no 7-Zip to read it, reading failed, or
+        /// it was cancelled.
+        case unreadable
+    }
+
+    /// The ROM's checksum as `of` gives it, else why it has none.
+    static func read(
+        _ rom: FolderROMFile, platformId: Int64, sevenZip: SevenZip?, isOnDisk: (URL) -> Bool = SevenZip.isOnDisk
+    ) async -> Reading {
+        guard let file = rom.ready ?? rom.archive else { return .unreadable }
+        guard isOnDisk(file) else { return .onlineOnly }
+        if ["7z", "zip"].contains(file.pathExtension.lowercased()) {
+            guard let sevenZip, let entries = try? await sevenZip.contents(of: file) else { return .unreadable }
+            return crc(of: entries).map { .checksum(.crc($0)) } ?? .noDump
+        }
+        guard let dump = dump(of: file) else { return .unreadable }
+        if notDumps.contains(dump.pathExtension.lowercased()) { return .noDump }
+        guard FileManager.default.fileExists(atPath: dump.path(percentEncoded: false)) else { return .unreadable }
+        guard isOnDisk(dump) else { return .onlineOnly }
+        guard let hash = try? md5(of: dump, skipping: headerLength(of: dump, platformId: platformId)) else { return .unreadable }
+        return .checksum(.md5(hash))
+    }
+
+    /// The file a DAT would hash for a ready file, there or not: a playlist's first Disc, a cue sheet's first track (the
+    /// data track), else the file itself. Nil for a playlist or cue sheet that names nothing.
     static func dump(of file: URL) -> URL? {
         let folder = file.deletingLastPathComponent()
         switch file.pathExtension.lowercased() {
         case "m3u": return ROMFiles.playlistEntries(file).first.flatMap { dump(of: folder.appending(path: $0)) }
         case "cue": return ROMFolder.cueTracks(file).first.flatMap { dump(of: folder.appending(path: $0)) }
-        default:
-            let exists = FileManager.default.fileExists(atPath: file.path(percentEncoded: false))
-            return exists && !notDumps.contains(file.pathExtension.lowercased()) ? file : nil
+        default: return file
         }
     }
 

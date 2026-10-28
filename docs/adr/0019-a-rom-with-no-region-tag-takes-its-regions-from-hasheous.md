@@ -1,5 +1,7 @@
 # A ROM with no region tag takes its Regions from Hasheous
 
+Amended by [0025](0025-a-playstation-roms-serials-say-its-regions-before-hasheous.md): a PlayStation ROM's Serials say its Regions before Hasheous is asked.
+
 Amends [0011](0011-roms-are-copies.md)'s rule that a ROM's Regions are read from its name when it first appears and never touched again.
 
 A ROM's Regions decide which region's box LaunchBox shows for its Game ([0018](0018-launchbox-box-art-after-libretros.md)), and with no Regions it falls back to North America's. 210 of my 1,239 ROMs had none, as their names had no region tag (`Crash Bandicoot`, `Castlevania - Aria of Sorrow # GBA`). Hasheous already answers each ROM's checksum at its Import, and its answer names the DAT entry the checksum is: its name (`Castlevania - Aria of Sorrow (USA).gba`) and the countries it's for. So a ROM with no Regions now takes them from that, once, at the next Import, which also fills in the ones already in the journal, or straight away when Add ROM puts it in.

@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-/// The Serials step of every Import, after Regions, and of Add ROM: each ROM on a Platform with a reader has its Discs'
+/// The Serials step of every Import, before Regions, and of Add ROM: each ROM on a Platform with a reader has its Discs'
 /// Serials read off them once, whether or not they have any. One whose files can't be read yet is left for the next
 /// Import: kept online only by Dropbox, in a form not read yet (`.chd`, `.pbp`), in a `.7z` with no 7-Zip to read it, or
 /// failing to read.

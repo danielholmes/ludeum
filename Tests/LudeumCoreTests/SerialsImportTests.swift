@@ -4,6 +4,21 @@ import Testing
 
 @testable import LudeumCore
 
+extension FakeROMFolder {
+    /// A PlayStation disc, as a cue sheet and its data track, in `folder` of the ROM folder; with `padding`, that many
+    /// more bytes on it after its executable, or before `SYSTEM.CNF` with `systemCNFLast`.
+    func addDisc(_ name: String, booting serial: String?, in folder: String, padding: Int = 0, systemCNFLast: Bool = false) throws {
+        var disc =
+            serial.map { serial in
+                let executable = serial.replacingOccurrences(of: "-", with: "_").prefix(8) + "." + serial.suffix(2)
+                return FakeDisc.booting("cdrom:\\\(executable);1", executable: String(executable))
+            } ?? FakeDisc(["PSX.EXE": "PS-X EXE"])
+        if padding > 0 { disc.files[systemCNFLast ? "PAD.DAT" : "ZZ.DAT"] = Data(count: padding) }
+        try add("\(folder)/\(name).bin", data: disc.image())
+        try add("\(folder)/\(name).cue", "FILE \"\(name).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n")
+    }
+}
+
 /// The Serials step of each Import: a PlayStation ROM has its Discs' Serials read off them, once.
 @Suite struct SerialsImportTests {
     let h: Harness
@@ -17,17 +32,8 @@ import Testing
         h.internet.addPlatform(Int(ROMPlatform.ps1), "PlayStation")
     }
 
-    /// A disc, as a cue sheet and its data track, in `folder` of the ROM folder; with `padding`, that many more bytes
-    /// on it after its executable, or before `SYSTEM.CNF` with `systemCNFLast`.
     func addDisc(_ name: String, booting serial: String?, in folder: String, padding: Int = 0, systemCNFLast: Bool = false) throws {
-        var disc =
-            serial.map { serial in
-                let executable = serial.replacingOccurrences(of: "-", with: "_").prefix(8) + "." + serial.suffix(2)
-                return FakeDisc.booting("cdrom:\\\(executable);1", executable: String(executable))
-            } ?? FakeDisc(["PSX.EXE": "PS-X EXE"])
-        if padding > 0 { disc.files[systemCNFLast ? "PAD.DAT" : "ZZ.DAT"] = Data(count: padding) }
-        try ps1.add("\(folder)/\(name).bin", data: disc.image())
-        try ps1.add("\(folder)/\(name).cue", "FILE \"\(name).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n")
+        try ps1.addDisc(name, booting: serial, in: folder, padding: padding, systemCNFLast: systemCNFLast)
     }
 
     func importNow(sevenZip: SevenZip? = nil) async throws {

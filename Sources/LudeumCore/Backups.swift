@@ -20,10 +20,12 @@ public enum BackupOperation: String, Sendable, CaseIterable {
     case beforeIntoFolders = "before-into-folders"
     /// `into-bundles`'s: never pruned.
     case beforeIntoBundles = "before-into-bundles"
+    /// `checksums`'s: never pruned.
+    case beforeChecksums = "before-checksums"
 
     /// A one-off command's, the one way back from it.
     var isKeptForever: Bool {
-        self == .beforeMigration || self == .beforeIntoFolders || self == .beforeRecovery || self == .beforeIntoBundles
+        [.beforeMigration, .beforeIntoFolders, .beforeRecovery, .beforeIntoBundles, .beforeChecksums].contains(self)
     }
 }
 

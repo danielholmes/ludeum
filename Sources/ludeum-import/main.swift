@@ -6,6 +6,8 @@ import LudeumCore
 //   ludeum-import check                    Live check of IGDB and Hasheous through the real cache.
 //   ludeum-import duckstation-cards [--run] One-off (ADR 0024): Serial-named memory cards take DuckStation's names, and
 //                                          per-game files lose what every Play used to write. A plan unless --run.
+//   ludeum-import checksums [--run]        One-off (#80): every present ROM's checksum becomes what an Import would
+//                                          read today, replacing OpenEmu's MD5s. A plan unless --run.
 //
 // Every command first needs the Data folder, and refuses without it in the app's words.
 // Credentials come from the environment or a .env file in the current directory
@@ -73,10 +75,29 @@ func duckStationCards(run: Bool) throws {
     print(actions.isEmpty ? "Nothing to do." : run ? "Done: \(actions.count)." : "A plan: \(actions.count). Run again with --run to do it.")
 }
 
+/// With Ludeum closed, and the ROM folders' files on disk (Dropbox's online-only ones are left). Reads every present
+/// ROM, so it takes a while either way. To go once it has run.
+func checksums(run: Bool) async throws {
+    requireDataFolder()
+    guard let sevenZip = SevenZip.find() else {
+        fail("\(SystemTool.sevenZip.name) isn't installed. Install it with `\(SystemTool.sevenZip.install)`.")
+    }
+    let ludeum = LudeumFolder.standard
+    let backups = Backups(folder: ludeum.backups)
+    let journal = try LudeumStore(directory: ludeum.url, backups: backups)
+    let migration = ChecksumMigration(journal: journal, romFolders: ludeum.romFolders, sevenZip: sevenZip, backups: backups)
+    let plan = run ? try await migration.run() : try await migration.plan()
+    for line in plan.lines { print(line) }
+    let count = plan.changes.count
+    print(
+        count == 0 ? "Nothing to change." : run ? "Done: \(count) changed." : "A plan: \(count) to change. Run again with --run to do it.")
+}
+
 let arguments = Array(CommandLine.arguments.dropFirst())
 switch arguments.first {
 case "check": try await check()
 case "duckstation-cards": try duckStationCards(run: arguments.contains("--run"))
+case "checksums": try await checksums(run: arguments.contains("--run"))
 default:
-    fail("usage: ludeum-import check | duckstation-cards [--run]")
+    fail("usage: ludeum-import check | duckstation-cards [--run] | checksums [--run]")
 }

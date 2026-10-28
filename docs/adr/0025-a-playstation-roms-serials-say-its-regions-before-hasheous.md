@@ -1,0 +1,17 @@
+# A PlayStation ROM's Serials say its Regions before Hasheous
+
+Amends [0019](0019-a-rom-with-no-region-tag-takes-its-regions-from-hasheous.md): a ROM with no region tag no longer goes to Hasheous first when its Serials can say its Regions.
+
+0019 noted that a disc's Serial would say its region for certain but wasn't read yet. Every PlayStation ROM's Serials are read now ([0021](0021-duckstation-settings-go-in-its-per-game-file-named-by-the-discs-serial.md)), and Hasheous answered few of them: 68 of my 113 PlayStation ROMs had no Regions, all of them US discs. Part of that was the checksums Hasheous was asked about. Most ROMs that came across from OpenEmu kept OpenEmu's MD5, which for a disc is of its cue sheet, a file no DAT Hasheous reads has, so Hasheous missed them, or once matched a GameCube ISO. 205 archived ROMs and 966 ready ones held such an MD5 and no CRC32, all 112 archived PlayStation ROMs among them, while the CRC32s in their archives match Redump's for 107. An Import only reads a checksum for a ROM that has none, so they'd never have been put right.
+
+So a ROM's Regions now come from its name's tags, then its Serials, and only then from Hasheous. A name's tag comes first because it can say more than a Serial: one of my SLES discs is tagged Australia, where its Serial says only Europe. Each Disc's Serial gives the Region of its prefix (`SLUS` and `SCUS` USA; `SLES`, `SCES`, `SLED` and `SCED` Europe; `SLPS`, `SCPM`, `SIPS` and `PCPX` Japan; `SLKA` Korea), and a ROM takes its Discs' Regions without repeats. The prefixes are the ones DuckStation's game database (`discdb.yaml`) never names a disc of another market for: `SCPS` is also Sony's Asian and Korean discs and `SLPM` Korean ones, `PAPX` is also Asian demos, and `SCAJ` and `SCKA` aren't in it at all, so those go to Hasheous as before. A ROM whose Serials give Regions is never asked about by Hasheous, and one whose Serials haven't been read waits for them rather than going to Hasheous first, so an Import now reads Serials before its Regions step, as Add ROM does. One whose Copy details I've edited is never given Regions, by either.
+
+The stored checksums are put right once, by hand, through `ludeum-import checksums`, which then goes: each ROM present in its ROM folder is read as an Import reads a new one, and where that differs from what the journal holds, the new checksum replaces both old values. A form no DAT knows (`chd`, `pbp`, …) has its checksum cleared, since it can only be OpenEmu's, and a ROM that can't be read then (online only in Dropbox) keeps its own. A changed ROM with no Regions is given them again at the next Import; any it has, and its Match, stay. Rehearsed on a copy of my journal, 1,122 of 1,241 present ROMs changed, and all 68 PlayStation ROMs without Regions took USA from their Serials.
+
+## Consequences
+
+- Hasheous still looks a ROM up by its MD5 before its CRC32; with the checksums put right, a ROM has one or the other, never both.
+- An `SLUS` disc shows USA even where Redump names it for Canada, as it does one.
+- `SLPS` stays Japan's, though one disc under it is a Breath of Fire IV (USA) beta that was never sold.
+- A ROM whose Regions I'd cleared by editing its Copy details can't be told apart from one Hasheous missed, so a changed checksum has it given Regions again. On 2026-10-28 no ROM without Regions had any Copy details.
+- Serials are read only for PlayStation, and not from a `.chd` or `.pbp`, so a ROM in those forms has neither a Serial nor a checksum to give it Regions.
