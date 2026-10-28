@@ -91,9 +91,8 @@ struct IGDBFactsRows: View {
     }
 }
 
-/// Screenshots in their Platform's shape, as many across as fit at about the same size and in two rows, or one when
-/// two would be 300 points tall or more (`ScreenshotShape`), then a tile to show the rest. Click one to see it full
-/// size.
+/// Screenshots in their Platform's shape, in two rows of the biggest that keep them at most 300 points tall, or a
+/// Nintendo DS Game's in one (`ScreenshotShape`), then a tile to show the rest. Click one to see it full size.
 struct ScreenshotsSection: View {
     let loader: ScreenshotLoader
     let screenshots: [ShownScreenshot]

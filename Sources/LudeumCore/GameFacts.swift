@@ -227,17 +227,25 @@ public struct ScreenshotShape: Sendable, Equatable {
     /// Whether IGDB's thumbnails, cropped to 16:9, are this shape; any other is cropped from the original.
     public var fitsThumbnail: Bool { self == .widescreen }
 
-    /// How they're tiled across `width` points with `spacing` between them: as many across as bring each screen in a
-    /// tile nearest `screenArea`, so every Platform's are about the same size and a wider panel fits more of them,
-    /// in two rows while those are under `twoRowsHeight` tall, else one.
+    /// How they're tiled across `width` points with `spacing` between them, filling it: two rows of the biggest that
+    /// keep them at most `twoRowsHeight` tall, so a wider panel fits more across; or, when those would be narrower than
+    /// `narrowest` (a Nintendo DS's), one row of as many as bring each screen in a tile nearest `screenArea`.
     public func layout(width: Double, spacing: Double) -> ScreenshotLayout {
+        func tileWidth(_ columns: Int) -> Double { (width - Double(columns - 1) * spacing) / Double(columns) }
+        var columns = 1
+        while tileWidth(columns) >= Self.narrowest {
+            if (2 * tileWidth(columns) / aspectRatio + spacing).rounded() <= Self.twoRowsHeight {
+                return ScreenshotLayout(columns: columns, rows: 2)
+            }
+            columns += 1
+        }
         let targetWidth = (Self.screenArea * Double(screens) * aspectRatio).squareRoot()
-        let columns = max(1, Int(((width + spacing) / (targetWidth + spacing)).rounded()))
-        let tileHeight = (width - Double(columns - 1) * spacing) / Double(columns) / aspectRatio
-        return ScreenshotLayout(columns: columns, rows: 2 * tileHeight + spacing < Self.twoRowsHeight ? 2 : 1)
+        return ScreenshotLayout(columns: max(1, Int(((width + spacing) / (targetWidth + spacing)).rounded())), rows: 1)
     }
 
-    /// A 146 × 82 tile at 16:9: three across `narrowPanelWidth`, each a little smaller.
+    /// The narrowest a tile in two rows goes.
+    static let narrowest = 100.0
+    /// One row's tiles are about this many square points each screen: a Nintendo DS's four across 600 points.
     static let screenArea = 12_000.0
     /// About as much as the Screenshots get of Game detail at its narrowest.
     public static let narrowPanelWidth = 400.0

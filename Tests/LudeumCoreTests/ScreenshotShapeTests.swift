@@ -44,39 +44,46 @@ import Testing
         for platformId: Int64 in [33, 24, 7, 20] { #expect(!ScreenshotShape.of(platformId: platformId).fitsThumbnail) }
     }
 
-    @Test func widescreenOnesInANarrowPanelAreTwoRowsOfThree() {
-        let layout = ScreenshotShape.widescreen.layout(width: ScreenshotShape.narrowPanelWidth, spacing: 12)
-        #expect(layout == ScreenshotLayout(columns: 3, rows: 2))
-        #expect(layout.limit == 6)
-    }
-
-    @Test func aWiderPanelFitsMoreAcrossRatherThanTallerOnes() {
-        #expect(ScreenshotShape.widescreen.layout(width: 640, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))
-        #expect(ScreenshotShape.widescreen.layout(width: 840, spacing: 12) == ScreenshotLayout(columns: 5, rows: 2))
-    }
-
-    @Test func squarerOnesAreNarrowerSoMoreFitAcross() {
+    @Test func theyAreTwoRowsOfTheBiggestThatKeepThemUnder300PointsTall() {
         let gameBoy = ScreenshotShape.of(platformId: 33)
         #expect(gameBoy.layout(width: 400, spacing: 12) == ScreenshotLayout(columns: 3, rows: 2))
-        #expect(gameBoy.layout(width: 480, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))
-        #expect(gameBoy.layout(width: 840, spacing: 12) == ScreenshotLayout(columns: 7, rows: 2))
+        #expect(gameBoy.layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))
+        #expect(gameBoy.layout(width: 840, spacing: 12) == ScreenshotLayout(columns: 5, rows: 2))
+        #expect(ScreenshotShape.of(platformId: 18).layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))  // NES
+        #expect(ScreenshotShape.of(platformId: 24).layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 3, rows: 2))  // GBA
+        // Three PlayStation ones across 600 points are 192 × 144: two rows of them exactly 300 tall.
+        #expect(ScreenshotShape.of(platformId: 7).layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 3, rows: 2))
     }
 
-    @Test func nintendoDSOnesAreOneRowAsTwoWouldBeTallerThan300Points() {
+    @Test func widescreenOnesAreTwoAcrossANarrowPanelAndMoreAsItWidens() {
+        let layout = ScreenshotShape.widescreen.layout(width: ScreenshotShape.narrowPanelWidth, spacing: 12)
+        #expect(layout == ScreenshotLayout(columns: 2, rows: 2))
+        #expect(layout.limit == 4)
+        #expect(ScreenshotShape.widescreen.layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 3, rows: 2))
+        #expect(ScreenshotShape.widescreen.layout(width: 840, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))
+    }
+
+    @Test func nintendoDSOnesAreOneRowAsTwoUnder300PointsWouldBeSlivers() {
         let ds = ScreenshotShape.of(platformId: 20)
         #expect(ds.layout(width: 400, spacing: 12) == ScreenshotLayout(columns: 3, rows: 1))
         #expect(ds.layout(width: 540, spacing: 12) == ScreenshotLayout(columns: 4, rows: 1))
         #expect(ds.layout(width: 840, spacing: 12) == ScreenshotLayout(columns: 6, rows: 1))
     }
 
-    @Test func twoRowsAreAlwaysUnder300PointsTall() {
+    @Test func twoRowsAreAtMost300PointsTallAndOneFewerAcrossWouldBeTaller() {
         for platformId: Int64? in [33, 24, 18, 19, 29, 13, 7, 20, nil] {
             let shape = ScreenshotShape.of(platformId: platformId)
-            for width in stride(from: 200.0, through: 1200, by: 10) {
+            func tile(_ columns: Int, _ width: Double) -> Double { (width - Double(columns - 1) * 12) / Double(columns) }
+            for width in stride(from: 250.0, through: 1200, by: 10) {
                 let layout = shape.layout(width: width, spacing: 12)
-                let tileHeight = (width - Double(layout.columns - 1) * 12) / Double(layout.columns) / shape.aspectRatio
-                #expect(layout.columns >= 1)
-                if layout.rows == 2 { #expect(2 * tileHeight + 12 < 300, "Platform \(String(describing: platformId)) at \(width)") }
+                let label: Comment = "Platform \(String(describing: platformId)) at \(width)"
+                #expect(layout.columns >= 1, label)
+                guard layout.rows == 2 else { continue }
+                #expect(tile(layout.columns, width) >= 100, label)
+                #expect((2 * tile(layout.columns, width) / shape.aspectRatio + 12).rounded() <= 300, label)
+                if layout.columns > 1 {
+                    #expect((2 * tile(layout.columns - 1, width) / shape.aspectRatio + 12).rounded() > 300, label)
+                }
             }
         }
     }
