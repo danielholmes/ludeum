@@ -116,7 +116,7 @@ final class FakeReleases: HTTPTransport, Sendable {
         let (_, release) = try release()
         let (installer, _) = installer(release, zips: [:])
 
-        await #expect(throws: DuckStationInstallError.notFound(tag: "v0.1-12083", status: 404)) { try await installer.install() }
+        await #expect(throws: DuckStationInstallError.notFound(tag: release.tag, status: 404)) { try await installer.install() }
         #expect(!exists(installed))
     }
 
@@ -134,11 +134,14 @@ final class FakeReleases: HTTPTransport, Sendable {
         #expect(!exists(installed))
     }
 
+    /// A build the pin isn't: the one before it.
+    var otherBuild: Int { DuckStationRelease.pinned.build - 1 }
+
     @Test func aDownloadOfAnotherBuildIsRefused() async throws {
-        let (zip, release) = try release(version: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)")
+        let (zip, release) = try release(version: "DuckStation Version 0.1-\(otherBuild)-gdd4a0eb77 (dev)")
         let (installer, _) = installer(release, zips: [release.urls[0]: zip])
 
-        await #expect(throws: DuckStationInstallError.wrongBuild(found: "12442")) { try await installer.install() }
+        await #expect(throws: DuckStationInstallError.wrongBuild(found: String(otherBuild))) { try await installer.install() }
         #expect(!exists(installed))
     }
 
@@ -168,9 +171,9 @@ final class FakeReleases: HTTPTransport, Sendable {
     @Test func aFailedInstallLeavesTheCopyThatWasThere() async throws {
         let (zip, pinned) = try release()
         try await installer(pinned, zips: [pinned.urls[0]: zip]).0.install()
-        let (other, otherRelease) = try release(version: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)")
+        let (other, otherRelease) = try release(version: "DuckStation Version 0.1-\(otherBuild)-gdd4a0eb77 (dev)")
 
-        await #expect(throws: DuckStationInstallError.wrongBuild(found: "12442")) {
+        await #expect(throws: DuckStationInstallError.wrongBuild(found: String(otherBuild))) {
             try await installer(otherRelease, zips: [otherRelease.urls[0]: other]).0.install()
         }
 
