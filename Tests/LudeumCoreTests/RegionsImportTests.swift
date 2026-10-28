@@ -193,7 +193,7 @@ import Testing
         try await importNow()
         #expect(try regions() == ["Crash Bandicoot": #"["USA"]"#])
 
-        // To be given Regions again, as `ludeum-import checksums` leaves a ROM whose checksum changed.
+        // To be given Regions again, as `ludeum-import checksums` left a ROM whose checksum changed.
         try await j.journal.db.write { try $0.execute(sql: "UPDATE rom SET regions = NULL, regionsLookedUp = 0") }
         h.internet.resetSent()
         try await importNow()
