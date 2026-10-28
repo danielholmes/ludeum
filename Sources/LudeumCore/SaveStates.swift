@@ -1,8 +1,8 @@
 import Foundation
 import GRDB
 
-/// A DuckStation save state (ADR 0022): made and managed in DuckStation, which keeps it in its own folder as
-/// `<serial>_<slot>.sav`, and backed up into the Data folder under the same name.
+/// A DuckStation save state: made and managed in DuckStation, which keeps it in the Data folder, where its Standing
+/// settings point it (ADR 0024), as `<serial>_<slot>.sav`.
 public struct SaveState: Sendable, Equatable, Identifiable {
     public enum Slot: Sendable, Hashable, Comparable {
         /// The one DuckStation saves on closing the game.
@@ -16,11 +16,6 @@ public struct SaveState: Sendable, Equatable, Identifiable {
     public let previous: Bool
     /// When it was saved: its file's modification date, as DuckStation shows it.
     public let saved: Date
-    /// DuckStation's folder has it; else only the backup does, after it was deleted there.
-    public let inDuckStation: Bool
-    /// The backup has it as DuckStation has it (always, when DuckStation hasn't).
-    public let backedUp: Bool
-    /// The file to Play and read: DuckStation's, else the backup's.
     public let file: URL
 
     public var fileName: String { file.lastPathComponent }
@@ -58,125 +53,43 @@ public struct SaveStateScreenshot: Sendable, Equatable {
     public let rgba: Data
 }
 
-/// DuckStation's save states, kept where DuckStation keeps them, with a backup of each in the Data folder (ADR 0022).
-/// DuckStation's folder is set only in its own settings, which no per-game file can change, so the states stay there;
-/// Ludeum copies them, and never deletes a backup because DuckStation's is gone.
+/// DuckStation's save states, in `Emulators/DuckStation/Save States/` in the Data folder (ADR 0024): Ludeum lists a
+/// Game's, Plays from one and deletes one; DuckStation makes them.
 public struct DuckStationSaveStates: Sendable {
-    /// DuckStation's own folder: its settings' `[Folders] SaveStates`, else `savestates`.
     public let folder: URL
-    /// `Emulators/DuckStation/Save States/` in the Data folder.
-    public let backup: URL
-    /// The Data folder: nothing's backed up while it's missing, so no backup is made somewhere Dropbox doesn't see.
-    let data: URL
 
-    public init(ludeum: LudeumFolder = .standard, duckStation: DuckStationSettings = .init()) {
-        self.init(folder: duckStation.folder("SaveStates", default: "savestates"), backup: ludeum.duckStationSaveStates, data: ludeum.data)
+    public init(ludeum: LudeumFolder = .standard) {
+        self.init(folder: ludeum.duckStationSaveStates)
     }
 
-    init(folder: URL, backup: URL, data: URL) {
+    init(folder: URL) {
         self.folder = folder
-        self.backup = backup
-        self.data = data
     }
 
-    /// Copies each state of `serials` the backup hasn't got as DuckStation has it. True if any was copied.
-    @discardableResult
-    public func backUp(_ serials: Set<String>) throws -> Bool {
-        guard !serials.isEmpty, isDirectory(data) else { return false }
-        var copied = false
-        for name in names(in: folder, of: serials) {
-            let source = folder.appending(path: name)
-            let copy = backup.appending(path: name)
-            guard !Self.same(source, copy) else { continue }
-            try FileManager.default.copyIntoDataFolder(source, over: copy)
-            copied = true
-        }
-        return copied
-    }
-
-    /// The states of `serials`, in DuckStation's folder or only in the backup: by Disc in `serials`' order, then Resume,
-    /// then by slot, each slot's previous one after it.
+    /// The states of `serials`: by Disc in `serials`' order, then Resume, then by slot, each slot's previous one after it.
     public func states(of serials: [String]) -> [SaveState] {
         let order = Dictionary(serials.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
-        let names = Set(names(in: folder, of: Set(serials))).union(names(in: backup, of: Set(serials)))
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? []
         return names.compactMap { name -> SaveState? in
             guard let parsed = SaveState.parse(name, serials: serials) else { return nil }
-            let live = folder.appending(path: name)
-            let copy = backup.appending(path: name)
-            let inDuckStation = Self.exists(live)
-            let file = inDuckStation ? live : copy
+            let file = folder.appending(path: name)
             guard let saved = Self.modified(file) else { return nil }
-            return SaveState(
-                serial: parsed.serial, slot: parsed.slot, previous: parsed.previous, saved: saved, inDuckStation: inDuckStation,
-                backedUp: !inDuckStation || Self.same(live, copy), file: file)
+            return SaveState(serial: parsed.serial, slot: parsed.slot, previous: parsed.previous, saved: saved, file: file)
         }
         .sorted {
             (order[$0.serial] ?? 0, $0.slot, $0.previous ? 1 : 0) < (order[$1.serial] ?? 0, $1.slot, $1.previous ? 1 : 0)
         }
     }
 
-    /// Sends it to the Trash from DuckStation's folder and from the backup.
+    /// Sends it to the Trash.
     public func delete(
         _ state: SaveState, moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
     ) throws {
-        for file in [folder.appending(path: state.fileName), backup.appending(path: state.fileName)] where Self.exists(file) {
-            try moveToTrash(file)
-        }
+        try moveToTrash(state.file)
     }
 
-    /// Copies the backup back into DuckStation's folder, where DuckStation's menus see it again.
-    public func restore(_ state: SaveState) throws {
-        try FileManager.default.copyIntoDataFolder(backup.appending(path: state.fileName), over: folder.appending(path: state.fileName))
-    }
-
-    /// The names of `serials`' states in `folder`.
-    private func names(in folder: URL, of serials: Set<String>) -> [String] {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? []
-        return names.filter { SaveState.parse($0, serials: serials) != nil }
-    }
-
-    private func isDirectory(_ url: URL) -> Bool {
-        var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: url.path(percentEncoded: false), isDirectory: &isDirectory)
-            && isDirectory.boolValue
-    }
-
-    private static func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) }
-
-    private static func attributes(_ url: URL) -> (size: Int64, modified: Date)? {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path(percentEncoded: false)),
-            let size = (attributes[.size] as? NSNumber)?.int64Value, let modified = attributes[.modificationDate] as? Date
-        else { return nil }
-        return (size, modified)
-    }
-
-    private static func modified(_ url: URL) -> Date? { attributes(url)?.modified }
-
-    /// The same size, saved within a second of each other: the copy is what DuckStation has.
-    private static func same(_ a: URL, _ b: URL) -> Bool {
-        guard let a = attributes(a), let b = attributes(b) else { return false }
-        return a.size == b.size && abs(a.modified.timeIntervalSince(b.modified)) < 1
-    }
-
-}
-
-extension FileManager {
-    /// Copies `source` over `destination` in one step, keeping when it was saved: it's written beside it under a hidden
-    /// name, then renamed into place, so Dropbox never sees half of it.
-    func copyIntoDataFolder(_ source: URL, over destination: URL) throws {
-        let folder = destination.deletingLastPathComponent()
-        try createDirectory(at: folder, withIntermediateDirectories: true)
-        let partial = folder.appending(path: ".\(destination.lastPathComponent).copying")
-        try? removeItem(at: partial)
-        try copyItem(at: source, to: partial)
-        if let modified = (try? attributesOfItem(atPath: source.path(percentEncoded: false)))?[.modificationDate] as? Date {
-            try setAttributes([.modificationDate: modified], ofItemAtPath: partial.path(percentEncoded: false))
-        }
-        guard rename(partial.path(percentEncoded: false), destination.path(percentEncoded: false)) == 0 else {
-            let error = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-            try? removeItem(at: partial)
-            throw error
-        }
+    private static func modified(_ url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path(percentEncoded: false)))?[.modificationDate] as? Date
     }
 }
 
@@ -241,16 +154,5 @@ public struct Zstd: Sendable {
         let out = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         return process.terminationStatus == 0 ? out : nil
-    }
-}
-
-extension LudeumStore {
-    /// The Serials of every Game's ROMs: the ones whose save states are backed up.
-    public func gameSerials() throws -> Set<String> {
-        try db.read { db in
-            let rows = try String.fetchAll(
-                db, sql: "SELECT serials FROM rom WHERE gameId IS NOT NULL AND serialsLookedUp AND serials IS NOT NULL")
-            return Set(rows.flatMap { text in (try? JSONDecoder().decode([String?].self, from: Data(text.utf8)))?.compactMap { $0 } ?? [] })
-        }
     }
 }

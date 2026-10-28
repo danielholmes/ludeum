@@ -67,6 +67,11 @@ extension LudeumStore {
         try roms(where: "r.id = ?", arguments: [id]).first
     }
 
+    /// Every ROM of a Platform, Matched or not, present first, then by file name.
+    public func roms(onPlatform platformId: Int64) throws -> [LudeumROM] {
+        try roms(where: "r.platformId = ?", arguments: [platformId])
+    }
+
     func roms(where condition: String, arguments: StatementArguments) throws -> [LudeumROM] {
         try db.read { db in
             try Row.fetchAll(

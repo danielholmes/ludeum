@@ -48,7 +48,7 @@ Run the tests with `swift test`.
 
 ## Where Ludeum keeps things
 
-Ludeum keeps everything in `~/Library/Application Support/Ludeum/`: the journal, and a `Data` folder holding what must survive losing your Mac (the ROM folders, attachments and backups). Ludeum won't start until the `Data` folder exists. Ludeum never creates it, so a missing link can't be silently replaced by an empty folder. Create it yourself, or link it to a synced folder so it's kept safe:
+Ludeum keeps everything in `~/Library/Application Support/Ludeum/`: the journal, the emulators it installs (under `Emulators/`), and a `Data` folder holding what must survive losing your Mac (the ROM folders, attachments, backups, and what DuckStation saves: its save states, memory cards and BIOS files under `Data/Emulators/DuckStation/`). Ludeum won't start until the `Data` folder exists. Ludeum never creates it, so a missing link can't be silently replaced by an empty folder. Create it yourself, or link it to a synced folder so it's kept safe:
 
 ```sh
 ln -s ~/Dropbox/games/Ludeum ~/Library/Application\ Support/Ludeum/Data
@@ -60,12 +60,12 @@ Each platform's ROMs go in `Data/ROMs/<Platform>/`, for example `Data/ROMs/SNES/
 
 Ludeum doesn't include any games, BIOS files or emulators. Supply your own legally obtained ROMs and BIOS files, and set up BIOS, controllers and video in each emulator. Ludeum keeps those settings, and sets each game's own settings for that Play only.
 
-Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found.
+Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found. DuckStation is the exception: Ludeum installs its own copy from there, at exactly the build below, into its own folder and made portable, so nothing of it is shared with any other DuckStation on your Mac. Its settings are still yours to make in DuckStation (open it from the same sheet), apart from where it keeps things and a few it fixes for every game.
 
 | Platform | Emulator | Version |
 | --- | --- | --- |
 | NES / Famicom, SNES / Super Famicom, Game Boy, Game Boy Color, Game Boy Advance, Master System, Game Gear, PC Engine CD | [MesenCE](https://github.com/nesdev-org/MesenCE) | 2.2.1 |
-| PlayStation | [DuckStation](https://www.duckstation.org) | build 12442 |
+| PlayStation | [DuckStation](https://www.duckstation.org), installed by Ludeum | build 12083 |
 | PlayStation 2 | [PCSX2](https://pcsx2.net) | 2.9.103 |
 | PlayStation Portable | [PPSSPP](https://www.ppsspp.org) | 1.20.4 |
 | Nintendo 64, Mega Drive / Genesis, Sega CD | [ares](https://ares-emu.net) | v148 |

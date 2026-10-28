@@ -4,6 +4,8 @@ import Observation
 /// What a Background task works on, so the things that would change it can wait while it's queued or running.
 public enum TaskSubject: Hashable, Sendable {
     case rom(Int64)
+    /// An Emulator being installed.
+    case emulator(Emulator)
 }
 
 /// Background tasks: long work that runs while I carry on, one at a time in the order asked for,

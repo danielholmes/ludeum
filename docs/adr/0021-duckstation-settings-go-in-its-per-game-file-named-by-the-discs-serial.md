@@ -1,5 +1,7 @@
 # DuckStation settings go in its per-game file, named by the disc's Serial
 
+Amended by [0024](0024-ludeum-installs-duckstation-and-says-where-it-keeps-things.md): fast boot, input latency and the memory card keys leave the per-game file, which carries only the Game's own settings.
+
 Amends [0008](0008-journal-owns-per-game-emulator-settings.md) for DuckStation: its Play no longer passes every setting, defaults included, for that launch only.
 
 A PlayStation Play passed DuckStation `-settings <file>`, a copy of its own `settings.ini` with the Game's run-ahead (and later its CD read speedup) written in, so nothing carried over between Games and DuckStation's own settings were never touched. DuckStation dropped `-settings` (and `-portable`) in build 8843, in April 2025 (`ffd6726a`, "Qt: Drop -settings/-portable CLI parameters"): it hadn't been tested in years, was broken for a long time with nobody complaining, and an alternative `settings.ini` makes little sense when the rest of what DuckStation keeps (play time, custom properties, crash dumps) stays in its data folder anyway. Every build Ludeum has accepted is later than that, so every PlayStation Play failed with "Unknown parameter: -settings". Nothing has replaced it: DuckStation's command line takes no settings at all, and its repository has no issues or discussions where one might be asked for.

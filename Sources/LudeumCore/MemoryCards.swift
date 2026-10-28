@@ -69,20 +69,17 @@ public enum MemoryCard {
     }
 }
 
-/// A ROM's memory card as Game detail shows it: the Data folder's, or before its first Play, DuckStation's own.
+/// A ROM's memory card as Game detail shows it: the one DuckStation keeps for its disc.
 public struct MemoryCardFile: Sendable, Equatable {
     public let file: URL
-    /// In the Data folder; else it's DuckStation's own, copied in at the ROM's next Play.
-    public let inDataFolder: Bool
     /// When the game last saved to it.
     public let saved: Date
     /// Nil when it couldn't be read as a card.
     public let saves: [CardSave]?
 }
 
-/// Each PlayStation ROM's memory card (ADR 0023): in the Data folder, named by Disc 1's Serial, where every Play points
-/// DuckStation's card 1 through the per-game file. The one copy: DuckStation's own card is copied in at a ROM's first
-/// Play, and left where it was.
+/// Each PlayStation ROM's memory card: DuckStation names and manages it, and Ludeum only says where they're kept, in the
+/// Data folder (ADR 0024). Game detail shows a ROM's by working out DuckStation's name for it.
 public struct DuckStationMemoryCards: Sendable {
     let duckStation: DuckStationSettings
 
@@ -90,44 +87,25 @@ public struct DuckStationMemoryCards: Sendable {
         self.duckStation = duckStation
     }
 
-    /// The folder in DuckStation's app holding the game database its own cards are named from.
+    /// The folder in DuckStation's app holding the game database its cards are named from.
     public static func resources(of app: URL) -> URL { app.appending(path: "Contents/Resources", directoryHint: .isDirectory) }
 
-    /// `Emulators/DuckStation/Memory Cards/` in the Data folder.
-    public var folder: URL { duckStation.ludeum.duckStationMemoryCards }
-
-    /// The card of a ROM whose Disc 1 has `serial`.
-    public func card(of serial: String) -> URL {
-        folder.appending(path: DuckStationSettings.fileName(serial) + ".mcd")
-    }
-
-    /// The Data folder's card, else DuckStation's own for `serial`'s disc opened from `rom`; nil when neither is there.
+    /// The card DuckStation keeps for `serial`'s disc opened from `rom`; nil when it hasn't one yet, or card 1 is off.
     public func memoryCard(serial: String, rom: URL, resources: URL?) -> MemoryCardFile? {
-        let duckStations = duckStationsCard(serial: serial, rom: rom, resources: resources)
-        for (file, inDataFolder) in [(card(of: serial), true), (duckStations, false)] {
-            guard let file, let saved = Self.modified(file) else { continue }
-            return MemoryCardFile(file: file, inDataFolder: inDataFolder, saved: saved, saves: MemoryCard.saves(of: file))
+        guard let file = duckStationsCard(serial: serial, rom: rom, resources: resources), let saved = Self.modified(file) else {
+            return nil
         }
-        return nil
+        return MemoryCardFile(file: file, saved: saved, saves: MemoryCard.saves(of: file))
     }
 
-    /// Copies DuckStation's own card for `serial`'s disc in, when the Data folder hasn't one, keeping when it was saved.
-    /// Its caller has found the Data folder.
-    func copyIn(serial: String, rom: URL, resources: URL?) throws {
-        let card = card(of: serial)
-        guard !Self.exists(card), let duckStations = duckStationsCard(serial: serial, rom: rom, resources: resources),
-            duckStations != card, Self.exists(duckStations)
-        else { return }
-        try FileManager.default.copyIntoDataFolder(duckStations, over: card)
-    }
-
-    /// The card DuckStation's own settings give card 1 for `serial`'s disc opened from `rom`, the per-game file's over
-    /// its `settings.ini`, as DuckStation names it: by its title in the game database in `resources` by default (a disc
+    /// The card DuckStation's settings give card 1 for `serial`'s disc opened from `rom`, the per-game file's over its
+    /// `settings.ini`, as DuckStation names it: by its title in the game database in `resources` by default (a disc
     /// set's, unless a card of the disc's own is there already), or by its Serial, its file's name, or one shared card.
-    /// Nil when card 1 is off. A title the game was given in DuckStation's game list isn't looked for.
-    func duckStationsCard(serial: String, rom: URL, resources: URL?) -> URL? {
-        let base = (try? String(contentsOf: duckStation.dataFolder.appending(path: "settings.ini"), encoding: .utf8)) ?? ""
-        let perGame = (try? String(contentsOf: duckStation.gameSettingsFile(serial), encoding: .utf8)) ?? ""
+    /// Nil when card 1 is off. A title the game was given in DuckStation's game list isn't looked for. `perGame` stands
+    /// in for the per-game file's text.
+    func duckStationsCard(serial: String, rom: URL, resources: URL?, perGame: String? = nil) -> URL? {
+        let base = (try? String(contentsOf: duckStation.settingsFile, encoding: .utf8)) ?? ""
+        let perGame = perGame ?? (try? String(contentsOf: duckStation.gameSettingsFile(serial), encoding: .utf8)) ?? ""
         func setting(_ key: String) -> String? {
             Ini.value(key, in: "MemoryCards", of: perGame) ?? Ini.value(key, in: "MemoryCards", of: base)
         }

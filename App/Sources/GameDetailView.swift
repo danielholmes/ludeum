@@ -93,7 +93,7 @@ struct GameDetailView: View {
                         OpenManualButton(services: services, game: id)
                         if !game.isBundle, !playROMs.isEmpty, !playROMs.allSatisfy(\.missing) {
                             playControls
-                            if let message = playError ?? emulator.flatMap(services.versions.tooOldMessage) {
+                            if let message = playError ?? emulator.flatMap(services.versions.refusalMessage) {
                                 Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -406,7 +406,7 @@ struct GameDetailView: View {
                     Label("Play", systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(services.versions.tooOldMessage(emulator) == nil ? nil : .red)
+                .tint(services.versions.refusalMessage(emulator) == nil ? nil : .red)
                 .disabled(refusal == .busy)
                 .help(refusal?.message ?? "Play in \(emulator.name)")
                 // Dolphin has no per-Game settings: every Game gets the same ones.

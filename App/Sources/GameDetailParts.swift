@@ -488,7 +488,7 @@ enum FactStyle {
     alert: (_ title: String, _ message: String) -> Void
 ) {
     let version: Play.VersionStatus =
-        if let tooOld = services.versions.tooOldMessage(emulator) {
+        if let tooOld = services.versions.refusalMessage(emulator) {
             .tooOld(tooOld)
         } else if let warning = services.versions.warningOnce(emulator) {
             .warn(warning)
@@ -496,9 +496,13 @@ enum FactStyle {
             .ok
         }
     let locator = ROMLocator(romFolders: services.settings.romFolders)
+    if services.versions.isInstalling(emulator, tasks: services.tasks) {
+        refused(Play.Refusal.installing(emulator).message)
+        return
+    }
     switch play.prepare(
         locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState,
-        duckStation: DuckStationSettings(ludeum: services.settings.folder))
+        duckStation: DuckStationSettings(ludeum: services.settings.folder), running: \.isRunning)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)

@@ -187,8 +187,12 @@ _Avoid_: Disagreement (that's about one Game, and needs more evidence)
 ### Playing
 
 **Emulator**:
-The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one.
+The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation itself, in the Ludeum folder at the build it chooses, and it can't be Played with until that's done; the others I install.
 _Avoid_: Core, player
+
+**Standing settings**:
+The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, fast boot, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. Not Emulator settings, which are one Game's own. Only DuckStation has them so far.
+_Avoid_: Global settings, defaults, config
 
 **Emulator settings**:
 The few settings of a Game's Emulator that the journal chooses on each Play, e.g. run-ahead frames. A Game without its own value gets the Emulator's default. Every Play sets all of them, so one Game's settings never carry into the next.
@@ -207,7 +211,7 @@ An Emulator setting for PlayStation Games: how much faster than a real drive Duc
 _Avoid_: Fast seeking, CD-ROM speed
 
 **Save state**:
-A snapshot of a game mid-play that DuckStation saves and loads, in one of a disc's slots (1 to 10), or as its Resume state, saved on closing the game, or as the Previous one of a slot, kept when it's saved over. Save states are made and managed in DuckStation, which names them by the disc's Serial; Ludeum lists a PlayStation Game's, Plays from one, deletes one, and keeps a backup of each in the Data folder, which stays when DuckStation's goes. A save state has no name: it's its slot, when it was saved and its screenshot. Not a Game save, which the game writes itself.
+A snapshot of a game mid-play that DuckStation saves and loads, in one of a disc's slots (1 to 10), or as its Resume state, saved on closing the game, or as the Previous one of a slot, kept when it's saved over. Save states are made and managed in DuckStation, which names them by the disc's Serial and keeps them in the Data folder, as its Standing settings say; Ludeum lists a PlayStation Game's, Plays from one and deletes one. A save state has no name: it's its slot, when it was saved and its screenshot. Not a Game save, which the game writes itself.
 _Avoid_: Snapshot, save (alone), quick save
 
 **Game save**:
@@ -229,11 +233,11 @@ _Avoid_: Job, operation
 ### Where things live
 
 **Ludeum folder**:
-The one place on this Mac where Ludeum keeps everything it owns: the live journal and the Data folder. The cache sits outside it, since it can always be rebuilt.
+The one place on this Mac where Ludeum keeps everything it owns: the live journal, the Data folder, and the Emulators it installs along with what they keep for themselves. The cache sits outside it, since it can always be rebuilt.
 _Avoid_: App folder, library
 
 **Data folder**:
-The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the PlayStation Games' Game saves, and the Game saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
+The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the PlayStation Games' Game saves and Save states, DuckStation's BIOS files, per-game settings, input profiles and screenshots, and the Game saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
 _Avoid_: Kept folder, backup-worthy, Library folder
 
 **Backup**:

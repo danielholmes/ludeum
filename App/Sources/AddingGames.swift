@@ -32,12 +32,10 @@ import SwiftUI
     let work = BackgroundWork()
     /// Archive and Unarchive, and other long work, one at a time.
     let tasks = BackgroundTasks()
-    /// Each installed Emulator's version, checked at launch.
-    let versions = EmulatorVersionChecks()
+    /// Each installed Emulator's version, checked at launch, and DuckStation's install.
+    let versions: EmulatorVersionChecks
     /// The app menu's sheets.
     let sheets = AppSheets()
-    /// The backup of DuckStation's save states.
-    let saveStates: SaveStateBackup
     /// Opened once; nil if it couldn't be.
     let cache: CacheStore?
     let launchBox: LaunchBoxGamesDB?
@@ -46,7 +44,7 @@ import SwiftUI
     init(settings: AppSettings, journal: LudeumStore?) {
         self.settings = settings
         self.journal = journal
-        saveStates = SaveStateBackup(journal: journal, ludeum: settings.folder)
+        versions = EmulatorVersionChecks(folder: settings.folder)
         cache = try? CacheStore(directory: CacheStore.defaultDirectory)
         launchBox = cache.map { LaunchBoxGamesDB(cache: $0) }
     }

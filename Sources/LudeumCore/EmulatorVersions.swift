@@ -9,6 +9,8 @@ public enum VersionCheck: Sendable, Equatable {
     case newerMajor(found: String)
     /// Its version couldn't be read: Play goes ahead, with a warning.
     case unreadable
+    /// Not the build Ludeum installs (ADR 0024): Play is refused until it's installed again.
+    case wrongBuild(found: String)
 }
 
 /// What each Emulator's version is expected to be, and where to read it.
@@ -29,12 +31,15 @@ struct EmulatorVersionSpec: Sendable {
         case buildNumber
     }
 
-    /// The minimum: the version the launch code was written and checked against.
+    /// The minimum: the version the launch code was written and checked against. For an Emulator Ludeum installs, the
+    /// exact version it installs.
     let expected: String
     let source: Source
     var format = Format.dotted
     /// False where the first number isn't a major version (Dolphin's year-month, ares' and DuckStation's counts).
     var warnsOnNewerMajor = true
+    /// Only `expected` will do: Ludeum installs it, so any other is `wrongBuild`.
+    var exact = false
 }
 
 extension Emulator {
@@ -46,7 +51,9 @@ extension Emulator {
         switch self {
         case .mesenCE: EmulatorVersionSpec(expected: "2.2.1", source: .mesenSettings)
         case .duckStation:
-            EmulatorVersionSpec(expected: "12442", source: .commandLine("-version"), format: .buildNumber, warnsOnNewerMajor: false)
+            EmulatorVersionSpec(
+                expected: String(DuckStationRelease.pinned.build), source: .commandLine("-version"), format: .buildNumber,
+                warnsOnNewerMajor: false, exact: true)
         // Its `--version` works, but the app version is the same and needs no process.
         case .dolphin: EmulatorVersionSpec(expected: "2609", source: .appVersion, warnsOnNewerMajor: false)
         case .ares: EmulatorVersionSpec(expected: "148", source: .commandLine("--version"), warnsOnNewerMajor: false)
@@ -87,6 +94,7 @@ public enum EmulatorVersions {
             return .unreadable
         }
         let shown = version.map(String.init).joined(separator: ".")
+        if spec.exact { return compare(version, expected) == 0 ? .ok : .wrongBuild(found: shown) }
         if compare(version, expected) < 0 { return .tooOld(found: shown) }
         if spec.warnsOnNewerMajor, version[0] > expected[0] { return .newerMajor(found: shown) }
         return .ok

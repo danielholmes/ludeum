@@ -75,14 +75,14 @@ func memoryCard(_ saves: [(name: String, title: String, frames: Int, blocks: Int
     }
 }
 
-/// Each PlayStation ROM's card, in the Data folder where every Play points DuckStation at it (ADR 0023).
+/// Each PlayStation ROM's card, named and kept by DuckStation; Ludeum works out its name to show it (ADR 0024).
 @Suite struct DuckStationMemoryCardTests {
     let root = FileManager.default.temporaryDirectory.appending(path: "memory cards \(UUID().uuidString)", directoryHint: .isDirectory)
     var duckStation: URL { root.appending(path: "DuckStation", directoryHint: .isDirectory) }
     var ludeum: LudeumFolder { LudeumFolder(url: root.appending(path: "Ludeum", directoryHint: .isDirectory)) }
     var resources: URL { root.appending(path: "DuckStation.app/Contents/Resources", directoryHint: .isDirectory) }
     var settings: DuckStationSettings {
-        DuckStationSettings(dataFolder: duckStation, oldCopy: root.appending(path: "old.ini"), ludeum: ludeum)
+        DuckStationSettings(app: root.appending(path: "DuckStation.app"), dataFolder: duckStation, ludeum: ludeum)
     }
     var cards: DuckStationMemoryCards { DuckStationMemoryCards(duckStation: settings) }
     let rom = URL(filePath: "/Games/PS1/Resident Evil - Director's Cut (USA)/Resident Evil - Director's Cut (USA).cue")
@@ -133,11 +133,7 @@ func memoryCard(_ saves: [(name: String, title: String, frames: Int, blocks: Int
         }
     }
 
-    @Test func aROMsCardIsNamedByDisc1sSerialInTheDataFolder() {
-        #expect(cards.card(of: "SLUS-00551") == ludeum.data.appending(path: "Emulators/DuckStation/Memory Cards/SLUS-00551.mcd"))
-    }
-
-    @Test func duckStationsOwnCardIsNamedByItsTitleAsItsSettingsSay() throws {
+    @Test func duckStationsCardIsNamedByItsTitleAsItsSettingsSay() throws {
         // By default, its title in DuckStation's game database.
         #expect(own("SLUS-00551") == "memcards/Resident Evil - Director's Cut (USA)_1.mcd")
         // A disc set's discs share its card, unless a card of the disc's own is there already.
@@ -165,65 +161,31 @@ func memoryCard(_ saves: [(name: String, title: String, frames: Int, blocks: Int
         #expect(own("SLUS-00551") == "memcards/SLUS-00551_1.mcd")
     }
 
-    @Test func withoutItsGameDatabaseItsOwnCardIsNamedByTheFile() {
+    @Test func onceTheStandingSettingsAreWrittenTheCardsAreInTheDataFolder() throws {
+        try settings.writeStanding()
+        #expect(
+            cards.duckStationsCard(serial: "SLUS-00551", rom: rom, resources: resources)
+                == ludeum.duckStationMemoryCards.appending(path: "Resident Evil - Director's Cut (USA)_1.mcd"))
+    }
+
+    @Test func withoutItsGameDatabaseItsCardIsNamedByTheFile() {
         let unknown = cards.duckStationsCard(serial: "SLUS-00551", rom: rom, resources: nil)
         #expect(unknown == memcard("Resident Evil - Director's Cut (USA)_1.mcd"))
     }
 
-    @Test func duckStationsCardIsCopiedInWhenTheDataFolderHasNone() throws {
+    @Test func aROMsCardIsShownWithItsSavesAndWhenTheGameLastSaved() throws {
         let saved = Date(timeIntervalSince1970: 1_000_000)
+        let card = memcard("Resident Evil - Director's Cut (USA)_1.mcd")
         try FileManager.default.createDirectory(at: memcard(""), withIntermediateDirectories: true)
-        try memoryCard([("BASLUS-00551RE001", "RE", 1, 1)]).write(to: memcard("Resident Evil - Director's Cut (USA)_1.mcd"))
-        try FileManager.default.setAttributes(
-            [.modificationDate: saved], ofItemAtPath: memcard("Resident Evil - Director's Cut (USA)_1.mcd").path(percentEncoded: false))
+        try memoryCard([("BASLUS-00551RE001", "RE", 1, 1)]).write(to: card)
+        try FileManager.default.setAttributes([.modificationDate: saved], ofItemAtPath: card.path(percentEncoded: false))
 
-        #expect(cards.memoryCard(serial: "SLUS-00551", rom: rom, resources: resources)?.inDataFolder == false)
-        try cards.copyIn(serial: "SLUS-00551", rom: rom, resources: resources)
-
-        let copy = cards.card(of: "SLUS-00551")
-        #expect(try Data(contentsOf: copy) == Data(contentsOf: memcard("Resident Evil - Director's Cut (USA)_1.mcd")))
-        #expect(try copy.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate == saved)
         let shown = try #require(cards.memoryCard(serial: "SLUS-00551", rom: rom, resources: resources))
-        #expect(shown.inDataFolder && shown.file == copy && shown.saved == saved && shown.saves?.map(\.title) == ["RE"])
 
-        // Once it's there, it's the card: DuckStation's is never copied over it.
-        try memoryCard([]).write(to: memcard("Resident Evil - Director's Cut (USA)_1.mcd"))
-        try cards.copyIn(serial: "SLUS-00551", rom: rom, resources: resources)
-        #expect(MemoryCard.saves(in: try Data(contentsOf: copy))?.count == 1)
+        #expect(shown.file == card && shown.saved == saved && shown.saves?.map(\.title) == ["RE"])
     }
 
-    @Test func aROMWithNoCardAnywhereHasNoneToShowOrCopy() throws {
-        try cards.copyIn(serial: "SLUS-00551", rom: rom, resources: resources)
-        #expect(!FileManager.default.fileExists(atPath: cards.card(of: "SLUS-00551").path(percentEncoded: false)))
+    @Test func aROMWithNoCardYetHasNoneToShow() {
         #expect(cards.memoryCard(serial: "SLUS-00551", rom: rom, resources: resources) == nil)
-    }
-
-    @Test func everyPlayPointsEachDiscsCard1AtTheDataFoldersCard() throws {
-        let ini = { (serial: String) in
-            try? String(contentsOf: duckStation.appending(path: "gamesettings/\(serial).ini"), encoding: .utf8)
-        }
-        let path = cards.card(of: "SLUS-00594").path(percentEncoded: false)
-        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: .read(["SLUS-00594", "SLUS-00776"]))
-
-        let disc1 = try #require(ini("SLUS-00594"))
-        #expect(Ini.value("Card1Type", in: "MemoryCards", of: disc1) == "Shared")
-        #expect(Ini.value("Card1Path", in: "MemoryCards", of: disc1) == path)
-        #expect(Ini.value("RunaheadFrameCount", in: "Main", of: disc1) == "1")
-        // Disc 2's file has the card alone, as its settings are Disc 1's.
-        #expect(ini("SLUS-00776") == "[MemoryCards]\nCard1Path = \(path)\nCard1Type = Shared\n\n")
-        // The folder's there for DuckStation to write the card into.
-        #expect(FileManager.default.fileExists(atPath: cards.folder.path(percentEncoded: false)))
-    }
-
-    @Test func noCardIsPointedAtWhileTheDataFolderIsMissing() throws {
-        try FileManager.default.removeItem(at: ludeum.data)
-        // Not even to copy DuckStation's own card in.
-        try FileManager.default.createDirectory(at: memcard(""), withIntermediateDirectories: true)
-        try memoryCard([]).write(to: memcard("Resident Evil - Director's Cut (USA)_1.mcd"))
-
-        #expect(throws: DataFolderMissing.self) {
-            try settings.arguments(rom: rom, settings: EmulatorSettings(), serials: .read(["SLUS-00551"]))
-        }
-        #expect(!FileManager.default.fileExists(atPath: ludeum.data.path(percentEncoded: false)))
     }
 }

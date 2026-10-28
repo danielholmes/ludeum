@@ -4,15 +4,19 @@ import Foundation
 /// The live journal sits in it, beside the Data folder: what must survive losing this Mac, which I link into Dropbox by
 /// hand. There are no settings for any of these locations. The cache is elsewhere (`CacheStore.defaultDirectory`).
 ///
+/// The Emulators Ludeum installs sit beside the journal, with what they keep for themselves (ADR 0024).
+///
 /// ```
 /// Ludeum/
 ///   journal.sqlite
+///   Emulators/DuckStation.app
 ///   Data/
 ///     ROMs/<Platform>/
 ///     Attachments/<Platform>/<Game>/
 ///     Backups/
 ///     Emulators/DuckStation/Save States/
 ///     Emulators/DuckStation/Memory Cards/
+///     Emulators/DuckStation/BIOS/, Game Settings/, Input Profiles/, Screenshots/
 ///     OpenEmu Battery Saves archive/
 /// ```
 public struct LudeumFolder: Sendable, Equatable {
@@ -37,16 +41,24 @@ public struct LudeumFolder: Sendable, Equatable {
     /// Where Attachments' files are, in a folder per Game under one per Platform (ADR 0014). Created when first needed.
     public var attachments: URL { data.appending(path: "Attachments", directoryHint: .isDirectory) }
 
-    /// The backup of DuckStation's save states, under DuckStation's own file names. Created when first needed.
-    public var duckStationSaveStates: URL {
-        data.appending(path: "Emulators/DuckStation/Save States", directoryHint: .isDirectory)
+    /// Where the Emulators Ludeum installs are kept, with what they keep for themselves: outside the Data folder, as
+    /// they can be installed again.
+    public var emulators: URL { url.appending(path: "Emulators", directoryHint: .isDirectory) }
+
+    /// The DuckStation Ludeum installs (ADR 0024).
+    public var duckStationApp: URL { emulators.appending(path: "DuckStation.app", directoryHint: .isDirectory) }
+
+    /// One of the folders DuckStation keeps in the Data folder, under `Emulators/DuckStation/`, where its Standing
+    /// settings point it. Made before every launch Ludeum gives it.
+    public func duckStation(_ folder: DuckStationFolder) -> URL {
+        data.appending(path: "Emulators/DuckStation/\(folder.name)", directoryHint: .isDirectory)
     }
 
-    /// Each PlayStation ROM's memory card, named by Disc 1's Serial, where DuckStation is pointed at it (ADR 0023).
-    /// Made at a PlayStation Play.
-    public var duckStationMemoryCards: URL {
-        data.appending(path: "Emulators/DuckStation/Memory Cards", directoryHint: .isDirectory)
-    }
+    /// DuckStation's save states, under its own file names.
+    public var duckStationSaveStates: URL { duckStation(.saveStates) }
+
+    /// DuckStation's memory cards, named as it names them.
+    public var duckStationMemoryCards: URL { duckStation(.memoryCards) }
 
     /// Where the since-removed `migrate-openemu` copied OpenEmu's Game saves, keeping its `<Core>/Battery Saves/` layout.
     public var batterySaveArchive: URL { data.appending(path: "OpenEmu Battery Saves archive", directoryHint: .isDirectory) }

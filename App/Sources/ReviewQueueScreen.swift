@@ -516,10 +516,10 @@ private struct ReviewItemDetail: View {
             Label("Play", systemImage: "play.fill")
         }
         .buttonStyle(.borderedProminent)
-        .tint(services.versions.tooOldMessage(emulator) == nil ? nil : .red)
+        .tint(services.versions.refusalMessage(emulator) == nil ? nil : .red)
         .disabled(playing == nil || refusal != nil)
         .help(refusal?.message ?? "Play in \(emulator.name), to see what it is")
-        if let message = playError ?? refusal?.message ?? services.versions.tooOldMessage(emulator) {
+        if let message = playError ?? refusal?.message ?? services.versions.refusalMessage(emulator) {
             Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
         }
     }

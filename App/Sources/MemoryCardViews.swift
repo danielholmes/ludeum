@@ -2,9 +2,9 @@ import AppKit
 import LudeumCore
 import SwiftUI
 
-/// Game detail's Memory card: each present PlayStation ROM's card, the one Game save DuckStation keeps for it in the Data
-/// folder, with the Card saves in it (ADR 0023). Before a ROM's first Play, it's DuckStation's own card, copied in then.
-/// It's read again when Game detail opens and whenever Ludeum becomes active, back from DuckStation.
+/// Game detail's Memory card: each present PlayStation ROM's card, the Game save DuckStation names and keeps for it in
+/// the Data folder, with the Card saves in it (ADR 0024). It's read again when Game detail opens and whenever Ludeum
+/// becomes active, back from DuckStation.
 struct MemoryCardSection: View {
     let services: Services
     /// The ROMs Play opens, each with Disc 1's Serial, which names its card.
@@ -28,13 +28,7 @@ struct MemoryCardSection: View {
     @ViewBuilder private func card(_ card: MemoryCardFile?) -> some View {
         if let card {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Saved \(card.saved.formatted(date: .abbreviated, time: .shortened))")
-                    if !card.inDataFolder {
-                        Text("DuckStation's own card: it's copied into the Data folder at the next Play").font(.callout)
-                            .foregroundStyle(.orange)
-                    }
-                }
+                Text("Saved \(card.saved.formatted(date: .abbreviated, time: .shortened))")
                 Spacer()
                 Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([card.file]) }
                     .labelStyle(.iconOnly).buttonStyle(.hover).help("Show the card in Finder")
@@ -59,9 +53,10 @@ struct MemoryCardSection: View {
     }
 
     private func load() async {
-        let memoryCards = DuckStationMemoryCards(duckStation: DuckStationSettings(ludeum: services.settings.folder))
+        let duckStation = DuckStationSettings(ludeum: services.settings.folder)
+        let memoryCards = DuckStationMemoryCards(duckStation: duckStation)
         let locator = ROMLocator(romFolders: services.settings.romFolders)
-        let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Emulator.duckStation.bundleIdentifier)
+        let app = duckStation.isInstalled ? duckStation.app : nil
         let roms = roms
         cards = await Task.detached(priority: .utility) {
             var cards: [Int64: MemoryCardFile?] = [:]

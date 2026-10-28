@@ -1,5 +1,7 @@
 # DuckStation's save states stay its own, and are backed up into the Data folder
 
+Superseded by [0024](0024-ludeum-installs-duckstation-and-says-where-it-keeps-things.md): the states live in the Data folder, with nothing copied.
+
 I save, load and delete save states in DuckStation's own menus, and want to go on doing so with no rules to remember, and to keep DuckStation usable on its own. But I also want each PlayStation Game's states listed in Ludeum, to Play from one, to delete one, and to have them backed up with the Data folder (#81).
 
 DuckStation keeps a game's states in one folder, `savestates` in its data folder, as `<serial>_<slot>.sav` (slots 1 to 10), `<serial>_resume.sav` (saved on closing the game, `SaveStateOnExit`) and, for the one a slot held before it was saved over, `<serial>_<slot>.bak` (`CreateSaveStateBackups`). The folder is set only in its own `settings.ini` (`[Folders] SaveStates`): it reads folders from that base layer alone (`System::UpdateFolderPaths`, build 12442), so the per-game file Ludeum writes ([0021](0021-duckstation-settings-go-in-its-per-game-file-named-by-the-discs-serial.md)) can't move them. Pointing the folder (or a link in its place) into the Data folder would change DuckStation for every game, inside Ludeum or not, which its own settings are kept clear of. Linking each state file in doesn't work either: DuckStation writes a state under another name and renames it into place, replacing the link.

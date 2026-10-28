@@ -29,9 +29,14 @@ public struct Play: Sendable {
         case couldntWriteSettings(Emulator, String)
         /// An Xbox ROM that's a full Redump image, which xemu can't boot.
         case needsXISO
-        /// A PlayStation Game whose ROM's Serial (Disc 1's) isn't known, so its per-game file can't be named (ADR 0021)
-        /// to point DuckStation at its memory card in the Data folder (ADR 0023).
+        /// A PlayStation Game with settings of its own whose ROM's Serial (Disc 1's) isn't known, so its per-game file
+        /// can't be named (ADR 0021).
         case noSerial(SerialMissing)
+        /// DuckStation is open: Ludeum writes its settings before each Play, which an open DuckStation would write over
+        /// (ADR 0024).
+        case running(Emulator)
+        /// DuckStation is being installed, so there's nothing to open yet.
+        case installing(Emulator)
 
         public enum SerialMissing: Sendable, Equatable {
             /// Not read off its Discs yet: it will be at the next Import.
@@ -51,17 +56,22 @@ public struct Play: Sendable {
             case .needsPlaylist: "Its Discs have no playlist: put an .m3u naming them in its folder, and it's seen at the next Import"
             case .busy: "Waiting for Archive, Unarchive or Compact to finish"
             case .tooOld(let message): message
+            case .notInstalled(.duckStation): "DuckStation isn't installed. Install it from Ludeum ▸ Emulators…"
             case .notInstalled(let emulator): "\(emulator.name) isn't installed."
             case .fileNotFound(let file): "Couldn't find \(file). Run an Import, then try again."
             case .couldntLook(let file, let why): "Couldn't look for \(file): \(why)"
             case .couldntWriteSettings(let emulator, let why): "Couldn't write \(emulator.name)'s settings: \(why)"
             case .needsXISO: "It's a full Redump image, and xemu boots only an XISO: make one with `xdvdfs pack`, then put it in its place."
             case .noSerial(.notReadYet):
-                "Its Serial hasn't been read yet, and DuckStation needs it to keep its memory card in the Data folder: it's read at the next Import."
+                "Its Serial hasn't been read yet, and its own DuckStation settings need it: it's read at the next Import. "
+                    + "Set them back to Default to Play meanwhile."
             case .noSerial(.noneOnDisc):
-                "Its Disc has no Serial DuckStation can use, so its memory card can't be kept in the Data folder."
+                "Its Disc has no Serial DuckStation can use, so it can't have DuckStation settings of its own: set them back to Default to Play."
             case .noSerial(.unreadForm(let ext)):
-                "Its Serial can't be read from a .\(ext) yet, so its memory card can't be kept in the Data folder."
+                "Its Serial can't be read from a .\(ext) yet, so it can't have DuckStation settings of its own: set them back to Default to Play."
+            case .running(let emulator):
+                "\(emulator.name) is open. Quit it, then Play: Ludeum writes its settings before each Play, which an open \(emulator.name) would write over."
+            case .installing(let emulator): "\(emulator.name) is being installed."
             }
         }
     }
@@ -97,7 +107,7 @@ public struct Play: Sendable {
         }
         if roms.contains(where: { busyROMs.contains($0.id) }) { return .refused(.busy) }
         if rom?.needsPlaylist == true { return .refused(.needsPlaylist) }
-        if emulator == .duckStation, let rom, rom.serials.first == nil {
+        if emulator == .duckStation, settings.hasDuckStationSettings, let rom, rom.serials.first == nil {
             return .refused(.noSerial(Self.serialMissing(rom)))
         }
         return .ready(emulator)
@@ -135,10 +145,11 @@ public struct Play: Sendable {
     }
 
     /// What a press of Play does. It writes the settings files of an Emulator that takes them only
-    /// that way. `app` finds an installed app by its bundle identifier. `saveState` starts DuckStation from that state.
+    /// that way. `app` finds an installed app by its bundle identifier; DuckStation is the one Ludeum installs
+    /// (`duckStation.app`), refused while it's `running`. `saveState` starts DuckStation from that state.
     public func prepare(
-        locator: ROMLocator, version: VersionStatus, app: (String) -> URL?, saveState: URL? = nil,
-        duckStation: DuckStationSettings = .init()
+        locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil,
+        duckStation: DuckStationSettings = .init(), running: (Emulator) -> Bool = { _ in false }
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -154,7 +165,15 @@ public struct Play: Sendable {
         case .ready(let ready): emulator = ready
         }
         if case .tooOld(let message) = version { return .refused(.tooOld(message)) }
-        guard let app = app(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
+        let app: URL
+        if emulator == .duckStation {
+            guard duckStation.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if running(emulator) { return .refused(.running(emulator)) }
+            app = duckStation.app
+        } else {
+            guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
+            app = found
+        }
         guard let rom else {
             return .refused(.archived)
         }
@@ -169,8 +188,7 @@ public struct Play: Sendable {
         if emulator == .xemu, XboxDisc.kind(of: file) == .redump { return .refused(.needsXISO) }
         do {
             let arguments = try emulator.arguments(
-                rom: file, platformId: platformId, settings: settings, serials: rom.serials, saveState: saveState, app: app,
-                duckStation: duckStation)
+                rom: file, platformId: platformId, settings: settings, serials: rom.serials, saveState: saveState, duckStation: duckStation)
             if case .warn(let warning) = version { return .open(app: app, arguments: arguments, warning: warning) }
             return .open(app: app, arguments: arguments, warning: nil)
         } catch {
