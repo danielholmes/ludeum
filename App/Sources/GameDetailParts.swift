@@ -484,10 +484,10 @@ enum FactStyle {
     static let labelWidth: CGFloat = 92
 }
 
-/// Opens `play`'s ROM in `emulator`, with every Emulator setting on the command line. A running Emulator gets the ROM
-/// in its open window. `refused` gets why it couldn't, then or once the Emulator fails to open; `alert` gets a version
-/// check's title and message. `saveState` starts DuckStation from that state; else a multi-disc ROM starts on `disc`, or
-/// the one it last started on, which it then remembers.
+/// Opens `play`'s ROM in `emulator`, with every Emulator setting on the command line. `refused` gets why it couldn't,
+/// then or once the Emulator fails to open; `alert` gets a version check's title and message. `saveState` starts
+/// DuckStation or MesenCE from that state; else a multi-disc ROM starts on `disc`, or the one it last started on, which
+/// it then remembers.
 @MainActor func startPlay(
     _ play: Play, in emulator: Emulator, services: Services, saveState: URL? = nil, disc: Int? = nil,
     refused: @escaping @MainActor (String) -> Void, alert: (_ title: String, _ message: String) -> Void
@@ -507,7 +507,9 @@ enum FactStyle {
     }
     switch play.prepare(
         locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState,
-        disc: disc, duckStation: DuckStationSettings(ludeum: services.settings.folder), running: \.isRunning)
+        disc: disc, duckStation: DuckStationSettings(ludeum: services.settings.folder),
+        mesen: MesenSettings(ludeum: services.settings.folder),
+        running: \.isRunning)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)
@@ -519,7 +521,8 @@ enum FactStyle {
         configuration.arguments = arguments
         let journal = services.journal
         let changes = services.changes
-        // A second MesenCE hands its arguments to the running one and quits; DuckStation opens another window.
+        // An Emulator already open opens another window, or for MesenCE another copy (ADR 0027), which Play refuses
+        // for DuckStation and MesenCE.
         configuration.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
             Task { @MainActor in

@@ -1,5 +1,7 @@
 # Ludeum installs DuckStation, portable, and says where it keeps things
 
+Amended by [0027](0027-ludeum-installs-mesence-with-a-folder-per-platform.md): Open leaves the Emulators sheet, so the Standing settings are written before every Play and after Install, and DuckStation's own settings are reached during a Play.
+
 Supersedes [0022](0022-duckstation-save-states-stay-its-own-and-are-backed-up.md) and [0023](0023-a-playstation-games-memory-card-lives-in-the-data-folder.md), and amends [0010](0010-a-fixed-data-folder-linked-into-dropbox.md) (the Ludeum folder now holds an Emulator) and [0021](0021-duckstation-settings-go-in-its-per-game-file-named-by-the-discs-serial.md) (fast boot, frame pacing and the memory card keys leave the per-game file).
 
 I want DuckStation's save states and memory cards in the Data folder so Dropbox has them, with none of the copying 0022 needed, and I want the DuckStation that Ludeum plays with to be Ludeum's own: not a copy I install and update by hand, exposed to the OS as any app, and not one whose settings Ludeum has to stay compatible with. In practice I only ever open it through Ludeum.

@@ -195,6 +195,12 @@ struct GameDetailView: View {
             if !game.isBundle, emulator == .duckStation, !memoryCardROMs.isEmpty {
                 MemoryCardSection(services: services, roms: memoryCardROMs)
             }
+            // Save states and Game saves: MesenCE's, in its Platform's folders in the Data folder.
+            if !game.isBundle, emulator == .mesenCE, playROMs.contains(where: { !$0.missing && !$0.archived }) {
+                MesenSavesSection(
+                    services: services, platformId: game.platformId, roms: playROMs, refusal: playing.availability.refusal?.message
+                ) { state in play(in: .mesenCE, from: state.file) }
+            }
 
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)
@@ -663,11 +669,25 @@ struct GameDetailView: View {
         return RenameOffer(rom: rom, standard: standard, taken: taken)
     }
 
-    /// Renames the ROM in its ROM folder and the journal.
+    /// Renames the ROM in its ROM folder and the journal; a MesenCE ROM's file inside its `.7z`, and its saves, too
+    /// (ADR 0027).
     private func rename(_ rom: LudeumROM, to name: String) {
         // A Background task may have started on it while the confirmation was up.
         guard let folder = locator.folder(of: rom), !services.tasks.isActive(.rom(rom.id)) else { return }
-        save { try $0.renameROM(rom.id, to: name, in: folder) }
+        guard Emulator.of(platformId: rom.platformId) == .mesenCE, let journal = services.journal else {
+            save { try $0.renameROM(rom.id, to: name, in: folder) }
+            return
+        }
+        let ludeum = services.settings.folder
+        Task {
+            do {
+                try await journal.renameMesenROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum)
+                error = nil
+            } catch {
+                self.error = journalErrorText(error)
+            }
+            services.changes.changed()
+        }
     }
 
     private var locator: ROMLocator {

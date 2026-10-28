@@ -32,11 +32,13 @@ public struct Play: Sendable {
         /// A PlayStation Game with settings of its own whose ROM's Serial (Disc 1's) isn't known, so its per-game file
         /// can't be named (ADR 0021).
         case noSerial(SerialMissing)
-        /// DuckStation is open: Ludeum writes its settings before each Play, which an open DuckStation would write over
-        /// (ADR 0024).
+        /// DuckStation or MesenCE is open: Ludeum writes its settings before each Play, which an open DuckStation would
+        /// write over (ADR 0024) and an open MesenCE wouldn't read (ADR 0027).
         case running(Emulator)
-        /// DuckStation is being installed, so there's nothing to open yet.
+        /// DuckStation or MesenCE is being installed, so there's nothing to open yet.
         case installing(Emulator)
+        /// The installed Emulator's build needs a library from Homebrew that isn't installed (MesenCE 2.2.1's SDL2).
+        case needs(Emulator, HomebrewLibrary)
 
         public enum SerialMissing: Sendable, Equatable {
             /// Not read off its Discs yet: it will be at the next Import.
@@ -56,7 +58,8 @@ public struct Play: Sendable {
             case .needsPlaylist: "Its Discs have no playlist: put an .m3u naming them in its folder, and it's seen at the next Import"
             case .busy: "Waiting for Archive, Unarchive or Compact to finish"
             case .tooOld(let message): message
-            case .notInstalled(.duckStation): "DuckStation isn't installed. Install it from Ludeum ▸ Emulators…"
+            case .notInstalled(let emulator) where emulator == .duckStation || emulator == .mesenCE:
+                "\(emulator.name) isn't installed. Install it from Ludeum ▸ Emulators…"
             case .notInstalled(let emulator): "\(emulator.name) isn't installed."
             case .fileNotFound(let file): "Couldn't find \(file). Run an Import, then try again."
             case .couldntLook(let file, let why): "Couldn't look for \(file): \(why)"
@@ -69,9 +72,14 @@ public struct Play: Sendable {
                 "Its Disc has no Serial DuckStation can use, so it can't have DuckStation settings of its own: set them back to Default to Play."
             case .noSerial(.unreadForm(let ext)):
                 "Its Serial can't be read from a .\(ext) yet, so it can't have DuckStation settings of its own: set them back to Default to Play."
+            case .running(.mesenCE):
+                "MesenCE is open. Quit it, then Play: Ludeum says where to keep this Platform's saves before each Play, "
+                    + "which an open MesenCE wouldn't read."
             case .running(let emulator):
                 "\(emulator.name) is open. Quit it, then Play: Ludeum writes its settings before each Play, which an open \(emulator.name) would write over."
             case .installing(let emulator): "\(emulator.name) is being installed."
+            case .needs(let emulator, let library):
+                "\(emulator.name) needs \(library.name), which isn't installed: install it with `\(library.install)`, then Play."
             }
         }
     }
@@ -209,7 +217,7 @@ public struct Play: Sendable {
     /// else a multi-disc ROM starts on `disc`, or the one it last started on.
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
-        duckStation: DuckStationSettings = .init(), running: (Emulator) -> Bool = { _ in false }
+        duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), running: (Emulator) -> Bool = { _ in false }
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -230,6 +238,11 @@ public struct Play: Sendable {
             guard duckStation.isInstalled else { return .refused(.notInstalled(emulator)) }
             if running(emulator) { return .refused(.running(emulator)) }
             app = duckStation.app
+        } else if emulator == .mesenCE {
+            guard mesen.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if let library = MesenRelease.pinned.needs, !library.isInstalled { return .refused(.needs(emulator, library)) }
+            if running(emulator) { return .refused(.running(emulator)) }
+            app = mesen.app
         } else {
             guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
             app = found
@@ -268,7 +281,7 @@ public struct Play: Sendable {
         do {
             let arguments = try emulator.arguments(
                 rom: opened, platformId: platformId, settings: settings, serials: rom.serials, saveState: saveState,
-                duckStation: duckStation)
+                duckStation: duckStation, mesen: mesen)
             return .open(app: app, arguments: arguments, warning: warning, startsOn: startsOn)
         } catch {
             return .refused(.couldntWriteSettings(emulator, error.localizedDescription))

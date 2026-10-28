@@ -48,20 +48,20 @@ import Testing
     }
 }
 
-/// Plays in MesenCE (NES), whose settings are all on the command line, so nothing is written outside the test.
+/// Plays in ares (Mega Drive), whose settings are all on the command line, so nothing is written outside the test.
 @Suite struct PlayPressTests {
     let directory = FileManager.default.temporaryDirectory.appending(path: "play \(UUID().uuidString)")
-    let mesen = URL(filePath: "/Applications/Mesen.app")
+    let ares = URL(filePath: "/Applications/ares.app")
 
     func press(
         _ roms: [LudeumROM], in folder: FakeROMFolder, version: Play.VersionStatus = .ok, settings: EmulatorSettings = EmulatorSettings(),
-        installed: Bool = true, platformId: Int64 = 18
+        installed: Bool = true, platformId: Int64 = 29
     ) -> Play.Outcome {
-        let mesen = mesen
-        return Play(platformId: platformId, platformName: "NES", roms: roms, settings: settings)
+        let ares = ares
+        return Play(platformId: platformId, platformName: "Mega Drive", roms: roms, settings: settings)
             .prepare(
                 locator: ROMLocator(romFolders: [folder.folder]), version: version,
-                app: { installed && $0 == Emulator.mesenCE.bundleIdentifier ? mesen : nil })
+                app: { installed && $0 == Emulator.ares.bundleIdentifier ? ares : nil })
     }
 
     @Test func itOpensTheROMInTheEmulatorWithEverySetting() throws {
@@ -71,8 +71,9 @@ import Testing
         #expect(
             press([folderROM("Zelda")], in: ps2, settings: EmulatorSettings(runAheadFrames: 2))
                 == .open(
-                    app: mesen,
-                    arguments: ["--doNotSaveSettings", "--emulation.runAheadFrames=2", rom.path(percentEncoded: false)], warning: nil))
+                    app: ares,
+                    arguments: ["--system", "Mega Drive", "--setting", "General/RunAhead=true", rom.path(percentEncoded: false)],
+                    warning: nil))
     }
     @Test func aMultiDiscVersionOpensItsPlaylist() throws {
         // Sega CD, in ares, whose settings are all on the command line too.
@@ -89,7 +90,7 @@ import Testing
         let outcome = Play(
             platformId: 78, platformName: "Sega CD", roms: [rom(1, "Game (Disc 1).cue"), rom(2, "Game.m3u")], settings: .init()
         )
-        .prepare(locator: ROMLocator(romFolders: [segaCD.folder]), version: .ok, app: { _ in mesen })
+        .prepare(locator: ROMLocator(romFolders: [segaCD.folder]), version: .ok, app: { _ in ares })
 
         #expect(outcome.arguments?.last == playlist.path(percentEncoded: false))
     }
@@ -105,7 +106,7 @@ import Testing
         let ps2 = try FakeROMFolder(in: directory)
         try ps2.add("Zelda.iso")
 
-        #expect(press([folderROM("Zelda")], in: ps2, version: .tooOld("MesenCE 1 is too old")) == .refused(.tooOld("MesenCE 1 is too old")))
+        #expect(press([folderROM("Zelda")], in: ps2, version: .tooOld("ares 1 is too old")) == .refused(.tooOld("ares 1 is too old")))
     }
 
     @Test func anEmulatorNotInstalledIsRefused() throws {
@@ -114,8 +115,8 @@ import Testing
 
         let outcome = press([folderROM("Zelda")], in: ps2, installed: false)
 
-        #expect(outcome == .refused(.notInstalled(.mesenCE)))
-        #expect(outcome.refusal?.message == "MesenCE isn't installed.")
+        #expect(outcome == .refused(.notInstalled(.ares)))
+        #expect(outcome.refusal?.message == "ares isn't installed.")
     }
 
     @Test func aROMWhoseFileIsGoneIsRefused() throws {

@@ -4,12 +4,13 @@ import Foundation
 /// The live journal sits in it, beside the Data folder: what must survive losing this Mac, which I link into Dropbox by
 /// hand. There are no settings for any of these locations. The cache is elsewhere (`CacheStore.defaultDirectory`).
 ///
-/// The Emulators Ludeum installs sit beside the journal, with what they keep for themselves (ADR 0024).
+/// The Emulators Ludeum installs sit beside the journal, with what they keep for themselves (ADR 0024, ADR 0027).
 ///
 /// ```
 /// Ludeum/
 ///   journal.sqlite
 ///   Emulators/DuckStation.app
+///   Emulators/MesenCE.app
 ///   Data/
 ///     ROMs/<Platform>/
 ///     Attachments/<Platform>/<Game>/
@@ -17,6 +18,7 @@ import Foundation
 ///     Emulators/DuckStation/Save States/
 ///     Emulators/DuckStation/Memory Cards/
 ///     Emulators/DuckStation/BIOS/, Game Settings/, Input Profiles/, Screenshots/
+///     Emulators/MesenCE/<Platform>/Save States/, Saves/, Screenshots/
 ///     OpenEmu Battery Saves archive/
 /// ```
 public struct LudeumFolder: Sendable, Equatable {

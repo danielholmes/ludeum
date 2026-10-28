@@ -38,17 +38,20 @@ public struct Emulator: Sendable, Hashable {
     }
 
     /// The command line for a Play. It sets every Emulator setting, with the default where the Game
-    /// has none, because a running MesenCE keeps the last Play's settings (ADR 0008). DuckStation
-    /// and PPSSPP take settings only as a whole file, so their Plays write one first (`DuckStationSettings`,
-    /// `PPSSPPSettings`); DuckStation's are its Standing settings and its per-game file, named by `serials`' Disc 1. Only
-    /// DuckStation starts from a `saveState`.
+    /// has none (ADR 0008). DuckStation and PPSSPP take settings only as a whole file, so their Plays write one first
+    /// (`DuckStationSettings`, `PPSSPPSettings`); DuckStation's are its Standing settings and its per-game file, named by
+    /// `serials`' Disc 1. MesenCE's Standing settings go into its `settings.json` (`MesenSettings`), the Game's own on
+    /// its command line. DuckStation and MesenCE start from a `saveState`.
     public func arguments(
         rom: URL, platformId: Int64, settings: EmulatorSettings, serials: Serials = .notRead, saveState: URL? = nil,
-        duckStation: DuckStationSettings = .init(), ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2GameSettings = .init()
+        duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ppsspp: PPSSPPSettings = .init(),
+        pcsx2: PCSX2GameSettings = .init()
     ) throws -> [String] {
         switch self {
         case .duckStation:
             try duckStation.arguments(rom: rom, settings: settings, serials: serials, saveState: saveState)
+        case .mesenCE:
+            try mesen.arguments(rom: rom, platformId: platformId, settings: settings, saveState: saveState)
         case .dolphin:
             // Lower input latency for every Game, for this launch only: frames shown as soon as
             // they're ready, with their timing smoothed. Immediately Present XFB stays off: it breaks some Games.
@@ -77,9 +80,7 @@ public struct Emulator: Sendable, Hashable {
             // Not `--appendconfig`: PPSSPP saves the merged settings into its own ppsspp.ini.
             ["--config=\(try ppsspp.write().path(percentEncoded: false))", rom.path(percentEncoded: false)]
         default:
-            ["--doNotSaveSettings", "--emulation.runAheadFrames=\(settings.runAheadFrames ?? 0)"]
-                + (GameBoyModel.applies(to: platformId) ? ["--gameboy.model=\(settings.gameBoyModel?.mesenName ?? "AutoFavorGbc")"] : [])
-                + [rom.path(percentEncoded: false)]
+            [rom.path(percentEncoded: false)]
         }
     }
 }

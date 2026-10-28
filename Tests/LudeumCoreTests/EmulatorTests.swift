@@ -17,32 +17,6 @@ import Testing
         #expect(Emulator.of(platformId: 11) == .xemu)  // Xbox
     }
 
-    @Test func everyPlaySetsAllTheSettingsWithoutSavingThem() throws {
-        let rom = URL(filePath: "/Games/roms/NES/Super Mario Bros. 3 (USA).nes")
-
-        #expect(
-            try Emulator.mesenCE.arguments(rom: rom, platformId: 18, settings: EmulatorSettings())
-                == ["--doNotSaveSettings", "--emulation.runAheadFrames=0", "/Games/roms/NES/Super Mario Bros. 3 (USA).nes"])
-        #expect(
-            try Emulator.mesenCE.arguments(rom: rom, platformId: 18, settings: EmulatorSettings(runAheadFrames: 2))
-                == ["--doNotSaveSettings", "--emulation.runAheadFrames=2", "/Games/roms/NES/Super Mario Bros. 3 (USA).nes"])
-    }
-
-    @Test func gameBoyPlaysSetTheGameBoyModelAutoByDefault() throws {
-        let rom = URL(filePath: "/Games/GB/Tetris (World).gb")
-        func play(_ platformId: Int64, _ model: GameBoyModel?) throws -> [String] {
-            try Emulator.mesenCE.arguments(rom: rom, platformId: platformId, settings: EmulatorSettings(gameBoyModel: model))
-        }
-
-        #expect(
-            try play(33, nil)
-                == ["--doNotSaveSettings", "--emulation.runAheadFrames=0", "--gameboy.model=AutoFavorGbc", "/Games/GB/Tetris (World).gb"])
-        #expect(try play(33, .gameBoy).contains("--gameboy.model=Gameboy"))
-        #expect(try play(22, .gameBoyColor).contains("--gameboy.model=GameboyColor"))
-        #expect(try play(33, .superGameBoy).contains("--gameboy.model=SuperGameboy"))
-        #expect(!(try play(18, .superGameBoy)).contains { $0.hasPrefix("--gameboy.model") })  // NES
-    }
-
     @Test func aGamesGameBoyModelIsKept() throws {
         let h = try LudeumHarness()
         let game = try h.addGame("Tetris")

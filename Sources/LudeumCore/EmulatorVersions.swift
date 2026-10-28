@@ -20,8 +20,8 @@ struct EmulatorVersionSpec: Sendable {
         case commandLine(String)
         /// The app's `CFBundleShortVersionString`.
         case appVersion
-        /// MesenCE's app version is a placeholder; its settings file records the version that last ran.
-        case mesenSettings
+        /// What Install recorded in the app (MesenCE's: every build says it's 2.2.1, and has no version flag).
+        case installRecord
     }
 
     enum Format: Sendable {
@@ -29,6 +29,8 @@ struct EmulatorVersionSpec: Sendable {
         case dotted
         /// DuckStation's rolling builds, `0.1-12442-gdd4a0eb77`: the build number.
         case buildNumber
+        /// The version and the zip's digest Install recorded, a line each: the digest says which build it is.
+        case installRecord
     }
 
     /// The minimum: the version the launch code was written and checked against. For an Emulator Ludeum installs, the
@@ -49,7 +51,9 @@ extension Emulator {
     /// Nil for an Emulator with no expected version yet: it isn't checked.
     var versionSpec: EmulatorVersionSpec? {
         switch self {
-        case .mesenCE: EmulatorVersionSpec(expected: "2.2.1", source: .mesenSettings)
+        case .mesenCE:
+            EmulatorVersionSpec(
+                expected: MesenRelease.pinned.version, source: .installRecord, format: .installRecord, exact: true)
         case .duckStation:
             EmulatorVersionSpec(
                 expected: String(DuckStationRelease.pinned.build), source: .commandLine("-version"), format: .buildNumber,
@@ -69,8 +73,6 @@ extension Emulator {
 }
 
 public enum EmulatorVersions {
-    static var mesenSettings: URL { URL.applicationSupportDirectory.appending(path: "MesenCE/settings.json") }
-
     /// Reads and checks the installed app's version. Runs a process for some Emulators, so not on the main thread.
     /// The installed app's version (as `shown(found:for:)` gives it) and how it compares. Runs a
     /// process for some Emulators, so not on the main thread. Nil for an Emulator that isn't checked.
@@ -94,6 +96,10 @@ public enum EmulatorVersions {
             return .unreadable
         }
         let shown = version.map(String.init).joined(separator: ".")
+        if spec.format == .installRecord {
+            let digest = text.split(separator: "\n").dropFirst().first.map(String.init)
+            return digest == MesenRelease.pinned.sha256 ? .ok : .wrongBuild(found: shown)
+        }
         if spec.exact { return compare(version, expected) == 0 ? .ok : .wrongBuild(found: shown) }
         if compare(version, expected) < 0 { return .tooOld(found: shown) }
         if spec.warnsOnNewerMajor, version[0] > expected[0] { return .newerMajor(found: shown) }
@@ -101,18 +107,15 @@ public enum EmulatorVersions {
     }
 
     /// The version text from the Emulator's source, or nil when it can't be had.
-    static func read(_ emulator: Emulator, app: URL, mesenSettings: URL = mesenSettings) -> String? {
+    static func read(_ emulator: Emulator, app: URL) -> String? {
         let info = Bundle(url: app)?.infoDictionary
         switch emulator.versionSpec?.source {
         case nil:
             return nil
         case .appVersion:
             return info?["CFBundleShortVersionString"] as? String
-        case .mesenSettings:
-            guard let data = try? Data(contentsOf: mesenSettings),
-                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return nil }
-            return json["Version"] as? String
+        case .installRecord:
+            return MesenRelease.Installed(app: app).map { "\($0.version)\n\($0.sha256)" }
         case .commandLine(let flag):
             guard let executable = info?["CFBundleExecutable"] as? String else { return nil }
             return run(app.appending(path: "Contents/MacOS/\(executable)"), flag)
@@ -154,6 +157,8 @@ public enum EmulatorVersions {
             // A dotted number first, so the 2 in "PCSX2 v2.9.103" isn't taken for the version.
             let match = text.firstMatch(of: /(\d+(?:\.\d+)+)/)?.output.1 ?? text.firstMatch(of: /(?:^|[^A-Za-z\d])v?(\d+)/)?.output.1
             return match.map { $0.split(separator: ".").compactMap { Int($0) } }
+        case .installRecord:
+            return text.split(separator: "\n").first.flatMap { parse(String($0), .dotted) }
         case .buildNumber:
             if let match = text.firstMatch(of: /\d+\.\d+-(\d+)/) { return Int(match.output.1).map { [$0] } }
             return text.wholeMatch(of: /\d+/).flatMap { Int($0.output) }.map { [$0] }

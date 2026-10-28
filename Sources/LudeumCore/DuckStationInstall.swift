@@ -96,19 +96,23 @@ public struct DuckStationInstaller: Sendable {
         let zip = work.appending(path: DuckStationRelease.asset)
         try await download(to: zip) { progress($0 * 0.8) }
         try Task.checkCancellation()
-        let digest = try Self.sha256(of: zip)
+        let digest = try EmulatorInstall.sha256(of: zip)
         guard digest == release.sha256.lowercased() else {
             throw DuckStationInstallError.badChecksum(expected: release.sha256, found: digest)
         }
 
         let unpacked = work.appending(path: "unpacked", directoryHint: .isDirectory)
-        try Self.unpack(zip, into: unpacked)
+        do {
+            try EmulatorInstall.unpack(zip, into: unpacked)
+        } catch let failed as EmulatorInstall.CouldntUnpack {
+            throw DuckStationInstallError.couldntUnpack(failed.message)
+        }
         progress(0.9)
         let app = unpacked.appending(path: "DuckStation.app", directoryHint: .isDirectory)
         guard files.isExecutableFile(atPath: app.appending(path: "Contents/MacOS/DuckStation").path(percentEncoded: false)) else {
             throw DuckStationInstallError.noApp
         }
-        Self.removeQuarantine(app)
+        EmulatorInstall.removeQuarantine(app)
         let found = EmulatorVersions.read(.duckStation, app: app)
         guard let build = found.flatMap({ EmulatorVersions.parse($0, .buildNumber) })?.first, build == release.build else {
             throw DuckStationInstallError.wrongBuild(found: EmulatorVersions.shown(found: found, for: .duckStation))
@@ -157,6 +161,14 @@ public struct DuckStationInstaller: Sendable {
         }
         throw DuckStationInstallError.notFound(tag: release.tag, status: status)
     }
+}
+
+/// What installing an Emulator Ludeum keeps takes, DuckStation's (ADR 0024) or MesenCE's (ADR 0027).
+enum EmulatorInstall {
+    /// `ditto` couldn't unpack a zip, with what it said.
+    struct CouldntUnpack: Error {
+        let message: String
+    }
 
     /// Its SHA-256, lowercase hex, read a megabyte at a time.
     static func sha256(of file: URL) throws -> String {
@@ -179,8 +191,7 @@ public struct DuckStationInstaller: Sendable {
         let output = errors.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            throw DuckStationInstallError.couldntUnpack(
-                String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
+            throw CouldntUnpack(message: String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
         }
     }
 

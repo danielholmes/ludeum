@@ -98,12 +98,16 @@ import Testing
         #expect(EmulatorVersions.read(.melonDS, app: fake) == "1.1")
     }
 
-    @Test func mesenCEIsReadFromItsSettings() throws {
+    @Test func mesenCEIsTheReleaseInstallRecordedByItsDigest() throws {
         let fake = try app(shortVersion: "1.0")
-        let settings = directory.appending(path: "settings.json")
-        try #"{ "Version": "2.2.1", "Audio": {} }"#.write(to: settings, atomically: true, encoding: .utf8)
+        #expect(EmulatorVersions.check(.mesenCE, app: fake)?.check == .unreadable)
 
-        #expect(EmulatorVersions.read(.mesenCE, app: fake, mesenSettings: settings) == "2.2.1")
-        #expect(EmulatorVersions.read(.mesenCE, app: fake, mesenSettings: directory.appending(path: "none.json")) == nil)
+        try MesenRelease.Installed(version: "2.2.1", sha256: MesenRelease.pinned.sha256).write(in: fake)
+        #expect(EmulatorVersions.check(.mesenCE, app: fake)?.installed == "2.2.1")
+        #expect(EmulatorVersions.check(.mesenCE, app: fake)?.check == .ok)
+
+        // Every build says it's 2.2.1: only the digest tells them apart.
+        try MesenRelease.Installed(version: "2.2.1", sha256: String(repeating: "0", count: 64)).write(in: fake)
+        #expect(EmulatorVersions.check(.mesenCE, app: fake)?.check == .wrongBuild(found: "2.2.1"))
     }
 }

@@ -226,6 +226,8 @@ Other ways to lose a Save state or Game save:
 
 ## 7. Single instance
 
+> **Correction, from a spike on 2026-10-28 (§12):** on the 2.2.1 macOS release the hand-off doesn't happen. A second launch, with no delay or after 0.3 s or 3 s, by the binary or by `open -n -a`, became a separate MesenCE with its own window, and no `.dotnet` shared-memory folder appeared in `$TMPDIR`. That fits the source's own comment that named mutexes don't work under NativeAOT, which the macOS release is. So every Play opens another MesenCE process, and ADR 0008's and `GameDetailParts.swift`'s "hands its arguments to the running one" doesn't hold for this build. The code reading below stands as what the source intends.
+
 - **How it works.**
   - `SingleInstance.Init` takes a named mutex `Global\{A46696B7-2D1C-4CC5-A52F-40BCAF094AEF}` (`T/UI/Utilities/SingleInstance.cs#L16` and `#L27-L47`).
   - The first instance listens on a named pipe of that GUID (`#L82-L111`).
@@ -470,3 +472,23 @@ None is a power of two plus a few bytes, so none carries a clock footer.
 
 - **PC Engine CD formats.** Ludeum's PC Engine CD ROM folder reads `m3u` and `chd` as ready (`Sources/LudeumCore/Import/ROMPlatform.swift` ~122–124), but MesenCE opens only `.pce`, `.cue`, `.sgx` and `.hes` for PC Engine (`T/Core/PCE/PceConsole.h#L51`). Both PC Engine CD ROMs today are Archived `.7z`.
 - **No PC Engine ROM folder.** `Emulator.of` sends PC Engine (86) to MesenCE, but there's no PC Engine ROM folder.
+
+## 12. Spike: starting a ROM from a chosen Save state (2026-10-28)
+
+Run against a throwaway portable copy of the 2.2.1 release with its folders in a scratch directory, NES `Castlevania (USA) (Rev A)` loose and in its `.7z`. Each result was checked by capturing the MesenCE window and comparing it with the chosen state's framebuffer, decoded: the chosen state at "STAGE 15", a failure on the title screen.
+
+| Route | Result |
+|---|---|
+| `Mesen <rom> <state.mss>` | **Fails, a race.** 1 of 8 loose, 0 of 5 `.7z`. `LoadFiles` calls `LoadStateFile` on the UI thread while the ROM is still loading on `Task.Run` (`T/UI/Utilities/LoadRomHelper.cs#L45-L57`), and `LoadState` returns false while nothing runs. |
+| `Mesen <rom> --loadLastSession` with a `.rgd` Ludeum writes | **Works, 22 of 22** (6 loose, 16 `.7z`), with `GameSelectionScreenMode` `ResumeState` or `Disabled` (5 of the `.7z` runs). |
+| An `.rgd` as an argument | **Fails.** `LoadFile` treats it as a ROM; nothing in the UI opens `.rgd` files. |
+| Launch the ROM, then `Mesen <state.mss>` (hand-off) | **Fails.** No hand-off happens at all (§7's correction): the second launch is a separate, empty MesenCE. |
+| A `.lua` argument loading the state | **Works, 5 of 5**, but opens a visible Script window, attaches the debugger, and needs a per-console exec callback address range (`emu.loadSavestate` only works inside one). |
+
+**The working route.**
+
+- After `GameLoaded` plus 50 ms, `ProcessPostLoadCommandSwitches` runs the LoadLastSession shortcut, and `LoadRecentGame` loads the ROM again from the `.rgd`'s path, then the state synchronously (`T/Core/Shared/SaveStateManager.cpp#L296-L321`). With a `.7z`, the ROM loaded at about 0.44 s and the state at 0.56–0.59 s, so the title screen shows for about 0.13 s.
+- The `.rgd` is `<data root>/RecentGames/<stem>.rgd`, the stem being the name inside the archive, as for `.mss`. It's a plain zip of `Savestate.mss` (the chosen `.mss`, byte for byte) and `RomInfo.txt` = `<inner ROM file name>\n<ROM path>\n\n`, where an archive's ROM path is `<absolute .7z path>\x01<inner name>`. That's byte for byte what MesenCE writes itself. `Screenshot.png` is optional.
+- A ROM path that isn't there leaves the game on the title screen, with the error only on screen.
+- With `GameSelectionScreenMode: Disabled`, nothing writes `RecentGames`, so the file stays as Ludeum wrote it. With `ResumeState`, quitting overwrites it with the session. Loading never overwrites it while the `.rgd`'s ROM path is the same string as the command line's.
+- `settings.json` is rewritten after each ROM load (its Recent files list) unless `--doNotSaveSettings` is passed. SIGTERM quits without writing an `.rgd` or settings.

@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Each installed Emulator's version, checked once per launch in the background: Play is refused
 /// for one older than Ludeum expects, and warns (once per launch) about a newer major version or
-/// one that couldn't be read. DuckStation is the copy Ludeum installs (ADR 0024), checked again after each Install:
-/// Play is refused until it's there, portable and the pinned build.
+/// one that couldn't be read. DuckStation (ADR 0024) and MesenCE (ADR 0027) are copies Ludeum installs, checked again
+/// after each Install: Play is refused until each is there, Ludeum's own and the pinned build.
 @Observable @MainActor final class EmulatorVersionChecks {
     /// By bundle identifier; an Emulator that isn't installed, or isn't checked yet, has none.
     private(set) var results: [String: VersionCheck] = [:]
@@ -15,8 +15,9 @@ import SwiftUI
     private(set) var notInstalled: Set<String> = []
     /// The launch check has been through every Emulator.
     private(set) var finished = false
-    /// The DuckStation in the Ludeum folder isn't portable, so it isn't the copy Ludeum installed.
-    private(set) var duckStationNotPortable = false
+    /// Emulators Ludeum installs whose copy in the Ludeum folder isn't the one it installed: one that isn't portable, or
+    /// a MesenCE with no record of its release.
+    private(set) var notLudeums: Set<String> = []
     /// Emulators already warned about this launch.
     private var warned: Set<String> = []
     @ObservationIgnored private let folder: LudeumFolder
@@ -29,8 +30,8 @@ import SwiftUI
 
     func checkAll() async {
         for emulator in Emulator.all {
-            if emulator == .duckStation {
-                await checkDuckStation()
+            if emulator.isLudeums {
+                await checkLudeums(emulator)
                 continue
             }
             let id = emulator.bundleIdentifier
@@ -45,49 +46,63 @@ import SwiftUI
         finished = true
     }
 
-    /// Checks the DuckStation Ludeum installs: there, portable, and the pinned build.
-    func checkDuckStation() async {
-        let id = Emulator.duckStation.bundleIdentifier
-        let settings = DuckStationSettings(ludeum: folder)
-        guard settings.isInstalled else {
+    /// Checks an Emulator Ludeum installs: there, its own copy, and the pinned build.
+    func checkLudeums(_ emulator: Emulator) async {
+        let id = emulator.bundleIdentifier
+        let app: URL
+        let isInstalled: Bool
+        let isLudeums: Bool
+        if emulator == .mesenCE {
+            let settings = MesenSettings(ludeum: folder)
+            (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, settings.isPortable && settings.installed != nil)
+        } else {
+            let settings = DuckStationSettings(ludeum: folder)
+            (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, settings.isPortable)
+        }
+        guard isInstalled else {
             notInstalled.insert(id)
             results[id] = nil
             installed[id] = nil
-            duckStationNotPortable = false
+            notLudeums.remove(id)
             return
         }
         notInstalled.remove(id)
-        duckStationNotPortable = !settings.isPortable
-        let app = settings.app
-        let found = await Task.detached(priority: .utility) { EmulatorVersions.check(.duckStation, app: app) }.value
+        if isLudeums { notLudeums.remove(id) } else { notLudeums.insert(id) }
+        let found = await Task.detached(priority: .utility) { EmulatorVersions.check(emulator, app: app) }.value
         results[id] = found?.check
         installed[id] = found?.installed
     }
 
-    /// Whether DuckStation is being installed now.
+    /// Whether an Emulator Ludeum installs is being installed now.
     func isInstalling(_ emulator: Emulator, tasks: BackgroundTasks) -> Bool { tasks.isActive(.emulator(emulator)) }
 
-    /// Installs the pinned DuckStation as a Background task, then checks it again. Installing replaces it, so a task
-    /// that gets its turn while DuckStation is open fails rather than pull the app from under it.
-    func installDuckStation(tasks: BackgroundTasks) {
+    /// Installs the pinned DuckStation or MesenCE as a Background task, then checks it again. Installing replaces it, so
+    /// a task that gets its turn while it's open fails rather than pull the app from under it.
+    func install(_ emulator: Emulator, tasks: BackgroundTasks) {
         let folder = folder
-        tasks.enqueue("Installing DuckStation", subject: .emulator(.duckStation)) { progress in
-            if await Emulator.duckStation.isRunning { throw EmulatorRunning() }
-            try await DuckStationInstaller(ludeum: folder).install(progress: progress)
+        tasks.enqueue("Installing \(emulator.name)", subject: .emulator(emulator)) { progress in
+            if await emulator.isRunning { throw EmulatorRunning(emulator: emulator) }
+            if emulator == .mesenCE {
+                try await MesenInstaller(ludeum: folder).install(progress: progress)
+            } else {
+                try await DuckStationInstaller(ludeum: folder).install(progress: progress)
+            }
         } ended: {
-            Task { await self.checkDuckStation() }
+            Task { await self.checkLudeums(emulator) }
         }
     }
 
     /// Why Play is refused, when the installed version won't do.
     func refusalMessage(_ emulator: Emulator) -> String? {
-        if emulator == .duckStation, duckStationNotPortable {
-            return "DuckStation isn't the copy Ludeum installed (it isn't portable). Install it again from Ludeum ▸ Emulators… to Play."
+        if notLudeums.contains(emulator.bundleIdentifier) {
+            return "\(emulator.name) isn't the copy Ludeum installed. Install it again from Ludeum ▸ Emulators… to Play."
         }
         guard let expected = emulator.expectedVersion else { return nil }
         switch result(emulator) {
         case .tooOld(let found):
             return "\(emulator.name) \(found) is older than \(expected), which Ludeum needs. Update \(emulator.name) to Play."
+        case .wrongBuild where emulator == .mesenCE:
+            return "MesenCE isn't the \(expected) release Ludeum installs. Install it again from Ludeum ▸ Emulators… to Play."
         case .wrongBuild(let found):
             return
                 "\(emulator.name) is build \(found), and Ludeum installs build \(expected). Install it again from Ludeum ▸ Emulators… to Play."
@@ -157,12 +172,13 @@ extension View {
 }
 
 /// Every Emulator Ludeum plays Games in, with what the launch check found: whether it's installed,
-/// the version Ludeum needs against the one installed, and the Platforms it plays. DuckStation is installed from here.
+/// the version Ludeum needs against the one installed, and the Platforms it plays. DuckStation and MesenCE are
+/// installed from here. No Emulator is opened from here: its own settings are reached during a Play (ADR 0027).
 struct EmulatorsSheet: View {
     let services: Services
     @Environment(\.dismiss) private var dismiss
     @State private var platforms: [PlatformCount] = []
-    @State private var openError: String?
+    @State private var installError: String?
 
     private var checks: EmulatorVersionChecks { services.versions }
 
@@ -188,25 +204,25 @@ struct EmulatorsSheet: View {
                         Text(checks.installed[emulator.bundleIdentifier] ?? "–").monospacedDigit()
                         Text(plays(emulator)).foregroundStyle(.secondary).lineLimit(2)
                             .frame(maxWidth: 260, alignment: .leading)
-                        HStack {
-                            if emulator == .duckStation { installButton }
-                            openButton(emulator)
-                        }
+                        if emulator.isLudeums { installButton(emulator) } else { Text("") }
                     }
                 }
             }
             Text(
                 "Checked when Ludeum opens. An Emulator older than it needs can't Play; "
                     + "a newer major version, or one whose version can't be read, gets a warning the first time it Plays. "
-                    + "DuckStation is Ludeum's own copy, installed here at the build Ludeum needs and kept in the Ludeum folder: "
-                    + "its save states, memory cards, BIOS and game settings live in the Data folder."
+                    + "DuckStation and MesenCE are Ludeum's own copies, installed here at the release Ludeum needs and kept in the "
+                    + "Ludeum folder: their save states and game saves live in the Data folder, MesenCE's apart for each Platform. "
+                    + "An Emulator's own settings are changed in it during a Play."
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if let openError { Text(openError).font(.callout).foregroundStyle(.red) }
-            if let failed = services.tasks.items.first(where: { $0.subject == .emulator(.duckStation) }),
-                case .failed(let why) = failed.state
-            {
-                Text("Installing DuckStation failed: \(why)").font(.callout).foregroundStyle(.red)
+            if let installError { Text(installError).font(.callout).foregroundStyle(.red) }
+            ForEach(Emulator.all.filter(\.isLudeums), id: \.bundleIdentifier) { emulator in
+                if let failed = services.tasks.items.first(where: { $0.subject == .emulator(emulator) }),
+                    case .failed(let why) = failed.state
+                {
+                    Text("Installing \(emulator.name) failed: \(why)").font(.callout).foregroundStyle(.red)
+                }
             }
             HStack {
                 Spacer()
@@ -220,12 +236,12 @@ struct EmulatorsSheet: View {
 
     @ViewBuilder private func status(_ emulator: Emulator) -> some View {
         let id = emulator.bundleIdentifier
-        if emulator == .duckStation, let item = services.tasks.active(.emulator(emulator)) {
+        if emulator.isLudeums, let item = services.tasks.active(.emulator(emulator)) {
             Label(item.progress.map { "Installing \(Int($0 * 100))%" } ?? "Installing…", systemImage: "arrow.down.circle")
                 .foregroundStyle(.secondary)
         } else if checks.notInstalled.contains(id) {
             Label("Not installed", systemImage: "minus.circle").foregroundStyle(.secondary)
-        } else if emulator == .duckStation, checks.duckStationNotPortable {
+        } else if checks.notLudeums.contains(id) {
             Label("Not Ludeum's copy: install again", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
         } else {
             switch checks.result(emulator) {
@@ -244,53 +260,24 @@ struct EmulatorsSheet: View {
         }
     }
 
-    /// Installs the pinned DuckStation into the Ludeum folder, or installs it again over the copy there.
-    private var installButton: some View {
-        let id = Emulator.duckStation.bundleIdentifier
-        let installed = !checks.notInstalled.contains(id)
+    /// Installs the pinned DuckStation or MesenCE into the Ludeum folder, or installs it again over the copy there.
+    private func installButton(_ emulator: Emulator) -> some View {
+        let installed = !checks.notInstalled.contains(emulator.bundleIdentifier)
+        let release = emulator == .mesenCE ? MesenRelease.pinned.version : "build \(DuckStationRelease.pinned.build)"
         return Button(installed ? "Reinstall" : "Install") {
-            openError = nil
-            if Emulator.duckStation.isRunning {
-                openError = EmulatorRunning().description
+            installError = nil
+            if emulator.isRunning {
+                installError = EmulatorRunning(emulator: emulator).description
                 return
             }
-            checks.installDuckStation(tasks: services.tasks)
-        }
-        .disabled(checks.isInstalling(.duckStation, tasks: services.tasks))
-        .help(
-            installed
-                ? "Download build \(DuckStationRelease.pinned.build) again and put it in place"
-                : "Download DuckStation into the Ludeum folder")
-    }
-
-    /// Opens an Emulator the launch check found installed on its own, with no ROM, e.g. to change its
-    /// settings or update it (even one too old to Play). DuckStation gets its Standing settings first.
-    @ViewBuilder private func openButton(_ emulator: Emulator) -> some View {
-        if checks.finished, !checks.notInstalled.contains(emulator.bundleIdentifier) {
-            Button("Open") {
-                openError = nil
-                let app: URL
-                if emulator == .duckStation {
-                    let settings = DuckStationSettings(ludeum: services.settings.folder)
-                    app = settings.app
-                    if !emulator.isRunning {
-                        do { try settings.writeStanding() } catch { openError = "Couldn't write DuckStation's settings: \(error)" }
-                    }
-                } else {
-                    guard let found = NSWorkspace.shared.urlForApplication(withBundleIdentifier: emulator.bundleIdentifier) else {
-                        openError = "Couldn't find \(emulator.name). Is it still installed?"
-                        return
-                    }
-                    app = found
-                }
-                NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration()) { _, error in
-                    if let error { Task { @MainActor in openError = "Couldn't open \(emulator.name): \(error.localizedDescription)" } }
-                }
+            if emulator == .mesenCE, let library = MesenRelease.pinned.needs, !library.isInstalled {
+                installError = MesenInstallError.needs(library).description
+                return
             }
-            .help("Open \(emulator.name) with no ROM")
-        } else {
-            Text("")
+            checks.install(emulator, tasks: services.tasks)
         }
+        .disabled(checks.isInstalling(emulator, tasks: services.tasks))
+        .help(installed ? "Download \(release) again and put it in place" : "Download \(emulator.name) into the Ludeum folder")
     }
 
     /// The Library's Platforms it plays, e.g. "SNES, Game Boy".
@@ -301,13 +288,18 @@ struct EmulatorsSheet: View {
 }
 
 extension Emulator {
-    /// Any copy of it is open, Ludeum's or another. DuckStation rewrites its settings file whole from memory, so Ludeum
-    /// doesn't write it, or replace the app, meanwhile.
+    /// Any copy of it is open, Ludeum's or another. DuckStation rewrites its settings file whole from memory, and MesenCE
+    /// reads its own once, so Ludeum doesn't write them, or replace the app, meanwhile.
     @MainActor var isRunning: Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).isEmpty }
+
+    /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024) and MesenCE (ADR 0027).
+    var isLudeums: Bool { self == .duckStation || self == .mesenCE }
 }
 
-/// Installing was refused because DuckStation is open.
+/// Installing was refused because the Emulator is open.
 struct EmulatorRunning: LocalizedError, CustomStringConvertible {
-    var description: String { "Quit DuckStation first: installing replaces it." }
+    let emulator: Emulator
+
+    var description: String { "Quit \(emulator.name) first: installing replaces it." }
     var errorDescription: String? { description }
 }
