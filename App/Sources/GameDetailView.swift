@@ -172,9 +172,9 @@ struct GameDetailView: View {
             }
             if !facts.screenshots.isEmpty, let igdb = services.igdb {
                 ScreenshotsSection(
-                    loader: ScreenshotLoader(igdb: igdb), screenshots: facts.screenshots.map { .igdb(imageID: $0) }, grid: screenshotGrid)
+                    loader: ScreenshotLoader(igdb: igdb), screenshots: facts.screenshots.map { .igdb(imageID: $0) }, shape: screenshotShape)
             }
-            LaunchBoxScreenshotsSection(services: services, game: id, grid: screenshotGrid)
+            LaunchBoxScreenshotsSection(services: services, game: id, shape: screenshotShape)
 
             // Copies: the ROMs (checked now and then), then the ones recorded by hand.
             Section("Copies") {
@@ -683,7 +683,7 @@ struct GameDetailView: View {
     }
 
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
-    private var screenshotGrid: ScreenshotGrid { .of(platformId: game?.platformId) }
+    private var screenshotShape: ScreenshotShape { .of(platformId: game?.platformId) }
 
     /// Plays the Game in its Emulator, with every Emulator setting on the command line, from `saveState` if given, else
     /// on `disc` of a multi-disc ROM if given. A running Emulator gets the ROM in its open window.

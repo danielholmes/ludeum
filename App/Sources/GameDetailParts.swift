@@ -153,7 +153,7 @@ struct ScreenshotLoader {
 struct LaunchBoxScreenshotsSection: View {
     let services: Services
     let game: GameID
-    let grid: ScreenshotGrid
+    let shape: ScreenshotShape
     @State private var screenshots: [String] = []
     @State private var failed = false
 
@@ -163,7 +163,7 @@ struct LaunchBoxScreenshotsSection: View {
             if !screenshots.isEmpty {
                 ScreenshotsSection(
                     loader: ScreenshotLoader(covers: services.covers), screenshots: screenshots.map { .launchBox(file: $0) }, title: title,
-                    grid: grid)
+                    shape: shape)
             } else if failed {
                 Section(title) { Text("Couldn't load").foregroundStyle(.red) }
             }

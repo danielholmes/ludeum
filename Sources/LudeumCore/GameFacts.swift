@@ -197,27 +197,60 @@ public func screenshotScale(pixelWidth: Int, pixelHeight: Int) -> Int {
     return (200 + shorter - 1) / shorter
 }
 
-/// How a Game's Screenshots are laid out before "+N more": a Nintendo DS one is both screens, one above the other, so
-/// four of them across in one row, taller than wide; every other Platform's three across in two rows, at 16:9.
-public struct ScreenshotGrid: Sendable, Equatable {
+/// How a Game's Screenshots are tiled before "+N more": each the shape of its Platform's screen, the shape most of
+/// IGDB's are for the Platforms with many (a Game Boy's 10:9, a PlayStation's 4:3; a Nintendo DS one is both screens,
+/// one above the other, 2:3), so a tile shows the whole of one; 16:9 for a Platform not listed and when there's none.
+public struct ScreenshotShape: Sendable, Equatable {
+    /// Each one's width over its height.
+    public let aspectRatio: Double
+    /// The Platform's screens in each: two for a Nintendo DS, one for every other.
+    public let screens: Int
+
+    public static let widescreen = ScreenshotShape(aspectRatio: 16.0 / 9, screens: 1)
+
+    /// The shape of a Platform's Games' Screenshots, by its IGDB id; the widescreen one when it isn't known.
+    public static func of(platformId: Int64?) -> ScreenshotShape {
+        switch platformId {
+        case 33, 22, 35: ScreenshotShape(aspectRatio: 10.0 / 9, screens: 1)  // Game Boy, Game Boy Color, Game Gear: 160 × 144
+        case 24: ScreenshotShape(aspectRatio: 3.0 / 2, screens: 1)  // Game Boy Advance: 240 × 160
+        case 18, 99: ScreenshotShape(aspectRatio: 16.0 / 15, screens: 1)  // NES, Family Computer: 256 × 240
+        case 19, 58: ScreenshotShape(aspectRatio: 8.0 / 7, screens: 1)  // SNES, Super Famicom: 256 × 224
+        case 29, 78: ScreenshotShape(aspectRatio: 10.0 / 7, screens: 1)  // Mega Drive, Sega CD: 320 × 224
+        case 13, 16: ScreenshotShape(aspectRatio: 16.0 / 10, screens: 1)  // DOS, Amiga: 320 × 200
+        // PlayStation, PlayStation 2, Nintendo 64, GameCube, Saturn, Xbox, Master System, PC Engine CD, MSX2: a 4:3 TV.
+        case 7, 8, 4, 21, 32, 11, 64, 150, 53: ScreenshotShape(aspectRatio: 4.0 / 3, screens: 1)
+        case 20: ScreenshotShape(aspectRatio: 2.0 / 3, screens: 2)  // Nintendo DS: two 256 × 192 screens
+        default: .widescreen
+        }
+    }
+
+    /// Whether IGDB's thumbnails, cropped to 16:9, are this shape; any other is cropped from the original.
+    public var fitsThumbnail: Bool { self == .widescreen }
+
+    /// How they're tiled across `width` points with `spacing` between them: as many across as bring each screen in a
+    /// tile nearest `screenArea`, so every Platform's are about the same size and a wider panel fits more of them,
+    /// in two rows while those are under `twoRowsHeight` tall, else one.
+    public func layout(width: Double, spacing: Double) -> ScreenshotLayout {
+        let targetWidth = (Self.screenArea * Double(screens) * aspectRatio).squareRoot()
+        let columns = max(1, Int(((width + spacing) / (targetWidth + spacing)).rounded()))
+        let tileHeight = (width - Double(columns - 1) * spacing) / Double(columns) / aspectRatio
+        return ScreenshotLayout(columns: columns, rows: 2 * tileHeight + spacing < Self.twoRowsHeight ? 2 : 1)
+    }
+
+    /// A 146 × 82 tile at 16:9: three across `narrowPanelWidth`, each a little smaller.
+    static let screenArea = 12_000.0
+    /// About as much as the Screenshots get of Game detail at its narrowest.
+    public static let narrowPanelWidth = 400.0
+    static let twoRowsHeight = 300.0
+}
+
+/// Screenshots' tiles: `columns` across, in `rows`.
+public struct ScreenshotLayout: Sendable, Equatable {
     public let columns: Int
     public let rows: Int
-    /// Taller than wide (2:3), not 16:9.
-    public let portrait: Bool
-
-    public static let landscape = ScreenshotGrid(columns: 3, rows: 2, portrait: false)
-    public static let nintendoDS = ScreenshotGrid(columns: 4, rows: 1, portrait: true)
-
-    /// The grid for a Platform's Games; the landscape one when it isn't known.
-    public static func of(platformId: Int64?) -> ScreenshotGrid {
-        platformId == 20 ? .nintendoDS : .landscape  // Nintendo DS
-    }
 
     /// How many are shown, the last of them "+N more" when there are more.
     public var limit: Int { columns * rows }
-
-    /// Each one's width over its height.
-    public var aspectRatio: Double { portrait ? 2.0 / 3 : 16.0 / 9 }
 }
 
 /// One release of a game: where and when.

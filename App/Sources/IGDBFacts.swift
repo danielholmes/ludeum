@@ -91,33 +91,34 @@ struct IGDBFactsRows: View {
     }
 }
 
-/// Screenshots in two rows of three (three rows of two in a narrow panel), or a Nintendo DS Game's in one row of four
-/// (`ScreenshotGrid`), then a tile to show the rest. Click one to see it full size.
+/// Screenshots in their Platform's shape, as many across as fit at about the same size and in two rows, or one when
+/// two would be 300 points tall or more (`ScreenshotShape`), then a tile to show the rest. Click one to see it full
+/// size.
 struct ScreenshotsSection: View {
     let loader: ScreenshotLoader
     let screenshots: [ShownScreenshot]
     /// Its heading, as LaunchBox's have their own.
     var title = "Screenshots"
-    var grid = ScreenshotGrid.landscape
+    var shape = ScreenshotShape.widescreen
     @State private var showingAll = false
-    /// The grid's columns while each landscape one gets at least `narrowest` points (in Game detail, a panel of about
-    /// 400 points), else two; portrait ones always the grid's.
-    @State private var columns: Int?
+    /// The tiles for the width it has; for a narrow Game detail panel's until that's known.
+    @State private var layout: ScreenshotLayout?
     @State private var viewing: Screenshot?
 
     private nonisolated static let spacing: CGFloat = 12
-    private nonisolated static let narrowest: CGFloat = 105
 
     var body: some View {
         Section(title) {
-            let limit = grid.limit
+            let tiles = layout ?? shape.layout(width: ScreenshotShape.narrowPanelWidth, spacing: Self.spacing)
+            let limit = tiles.limit
             let collapsed = !showingAll && screenshots.count > limit
             let shown = collapsed ? Array(screenshots.prefix(limit - 1)) : screenshots
-            let count = columns ?? grid.columns
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: count), spacing: Self.spacing) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: tiles.columns), spacing: Self.spacing
+            ) {
                 ForEach(shown, id: \.self) { screenshot in
-                    ScreenshotImage(loader: loader, screenshot: screenshot, original: grid.portrait)
-                        .aspectRatio(grid.aspectRatio, contentMode: .fit)
+                    ScreenshotImage(loader: loader, screenshot: screenshot, original: !shape.fitsThumbnail)
+                        .aspectRatio(shape.aspectRatio, contentMode: .fit)
                         .frame(minWidth: 0)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                         .onTapGesture { viewing = Screenshot(id: screenshot) }
@@ -127,8 +128,8 @@ struct ScreenshotsSection: View {
                         showingAll = true
                     } label: {
                         // The next screenshot, dimmed, under "+N more".
-                        ScreenshotImage(loader: loader, screenshot: screenshots[shown.count], original: grid.portrait)
-                            .aspectRatio(grid.aspectRatio, contentMode: .fit)
+                        ScreenshotImage(loader: loader, screenshot: screenshots[shown.count], original: !shape.fitsThumbnail)
+                            .aspectRatio(shape.aspectRatio, contentMode: .fit)
                             .frame(minWidth: 0)
                             .overlay(Color.black.opacity(0.55))
                             .overlay {
@@ -140,16 +141,15 @@ struct ScreenshotsSection: View {
                     .buttonStyle(.plain)
                 }
             }
-            .onGeometryChange(for: Int.self) { [grid] in
-                let across = CGFloat(grid.columns)
-                return grid.portrait || $0.size.width >= across * Self.narrowest + (across - 1) * Self.spacing ? grid.columns : 2
+            .onGeometryChange(for: ScreenshotLayout.self) { [shape] in
+                shape.layout(width: $0.size.width, spacing: Self.spacing)
             } action: {
-                columns = $0
+                layout = $0
             }
         }
         .onChange(of: screenshots) { showingAll = false }
         .sheet(item: $viewing) { shot in
-            ScreenshotGallery(loader: loader, screenshots: screenshots, showing: shot.id, grid: grid)
+            ScreenshotGallery(loader: loader, screenshots: screenshots, showing: shot.id, shape: shape)
         }
     }
 }
@@ -159,17 +159,17 @@ struct ScreenshotsSection: View {
 struct ScreenshotGallery: View {
     let loader: ScreenshotLoader
     let screenshots: [ShownScreenshot]
-    /// The strip's thumbnails are its shape: 16:9, or a Nintendo DS Game's taller than wide.
-    let grid: ScreenshotGrid
+    /// The strip's thumbnails are its shape: its Platform's screen.
+    let shape: ScreenshotShape
     @State private var index: Int
     @Environment(\.dismiss) private var dismiss
 
     private nonisolated static let thumbnailHeight: CGFloat = 63
 
-    init(loader: ScreenshotLoader, screenshots: [ShownScreenshot], showing screenshot: ShownScreenshot, grid: ScreenshotGrid) {
+    init(loader: ScreenshotLoader, screenshots: [ShownScreenshot], showing screenshot: ShownScreenshot, shape: ScreenshotShape) {
         self.loader = loader
         self.screenshots = screenshots
-        self.grid = grid
+        self.shape = shape
         _index = State(initialValue: screenshots.firstIndex(of: screenshot) ?? 0)
     }
 
@@ -229,8 +229,8 @@ struct ScreenshotGallery: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(screenshots.indices, id: \.self) { i in
-                        ScreenshotImage(loader: loader, screenshot: screenshots[i], original: grid.portrait)
-                            .frame(width: Self.thumbnailHeight * grid.aspectRatio, height: Self.thumbnailHeight)
+                        ScreenshotImage(loader: loader, screenshot: screenshots[i], original: !shape.fitsThumbnail)
+                            .frame(width: Self.thumbnailHeight * shape.aspectRatio, height: Self.thumbnailHeight)
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 3)
