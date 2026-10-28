@@ -62,7 +62,7 @@ public struct ROMArchiver: Sendable {
     public init(
         sevenZip: SevenZip,
         freeSpace: @escaping @Sendable (URL) -> Int64? = ROMArchiver.availableSpace,
-        moveToTrash: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        moveToTrash: @escaping @Sendable (URL) throws -> Void = Trash.move
     ) {
         self.sevenZip = sevenZip
         self.freeSpace = freeSpace

@@ -287,7 +287,7 @@ struct GameDetailView: View {
             Text(
                 deletingROM?.missing == true
                     ? "Its file is gone already. The ROM leaves the journal with its Copy details; if the file comes back, it waits in the Review queue as a Stray file."
-                    : "Its files go to the Trash, and the ROM leaves the journal with its Copy details. There's no undo; a backup is taken first."
+                    : "Its files go to the Trash (one Dropbox keeps online only is deleted in Dropbox, which keeps it for a while), and the ROM leaves the journal with its Copy details. There's no undo; a backup is taken first."
             )
         }
         .sheet(isPresented: $linking) {

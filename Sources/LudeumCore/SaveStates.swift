@@ -83,7 +83,7 @@ public struct DuckStationSaveStates: Sendable {
 
     /// Sends it to the Trash.
     public func delete(
-        _ state: SaveState, moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        _ state: SaveState, moveToTrash: (URL) throws -> Void = Trash.move
     ) throws {
         try moveToTrash(state.file)
     }

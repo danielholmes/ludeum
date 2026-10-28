@@ -186,7 +186,7 @@ public struct AddROM: Sendable {
     /// checksum at the next Import instead.
     public init(
         journal: LudeumStore, sevenZip: SevenZip? = SevenZip.find(), hasheous: HasheousClient? = nil,
-        moveToTrash: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        moveToTrash: @escaping @Sendable (URL) throws -> Void = Trash.move
     ) {
         self.journal = journal
         self.sevenZip = sevenZip

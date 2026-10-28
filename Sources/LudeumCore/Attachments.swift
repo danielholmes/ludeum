@@ -47,7 +47,7 @@ public struct Attachments: Sendable {
 
     public init(
         journal: LudeumStore, root: URL,
-        moveToTrash: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        moveToTrash: @escaping @Sendable (URL) throws -> Void = Trash.move
     ) {
         self.journal = journal
         self.root = root

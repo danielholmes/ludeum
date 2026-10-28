@@ -202,7 +202,7 @@ extension LudeumStore {
     /// that way it throws, with nothing sent to the Trash, and the ROM is read again all the same.
     public func keepOneForm(
         _ item: BothFormsROM, as forms: BothForms, romFolders: [ROMFolder],
-        moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        moveToTrash: (URL) throws -> Void = Trash.move
     ) throws {
         guard let folder = romFolders.first(where: { $0.platformId == item.rom.platformId }) else { throw ReviewError.noROMFolder }
         guard try folder.bothForms(named: item.rom.folderName) == forms else {
@@ -236,7 +236,7 @@ extension LudeumStore {
     /// aren't in its ROM folder, or a Playthrough was played on one of them, it throws with nothing sent to the Trash.
     public func keepOnly(
         _ version: [LudeumROM], of item: DuplicateVersionsGame, romFolders: [ROMFolder],
-        moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        moveToTrash: (URL) throws -> Void = Trash.move
     ) throws {
         try checkVersionsUnchanged(version, of: item)
         let kept = Set(version.map(\.id))
@@ -271,7 +271,7 @@ extension LudeumStore {
     /// ROM. Refused, with nothing sent to the Trash, once it's Matched: it's deleted from its Game then.
     public func deleteROM(
         _ item: ReviewItem, romFolders: [ROMFolder],
-        moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        moveToTrash: (URL) throws -> Void = Trash.move
     ) throws {
         let matched = try db.read { db in
             try Bool.fetchOne(db, sql: "SELECT gameId IS NOT NULL FROM rom WHERE id = ?", arguments: [item.romId])

@@ -44,7 +44,7 @@ extension LudeumStore {
     /// all of it reached the Trash. Refused, with nothing sent to the Trash, while a Playthrough was played on it.
     public func deleteROM(
         _ rom: Int64, romFolders: [ROMFolder],
-        moveToTrash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        moveToTrash: (URL) throws -> Void = Trash.move
     ) throws {
         guard
             let row = try db.read({ db in
