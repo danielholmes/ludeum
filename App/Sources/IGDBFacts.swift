@@ -91,16 +91,18 @@ struct IGDBFactsRows: View {
     }
 }
 
-/// Screenshots in two rows of three (three rows of two in a narrow panel), then a tile to show the rest. Click one to
-/// see it full size.
+/// Screenshots in two rows of three (three rows of two in a narrow panel), or a Nintendo DS Game's in one row of four
+/// (`ScreenshotGrid`), then a tile to show the rest. Click one to see it full size.
 struct ScreenshotsSection: View {
     let loader: ScreenshotLoader
     let screenshots: [ShownScreenshot]
     /// Its heading, as LaunchBox's have their own.
     var title = "Screenshots"
+    var grid = ScreenshotGrid.landscape
     @State private var showingAll = false
-    /// Three across while each gets at least `narrowest` points (in Game detail, a panel of about 400 points), else two.
-    @State private var columns = 3
+    /// The grid's columns while each landscape one gets at least `narrowest` points (in Game detail, a panel of about
+    /// 400 points), else two; portrait ones always the grid's.
+    @State private var columns: Int?
     @State private var viewing: Screenshot?
 
     private nonisolated static let spacing: CGFloat = 12
@@ -108,13 +110,14 @@ struct ScreenshotsSection: View {
 
     var body: some View {
         Section(title) {
-            let limit = 6
+            let limit = grid.limit
             let collapsed = !showingAll && screenshots.count > limit
             let shown = collapsed ? Array(screenshots.prefix(limit - 1)) : screenshots
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columns), spacing: Self.spacing) {
+            let count = columns ?? grid.columns
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: count), spacing: Self.spacing) {
                 ForEach(shown, id: \.self) { screenshot in
-                    ScreenshotImage(loader: loader, screenshot: screenshot)
-                        .aspectRatio(16 / 9, contentMode: .fit)
+                    ScreenshotImage(loader: loader, screenshot: screenshot, original: grid.portrait)
+                        .aspectRatio(grid.aspectRatio, contentMode: .fit)
                         .frame(minWidth: 0)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                         .onTapGesture { viewing = Screenshot(id: screenshot) }
@@ -124,8 +127,8 @@ struct ScreenshotsSection: View {
                         showingAll = true
                     } label: {
                         // The next screenshot, dimmed, under "+N more".
-                        ScreenshotImage(loader: loader, screenshot: screenshots[shown.count])
-                            .aspectRatio(16 / 9, contentMode: .fit)
+                        ScreenshotImage(loader: loader, screenshot: screenshots[shown.count], original: grid.portrait)
+                            .aspectRatio(grid.aspectRatio, contentMode: .fit)
                             .frame(minWidth: 0)
                             .overlay(Color.black.opacity(0.55))
                             .overlay {
@@ -137,15 +140,16 @@ struct ScreenshotsSection: View {
                     .buttonStyle(.plain)
                 }
             }
-            .onGeometryChange(for: Int.self) {
-                $0.size.width >= 3 * Self.narrowest + 2 * Self.spacing ? 3 : 2
+            .onGeometryChange(for: Int.self) { [grid] in
+                let across = CGFloat(grid.columns)
+                return grid.portrait || $0.size.width >= across * Self.narrowest + (across - 1) * Self.spacing ? grid.columns : 2
             } action: {
                 columns = $0
             }
         }
         .onChange(of: screenshots) { showingAll = false }
         .sheet(item: $viewing) { shot in
-            ScreenshotGallery(loader: loader, screenshots: screenshots, showing: shot.id)
+            ScreenshotGallery(loader: loader, screenshots: screenshots, showing: shot.id, grid: grid)
         }
     }
 }
@@ -155,14 +159,17 @@ struct ScreenshotsSection: View {
 struct ScreenshotGallery: View {
     let loader: ScreenshotLoader
     let screenshots: [ShownScreenshot]
+    /// The strip's thumbnails are its shape: 16:9, or a Nintendo DS Game's taller than wide.
+    let grid: ScreenshotGrid
     @State private var index: Int
     @Environment(\.dismiss) private var dismiss
 
-    private nonisolated static let thumbnailWidth: CGFloat = 112
+    private nonisolated static let thumbnailHeight: CGFloat = 63
 
-    init(loader: ScreenshotLoader, screenshots: [ShownScreenshot], showing screenshot: ShownScreenshot) {
+    init(loader: ScreenshotLoader, screenshots: [ShownScreenshot], showing screenshot: ShownScreenshot, grid: ScreenshotGrid) {
         self.loader = loader
         self.screenshots = screenshots
+        self.grid = grid
         _index = State(initialValue: screenshots.firstIndex(of: screenshot) ?? 0)
     }
 
@@ -222,8 +229,8 @@ struct ScreenshotGallery: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(screenshots.indices, id: \.self) { i in
-                        ScreenshotImage(loader: loader, screenshot: screenshots[i])
-                            .frame(width: Self.thumbnailWidth, height: Self.thumbnailWidth * 9 / 16)
+                        ScreenshotImage(loader: loader, screenshot: screenshots[i], original: grid.portrait)
+                            .frame(width: Self.thumbnailHeight * grid.aspectRatio, height: Self.thumbnailHeight)
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 3)

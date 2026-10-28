@@ -197,6 +197,29 @@ public func screenshotScale(pixelWidth: Int, pixelHeight: Int) -> Int {
     return (200 + shorter - 1) / shorter
 }
 
+/// How a Game's Screenshots are laid out before "+N more": a Nintendo DS one is both screens, one above the other, so
+/// four of them across in one row, taller than wide; every other Platform's three across in two rows, at 16:9.
+public struct ScreenshotGrid: Sendable, Equatable {
+    public let columns: Int
+    public let rows: Int
+    /// Taller than wide (2:3), not 16:9.
+    public let portrait: Bool
+
+    public static let landscape = ScreenshotGrid(columns: 3, rows: 2, portrait: false)
+    public static let nintendoDS = ScreenshotGrid(columns: 4, rows: 1, portrait: true)
+
+    /// The grid for a Platform's Games; the landscape one when it isn't known.
+    public static func of(platformId: Int64?) -> ScreenshotGrid {
+        platformId == 20 ? .nintendoDS : .landscape  // Nintendo DS
+    }
+
+    /// How many are shown, the last of them "+N more" when there are more.
+    public var limit: Int { columns * rows }
+
+    /// Each one's width over its height.
+    public var aspectRatio: Double { portrait ? 2.0 / 3 : 16.0 / 9 }
+}
+
 /// One release of a game: where and when.
 public struct GameRelease: Sendable, Equatable {
     /// e.g. "North America", "Japan".

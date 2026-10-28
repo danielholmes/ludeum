@@ -153,6 +153,7 @@ struct ScreenshotLoader {
 struct LaunchBoxScreenshotsSection: View {
     let services: Services
     let game: GameID
+    let grid: ScreenshotGrid
     @State private var screenshots: [String] = []
     @State private var failed = false
 
@@ -161,7 +162,8 @@ struct LaunchBoxScreenshotsSection: View {
             let title = "LaunchBox Screenshots"
             if !screenshots.isEmpty {
                 ScreenshotsSection(
-                    loader: ScreenshotLoader(covers: services.covers), screenshots: screenshots.map { .launchBox(file: $0) }, title: title)
+                    loader: ScreenshotLoader(covers: services.covers), screenshots: screenshots.map { .launchBox(file: $0) }, title: title,
+                    grid: grid)
             } else if failed {
                 Section(title) { Text("Couldn't load").foregroundStyle(.red) }
             }
@@ -183,6 +185,8 @@ struct LaunchBoxScreenshotsSection: View {
 struct ScreenshotImage: View {
     let loader: ScreenshotLoader
     let screenshot: ShownScreenshot
+    /// Cropped from the original rather than IGDB's 16:9 thumbnail, for a frame that isn't 16:9.
+    var original = false
     @State private var image: NSImage?
 
     var body: some View {
@@ -193,7 +197,7 @@ struct ScreenshotImage: View {
             }
             .clipped()
             .task(id: screenshot) {
-                if let file = await loader.file(screenshot, original: false) { image = NSImage(contentsOf: file) }
+                if let file = await loader.file(screenshot, original: original) { image = NSImage(contentsOf: file) }
             }
     }
 }
