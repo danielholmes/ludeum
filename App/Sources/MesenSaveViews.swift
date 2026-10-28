@@ -12,6 +12,8 @@ struct MesenSavesSection: View {
     let platformId: Int64
     /// The present ROMs Play opens.
     let roms: [LudeumROM]
+    /// The one of them Play opens, the only one whose states it can start from.
+    let plays: LudeumROM?
     /// Why Play can't open it, if it can't.
     let refusal: String?
     let play: (SaveState) -> Void
@@ -97,9 +99,10 @@ struct MesenSavesSection: View {
                 Text(state.saved.formatted(date: .abbreviated, time: .shortened)).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
+            let why = refusal ?? (rom.rom.id == plays?.id ? nil : "Play opens \(plays?.name ?? "another ROM"), not this one")
             Button("Play", systemImage: "play.fill") { play(state) }
-                .labelStyle(.iconOnly).buttonStyle(.hover).disabled(refusal != nil)
-                .help(refusal ?? "Play from this state in MesenCE")
+                .labelStyle(.iconOnly).buttonStyle(.hover).disabled(why != nil)
+                .help(why ?? "Play from this state in MesenCE")
             Menu {
                 Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([state.file]) }
                 Divider()

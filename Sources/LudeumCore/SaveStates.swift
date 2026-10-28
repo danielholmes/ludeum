@@ -1,8 +1,9 @@
 import Foundation
 import GRDB
 
-/// A DuckStation save state: made and managed in DuckStation, which keeps it in the Data folder, where its Standing
-/// settings point it (ADR 0024), as `<serial>_<slot>.sav`.
+/// A save state, made and managed in its Emulator, which keeps it in the Data folder, where its Standing settings point
+/// it: DuckStation's as `<serial>_<slot>.sav` (ADR 0024), MesenCE's as `<name>_<slot>.mss` in its Platform's folder,
+/// `serial` then holding the ROM's name in MesenCE (ADR 0027, `MesenSaveStates`).
 public struct SaveState: Sendable, Equatable, Identifiable {
     public enum Slot: Sendable, Hashable, Comparable {
         /// The one DuckStation saves on closing the game.

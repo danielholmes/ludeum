@@ -21,6 +21,11 @@ public struct MesenROMName: Sendable, Equatable {
         let entry = entries.first { kinds.contains(($0.fileName as NSString).pathExtension.lowercased()) } ?? entries.first
         return entry.map { MesenROMName(name: ($0.fileName as NSString).deletingPathExtension, inArchive: $0.path) }
     }
+
+    /// The path of a file inside an archive given `name`, keeping its folder and extension.
+    static func path(_ inside: String, renamedTo name: String) -> String {
+        ((inside as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name + "." + (inside as NSString).pathExtension)
+    }
 }
 
 /// A Game save MesenCE keeps for a ROM, which the game wrote itself: `<name>.srm`, `.sav`, `.rtc` and the like.
@@ -118,25 +123,14 @@ public struct MesenSaveStates: Sendable {
 
     /// The ROM's file name a Save state was saved with, read from its header: `DuckTales (USA).nes`. Nil when it isn't
     /// a MesenCE state.
-    static func romName(inState data: Data) -> String? {
-        var offset = 0
-        func u32() -> Int? {
-            guard offset + 4 <= data.count else { return nil }
-            defer { offset += 4 }
-            let start = data.startIndex + offset
-            return Int(data[start..<start + 4].reversed().reduce(UInt32(0)) { $0 << 8 | UInt32($1) })
+    static func romName(inState data: Data) -> String? { MesenStateHeader(data)?.romName }
+
+    /// Moves every file MesenCE keeps by `oldName` to `name`, as a Rename does.
+    func move(_ oldName: String, to name: String) throws {
+        for file in files(of: oldName) {
+            let rest = file.lastPathComponent.dropFirst(oldName.count)
+            try FileManager.default.moveItem(at: file, to: file.deletingLastPathComponent().appending(path: name + rest))
         }
-        guard data.count > 3, data.prefix(3) == Data("MSS".utf8) else { return nil }
-        offset = 3
-        // The version that wrote it, the format, (an old SHA-1), the console, then the picture: its size, width, height
-        // and scale, and the picture itself, compressed.
-        guard u32() != nil, let format = u32() else { return nil }
-        if format <= 3 { offset += 40 }
-        guard u32() != nil, u32() != nil, u32() != nil, u32() != nil, u32() != nil, let compressed = u32() else { return nil }
-        offset += compressed
-        guard let length = u32(), length > 0, offset + length <= data.count else { return nil }
-        let start = data.startIndex + offset
-        return String(data: data[start..<start + length], encoding: .utf8)
     }
 }
 
@@ -153,41 +147,33 @@ public enum MesenRenameError: LocalizedError, Equatable {
 }
 
 extension LudeumStore {
-    /// Renames a MesenCE ROM as `renameROM(_:to:in:)` does, then what MesenCE keys it by (ADR 0027): the file inside its
-    /// `.7z` when that has the ROM's name (7-Zip's `rn`, which doesn't repack), and its Save states, Game saves and
-    /// screenshots in its Platform's folders. A ROM MesenCE names otherwise (a disc ROM's cue sheet, a file inside of
-    /// another name) keeps its saves as they are. Refused, with nothing renamed, when MesenCE already keeps a file
-    /// under the new name.
+    /// Renames a MesenCE ROM as `renameROM(_:to:in:)` does, and what MesenCE keys it by (ADR 0027): the file inside its
+    /// `.7z` when that has the ROM's name (7-Zip's `rn`, which doesn't repack), renamed first and put back should the
+    /// ROM's own rename fail, then its Save states, Game saves and screenshots in its Platform's folders. A ROM MesenCE
+    /// names otherwise keeps its saves as they are: a disc ROM's cue sheet in its subfolder, or a file inside of
+    /// another name. Refused, with nothing renamed, when MesenCE already keeps a file under the new name.
     public func renameMesenROM(
         _ rom: Int64, from oldName: String, to name: String, in folder: ROMFolder, ludeum: LudeumFolder = .standard,
         sevenZip: SevenZip? = .find()
     ) async throws {
+        // Only a loose file, or an archive, is renamed with the ROM: a subfolder's files keep their names.
+        guard let ready = try folder.readyFile(named: oldName),
+            ready.deletingLastPathComponent().standardizedFileURL == folder.url.standardizedFileURL,
+            let key = await MesenROMName.of(ready, platformId: folder.platformId, sevenZip: sevenZip), key.name == oldName
+        else { return try renameROM(rom, to: name, in: folder) }
         let saves = MesenSaveStates(ludeum: ludeum, platformId: folder.platformId)
-        let ready = try folder.readyFile(named: oldName)
-        let key = await ready.asyncFlatMap { await MesenROMName.of($0, platformId: folder.platformId, sevenZip: sevenZip) }
-        // What MesenCE keys it by follows only a name that was the ROM's.
-        let follows = key?.name == oldName
-        if follows, let saves {
-            if let taken = saves.files(of: name).first { throw MesenRenameError.savesInTheWay(taken.lastPathComponent) }
+        if let taken = saves?.files(of: name).first { throw MesenRenameError.savesInTheWay(taken.lastPathComponent) }
+        var inside: (from: String, to: String)?
+        if let path = key.inArchive, let sevenZip {
+            inside = (path, MesenROMName.path(path, renamedTo: name))
+            try await sevenZip.rename(path, to: MesenROMName.path(path, renamedTo: name), in: ready)
         }
-        try renameROM(rom, to: name, in: folder)
-        guard follows, let key else { return }
-        if let inside = key.inArchive, let sevenZip, let archive = try folder.readyFile(named: name) {
-            let renamed = ((inside as NSString).deletingLastPathComponent as NSString).appendingPathComponent(
-                name + "." + (inside as NSString).pathExtension)
-            try await sevenZip.rename(inside, to: renamed, in: archive)
+        do {
+            try renameROM(rom, to: name, in: folder)
+        } catch {
+            if let inside, let sevenZip { try? await sevenZip.rename(inside.to, to: inside.from, in: ready) }
+            throw error
         }
-        guard let saves else { return }
-        for file in saves.files(of: oldName) {
-            let rest = file.lastPathComponent.dropFirst(oldName.count)
-            try FileManager.default.moveItem(at: file, to: file.deletingLastPathComponent().appending(path: name + rest))
-        }
-    }
-}
-
-extension Optional {
-    fileprivate func asyncFlatMap<T>(_ transform: (Wrapped) async -> T?) async -> T? {
-        guard let self else { return nil }
-        return await transform(self)
+        try saves?.move(oldName, to: name)
     }
 }

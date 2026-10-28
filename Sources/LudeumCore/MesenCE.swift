@@ -153,10 +153,14 @@ public struct MesenSettings: Sendable {
 
     /// Writes the resume file `--loadLastSession` loads for `rom`, holding `saveState`: `RecentGames/<name>.rgd`, a zip
     /// of the state and the ROM's name and path as MesenCE writes them, `<archive>\u{1}<file inside>` for one in an
-    /// archive. The ROM's file name, inside an archive or not, is the one the state was saved with.
+    /// archive. The ROM's file name, inside an archive or not, is the state's own name (`<name>_<slot>.mss`), which a
+    /// Rename keeps in step with it, with the extension of the file it was saved with.
     func writeResume(from saveState: URL, rom: URL) throws {
         let state = try Data(contentsOf: saveState)
-        guard let romName = MesenSaveStates.romName(inState: state) else { throw MesenResumeError.notAState }
+        guard let savedWith = MesenSaveStates.romName(inState: state) else { throw MesenResumeError.notAState }
+        let stem = saveState.deletingPathExtension().lastPathComponent
+        let name = stem.firstMatch(of: /^(.+)_\d+$/).map { String($0.output.1) } ?? (savedWith as NSString).deletingPathExtension
+        let romName = name + "." + (savedWith as NSString).pathExtension
         let path = rom.path(percentEncoded: false)
         let romPath = ["7z", "zip"].contains(rom.pathExtension.lowercased()) ? "\(path)\u{1}\(romName)" : path
         let info = "\(romName)\n\(romPath)\n\n"

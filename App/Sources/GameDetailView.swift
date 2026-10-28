@@ -198,7 +198,8 @@ struct GameDetailView: View {
             // Save states and Game saves: MesenCE's, in its Platform's folders in the Data folder.
             if !game.isBundle, emulator == .mesenCE, playROMs.contains(where: { !$0.missing && !$0.archived }) {
                 MesenSavesSection(
-                    services: services, platformId: game.platformId, roms: playROMs, refusal: playing.availability.refusal?.message
+                    services: services, platformId: game.platformId, roms: playROMs, plays: playing.rom,
+                    refusal: playing.availability.refusal?.message
                 ) { state in play(in: .mesenCE, from: state.file) }
             }
 

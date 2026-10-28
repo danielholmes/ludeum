@@ -98,7 +98,7 @@ public enum EmulatorVersions {
         let shown = version.map(String.init).joined(separator: ".")
         if spec.format == .installRecord {
             let digest = text.split(separator: "\n").dropFirst().first.map(String.init)
-            return digest == MesenRelease.pinned.sha256 ? .ok : .wrongBuild(found: shown)
+            return digest?.lowercased() == MesenRelease.pinned.sha256.lowercased() ? .ok : .wrongBuild(found: shown)
         }
         if spec.exact { return compare(version, expected) == 0 ? .ok : .wrongBuild(found: shown) }
         if compare(version, expected) < 0 { return .tooOld(found: shown) }

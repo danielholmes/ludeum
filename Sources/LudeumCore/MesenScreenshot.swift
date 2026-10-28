@@ -13,29 +13,24 @@ public enum MesenScreenshot {
 
     /// The screenshot in a state's bytes.
     static func decode(_ data: Data) -> SaveStateScreenshot? {
-        var reader = Reader(data: data)
-        guard reader.bytes(3) == Data("MSS".utf8), reader.u32() != nil, let format = reader.u32(), (3...4).contains(format)
+        guard let header = MesenStateHeader(data), header.packedFrame.count > 2,
+            // zlib's: its 2-byte header, then deflate.
+            let frame = try? (header.packedFrame.dropFirst(2) as NSData).decompressed(using: .zlib) as Data,
+            frame.count >= header.frameSize
         else { return nil }
-        // Format 3 had a SHA-1, as 40 hex digits, after its version.
-        if format == 3 { _ = reader.bytes(40) }
-        guard let console = reader.u32(), let size = reader.u32(), let width = reader.u32(), let height = reader.u32(),
-            reader.u32() != nil, let packedSize = reader.u32(), packedSize > 2, packedSize <= 2 << 20,
-            let packed = reader.bytes(packedSize), let nameSize = reader.u32(), nameSize <= 4096,
-            let name = reader.bytes(nameSize).flatMap({ String(data: $0, encoding: .utf8) })
-        else { return nil }
-        // zlib's: its 2-byte header, then deflate.
-        guard let frame = try? (packed.dropFirst(2) as NSData).decompressed(using: .zlib) as Data, frame.count >= size
-        else { return nil }
+        let (width, height) = (header.width, header.height)
         let bytes = [UInt8](frame)
         let pixels = (0..<bytes.count / 2).map { UInt16(bytes[$0 * 2]) | UInt16(bytes[$0 * 2 + 1]) << 8 }
-        switch console {
-        case 0: return snes(pixels, width: width, height: height)
-        case 1: return gameBoy(pixels, width: width, height: height)
-        case 2: return nes(pixels, width: width, height: height)
-        case 3: return pcEngine(pixels)
-        case 4: return masterSystem(pixels, width: width, height: height, gameGear: (name as NSString).pathExtension.lowercased() == "gg")
-        case 5: return gameBoyAdvance(pixels, width: width, height: height)
-        default: return nil
+        switch header.console {
+        case .snes: return snes(pixels, width: width, height: height)
+        case .gameBoy: return gameBoy(pixels, width: width, height: height)
+        case .nes: return nes(pixels, width: width, height: height)
+        case .pcEngine: return pcEngine(pixels)
+        case .masterSystem:
+            return masterSystem(
+                pixels, width: width, height: height, gameGear: (header.romName as NSString).pathExtension.lowercased() == "gg")
+        case .gameBoyAdvance: return gameBoyAdvance(pixels, width: width, height: height)
+        case nil: return nil
         }
     }
 
@@ -232,6 +227,58 @@ public enum MesenScreenshot {
 
     private static func colors(_ hex: String) -> [UInt32] {
         hex.split(whereSeparator: \.isWhitespace).map { UInt32($0, radix: 16)! }
+    }
+}
+
+/// The header at the front of a MesenCE save state (`SaveStateManager::GetSaveStateHeader`): "MSS", MesenCE's version,
+/// the format's version (3, with a SHA-1 after it, or 4, as MesenCE reads no older), the console, then its picture's
+/// size, width, height and scale and the picture, zlib-compressed, then the ROM's file name. Nil for anything else.
+struct MesenStateHeader {
+    /// The hardware MesenCE emulated, by its `ConsoleType`, for the Platforms Ludeum plays with it.
+    enum Console: Int {
+        case snes = 0
+        case gameBoy, nes, pcEngine, masterSystem, gameBoyAdvance
+
+        /// The Platforms whose Games MesenCE plays as this console.
+        var platforms: Set<Int64> {
+            switch self {
+            case .snes: [19, 58]  // SNES, Super Famicom
+            case .gameBoy: [33, 22]  // Game Boy, Game Boy Color
+            case .nes: [18, 99]  // NES, Family Computer
+            case .pcEngine: [86, 150]  // PC Engine, PC Engine CD
+            case .masterSystem: [64, 35]  // Master System, Game Gear
+            case .gameBoyAdvance: [24]
+            }
+        }
+    }
+
+    /// Nil for a console Ludeum doesn't play with MesenCE (WonderSwan).
+    let console: Console?
+    /// The picture's size unpacked, in bytes, and its width and height in pixels.
+    let frameSize: Int
+    let width: Int
+    let height: Int
+    let packedFrame: Data
+    /// The ROM's file name, with its extension, inside its archive if it's in one: `DuckTales (USA).nes`.
+    let romName: String
+
+    init?(_ data: Data) {
+        var reader = Reader(data: data)
+        guard reader.bytes(3) == Data("MSS".utf8), reader.u32() != nil, let format = reader.u32(), (3...4).contains(format)
+        else { return nil }
+        // Format 3 had a SHA-1, as 40 hex digits, after its version.
+        if format == 3 { _ = reader.bytes(40) }
+        guard let console = reader.u32(), let frameSize = reader.u32(), let width = reader.u32(), let height = reader.u32(),
+            reader.u32() != nil, let packedSize = reader.u32(), packedSize <= 2 << 20, let packedFrame = reader.bytes(packedSize),
+            let nameSize = reader.u32(), nameSize > 0, nameSize <= 4096,
+            let romName = reader.bytes(nameSize).flatMap({ String(data: $0, encoding: .utf8) })
+        else { return nil }
+        self.console = Console(rawValue: console)
+        self.frameSize = frameSize
+        self.width = width
+        self.height = height
+        self.packedFrame = packedFrame
+        self.romName = romName
     }
 
     /// Little-endian values from the front of a state.

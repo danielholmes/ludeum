@@ -134,6 +134,20 @@ func mesenState(romName: String, console: UInt32 = 2) -> Data {
         #expect(try unzipped("RomInfo.txt", from: resume) == Data("DuckTales (USA).nes\n/Games/NES/DuckTales (USA).nes\n\n".utf8))
     }
 
+    @Test func aRenamedROMsStateResumesUnderItsNewName() throws {
+        // Saved before a Rename gave the ROM, the file inside its archive and the state their new name.
+        let state = root.appending(path: "DuckTales (USA)_1.mss")
+        try mesenState(romName: "Duck Tales (U).nes").write(to: state)
+
+        _ = try Emulator.mesenCE.arguments(
+            rom: URL(filePath: "/Games/NES/DuckTales (USA).7z"), platformId: 18, settings: EmulatorSettings(), saveState: state,
+            mesen: settings)
+
+        #expect(
+            try unzipped("RomInfo.txt", from: settings.recentGames.appending(path: "DuckTales (USA).rgd"))
+                == Data("DuckTales (USA).nes\n/Games/NES/DuckTales (USA).7z\u{1}DuckTales (USA).nes\n\n".utf8))
+    }
+
     @Test func aFileThatIsntAStateCantBePlayedFrom() throws {
         let state = root.appending(path: "Not a state_1.mss")
         try Data("nope".utf8).write(to: state)
@@ -293,6 +307,25 @@ func mesenState(romName: String, console: UInt32 = 2) -> Data {
         #expect(try names(in: .saveStates) == ["Duck Tales 2 (U)_1.mss", "DuckTales (USA)_1.mss", "DuckTales (USA)_11.mss"])
         #expect(try names(in: .saves) == ["DuckTales (USA).sav"])
         #expect(try names(in: .screenshots) == ["DuckTales (USA)_002.png"])
+    }
+
+    @Test func aDiscROMsCueSheetKeepsItsNameAndSoDoItsSaves() async throws {
+        try h.journal.addPlatform(id: 150, name: "PC Engine CD")
+        let cd = try h.journal.addGame(platformId: 150, name: "Gate of Thunder")
+        let pce = try FakeROMFolder(in: h.directory, platform: 150)
+        try pce.add("Gate of Thunder (J)/Gate of Thunder (J).cue", "cue")
+        try h.journal.recordROM(game: cd, fileName: "Gate of Thunder (J).cue", missing: false)
+        let recorded = try #require(try h.journal.roms(of: cd).first)
+        try h.journal.checkROMAgain(recorded.id, in: pce.folder)
+        let saves = try #require(ludeum.mesen(.saves, platform: 150))
+        try FileManager.default.createDirectory(at: saves, withIntermediateDirectories: true)
+        try Data().write(to: saves.appending(path: "Gate of Thunder (J).sav"))
+
+        try await h.journal.renameMesenROM(
+            recorded.id, from: "Gate of Thunder (J)", to: "Gate of Thunder (Japan)", in: pce.folder, ludeum: ludeum)
+
+        #expect(try h.journal.rom(recorded.id)?.folderName == "Gate of Thunder (Japan)")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: saves.path(percentEncoded: false)) == ["Gate of Thunder (J).sav"])
     }
 
     @Test func itsRefusedWhenMesenCEKeepsAFileUnderTheNewName() async throws {

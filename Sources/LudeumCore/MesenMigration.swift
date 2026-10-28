@@ -21,13 +21,25 @@ public struct MesenMigration: Sendable {
         self.sevenZip = sevenZip
     }
 
-    /// A MesenCE ROM: its Platform, and the name MesenCE keeps it by.
+    /// A MesenCE ROM: its Platform, its name in its ROM folder, and the name MesenCE keeps it by, or for one Dropbox
+    /// keeps online only (not read, as that would download it) its own name, so a name it might have still counts.
     struct KnownROM: Sendable, Equatable {
         let platformId: Int64
-        let name: MesenROMName
-        let archive: URL?
-        /// Its name in its ROM folder.
         let romName: String
+        let mesenName: String
+        /// Its archive and the path of its file inside, when MesenCE names it by a file inside one.
+        let archive: URL?
+        let inArchive: String?
+    }
+
+    /// An archive whose file inside takes the archive's name, its saves following.
+    public struct InnerRename: Sendable {
+        public let archive: URL
+        public let platformId: Int64
+        /// The file's path inside, and MesenCE's name for it before and after.
+        public let path: String
+        public let from: String
+        public let to: String
     }
 
     public struct Plan: Sendable {
@@ -35,36 +47,35 @@ public struct MesenMigration: Sendable {
         public var moves: [(from: URL, to: URL)] = []
         /// Files to copy into the installed MesenCE's Firmware.
         public var firmware: [(from: URL, to: URL)] = []
-        /// Archives whose file inside takes the archive's name: the archive, the file's path inside and its new path,
-        /// with MesenCE's old and new names for it.
-        public var innerRenames: [(archive: URL, path: String, to: String, platformId: Int64, from: String, name: String)] = []
+        public var innerRenames: [InnerRename] = []
         /// What's left as it is, and why.
         public var left: [(file: String, why: String)] = []
         /// ROMs that couldn't be read, being kept online only by Dropbox.
         public var unread: [String] = []
     }
 
-    /// The MesenCE Platforms' ROMs, by the name MesenCE keeps each by. Archives Dropbox keeps online only aren't read.
+    /// The MesenCE Platforms' ROMs.
     func knownROMs(into plan: inout Plan) async throws -> [KnownROM] {
         var known: [KnownROM] = []
         for folder in ludeum.romFolders where Emulator.of(platformId: folder.platformId) == .mesenCE {
             guard FileManager.default.fileExists(atPath: folder.url.path(percentEncoded: false)) else { continue }
             for rom in try folder.scan() {
                 guard let ready = rom.ready else { continue }
-                if !SevenZip.isOnDisk(ready) {
+                guard SevenZip.isOnDisk(ready) else {
                     plan.unread.append(ready.lastPathComponent)
+                    known.append(
+                        KnownROM(platformId: folder.platformId, romName: rom.name, mesenName: rom.name, archive: nil, inArchive: nil))
                     continue
                 }
                 guard let name = await MesenROMName.of(ready, platformId: folder.platformId, sevenZip: sevenZip) else { continue }
-                let archive = name.inArchive == nil ? nil : ready
-                known.append(KnownROM(platformId: folder.platformId, name: name, archive: archive, romName: rom.name))
+                known.append(
+                    KnownROM(
+                        platformId: folder.platformId, romName: rom.name, mesenName: name.name,
+                        archive: name.inArchive == nil ? nil : ready, inArchive: name.inArchive))
             }
         }
         return known
     }
-
-    /// The Platforms each MesenCE console's states come from (`ConsoleType`).
-    static let consoles: [Int: Set<Int64>] = [0: [19, 58], 1: [33, 22], 2: [18, 99], 3: [86, 150], 4: [64, 35], 5: [24]]
 
     public func plan() async throws -> Plan {
         var plan = Plan()
@@ -78,18 +89,16 @@ public struct MesenMigration: Sendable {
                 let stem = (name as NSString).deletingPathExtension
                 var matches = known.filter { rom in
                     switch folder {
-                    case .saves: name.hasPrefix(rom.name.name + ".")
-                    case .saveStates: MesenSaveStates.slot(stem, of: rom.name.name) != nil
-                    case .screenshots: MesenSaveStates.isScreenshot(stem, of: rom.name.name)
+                    case .saves: name.hasPrefix(rom.mesenName + ".")
+                    case .saveStates: MesenSaveStates.slot(stem, of: rom.mesenName) != nil
+                    case .screenshots: MesenSaveStates.isScreenshot(stem, of: rom.mesenName)
                     }
                 }
                 // The longest name, should one begin another's: "Foo" and "Foo (USA)" for "Foo (USA).srm".
-                if let longest = matches.map(\.name.name.count).max() { matches = matches.filter { $0.name.name.count == longest } }
+                if let longest = matches.map(\.mesenName.count).max() { matches = matches.filter { $0.mesenName.count == longest } }
                 // A state says which console it's from.
-                if folder == .saveStates, let data = try? Data(contentsOf: file), let console = Self.console(inState: data),
-                    let platforms = Self.consoles[console]
-                {
-                    matches = matches.filter { platforms.contains($0.platformId) }
+                if folder == .saveStates, let console = (try? Data(contentsOf: file)).flatMap(MesenStateHeader.init)?.console {
+                    matches = matches.filter { console.platforms.contains($0.platformId) }
                 }
                 let platforms = Set(matches.map(\.platformId))
                 guard platforms.count == 1, let platform = platforms.first, let target = ludeum.mesen(folder, platform: platform) else {
@@ -114,10 +123,9 @@ public struct MesenMigration: Sendable {
             plan.firmware.append((firmware.appending(path: name), to))
         }
         for rom in known {
-            guard let archive = rom.archive, let inside = rom.name.inArchive, rom.name.name != rom.romName else { continue }
-            let renamed = ((inside as NSString).deletingLastPathComponent as NSString).appendingPathComponent(
-                rom.romName + "." + (inside as NSString).pathExtension)
-            plan.innerRenames.append((archive, inside, renamed, rom.platformId, rom.name.name, rom.romName))
+            guard let archive = rom.archive, let path = rom.inArchive, rom.mesenName != rom.romName else { continue }
+            plan.innerRenames.append(
+                InnerRename(archive: archive, platformId: rom.platformId, path: path, from: rom.mesenName, to: rom.romName))
         }
         return plan
     }
@@ -137,28 +145,13 @@ public struct MesenMigration: Sendable {
         }
         for rename in plan.innerRenames {
             guard let saves = MesenSaveStates(ludeum: ludeum, platformId: rename.platformId) else { continue }
-            if let taken = saves.files(of: rename.name).first {
+            if let taken = saves.files(of: rename.to).first {
                 left.append((rename.archive.lastPathComponent, "MesenCE already keeps \(taken.lastPathComponent) under its name"))
                 continue
             }
-            try await sevenZip.rename(rename.path, to: rename.to, in: rename.archive)
-            for file in saves.files(of: rename.from) {
-                let rest = file.lastPathComponent.dropFirst(rename.from.count)
-                try files.moveItem(at: file, to: file.deletingLastPathComponent().appending(path: rename.name + rest))
-            }
+            try await sevenZip.rename(rename.path, to: MesenROMName.path(rename.path, renamedTo: rename.to), in: rename.archive)
+            try saves.move(rename.from, to: rename.to)
         }
         return left
-    }
-
-    /// The console a state was saved on (`ConsoleType`), from its header.
-    static func console(inState data: Data) -> Int? {
-        guard data.count >= 15, data.prefix(3) == Data("MSS".utf8) else { return nil }
-        func u32(_ offset: Int) -> Int {
-            let start = data.startIndex + offset
-            return Int(data[start..<start + 4].reversed().reduce(UInt32(0)) { $0 << 8 | UInt32($1) })
-        }
-        let format = u32(7)
-        let at = format <= 3 ? 51 : 11
-        return data.count >= at + 4 ? u32(at) : nil
     }
 }

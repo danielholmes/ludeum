@@ -114,12 +114,12 @@ public struct SevenZip: Sendable {
         }
     }
 
-    /// Throws unless every file in the archive tests as intact.
     /// Renames a file inside the archive, as `rn` does, without unpacking or recompressing what's in it.
     func rename(_ path: String, to newPath: String, in archive: URL) async throws {
         _ = try await run(["rn", archive.path(percentEncoded: false), path, newPath])
     }
 
+    /// Throws unless every file in the archive tests as intact.
     func test(_ archive: URL) async throws {
         _ = try await run(["t", archive.path(percentEncoded: false)])
     }

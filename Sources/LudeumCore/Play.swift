@@ -100,7 +100,7 @@ public struct Play: Sendable {
     }
 
     /// The ROM a Play opens: the playlist of a multi-disc Version, else the first present ROM that isn't archived.
-    var rom: LudeumROM? {
+    public var rom: LudeumROM? {
         let present = roms.filter { !$0.missing && !$0.archived }
         return present.first { $0.fileName.lowercased().hasSuffix(".m3u") } ?? present.first
     }
