@@ -228,14 +228,15 @@ public struct ScreenshotShape: Sendable, Equatable {
     public var fitsThumbnail: Bool { self == .widescreen }
 
     /// How they're tiled across `width` points with `spacing` between them, filling it: two rows of the biggest that
-    /// keep them at most `twoRowsHeight` tall, so a wider panel fits more across; or, when those would be narrower than
+    /// keep them at most `twoRowsHeight` tall, so a wider panel fits more across, though never more than
+    /// `mostAcross`, taller instead (a Game Boy's in the widest Game detail); or, when those would be narrower than
     /// `narrowest` (a Nintendo DS's), one row of as many as bring each screen in a tile nearest `screenArea`.
     public func layout(width: Double, spacing: Double) -> ScreenshotLayout {
         func tileWidth(_ columns: Int) -> Double { (width - Double(columns - 1) * spacing) / Double(columns) }
         var columns = 1
         while tileWidth(columns) >= Self.narrowest {
             if (2 * tileWidth(columns) / aspectRatio + spacing).rounded() <= Self.twoRowsHeight {
-                return ScreenshotLayout(columns: columns, rows: 2)
+                return ScreenshotLayout(columns: min(columns, Self.mostAcross), rows: 2)
             }
             columns += 1
         }
@@ -245,6 +246,7 @@ public struct ScreenshotShape: Sendable, Equatable {
 
     /// The narrowest a tile in two rows goes.
     static let narrowest = 100.0
+    static let mostAcross = 4
     /// One row's tiles are about this many square points each screen: a Nintendo DS's four across 600 points.
     static let screenArea = 12_000.0
     /// About as much as the Screenshots get of Game detail at its narrowest.

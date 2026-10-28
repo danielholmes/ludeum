@@ -48,11 +48,18 @@ import Testing
         let gameBoy = ScreenshotShape.of(platformId: 33)
         #expect(gameBoy.layout(width: 400, spacing: 12) == ScreenshotLayout(columns: 3, rows: 2))
         #expect(gameBoy.layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))
-        #expect(gameBoy.layout(width: 840, spacing: 12) == ScreenshotLayout(columns: 5, rows: 2))
         #expect(ScreenshotShape.of(platformId: 18).layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))  // NES
         #expect(ScreenshotShape.of(platformId: 24).layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 3, rows: 2))  // GBA
         // Three PlayStation ones across 600 points are 192 × 144: two rows of them exactly 300 tall.
         #expect(ScreenshotShape.of(platformId: 7).layout(width: 600, spacing: 12) == ScreenshotLayout(columns: 3, rows: 2))
+    }
+
+    @Test func twoRowsAreNeverMoreThanFourAcrossBeingTallerInstead() {
+        // The widest Game detail: a Game Boy's 201 × 181, an NES's 201 × 189.
+        for platformId: Int64? in [33, 22, 18, 19, 7] {
+            #expect(ScreenshotShape.of(platformId: platformId).layout(width: 840, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))
+        }
+        #expect(ScreenshotShape.widescreen.layout(width: 1200, spacing: 12) == ScreenshotLayout(columns: 4, rows: 2))
     }
 
     @Test func widescreenOnesAreTwoAcrossANarrowPanelAndMoreAsItWidens() {
@@ -70,7 +77,7 @@ import Testing
         #expect(ds.layout(width: 840, spacing: 12) == ScreenshotLayout(columns: 6, rows: 1))
     }
 
-    @Test func twoRowsAreAtMost300PointsTallAndOneFewerAcrossWouldBeTaller() {
+    @Test func twoRowsAreAtMost300PointsTallUnlessFourAcrossAndOneFewerAcrossWouldBeTaller() {
         for platformId: Int64? in [33, 24, 18, 19, 29, 13, 7, 20, nil] {
             let shape = ScreenshotShape.of(platformId: platformId)
             func tile(_ columns: Int, _ width: Double) -> Double { (width - Double(columns - 1) * 12) / Double(columns) }
@@ -80,7 +87,8 @@ import Testing
                 #expect(layout.columns >= 1, label)
                 guard layout.rows == 2 else { continue }
                 #expect(tile(layout.columns, width) >= 100, label)
-                #expect((2 * tile(layout.columns, width) / shape.aspectRatio + 12).rounded() <= 300, label)
+                #expect(layout.columns <= 4, label)
+                if layout.columns < 4 { #expect((2 * tile(layout.columns, width) / shape.aspectRatio + 12).rounded() <= 300, label) }
                 if layout.columns > 1 {
                     #expect((2 * tile(layout.columns - 1, width) / shape.aspectRatio + 12).rounded() > 300, label)
                 }
