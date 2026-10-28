@@ -75,6 +75,20 @@ import Testing
         #expect(Ini.value("UpdateTag", in: "AutoUpdater", of: ini) == "latest")
     }
 
+    @Test func theStandingSettingsPutThePlayStationROMFolderInDuckStationsGameList() throws {
+        // A lone Disc of a set swaps to the set's others from DuckStation's game list (ADR 0026).
+        try write("[GameList]\nRecursivePaths = /Games/Mine\n", to: settingsFile)
+        let ps1 = String(try #require(ludeum.romFolder(platform: ROMPlatform.ps1)).path(percentEncoded: false).dropLast())
+
+        try settings.writeStanding()
+
+        let ini = try #require(contents(settingsFile))
+        #expect(ini.contains("[GameList]\nRecursivePaths = \(ps1)\nRecursivePaths = /Games/Mine\n"))
+        // Once.
+        try settings.writeStanding()
+        #expect(contents(settingsFile) == ini)
+    }
+
     @Test func writingTheStandingSettingsAgainChangesNothing() throws {
         try settings.writeStanding()
         let once = contents(settingsFile)

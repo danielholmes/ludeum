@@ -305,4 +305,163 @@ import Testing
 
         #expect(press(rom, settings: EmulatorSettings(runAheadFrames: 1), in: ps1) == .refused(.noSerial(.unreadForm("chd"))))
     }
+
+    // MARK: Starting on a Disc (ADR 0026)
+
+    static let gt2 = "Gran Turismo 2 (Europe)"
+    static let gt2Discs = [
+        "Gran Turismo 2 (Europe) (Disc 1) (Arcade Mode Disc).cue",
+        "Gran Turismo 2 (Europe) (En,Fr,De,Es,It) (Disc 2) (Gran Turismo Mode).cue",
+    ]
+
+    /// Gran Turismo 2's folder ROM: its two Discs and its playlist. Returns the playlist and each Disc's cue sheet.
+    func addGT2(to ps1: FakeROMFolder) throws -> (playlist: URL, discs: [URL]) {
+        let discs = try Self.gt2Discs.map { try ps1.add("\(Self.gt2)/\($0)") }
+        let playlist = try ps1.add("\(Self.gt2)/\(Self.gt2).m3u", Self.gt2Discs.joined(separator: "\n") + "\n")
+        return (playlist, discs)
+    }
+
+    func gt2ROM(lastDisc: Int? = nil) -> LudeumROM {
+        var rom = LudeumROM(
+            id: 7, folderName: Self.gt2, platformId: ROMPlatform.ps1, fileName: "\(Self.gt2)/\(Self.gt2).m3u", name: Self.gt2,
+            version: "", disc: nil, missing: false, archived: false, serials: .read(["SCES-02380", "SCES-12380"]))
+        rom.lastDisc = lastDisc
+        return rom
+    }
+
+    func play(_ rom: LudeumROM) -> Play {
+        Play(platformId: ROMPlatform.ps1, platformName: "PlayStation", roms: [rom], settings: EmulatorSettings())
+    }
+
+    func press(_ rom: LudeumROM, in folder: FakeROMFolder, disc: Int? = nil, saveState: URL? = nil) -> Play.Outcome {
+        play(rom).prepare(
+            locator: ROMLocator(romFolders: [folder.folder]), version: .ok, app: { _ in nil }, saveState: saveState, disc: disc,
+            duckStation: DuckStationSettings(ludeum: ludeum))
+    }
+
+    @Test func aMultiDiscROMsDiscsAreItsPlaylistsWithTheirLabels() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let gt2 = try addGT2(to: ps1)
+        let mgs = "Metal Gear Solid (USA) (v1.1)"
+        try ps1.add("\(mgs)/\(mgs).m3u", "Metal Gear Solid (USA) (Disc 1) (v1.1).cue\nMetal Gear Solid (USA) (Disc 2) (v1.1).cue\n")
+        let mgsROM = LudeumROM(
+            id: 8, folderName: mgs, platformId: ROMPlatform.ps1, fileName: "\(mgs)/\(mgs).m3u", name: mgs, version: "", disc: nil,
+            missing: false, archived: false)
+        let locator = ROMLocator(romFolders: [ps1.folder])
+
+        let discs = play(gt2ROM()).discs(locator: locator)
+
+        #expect(discs.map(\.labelOrNumber) == ["Arcade Mode Disc", "Gran Turismo Mode"])
+        #expect(discs.map(\.serial) == ["SCES-02380", "SCES-12380"])
+        #expect(discs.map(\.numberAndLabel) == ["Disc 1 · Arcade Mode Disc", "Disc 2 · Gran Turismo Mode"])
+        #expect(discs.map(\.file) == gt2.discs)
+        // A Version's tag is never a Disc label.
+        #expect(play(mgsROM).discs(locator: locator).map(\.numberAndLabel) == ["Disc 1", "Disc 2"])
+    }
+
+    @Test func aROMOfOneDiscHasNoDiscsToChooseFrom() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        try ps1.add("Ape Escape (USA).cue")
+
+        #expect(play(rom("Ape Escape (USA).cue", serials: .notRead)).discs(locator: ROMLocator(romFolders: [ps1.folder])).isEmpty)
+        #expect(press(rom("Ape Escape (USA).cue", serials: .notRead), in: ps1).startsOn == nil)
+    }
+
+    @Test func atFirstAMultiDiscROMStartsOnDisc1ThroughItsPlaylist() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let gt2 = try addGT2(to: ps1)
+
+        let outcome = press(gt2ROM(), in: ps1)
+
+        #expect(outcome.arguments == ["--", gt2.playlist.path(percentEncoded: false)])
+        #expect(outcome.startsOn == Play.DiscStart(rom: 7, disc: 1))
+        #expect(play(gt2ROM()).startingDisc(among: play(gt2ROM()).discs(locator: ROMLocator(romFolders: [ps1.folder])))?.number == 1)
+    }
+
+    @Test func aChosenDiscOpensAsItsOwnCueSheet() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let gt2 = try addGT2(to: ps1)
+
+        let outcome = press(gt2ROM(), in: ps1, disc: 2)
+
+        // DuckStation can't be told which of a playlist's Discs to boot.
+        #expect(outcome.arguments == ["--", gt2.discs[1].path(percentEncoded: false)])
+        #expect(outcome.startsOn == Play.DiscStart(rom: 7, disc: 2))
+        // Disc 1 chosen is the playlist, so a Disc set DuckStation doesn't know still swaps.
+        #expect(press(gt2ROM(lastDisc: 2), in: ps1, disc: 1).arguments == ["--", gt2.playlist.path(percentEncoded: false)])
+    }
+
+    @Test func itStartsOnTheDiscItLastStartedOn() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let gt2 = try addGT2(to: ps1)
+
+        let outcome = press(gt2ROM(lastDisc: 2), in: ps1)
+
+        #expect(outcome.arguments == ["--", gt2.discs[1].path(percentEncoded: false)])
+        #expect(outcome.startsOn == Play.DiscStart(rom: 7, disc: 2))
+        #expect(
+            play(gt2ROM(lastDisc: 2)).startingDisc(among: play(gt2ROM()).discs(locator: ROMLocator(romFolders: [ps1.folder])))?.number == 2)
+    }
+
+    @Test func aLastDiscItNoLongerHasStartsOnDisc1() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let gt2 = try addGT2(to: ps1)
+
+        let outcome = press(gt2ROM(lastDisc: 3), in: ps1)
+
+        #expect(outcome.arguments == ["--", gt2.playlist.path(percentEncoded: false)])
+        #expect(outcome.startsOn == Play.DiscStart(rom: 7, disc: 1))
+        #expect(press(gt2ROM(), in: ps1, disc: 5).startsOn == Play.DiscStart(rom: 7, disc: 1))
+        // Nor one whose file is gone, unless it's chosen.
+        try FileManager.default.removeItem(at: gt2.discs[1])
+        #expect(press(gt2ROM(lastDisc: 2), in: ps1).startsOn == Play.DiscStart(rom: 7, disc: 1))
+        #expect(press(gt2ROM(), in: ps1, disc: 2) == .refused(.fileNotFound(gt2.discs[1].lastPathComponent)))
+    }
+
+    @Test func aSaveStateStartsOnItsOwnDisc() throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let gt2 = try addGT2(to: ps1)
+        let state = ludeum.duckStationSaveStates.appending(path: "SCES-12380_3.sav")
+
+        let outcome = press(gt2ROM(), in: ps1, saveState: state)
+
+        // DuckStation boots the disc the state was saved with; its own Disc is what it falls back to.
+        #expect(outcome.arguments == ["-statefile", state.path(percentEncoded: false), "--", gt2.discs[1].path(percentEncoded: false)])
+        #expect(outcome.startsOn == Play.DiscStart(rom: 7, disc: 2))
+        #expect(
+            press(gt2ROM(lastDisc: 2), in: ps1, saveState: state.deletingLastPathComponent().appending(path: "SCES-02380_resume.sav"))
+                .startsOn == Play.DiscStart(rom: 7, disc: 1))
+        // One whose Disc can't be told opens the playlist, and nothing's remembered.
+        let unknown = press(gt2ROM(lastDisc: 2), in: ps1, saveState: state.deletingLastPathComponent().appending(path: "SLUS-00551_1.sav"))
+        #expect(unknown.arguments?.last == gt2.playlist.path(percentEncoded: false))
+        #expect(unknown.startsOn == nil)
+    }
+}
+
+/// The Disc a multi-disc ROM last started on, kept on the ROM and nothing else about the Play (ADR 0026).
+@Suite struct LastDiscTests {
+    let h: LudeumHarness
+
+    init() throws { h = try LudeumHarness() }
+
+    @Test func aROMRemembersTheDiscItLastStartedOn() throws {
+        let game = try h.addGame("Gran Turismo 2")
+        let rom = try h.journal.db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO rom (folderName, fileName, name, platformId, gameId, matchKind, matchedAt)
+                    VALUES ('GT2', 'GT2/GT2.m3u', 'GT2', 19, ?, 'manual', 0)
+                    """, arguments: [game])
+            return db.lastInsertedRowID
+        }
+        #expect(try h.journal.rom(rom)?.lastDisc == nil)
+
+        #expect(try h.journal.setLastDisc(Play.DiscStart(rom: rom, disc: 2)))
+        #expect(try h.journal.rom(rom)?.lastDisc == 2)
+        // The same Disc again is no change.
+        #expect(try !h.journal.setLastDisc(Play.DiscStart(rom: rom, disc: 2)))
+
+        #expect(try h.journal.setLastDisc(Play.DiscStart(rom: rom, disc: 1)))
+        #expect(try h.journal.rom(rom)?.lastDisc == 1)
+    }
 }

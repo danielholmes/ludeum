@@ -10,6 +10,8 @@ struct SaveStatesSection: View {
     let services: Services
     /// The Serials of the ROMs Play opens, in Disc order.
     let serials: [String]
+    /// The Discs of the multi-disc ROM Play opens, saying which a state was saved on with its Disc label.
+    let discs: [PlayDisc]
     /// Why Play can't open it, if it can't.
     let refusal: String?
     let play: (SaveState) -> Void
@@ -57,7 +59,10 @@ struct SaveStatesSection: View {
             }
             .frame(width: 96, height: 72).clipShape(.rect(cornerRadius: 4))
             VStack(alignment: .leading, spacing: 2) {
-                Text(serials.count > 1 ? "\(state.title) · Disc \((serials.firstIndex(of: state.serial) ?? 0) + 1)" : state.title)
+                Text(
+                    serials.count > 1
+                        ? "\(state.title) · \(discs.first { $0.serial == state.serial }?.numberAndLabel ?? "Disc \((serials.firstIndex(of: state.serial) ?? 0) + 1)")"
+                        : state.title)
                 Text(state.saved.formatted(date: .abbreviated, time: .shortened)).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()

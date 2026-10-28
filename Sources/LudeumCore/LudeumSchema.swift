@@ -728,6 +728,12 @@ enum LudeumSchema {
             try db.alter(table: "game") { t in t.add(column: "cdSeekSpeedup", .integer) }
             try keepTimestamps(db, on: "game")
         }
+        // The Disc a multi-disc ROM last started on, by its number, to start on next time; null before its first Play
+        // (ADR 0026).
+        migrator.registerMigration("v42 last disc") { db in
+            try db.alter(table: "rom") { t in t.add(column: "lastDisc", .integer) }
+            try keepTimestamps(db, on: "rom")
+        }
         return migrator
     }
 

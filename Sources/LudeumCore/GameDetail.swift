@@ -22,6 +22,8 @@ public struct LudeumROM: Sendable, Equatable, Identifiable {
     public var details = CopyDetails()
     /// Its Serials, once read off its Discs (ADR 0021): each Disc's in Disc order, nil for one with none.
     public var serials: Serials = .notRead
+    /// The Disc a multi-disc ROM last started on, by its number; nil before its first Play (ADR 0026).
+    public var lastDisc: Int?
 
     /// The subfolder it's kept in, named after it, when it's a ROM folder subfolder ROM; nil for a loose file
     /// or an archive.
@@ -80,7 +82,7 @@ extension LudeumStore {
                     SELECT r.id, r.folderName, r.platformId, r.archived, r.fileName,
                         COALESCE(r.name, r.fileName) AS displayName, r.version, r.discNumber, r.missing,
                         r.needsPlaylist, r.regions, r.acquiredOn, r.acquiredFrom, r.price, r.currency, r.notes, r.serials,
-                        r.serialsLookedUp
+                        r.serialsLookedUp, r.lastDisc
                     FROM rom r
                     WHERE \(condition)
                     ORDER BY r.missing, r.fileName COLLATE NOCASE
@@ -93,8 +95,19 @@ extension LudeumStore {
                     fileName: fileName,
                     name: row["displayName"], version: row["version"] ?? parsed.version, disc: row["discNumber"] ?? parsed.disc,
                     missing: row["missing"], archived: row["archived"], needsPlaylist: row["needsPlaylist"],
-                    details: Self.details(row), serials: Serials(row))
+                    details: Self.details(row), serials: Serials(row), lastDisc: row["lastDisc"])
             }
+        }
+    }
+
+    /// Remembers the Disc a multi-disc ROM's Play started on, to start on next time: the one journal change a Play makes.
+    /// Whether it's a different one from before.
+    @discardableResult
+    public func setLastDisc(_ start: Play.DiscStart) throws -> Bool {
+        try db.write { db in
+            try db.execute(
+                sql: "UPDATE rom SET lastDisc = ? WHERE id = ? AND lastDisc IS NOT ?", arguments: [start.disc, start.rom, start.disc])
+            return db.changesCount > 0
         }
     }
 

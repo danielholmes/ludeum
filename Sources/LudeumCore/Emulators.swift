@@ -122,7 +122,9 @@ public enum DuckStationFolder: CaseIterable, Sendable {
 /// folder (`DuckStationFolder`), no checking for updates (DuckStation would replace its own bundle), and for every Game
 /// fast boot, skipping the BIOS logo and running unthrottled to its first frame, unless DuckStation's game database
 /// says that breaks it (its `ForceFullBoot`, which `-fastboot` would override), and its lowest input latency, presenting
-/// each frame on time and running it as late as it can before then. Everything else in the file is DuckStation's own.
+/// each frame on time and running it as late as it can before then. The PlayStation ROM folder is among its game list's
+/// folders, so a lone Disc of a set can swap to the set's others (ADR 0026). Everything else in the file is DuckStation's
+/// own.
 ///
 /// A Game's own settings go into DuckStation's per-game file for the disc, named by its Serial
 /// (`<Game Settings>/SLUS-00551.ini`), where its Game Properties keeps them too (ADR 0021). Ludeum's win: a setting the
@@ -187,16 +189,24 @@ public struct DuckStationSettings: Sendable {
     }
 
     /// `ini` with the Standing settings: each folder's key an absolute path into the Data folder, `[AutoUpdater]
-    /// CheckAtStartup` off, and fast boot and the lowest input latency on.
+    /// CheckAtStartup` off, fast boot and the lowest input latency on, and the PlayStation ROM folder in `[GameList]
+    /// RecursivePaths`, beside any of DuckStation's own.
     static func standing(in ini: String, ludeum: LudeumFolder) -> String {
         var ini = ini
         for folder in DuckStationFolder.allCases {
-            let path = ludeum.duckStation(folder).path(percentEncoded: false)
-            ini = Ini.setting(
-                folder.setting.key, to: path.hasSuffix("/") ? String(path.dropLast()) : path, in: folder.setting.section, of: ini)
+            ini = Ini.setting(folder.setting.key, to: path(ludeum.duckStation(folder)), in: folder.setting.section, of: ini)
         }
         for (section, key) in standingKeys { ini = Ini.setting(key, to: "true", in: section, of: ini) }
+        if let ps1 = ludeum.romFolder(platform: ROMPlatform.ps1) {
+            ini = Ini.including(path(ps1), as: "RecursivePaths", in: "GameList", of: ini)
+        }
         return Ini.setting("CheckAtStartup", to: "false", in: "AutoUpdater", of: ini)
+    }
+
+    /// A folder's path as DuckStation's settings write one: without a trailing `/`.
+    private static func path(_ folder: URL) -> String {
+        let path = folder.path(percentEncoded: false)
+        return path.hasSuffix("/") ? String(path.dropLast()) : path
     }
 
     /// The keys on for every Game, which used to go into each per-game file (the sleep needs the pacing).
@@ -329,10 +339,22 @@ enum Ini {
                 return lines.joined(separator: "\n")
             }
         }
-        if let start = lines.firstIndex(where: { trimmed($0) == header }) {
+        return inserting(setting, in: section, into: lines)
+    }
+
+    /// `ini` with `key = value` in `[section]` among any others of a key that's a list, as DuckStation's are, added at
+    /// the top of the section (else in a new section at the top) unless it's there already.
+    static func including(_ value: String, as key: String, in section: String, of ini: String) -> String {
+        values(key, in: section, of: ini).contains(value) ? ini : inserting("\(key) = \(value)", in: section, into: lines(of: ini))
+    }
+
+    /// `lines` with `setting` at the top of `[section]`, else in a new section at the top, as one text.
+    private static func inserting(_ setting: String, in section: String, into lines: [String]) -> String {
+        var lines = lines
+        if let start = lines.firstIndex(where: { trimmed($0) == "[\(section)]" }) {
             lines.insert(setting, at: start + 1)
         } else {
-            lines.insert(contentsOf: [header, setting, ""], at: 0)
+            lines.insert(contentsOf: ["[\(section)]", setting, ""], at: 0)
         }
         return lines.joined(separator: "\n")
     }
@@ -360,16 +382,22 @@ enum Ini {
 
     /// The value of `key` in `[section]`, if it's there.
     static func value(_ key: String, in section: String, of ini: String) -> String? {
+        values(key, in: section, of: ini).first
+    }
+
+    /// Every value of `key` in `[section]`, in order: more than one for a key that's a list.
+    static func values(_ key: String, in section: String, of ini: String) -> [String] {
         var current = ""
+        var values: [String] = []
         for line in lines(of: ini) {
             let trimmed = trimmed(line)
             if trimmed.hasPrefix("[") {
                 current = trimmed
             } else if current == "[\(section)]", Self.key(of: trimmed) == key, let equals = trimmed.firstIndex(of: "=") {
-                return trimmed[trimmed.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+                values.append(trimmed[trimmed.index(after: equals)...].trimmingCharacters(in: .whitespaces))
             }
         }
-        return nil
+        return values
     }
 
     /// Whether a value is true as DuckStation reads a boolean.

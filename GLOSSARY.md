@@ -63,8 +63,12 @@ Renaming a ROM to its Standard name in every form it's kept in: its subfolder, i
 _Avoid_: Move, retitle
 
 **Disc**:
-One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" are Discs too. On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version.
+One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" are Discs too. On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version. Any Disc can be the one a Play starts on, and the others can still be swapped in.
 _Avoid_: Part, volume, CD
+
+**Disc label**:
+What a Disc's name says is on it, beyond its number, e.g. "Leon" and "Claire", or "Arcade Mode Disc" and "Gran Turismo Mode". Most Discs have none. A tag of the Version (a revision, `v1.1`, languages) is never a Disc label.
+_Avoid_: Disc name, disc title
 
 **IGDB link**:
 An optional reference from a Game to one IGDB game on the Game's Platform, used for metadata, the Game's name and its Cover. A Game a Bundle contains may link to an IGDB game that isn't on its Platform, as Metal Slug 6 in the PSP's Metal Slug Anthology does. A Bundle has an IGDB link the same way. A Game has at most one, and no two Games on a Platform share one. A Game with no IGDB link can gain one later, and a mistaken link can be changed to another (never removed).
@@ -223,7 +227,7 @@ One save inside a memory card, made by a game: its title as the game wrote it, i
 _Avoid_: Save slot, block, file
 
 **Play**:
-Opening a present ROM of a Game, or of a Bundle that contains it, in its Platform's Emulator, with the Game's Emulator settings, or from one of its Save states. Play never changes journal data. A Game can't be Played while a Background task is working on one of its ROMs.
+Opening a present ROM of a Game, or of a Bundle that contains it, in its Platform's Emulator, with the Game's Emulator settings, or from one of its Save states. A multi-disc ROM starts on the Disc it last started on (Disc 1 at first) unless I choose another of its Discs. Play changes no journal data but that. A Game can't be Played while a Background task is working on one of its ROMs.
 _Avoid_: Launch, run
 
 **Background task**:

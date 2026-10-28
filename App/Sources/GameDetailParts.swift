@@ -482,10 +482,11 @@ enum FactStyle {
 
 /// Opens `play`'s ROM in `emulator`, with every Emulator setting on the command line. A running Emulator gets the ROM
 /// in its open window. `refused` gets why it couldn't, then or once the Emulator fails to open; `alert` gets a version
-/// check's title and message. `saveState` starts DuckStation from that state.
+/// check's title and message. `saveState` starts DuckStation from that state; else a multi-disc ROM starts on `disc`, or
+/// the one it last started on, which it then remembers.
 @MainActor func startPlay(
-    _ play: Play, in emulator: Emulator, services: Services, saveState: URL? = nil, refused: @escaping @MainActor (String) -> Void,
-    alert: (_ title: String, _ message: String) -> Void
+    _ play: Play, in emulator: Emulator, services: Services, saveState: URL? = nil, disc: Int? = nil,
+    refused: @escaping @MainActor (String) -> Void, alert: (_ title: String, _ message: String) -> Void
 ) {
     let version: Play.VersionStatus =
         if let tooOld = services.versions.refusalMessage(emulator) {
@@ -502,20 +503,29 @@ enum FactStyle {
     }
     switch play.prepare(
         locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState,
-        duckStation: DuckStationSettings(ludeum: services.settings.folder), running: \.isRunning)
+        disc: disc, duckStation: DuckStationSettings(ludeum: services.settings.folder), running: \.isRunning)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)
     case .refused(let refusal):
         refused(refusal.message)
-    case .open(let app, let arguments, let warning):
+    case .open(let app, let arguments, let warning, let startsOn):
         if let warning { alert("Check \(emulator.name)'s version", warning) }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.arguments = arguments
+        let journal = services.journal
+        let changes = services.changes
         // A second MesenCE hands its arguments to the running one and quits; DuckStation opens another window.
         configuration.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
-            if let error { Task { @MainActor in refused("Couldn't open \(emulator.name): \(error.localizedDescription)") } }
+            Task { @MainActor in
+                if let error {
+                    refused("Couldn't open \(emulator.name): \(error.localizedDescription)")
+                } else if let startsOn, (try? journal?.setLastDisc(startsOn)) == true {
+                    // The Disc it started on, to start on next time (ADR 0026).
+                    changes.changed()
+                }
+            }
         }
     }
 }
@@ -526,20 +536,30 @@ enum FactStyle {
     _ row: LibraryRow, services: Services, refused: @escaping @MainActor (String) -> Void,
     alert: (_ title: String, _ message: String) -> Void
 ) {
-    guard let journal = services.journal, let emulator = Emulator.of(platformId: row.platformId) else { return }
-    let roms: [LudeumROM]
-    let settings: EmulatorSettings
+    guard let emulator = Emulator.of(platformId: row.platformId) else { return }
+    let play: Play
     do {
-        roms = try journal.romsToPlay(of: row.id)
-        settings = try journal.emulatorSettings(row.id)
+        guard let found = try libraryPlay(row, services: services) else { return }
+        play = found
     } catch {
         refused("Couldn't read its ROMs and Emulator settings: \(error.localizedDescription)")
         return
     }
-    let play = Play(
-        platformId: row.platformId, platformName: row.platformName, roms: roms, settings: settings,
-        busyROMs: Set(roms.map(\.id).filter { services.tasks.isActive(.rom($0)) }))
     startPlay(play, in: emulator, services: services, refused: refused, alert: alert)
+}
+
+/// A Library row's Play, from its ROMs and Emulator settings as the journal has them now.
+@MainActor func libraryPlay(_ row: LibraryRow, services: Services) throws -> Play? {
+    guard let journal = services.journal else { return nil }
+    let roms = try journal.romsToPlay(of: row.id)
+    return Play(
+        platformId: row.platformId, platformName: row.platformName, roms: roms, settings: try journal.emulatorSettings(row.id),
+        busyROMs: Set(roms.map(\.id).filter { services.tasks.isActive(.rom($0)) }))
+}
+
+/// The Disc a multi-disc ROM's Play starts on, which Play says; nil for a ROM of one Disc.
+@MainActor func startingDisc(of play: Play, services: Services) -> PlayDisc? {
+    play.startingDisc(among: play.discs(locator: ROMLocator(romFolders: services.settings.romFolders)))
 }
 
 /// Under an Expansion's name: "Expansion of" its Base game, a link when it's my Game on the same Platform,

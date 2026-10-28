@@ -21,6 +21,8 @@ struct GameDetailView: View {
     @State private var roms: [LudeumROM] = []
     /// The ROMs Play can open: its own, else its Bundles' too (`romsToPlay`).
     @State private var playROMs: [LudeumROM] = []
+    /// The Discs its Play can start on, when it opens a multi-disc ROM.
+    @State private var discs: [PlayDisc] = []
     /// The hand-recorded Copies; the ROMs are Copies too.
     @State private var copies: [Copy] = []
     @State private var editingCopy: CopyEdit?
@@ -184,9 +186,9 @@ struct GameDetailView: View {
 
             // Save states: DuckStation's, backed up into the Data folder.
             if !game.isBundle, emulator == .duckStation, !saveStateSerials.isEmpty {
-                SaveStatesSection(services: services, serials: saveStateSerials, refusal: playing.availability.refusal?.message) {
-                    state in play(in: .duckStation, from: state.file)
-                }
+                SaveStatesSection(
+                    services: services, serials: saveStateSerials, discs: discs, refusal: playing.availability.refusal?.message
+                ) { state in play(in: .duckStation, from: state.file) }
             }
             // Memory card: each ROM's, in the Data folder where DuckStation's pointed at it.
             if !game.isBundle, emulator == .duckStation, !memoryCardROMs.isEmpty {
@@ -341,6 +343,7 @@ struct GameDetailView: View {
             playROMs = try journal.romsToPlay(of: id)
             copies = try journal.copies(of: id)
             emulatorSettings = try journal.emulatorSettings(id)
+            discs = playing.discs(locator: locator)
             bundles = game.isBundle ? [] : try BundleShare.of(id, services: services)
             readExpansions()
         } catch LudeumError.gameNotFound {
@@ -400,10 +403,25 @@ struct GameDetailView: View {
             }
         } else if let emulator, let platformId = game?.platformId {
             SideBySideOrStacked {
-                Button {
-                    play(in: emulator)
-                } label: {
-                    Label("Play", systemImage: "play.fill")
+                Group {
+                    if let start = playing.startingDisc(among: discs) {
+                        // A multi-disc ROM starts on the Disc it last started on, or the one chosen (ADR 0026).
+                        Menu {
+                            ForEach(discs) { disc in Button(disc.numberAndLabel) { play(in: emulator, disc: disc.number) } }
+                        } label: {
+                            Label("Play · \(start.labelOrNumber)", systemImage: "play.fill")
+                        } primaryAction: {
+                            play(in: emulator)
+                        }
+                        .menuStyle(.button)
+                        .fixedSize()
+                    } else {
+                        Button {
+                            play(in: emulator)
+                        } label: {
+                            Label("Play", systemImage: "play.fill")
+                        }
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(services.versions.refusalMessage(emulator) == nil ? nil : .red)
@@ -665,12 +683,12 @@ struct GameDetailView: View {
 
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
 
-    /// Plays the Game in its Emulator, with every Emulator setting on the command line, from `saveState` if given. A
-    /// running Emulator gets the ROM in its open window.
-    private func play(in emulator: Emulator, from saveState: URL? = nil) {
+    /// Plays the Game in its Emulator, with every Emulator setting on the command line, from `saveState` if given, else
+    /// on `disc` of a multi-disc ROM if given. A running Emulator gets the ROM in its open window.
+    private func play(in emulator: Emulator, from saveState: URL? = nil, disc: Int? = nil) {
         playError = nil
         startPlay(
-            playing, in: emulator, services: services, saveState: saveState, refused: { playError = $0 },
+            playing, in: emulator, services: services, saveState: saveState, disc: disc, refused: { playError = $0 },
             alert: { versionAlert = ($0, $1) })
     }
 
