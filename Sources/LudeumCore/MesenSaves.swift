@@ -28,18 +28,6 @@ public struct MesenROMName: Sendable, Equatable {
     }
 }
 
-/// A Game save an Emulator keeps for a ROM by its name, which the game wrote itself: MesenCE's `<name>.srm`, `.sav`,
-/// `.rtc` and the like, ares's `<name>.ram`, `.eeprom`, `.pak` and the like.
-public struct GameSaveFile: Sendable, Equatable, Identifiable {
-    public let file: URL
-    /// When the Emulator last wrote it: its file's modification date. MesenCE writes one when the Game stops, ares every
-    /// 30 seconds of play too.
-    public let saved: Date
-
-    public var fileName: String { file.lastPathComponent }
-    public var id: String { fileName }
-}
-
 /// MesenCE's Save states and Game saves for one Platform, in its folders under `Emulators/MesenCE/<Platform>/` in the
 /// Data folder (ADR 0027): Ludeum lists a ROM's, Plays from a Save state and deletes one; MesenCE makes them.
 public struct MesenSaveStates: Sendable {

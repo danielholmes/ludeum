@@ -128,6 +128,15 @@ import Testing
         #expect(BML.setting("Input/Driver", to: "SDL", in: bml) == bml + "Input\n  Driver: SDL\n")
     }
 
+    @Test func settingsThatCantBeReadAreRefusedNotWrittenOver() throws {
+        try FileManager.default.createDirectory(at: settings.settingsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let unreadable = Data([0x49, 0x6E, 0xFF, 0xFE, 0x0A])
+        try unreadable.write(to: settings.settingsFile)
+
+        #expect(throws: (any Error).self) { try settings.writeStanding() }
+        #expect(try Data(contentsOf: settings.settingsFile) == unreadable)
+    }
+
     @Test func itsRefusedWithoutTheDataFolder() throws {
         let away = AresSettings(ludeum: LudeumFolder(url: root.appending(path: "Nowhere", directoryHint: .isDirectory)))
 
@@ -252,6 +261,18 @@ import Testing
         #expect(try names("Mega Drive", in: ludeum.aresScreenshots) == ["Sonic the Hedgehog (USA, Europe) 2026-10-29 11-32-05.png"])
     }
 
+    @Test func anArchivedROMsSavesFollowItsNameForWhenItsUnarchived() throws {
+        let megaDrive = try FakeROMFolder(in: h.directory, platform: 29)
+        try megaDrive.add("Sonic (U).7z", "archive")
+        let rom = try record("Sonic (U).7z", in: megaDrive)
+        try put("Mega Drive/Sonic (U).ram")
+
+        try h.journal.renameAresROM(rom.id, from: "Sonic (U)", to: "Sonic the Hedgehog (USA, Europe)", in: megaDrive.folder, ludeum: ludeum)
+
+        #expect(try h.journal.rom(rom.id)?.fileName == "Sonic the Hedgehog (USA, Europe).7z")
+        #expect(try names("Mega Drive") == ["Sonic the Hedgehog (USA, Europe).ram"])
+    }
+
     @Test func itsRefusedWhenAresKeepsAFileUnderTheNewName() throws {
         let megaDrive = try FakeROMFolder(in: h.directory, platform: 29)
         try megaDrive.add("Sonic (U).zip", "rom")
@@ -295,20 +316,22 @@ import Testing
 
     func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) }
 
-    /// A fake ares.app in an `ares-v<version>` folder, zipped as the release zips it, and the release that names it.
-    /// For `--version` it prints `printing`, and writes a `settings.bml` beside itself, as ares does whenever it starts.
-    func release(printing: String = "v148", version: String = "148") throws -> (zip: Data, release: AresRelease) {
+    /// Where the fake ares notes it was run: ares writes its settings whenever it starts, so Install mustn't run it.
+    var ran: URL { root.appending(path: "ares ran") }
+
+    /// A fake ares.app in an `ares-v<version>` folder, zipped as the release zips it, and the release that names it. Its
+    /// app says it's `appVersion`.
+    func release(appVersion: String = "v148", version: String = "148") throws -> (zip: Data, release: AresRelease) {
         let staging = root.appending(path: "staging \(UUID().uuidString)", directoryHint: .isDirectory)
         let top = staging.appending(path: "ares-v\(version)", directoryHint: .isDirectory)
         let app = top.appending(path: "ares.app", directoryHint: .isDirectory)
         let macOS = app.appending(path: "Contents/MacOS", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
-        let plist: [String: Any] = ["CFBundleShortVersionString": "v\(version)", "CFBundleExecutable": "ares"]
+        let plist: [String: Any] = ["CFBundleShortVersionString": appVersion, "CFBundleExecutable": "ares"]
         try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0).write(
             to: app.appending(path: "Contents/Info.plist"))
         let executable = macOS.appending(path: "ares")
-        try "#!/bin/sh\necho 'Written by ares' > \"$(dirname \"$0\")/../../../settings.bml\"\nprintf '\\n\(printing)\\n'\n"
-            .write(to: executable, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\ntouch '\(ran.path(percentEncoded: false))'\n".write(to: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path(percentEncoded: false))
         let zipFile = staging.appending(path: "ares-macos-universal.zip")
         let ditto = Process()
@@ -339,6 +362,7 @@ import Testing
         #expect(written.hasPrefix("Input\n  Driver: SDL\nPaths\n  Saves: "))
         #expect(written.contains("AutoSaveMemory: true"))
         #expect(!exists(ludeum.emulators.appending(path: ".installing ares")))
+        #expect(!exists(ran))
     }
 
     @Test func aReinstallKeepsItsOwnSettings() async throws {
@@ -365,7 +389,7 @@ import Testing
     }
 
     @Test func aBuildThatSaysItsAnotherVersionIsRefused() async throws {
-        let (zip, release) = try release(printing: "v147")
+        let (zip, release) = try release(appVersion: "v147")
 
         await #expect(throws: AresInstallError.wrongBuild(found: "147")) { try await installer(release, zip: zip).install() }
         #expect(!exists(settings.app))

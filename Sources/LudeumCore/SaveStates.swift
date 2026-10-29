@@ -2,8 +2,9 @@ import Foundation
 import GRDB
 
 /// A save state, made and managed in its Emulator, which keeps it in the Data folder, where its Standing settings point
-/// it: DuckStation's as `<serial>_<slot>.sav` (ADR 0024), MesenCE's as `<name>_<slot>.mss` in its Platform's folder,
-/// `serial` then holding the ROM's name in MesenCE (ADR 0027, `MesenSaveStates`).
+/// it: DuckStation's as `<serial>_<slot>.sav` (ADR 0024), MesenCE's as `<name>_<slot>.mss` in its Platform's folder
+/// (ADR 0027, `MesenSaveStates`), ares's as `<name>.bs<slot>` (ADR 0028, `AresSaves`), `serial` then holding the ROM's
+/// name.
 public struct SaveState: Sendable, Equatable, Identifiable {
     public enum Slot: Sendable, Hashable, Comparable {
         /// The one DuckStation saves on closing the game.
@@ -45,6 +46,18 @@ public struct SaveState: Sendable, Equatable, Identifiable {
         }
         return nil
     }
+}
+
+/// A Game save an Emulator keeps for a ROM by its name, which the game wrote itself: MesenCE's `<name>.srm`, `.sav`,
+/// `.rtc` and the like, ares's `<name>.ram`, `.eeprom`, `.pak` and the like.
+public struct GameSaveFile: Sendable, Equatable, Identifiable {
+    public let file: URL
+    /// When the Emulator last wrote it: its file's modification date. MesenCE writes one when the Game stops, ares every
+    /// 30 seconds of play too.
+    public let saved: Date
+
+    public var fileName: String { file.lastPathComponent }
+    public var id: String { fileName }
 }
 
 /// The screenshot a save state was saved with: RGBA, a byte each.

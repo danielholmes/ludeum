@@ -683,6 +683,11 @@ struct GameDetailView: View {
         // A Background task may have started on it while the confirmation was up.
         guard let folder = locator.folder(of: rom), !services.tasks.isActive(.rom(rom.id)) else { return }
         if Emulator.of(platformId: rom.platformId) == .ares {
+            // An open ares would go on saving under the old name.
+            if Emulator.ares.isRunning {
+                error = "Quit ares first: it would go on saving the ROM's saves under its old name."
+                return
+            }
             let ludeum = services.settings.folder
             save { try $0.renameAresROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
             return

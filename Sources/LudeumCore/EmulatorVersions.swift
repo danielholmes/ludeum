@@ -60,9 +60,8 @@ extension Emulator {
                 warnsOnNewerMajor: false, exact: true)
         // Its `--version` works, but the app version is the same and needs no process.
         case .dolphin: EmulatorVersionSpec(expected: "2609", source: .appVersion, warnsOnNewerMajor: false)
-        case .ares:
-            EmulatorVersionSpec(
-                expected: AresRelease.pinned.version, source: .commandLine("--version"), warnsOnNewerMajor: false, exact: true)
+        // Its `--version` works, but the app version is the same, and running it rewrites its settings.
+        case .ares: EmulatorVersionSpec(expected: AresRelease.pinned.version, source: .appVersion, warnsOnNewerMajor: false, exact: true)
         case .melonDS: EmulatorVersionSpec(expected: "1.1", source: .appVersion)
         case .ymir: EmulatorVersionSpec(expected: "0.3.3", source: .appVersion)
         case .ppsspp: EmulatorVersionSpec(expected: "1.20.4", source: .commandLine("--version"))
