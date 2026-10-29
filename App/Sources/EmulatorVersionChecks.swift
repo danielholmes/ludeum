@@ -202,8 +202,9 @@ struct EmulatorsSheet: View {
                         status(emulator)
                         Text(emulator.expectedVersion ?? "–").monospacedDigit()
                         Text(checks.installed[emulator.bundleIdentifier] ?? "–").monospacedDigit()
-                        Text(plays(emulator)).foregroundStyle(.secondary).lineLimit(2)
-                            .frame(maxWidth: 260, alignment: .leading)
+                        Text(plays(emulator)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(width: 260, alignment: .leading)
                         if emulator.isLudeums { installButton(emulator) } else { Text("") }
                     }
                 }
