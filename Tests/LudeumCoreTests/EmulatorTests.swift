@@ -26,19 +26,6 @@ import Testing
         #expect(try h.journal.emulatorSettings(game) == EmulatorSettings(gameBoyModel: .superGameBoy))
     }
 
-    @Test func aresRunAheadIsOnOrOff() throws {
-        let rom = URL(filePath: "/Games/Genesis/Sonic the Hedgehog (USA, Europe).md")
-        func runAhead(_ frames: Int?) throws -> [String] {
-            try Emulator.ares.arguments(rom: rom, platformId: 29, settings: EmulatorSettings(runAheadFrames: frames))
-        }
-
-        #expect(
-            try runAhead(nil)
-                == ["--system", "Mega Drive", "--setting", "General/RunAhead=false", "/Games/Genesis/Sonic the Hedgehog (USA, Europe).md"])
-        #expect(try runAhead(0).contains("General/RunAhead=false"))
-        #expect(try runAhead(1).contains("General/RunAhead=true"))
-    }
-
     @Test func aGamesSettingsAreKeptAndCanBeClearedBackToTheDefault() throws {
         let h = try LudeumHarness()
         let game = try h.addGame("Super Mario Bros. 3")
@@ -77,18 +64,6 @@ import Testing
     let rom = URL(filePath: "/Games/Wii/World of Goo (USA) (WiiWare).wad")
 
     #expect(try Emulator.dolphin.arguments(rom: rom, platformId: 5, settings: EmulatorSettings()).suffix(2) == ["-e", rom.path])
-}
-
-@Test func aresPlaysNintendo64GamesAsNintendo64() throws {
-    #expect(
-        try Emulator.ares.arguments(
-            rom: URL(filePath: "/Games/N64/Super Mario 64 (USA).z64"), platformId: 4, settings: EmulatorSettings(runAheadFrames: 1))
-            == ["--system", "Nintendo 64", "--setting", "General/RunAhead=true", "/Games/N64/Super Mario 64 (USA).z64"])
-}
-
-@Test func aresPlaysSegaCDGamesAsMegaCD() throws {
-    let rom = URL(filePath: "/Games/SegaCD/Sonic CD (USA).cue")
-    #expect(try Emulator.ares.arguments(rom: rom, platformId: 78, settings: EmulatorSettings()).prefix(2) == ["--system", "Mega CD"])
 }
 
 @Test func ymirJustOpensTheDisc() throws {

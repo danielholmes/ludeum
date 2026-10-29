@@ -23,7 +23,7 @@ struct MesenSavesSection: View {
         let rom: LudeumROM
         let name: String
         let states: [SaveState]
-        let gameSaves: [MesenGameSave]
+        let gameSaves: [GameSaveFile]
         var id: Int64 { rom.id }
     }
 

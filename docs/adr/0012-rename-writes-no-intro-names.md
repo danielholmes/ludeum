@@ -1,6 +1,6 @@
 # Rename writes No-Intro names (Redump's on disc Platforms), with the ROM's Regions as its region tag
 
-Amended by [0027](0027-ludeum-installs-mesence-with-a-folder-per-platform.md): Rename of a MesenCE ROM renames the file inside its `.7z` too, when that had the ROM's name, and moves its Save states and Game saves, as MesenCE keys them by that name.
+Amended by [0027](0027-ludeum-installs-mesence-with-a-folder-per-platform.md): Rename of a MesenCE ROM renames the file inside its `.7z` too, when that had the ROM's name, and moves its Save states and Game saves, as MesenCE keys them by that name. Amended by [0028](0028-ludeum-installs-ares-and-says-where-it-keeps-things.md): Rename of an ares ROM moves its Save states and Game saves, as ares keys them by the ROM file's name.
 
 A ROM's Standard name, which Rename gives it, is the name the groups that catalogue its Platform would give it: No-Intro's for cartridge and digital Platforms, Redump's for disc Platforms (PS1, PS2, PSP, GameCube, Wii, Saturn, Sega CD, PC Engine CD). The title is the Game's name written their way (a leading article moved to the end, `" - "` for a subtitle, accents stripped, forbidden characters dropped), the region tag is written from the ROM's Regions rather than kept from the old name, and the rest of the name is rewritten into their tags and order: GoodTools dump flags and scene tags go, except `[b]`, `[h]`, `[t]` and translations, which say something about the file's contents. See `docs/research/rom-naming-conventions.md`.
 

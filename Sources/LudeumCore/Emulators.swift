@@ -18,6 +18,10 @@ public struct Emulator: Sendable, Hashable {
 
     public static let all: [Emulator] = [.mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu]
 
+    /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024), MesenCE (ADR 0027)
+    /// and ares (ADR 0028).
+    public var isLudeums: Bool { self == .duckStation || self == .mesenCE || self == .ares }
+
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
         switch platformId {
@@ -40,12 +44,12 @@ public struct Emulator: Sendable, Hashable {
     /// The command line for a Play. It sets every Emulator setting, with the default where the Game
     /// has none (ADR 0008). DuckStation and PPSSPP take settings only as a whole file, so their Plays write one first
     /// (`DuckStationSettings`, `PPSSPPSettings`); DuckStation's are its Standing settings and its per-game file, named by
-    /// `serials`' Disc 1. MesenCE's Standing settings go into its `settings.json` (`MesenSettings`), the Game's own on
-    /// its command line. DuckStation and MesenCE start from a `saveState`.
+    /// `serials`' Disc 1. MesenCE's and ares's Standing settings go into their own settings files (`MesenSettings`,
+    /// `AresSettings`), the Game's own on their command lines. DuckStation, MesenCE and ares start from a `saveState`.
     public func arguments(
         rom: URL, platformId: Int64, settings: EmulatorSettings, serials: Serials = .notRead, saveState: URL? = nil,
-        duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ppsspp: PPSSPPSettings = .init(),
-        pcsx2: PCSX2GameSettings = .init()
+        duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
+        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2GameSettings = .init()
     ) throws -> [String] {
         switch self {
         case .duckStation:
@@ -60,12 +64,7 @@ public struct Emulator: Sendable, Hashable {
                 rom.path(percentEncoded: false),
             ]
         case .ares:
-            // ares's run-ahead is on or off (one frame); any run-ahead frames turn it on. `--setting`
-            // overrides are for this launch only: ares puts the saved values back.
-            [
-                "--system", platformId == 4 ? "Nintendo 64" : platformId == 78 ? "Mega CD" : "Mega Drive",
-                "--setting", "General/RunAhead=\((settings.runAheadFrames ?? 0) > 0)", rom.path(percentEncoded: false),
-            ]
+            try ares.arguments(rom: rom, platformId: platformId, settings: settings, saveState: saveState)
         case .melonDS, .ymir:
             // No settings: it just opens the Game.
             [rom.path(percentEncoded: false)]

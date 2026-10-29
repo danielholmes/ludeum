@@ -28,10 +28,12 @@ public struct MesenROMName: Sendable, Equatable {
     }
 }
 
-/// A Game save MesenCE keeps for a ROM, which the game wrote itself: `<name>.srm`, `.sav`, `.rtc` and the like.
-public struct MesenGameSave: Sendable, Equatable, Identifiable {
+/// A Game save an Emulator keeps for a ROM by its name, which the game wrote itself: MesenCE's `<name>.srm`, `.sav`,
+/// `.rtc` and the like, ares's `<name>.ram`, `.eeprom`, `.pak` and the like.
+public struct GameSaveFile: Sendable, Equatable, Identifiable {
     public let file: URL
-    /// When MesenCE last wrote it: its file's modification date. It writes one when the Game stops.
+    /// When the Emulator last wrote it: its file's modification date. MesenCE writes one when the Game stops, ares every
+    /// 30 seconds of play too.
     public let saved: Date
 
     public var fileName: String { file.lastPathComponent }
@@ -75,9 +77,9 @@ public struct MesenSaveStates: Sendable {
     }
 
     /// The Game saves of the ROM MesenCE names `name`, by file name.
-    public func gameSaves(of name: String) -> [MesenGameSave] {
+    public func gameSaves(of name: String) -> [GameSaveFile] {
         Self.files(in: saves).filter { $0.lastPathComponent.hasPrefix(name + ".") }
-            .compactMap { file in Self.modified(file).map { MesenGameSave(file: file, saved: $0) } }
+            .compactMap { file in Self.modified(file).map { GameSaveFile(file: file, saved: $0) } }
             .sorted { $0.fileName < $1.fileName }
     }
 

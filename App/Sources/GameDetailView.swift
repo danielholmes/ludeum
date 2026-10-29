@@ -202,6 +202,13 @@ struct GameDetailView: View {
                     refusal: playing.availability.refusal?.message
                 ) { state in play(in: .mesenCE, from: state.file) }
             }
+            // Save states and Game saves: ares's, in its system's folder in the Data folder.
+            if !game.isBundle, emulator == .ares, playROMs.contains(where: { !$0.missing && !$0.archived }) {
+                AresSavesSection(
+                    services: services, platformId: game.platformId, roms: playROMs, plays: playing.rom,
+                    refusal: playing.availability.refusal?.message
+                ) { state in play(in: .ares, from: state.file) }
+            }
 
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)
@@ -671,10 +678,15 @@ struct GameDetailView: View {
     }
 
     /// Renames the ROM in its ROM folder and the journal; a MesenCE ROM's file inside its `.7z`, and its saves, too
-    /// (ADR 0027).
+    /// (ADR 0027), and an ares ROM's saves (ADR 0028).
     private func rename(_ rom: LudeumROM, to name: String) {
         // A Background task may have started on it while the confirmation was up.
         guard let folder = locator.folder(of: rom), !services.tasks.isActive(.rom(rom.id)) else { return }
+        if Emulator.of(platformId: rom.platformId) == .ares {
+            let ludeum = services.settings.folder
+            save { try $0.renameAresROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
+            return
+        }
         guard Emulator.of(platformId: rom.platformId) == .mesenCE, let journal = services.journal else {
             save { try $0.renameROM(rom.id, to: name, in: folder) }
             return

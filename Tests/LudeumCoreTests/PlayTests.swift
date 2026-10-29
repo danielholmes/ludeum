@@ -48,20 +48,20 @@ import Testing
     }
 }
 
-/// Plays in ares (Mega Drive), whose settings are all on the command line, so nothing is written outside the test.
+/// Plays in Dolphin (GameCube), whose settings are all on the command line, so nothing is written outside the test.
 @Suite struct PlayPressTests {
     let directory = FileManager.default.temporaryDirectory.appending(path: "play \(UUID().uuidString)")
-    let ares = URL(filePath: "/Applications/ares.app")
+    let dolphin = URL(filePath: "/Applications/Dolphin.app")
 
     func press(
         _ roms: [LudeumROM], in folder: FakeROMFolder, version: Play.VersionStatus = .ok, settings: EmulatorSettings = EmulatorSettings(),
-        installed: Bool = true, platformId: Int64 = 29
+        installed: Bool = true, platformId: Int64 = 21
     ) -> Play.Outcome {
-        let ares = ares
-        return Play(platformId: platformId, platformName: "Mega Drive", roms: roms, settings: settings)
+        let dolphin = dolphin
+        return Play(platformId: platformId, platformName: "Nintendo GameCube", roms: roms, settings: settings)
             .prepare(
                 locator: ROMLocator(romFolders: [folder.folder]), version: version,
-                app: { installed && $0 == Emulator.ares.bundleIdentifier ? ares : nil })
+                app: { installed && $0 == Emulator.dolphin.bundleIdentifier ? dolphin : nil })
     }
 
     @Test func itOpensTheROMInTheEmulatorWithEverySetting() throws {
@@ -71,26 +71,29 @@ import Testing
         #expect(
             press([folderROM("Zelda")], in: ps2, settings: EmulatorSettings(runAheadFrames: 2))
                 == .open(
-                    app: ares,
-                    arguments: ["--system", "Mega Drive", "--setting", "General/RunAhead=true", rom.path(percentEncoded: false)],
+                    app: dolphin,
+                    arguments: [
+                        "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-e",
+                        rom.path(percentEncoded: false),
+                    ],
                     warning: nil))
     }
     @Test func aMultiDiscVersionOpensItsPlaylist() throws {
-        // Sega CD, in ares, whose settings are all on the command line too.
-        let segaCD = try FakeROMFolder(in: directory, platform: 78)
-        try segaCD.add("Game (Disc 1).cue")
-        let playlist = try segaCD.add("Game.m3u")
+        // Saturn, in Ymir, which takes no settings at all.
+        let saturn = try FakeROMFolder(in: directory, platform: 32)
+        try saturn.add("Game (Disc 1).cue")
+        let playlist = try saturn.add("Game.m3u")
         func rom(_ id: Int64, _ fileName: String) -> LudeumROM {
             let name = (fileName as NSString).deletingPathExtension
             return LudeumROM(
-                id: id, folderName: name, platformId: 78, fileName: fileName, name: name, version: "", disc: nil, missing: false,
+                id: id, folderName: name, platformId: 32, fileName: fileName, name: name, version: "", disc: nil, missing: false,
                 archived: false)
         }
 
         let outcome = Play(
-            platformId: 78, platformName: "Sega CD", roms: [rom(1, "Game (Disc 1).cue"), rom(2, "Game.m3u")], settings: .init()
+            platformId: 32, platformName: "Sega Saturn", roms: [rom(1, "Game (Disc 1).cue"), rom(2, "Game.m3u")], settings: .init()
         )
-        .prepare(locator: ROMLocator(romFolders: [segaCD.folder]), version: .ok, app: { _ in ares })
+        .prepare(locator: ROMLocator(romFolders: [saturn.folder]), version: .ok, app: { _ in URL(filePath: "/Applications/Ymir.app") })
 
         #expect(outcome.arguments?.last == playlist.path(percentEncoded: false))
     }
@@ -106,7 +109,7 @@ import Testing
         let ps2 = try FakeROMFolder(in: directory)
         try ps2.add("Zelda.iso")
 
-        #expect(press([folderROM("Zelda")], in: ps2, version: .tooOld("ares 1 is too old")) == .refused(.tooOld("ares 1 is too old")))
+        #expect(press([folderROM("Zelda")], in: ps2, version: .tooOld("Dolphin 1 is too old")) == .refused(.tooOld("Dolphin 1 is too old")))
     }
 
     @Test func anEmulatorNotInstalledIsRefused() throws {
@@ -115,8 +118,8 @@ import Testing
 
         let outcome = press([folderROM("Zelda")], in: ps2, installed: false)
 
-        #expect(outcome == .refused(.notInstalled(.ares)))
-        #expect(outcome.refusal?.message == "ares isn't installed.")
+        #expect(outcome == .refused(.notInstalled(.dolphin)))
+        #expect(outcome.refusal?.message == "Dolphin isn't installed.")
     }
 
     @Test func aROMWhoseFileIsGoneIsRefused() throws {

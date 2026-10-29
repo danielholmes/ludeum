@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Each installed Emulator's version, checked once per launch in the background: Play is refused
 /// for one older than Ludeum expects, and warns (once per launch) about a newer major version or
-/// one that couldn't be read. DuckStation (ADR 0024) and MesenCE (ADR 0027) are copies Ludeum installs, checked again
-/// after each Install: Play is refused until each is there, Ludeum's own and the pinned build.
+/// one that couldn't be read. DuckStation (ADR 0024), MesenCE (ADR 0027) and ares (ADR 0028) are copies Ludeum
+/// installs, checked again after each Install: Play is refused until each is there, Ludeum's own and the pinned build.
 @Observable @MainActor final class EmulatorVersionChecks {
     /// By bundle identifier; an Emulator that isn't installed, or isn't checked yet, has none.
     private(set) var results: [String: VersionCheck] = [:]
@@ -55,6 +55,9 @@ import SwiftUI
         if emulator == .mesenCE {
             let settings = MesenSettings(ludeum: folder)
             (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, settings.isPortable && settings.installed != nil)
+        } else if emulator == .ares {
+            let settings = AresSettings(ludeum: folder)
+            (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, settings.isPortable)
         } else {
             let settings = DuckStationSettings(ludeum: folder)
             (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, settings.isPortable)
@@ -76,14 +79,16 @@ import SwiftUI
     /// Whether an Emulator Ludeum installs is being installed now.
     func isInstalling(_ emulator: Emulator, tasks: BackgroundTasks) -> Bool { tasks.isActive(.emulator(emulator)) }
 
-    /// Installs the pinned DuckStation or MesenCE as a Background task, then checks it again. Installing replaces it, so
-    /// a task that gets its turn while it's open fails rather than pull the app from under it.
+    /// Installs the pinned DuckStation, MesenCE or ares as a Background task, then checks it again. Installing replaces
+    /// it, so a task that gets its turn while it's open fails rather than pull the app from under it.
     func install(_ emulator: Emulator, tasks: BackgroundTasks) {
         let folder = folder
         tasks.enqueue("Installing \(emulator.name)", subject: .emulator(emulator)) { progress in
             if await emulator.isRunning { throw EmulatorRunning(emulator: emulator) }
             if emulator == .mesenCE {
                 try await MesenInstaller(ludeum: folder).install(progress: progress)
+            } else if emulator == .ares {
+                try await AresInstaller(ludeum: folder).install(progress: progress)
             } else {
                 try await DuckStationInstaller(ludeum: folder).install(progress: progress)
             }
@@ -103,6 +108,8 @@ import SwiftUI
             return "\(emulator.name) \(found) is older than \(expected), which Ludeum needs. Update \(emulator.name) to Play."
         case .wrongBuild where emulator == .mesenCE:
             return "MesenCE isn't the \(expected) release Ludeum installs. Install it again from Ludeum ▸ Emulators… to Play."
+        case .wrongBuild(let found) where emulator == .ares:
+            return "ares is v\(found), and Ludeum installs v\(expected). Install it again from Ludeum ▸ Emulators… to Play."
         case .wrongBuild(let found):
             return
                 "\(emulator.name) is build \(found), and Ludeum installs build \(expected). Install it again from Ludeum ▸ Emulators… to Play."
@@ -172,7 +179,7 @@ extension View {
 }
 
 /// Every Emulator Ludeum plays Games in, with what the launch check found: whether it's installed,
-/// the version Ludeum needs against the one installed, and the Platforms it plays. DuckStation and MesenCE are
+/// the version Ludeum needs against the one installed, and the Platforms it plays. DuckStation, MesenCE and ares are
 /// installed from here. No Emulator is opened from here: its own settings are reached during a Play (ADR 0027).
 struct EmulatorsSheet: View {
     let services: Services
@@ -212,8 +219,9 @@ struct EmulatorsSheet: View {
             Text(
                 "Checked when Ludeum opens. An Emulator older than it needs can't Play; "
                     + "a newer major version, or one whose version can't be read, gets a warning the first time it Plays. "
-                    + "DuckStation and MesenCE are Ludeum's own copies, installed here at the release Ludeum needs and kept in the "
-                    + "Ludeum folder: their save states and game saves live in the Data folder, MesenCE's apart for each Platform. "
+                    + "DuckStation, MesenCE and ares are Ludeum's own copies, installed here at the release Ludeum needs and kept "
+                    + "in the Ludeum folder: their save states and game saves live in the Data folder, MesenCE's apart for each "
+                    + "Platform and ares's for each of its systems. "
                     + "An Emulator's own settings are changed in it during a Play."
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -261,10 +269,15 @@ struct EmulatorsSheet: View {
         }
     }
 
-    /// Installs the pinned DuckStation or MesenCE into the Ludeum folder, or installs it again over the copy there.
+    /// Installs the pinned DuckStation, MesenCE or ares into the Ludeum folder, or installs it again over the copy there.
     private func installButton(_ emulator: Emulator) -> some View {
         let installed = !checks.notInstalled.contains(emulator.bundleIdentifier)
-        let release = emulator == .mesenCE ? MesenRelease.pinned.version : "build \(DuckStationRelease.pinned.build)"
+        let release =
+            switch emulator {
+            case .mesenCE: MesenRelease.pinned.version
+            case .ares: "v\(AresRelease.pinned.version)"
+            default: "build \(DuckStationRelease.pinned.build)"
+            }
         return Button(installed ? "Reinstall" : "Install") {
             installError = nil
             if emulator.isRunning {
@@ -289,12 +302,9 @@ struct EmulatorsSheet: View {
 }
 
 extension Emulator {
-    /// Any copy of it is open, Ludeum's or another. DuckStation rewrites its settings file whole from memory, and MesenCE
-    /// reads its own once, so Ludeum doesn't write them, or replace the app, meanwhile.
+    /// Any copy of it is open, Ludeum's or another. DuckStation and ares rewrite their settings files whole from memory,
+    /// and MesenCE reads its own once, so Ludeum doesn't write them, or replace the app, meanwhile.
     @MainActor var isRunning: Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).isEmpty }
-
-    /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024) and MesenCE (ADR 0027).
-    var isLudeums: Bool { self == .duckStation || self == .mesenCE }
 }
 
 /// Installing was refused because the Emulator is open.

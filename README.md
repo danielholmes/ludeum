@@ -60,15 +60,15 @@ Each platform's ROMs go in `Data/ROMs/<Platform>/`, for example `Data/ROMs/SNES/
 
 Ludeum doesn't include any games, BIOS files or emulators. Supply your own legally obtained ROMs and BIOS files, and set up BIOS, controllers and video in each emulator. Ludeum keeps those settings, and sets each game's own settings for that Play only.
 
-Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found. DuckStation is the exception: Ludeum installs its own copy from there, at exactly the build below, into its own folder and made portable, so nothing of it is shared with any other DuckStation on your Mac. Its settings are still yours to make in DuckStation (open it from the same sheet), apart from where it keeps things and a few it fixes for every game.
+Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found. DuckStation, MesenCE and ares are the exception: Ludeum installs its own copy of each from there, at exactly the version below, into its own folder and made portable, so nothing of it is shared with any other copy on your Mac. Their settings are still yours to make in each, during a Play, apart from where they keep things and a few Ludeum fixes for every game. MesenCE 2.2.1 needs SDL2 (`brew install sdl2`).
 
 | Platform | Emulator | Version |
 | --- | --- | --- |
-| NES / Famicom, SNES / Super Famicom, Game Boy, Game Boy Color, Game Boy Advance, Master System, Game Gear, PC Engine CD | [MesenCE](https://github.com/nesdev-org/MesenCE) | 2.2.1 |
+| NES / Famicom, SNES / Super Famicom, Game Boy, Game Boy Color, Game Boy Advance, Master System, Game Gear, PC Engine CD | [MesenCE](https://github.com/nesdev-org/MesenCE), installed by Ludeum | 2.2.1 |
 | PlayStation | [DuckStation](https://www.duckstation.org), installed by Ludeum | build 12442 |
 | PlayStation 2 | [PCSX2](https://pcsx2.net) | 2.9.103 |
 | PlayStation Portable | [PPSSPP](https://www.ppsspp.org) | 1.20.4 |
-| Nintendo 64, Mega Drive / Genesis, Sega CD | [ares](https://ares-emu.net) | v148 |
+| Nintendo 64, Mega Drive / Genesis, Sega CD | [ares](https://ares-emu.net), installed by Ludeum | v148 |
 | GameCube, Wii | [Dolphin](https://dolphin-emu.org) | 2609 |
 | Nintendo DS | [melonDS](https://melonds.kuribo64.net) | 1.1 |
 | Saturn | [Ymir](https://github.com/StrikerX3/Ymir) | 0.3.3 |
