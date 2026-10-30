@@ -900,8 +900,6 @@ func journalErrorText(_ error: Error) -> String {
     case .nameRequired: "A name is required."
     case .gameNotFound: "That Game no longer exists."
     case .runAheadOutOfRange: "Run-ahead is 0 to 10 frames."
-    case .cdReadSpeedupOutOfRange: "CD read speedup is off, 2x to 6x, or maximum."
-    case .cdSeekSpeedupOutOfRange: "CD seek speedup is off, 2x to 6x, or maximum."
     case .copyPlayedOn: "A Playthrough was played on this Copy. Change that Playthrough's Copy first."
     case .copyNotOfGame: "That Copy isn't one of this Game's."
     case nil: error.localizedDescription

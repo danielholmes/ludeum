@@ -734,6 +734,18 @@ enum LudeumSchema {
             try db.alter(table: "rom") { t in t.add(column: "lastDisc", .integer) }
             try keepTimestamps(db, on: "rom")
         }
+        // A PlayStation Game's own settings are DuckStation's, set in its Game Properties (ADR 0029): its CD speedups go,
+        // and so does its run-ahead, which is kept for MesenCE's and ares's Games. The `updatedAt` trigger watches those
+        // columns, so it goes first and comes back watching the rest; no row's timestamps change.
+        migrator.registerMigration("v43 no duckstation settings") { db in
+            try db.execute(sql: "DROP TRIGGER game_updatedAt")
+            try db.execute(sql: "UPDATE game SET runAheadFrames = NULL WHERE platformId = 7")
+            try db.alter(table: "game") { t in
+                t.drop(column: "cdReadSpeedup")
+                t.drop(column: "cdSeekSpeedup")
+            }
+            try keepTimestamps(db, on: "game")
+        }
         return migrator
     }
 

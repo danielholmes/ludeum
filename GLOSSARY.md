@@ -203,20 +203,12 @@ The settings of an Emulator that Ludeum fixes the same for every Game, e.g. wher
 _Avoid_: Global settings, defaults, config
 
 **Emulator settings**:
-The few settings of a Game's Emulator that the journal chooses on each Play, e.g. run-ahead frames. A Game without its own value gets the Emulator's default. Every Play sets all of them, so one Game's settings never carry into the next.
+The few settings of a Game's Emulator that the journal chooses on each Play, e.g. run-ahead frames. A Game without its own value gets the Emulator's default. Every Play sets all of them, so one Game's settings never carry into the next. Only MesenCE's and ares's Games have them; a PlayStation Game's own settings are DuckStation's, set in its Game Properties.
 _Avoid_: Config, overrides
 
 **Game Boy Model**:
 An Emulator setting for Game Boy and Game Boy Color Games: the hardware the Emulator pretends to be on Play. It is Auto, Game Boy, Game Boy Color or Super Game Boy, and defaults to Auto. It never changes the Game's Platform.
 _Avoid_: Forced platform, hardware mode
-
-**CD read speedup**:
-An Emulator setting for PlayStation Games: how much faster than a real drive DuckStation reads the disc, to shorten loading. It is Off, 2x to 6x or Maximum, and defaults to whatever DuckStation itself is set to, so the usual choice is made once in DuckStation and a Game sets its own only to differ.
-_Avoid_: Fast loading, CD-ROM speed
-
-**CD seek speedup**:
-An Emulator setting for PlayStation Games: how much faster than a real drive DuckStation moves to another part of the disc. It is Off, 2x to 6x or Maximum, and defaults to whatever DuckStation itself is set to. It breaks more games than the CD read speedup.
-_Avoid_: Fast seeking, CD-ROM speed
 
 **Save state**:
 A snapshot of a game mid-play that DuckStation, MesenCE or ares saves and loads, in one of a ROM's slots (1 to 10, ares's 1 to 9), or as its Resume state, which DuckStation saves on closing the game and MesenCE every minute of play, or as DuckStation's Previous one of a slot, kept when it's saved over. Save states are made and managed in the Emulator, which keeps them in the Data folder, as its Standing settings say: DuckStation names them by the disc's Serial, MesenCE by the ROM's file name, in a folder for each Platform, and ares by the ROM's file name, the Mega Drive and Sega CD in one folder and the N64 in another. Ludeum lists a Game's, Plays from one and deletes one. A save state has no name: it's its slot, when it was saved and its screenshot (ares's have none). One of ares's loads only in the ares release that saved it. Not a Game save, which the game writes itself.

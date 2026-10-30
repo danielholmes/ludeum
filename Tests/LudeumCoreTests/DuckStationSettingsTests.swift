@@ -4,7 +4,7 @@ import Testing
 @testable import LudeumCore
 
 /// DuckStation's settings as Ludeum writes them (ADR 0024): the Standing settings into its own `settings.ini` before
-/// every launch, and a Game's own settings into its per-game file, named by its Serial (ADR 0021).
+/// every launch, and nothing into its per-game files, which are DuckStation's (ADR 0029).
 @Suite struct DuckStationSettingsTests {
     let folder = FileManager.default.temporaryDirectory.appending(
         path: "duckstation tests \(UUID().uuidString)", directoryHint: .isDirectory)
@@ -105,7 +105,7 @@ import Testing
 
         #expect(throws: DataFolderMissing.self) { try settings.writeStanding() }
         #expect(throws: DataFolderMissing.self) {
-            try settings.arguments(rom: rom, settings: EmulatorSettings(), serials: .read(["SLUS-00551"]))
+            try settings.arguments(rom: rom)
         }
         #expect(contents(settingsFile) == nil)
         #expect(!FileManager.default.fileExists(atPath: ludeum.data.path(percentEncoded: false)))
@@ -113,126 +113,16 @@ import Testing
 
     // MARK: A Game's own settings
 
-    @Test func aPlayWritesTheStandingSettingsAndMergesTheGamesOwnIntoItsPerGameFile() throws {
+    @Test func aPlayWritesTheStandingSettingsAndLeavesThePerGameFileAsDuckStationMadeIt() throws {
         try write("[Main]\nRewindEnable = false\n", to: settingsFile)
-        try write("[Main]\nRunaheadFrameCount = 0\n\n[GPU]\nResolutionScale = 4\n", to: gameSettings("SLUS-00551"))
+        let perGame = "[Main]\nRunaheadFrameCount = 6\n\n[CDROM]\nReadSpeedup = 0\nSeekSpeedup = 0\n"
+        try write(perGame, to: gameSettings("SLUS-00551"))
 
-        let arguments = try Emulator.duckStation.arguments(
-            rom: rom, platformId: 7, settings: EmulatorSettings(runAheadFrames: 2, cdReadSpeedup: 4, cdSeekSpeedup: 0),
-            serials: .read(["SLUS-00551"]), duckStation: settings)
+        let arguments = try Emulator.duckStation.arguments(rom: rom, platformId: 7, settings: EmulatorSettings(), duckStation: settings)
 
         #expect(arguments == ["--", rom.path(percentEncoded: false)])
-        #expect(
-            contents(gameSettings("SLUS-00551"))
-                == "[CDROM]\nSeekSpeedup = 0\nReadSpeedup = 4\n\n[Main]\nRunaheadFrameCount = 2\n\n[GPU]\nResolutionScale = 4\n")
+        #expect(contents(gameSettings("SLUS-00551")) == perGame)
         #expect(Ini.value("SaveStates", in: "Folders", of: contents(settingsFile) ?? "") == dataFolder("Save States"))
-    }
-
-    @Test func aSettingTheGameHasntGotIsTakenOutSoDuckStationsOwnApplies() {
-        let ini = """
-            [Main]
-            RunaheadFrameCount = 3
-            RewindEnable = false
-
-            [CDROM]
-            ReadSpeedup = 4
-            SeekSpeedup = 2
-
-            [GPU]
-            ResolutionScale = 4
-
-            """
-        #expect(
-            DuckStationSettings.applying(EmulatorSettings(), to: ini, serial: "SLUS-00551")
-                == "[Main]\nRewindEnable = false\n\n[GPU]\nResolutionScale = 4\n")
-        #expect(
-            DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 0, cdSeekSpeedup: 1), to: ini, serial: "SLUS-00551")
-                == "[Main]\nRunaheadFrameCount = 0\nRewindEnable = false\n\n[CDROM]\nSeekSpeedup = 1\n\n[GPU]\nResolutionScale = 4\n")
-    }
-
-    @Test func whatUsedToGoIntoEveryPerGameFileIsTakenOutAsItsStandingNow() {
-        let ini = """
-            [MemoryCards]
-            Card1Path = /Data/Emulators/DuckStation/Memory Cards/SLUS-00551.mcd
-            Card1Type = Shared
-            Card2Type = None
-
-            [Display]
-            PreFrameSleep = true
-            OptimalFramePacing = true
-
-            [BIOS]
-            FastForwardBoot = true
-            PatchFastBoot = true
-
-            [Main]
-            RunaheadFrameCount = 1
-
-            """
-        #expect(
-            DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 1), to: ini, serial: "SLUS-00551")
-                == "[MemoryCards]\nCard2Type = None\n\n[Main]\nRunaheadFrameCount = 1\n")
-        #expect(DuckStationSettings.applying(EmulatorSettings(), to: ini, serial: "SLUS-00551") == "[MemoryCards]\nCard2Type = None\n\n")
-
-        // What's been set since in DuckStation's Game Properties is DuckStation's, and stays: a card of my own, even one
-        // in the Data folder's card folder, where every card is now.
-        let mine = "[MemoryCards]\nCard1Type = Shared\nCard1Path = /Volumes/Cards/mine.mcd\n\n[BIOS]\nPatchFastBoot = false\n"
-        #expect(DuckStationSettings.applying(EmulatorSettings(), to: mine, serial: "SLUS-00551") == mine)
-        let chosen = "[MemoryCards]\nCard1Type = Shared\nCard1Path = /Data/Emulators/DuckStation/Memory Cards/Resident Evil_1.mcd\n"
-        #expect(DuckStationSettings.applying(EmulatorSettings(), to: chosen, serial: "SLUS-00551") == chosen)
-    }
-
-    @Test func aDiscSetsOtherDiscsLoseDisc1sCardTooAtTheNextPlay() throws {
-        try settings.writeStanding()
-        let card = "[MemoryCards]\nCard1Path = /Data/Emulators/DuckStation/Memory Cards/SCUS-94163.mcd\nCard1Type = Shared\n\n"
-        try write(card + "[Main]\nRunaheadFrameCount = 1\n", to: gameSettings("SCUS-94163"))
-        try write(card, to: gameSettings("SCUS-94164"))
-        try write(card + "[GPU]\nResolutionScale = 4\n", to: gameSettings("SCUS-94165"))
-
-        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: .read(["SCUS-94163", "SCUS-94164", "SCUS-94165"]))
-
-        #expect(contents(gameSettings("SCUS-94163")) == "[Main]\nRunaheadFrameCount = 1\n")
-        #expect(contents(gameSettings("SCUS-94164")) == "")
-        #expect(contents(gameSettings("SCUS-94165")) == "[GPU]\nResolutionScale = 4\n")
-    }
-
-    @Test func aFileWithCRLFLineEndingsIsMergedLineByLine() {
-        let ini = "[Main]\r\nRunaheadFrameCount = 3\r\nRewindEnable = false\r\n\r\n[CDROM]\r\nReadSpeedup = 4\r\n"
-        #expect(
-            DuckStationSettings.applying(EmulatorSettings(runAheadFrames: 1), to: ini, serial: "SLUS-00551")
-                == "[Main]\r\nRunaheadFrameCount = 1\nRewindEnable = false\r\n\r\n")
-        #expect(Ini.value("ReadSpeedup", in: "CDROM", of: ini) == "4")
-    }
-
-    @Test func aGameWithNoSettingsOfItsOwnGetsNoPerGameFile() throws {
-        try settings.writeStanding()
-        try settings.write(EmulatorSettings(), serials: .read(["SLUS-00551"]))
-        #expect(contents(gameSettings("SLUS-00551")) == nil)
-
-        // One it has is left as DuckStation's Game Properties made it, less what Ludeum used to put there.
-        try write("[GPU]\nResolutionScale = 4\n\n[BIOS]\nPatchFastBoot = true\n", to: gameSettings("SCUS-94900"))
-        try settings.write(EmulatorSettings(), serials: .read(["SCUS-94900"]))
-        #expect(contents(gameSettings("SCUS-94900")) == "[GPU]\nResolutionScale = 4\n\n")
-    }
-
-    @Test func aMultiDiscVersionsSettingsAreDisc1sUnlessItKeepsEachDiscApart() throws {
-        let serials = Serials.read(["SCUS-94163", "SCUS-94164", nil])
-        try settings.writeStanding()
-        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
-        #expect(contents(gameSettings("SCUS-94163")) == "[Main]\nRunaheadFrameCount = 1\n\n")
-        #expect(contents(gameSettings("SCUS-94164")) == nil)
-
-        try write("[Main]\nUseSeparateConfigForDiscSet = true\n", to: gameSettings("SCUS-94163"))
-        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: serials)
-        #expect(contents(gameSettings("SCUS-94163")) == "[Main]\nRunaheadFrameCount = 1\nUseSeparateConfigForDiscSet = true\n")
-        #expect(contents(gameSettings("SCUS-94164")) == "[Main]\nRunaheadFrameCount = 1\n\n")
-    }
-
-    @Test func withoutDisc1sSerialNoPerGameFileIsWritten() throws {
-        try settings.writeStanding()
-        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: .notRead)
-        try settings.write(EmulatorSettings(runAheadFrames: 1), serials: .read([nil, "SCUS-94164"]))
-        #expect(try FileManager.default.contentsOfDirectory(atPath: ludeum.duckStation(.gameSettings).path(percentEncoded: false)).isEmpty)
     }
 
     @Test func perGameFilesAreWhereDuckStationsSettingsPutThem() throws {
@@ -244,23 +134,6 @@ import Testing
         try settings.writeStanding()
         #expect(
             settings.gameSettingsFolder == ludeum.data.appending(path: "Emulators/DuckStation/Game Settings", directoryHint: .isDirectory))
-    }
-
-    @Test func aGamesCDSpeedupsAreKeptAndChecked() throws {
-        let h = try LudeumHarness()
-        let game = try h.addGame("Resident Evil")
-
-        try h.journal.setEmulatorSettings(game, EmulatorSettings(cdReadSpeedup: 0, cdSeekSpeedup: 4))
-        try h.reopen()
-        #expect(try h.journal.emulatorSettings(game) == EmulatorSettings(cdReadSpeedup: 0, cdSeekSpeedup: 4))
-        #expect(throws: LudeumError.cdReadSpeedupOutOfRange) {
-            try h.journal.setEmulatorSettings(game, EmulatorSettings(cdReadSpeedup: 7))
-        }
-        #expect(throws: LudeumError.cdSeekSpeedupOutOfRange) {
-            try h.journal.setEmulatorSettings(game, EmulatorSettings(cdSeekSpeedup: -1))
-        }
-        try h.journal.setEmulatorSettings(game, EmulatorSettings())
-        #expect(try h.journal.emulatorSettings(game) == EmulatorSettings())
     }
 
     // MARK: The DuckStation Ludeum installs

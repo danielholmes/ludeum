@@ -16,20 +16,20 @@ struct EmulatorSettingRow: Identifiable {
     let summary: (Int) -> String
     var id: String { title }
 
+    /// None for DuckStation: a PlayStation Game's own settings are set in DuckStation's Game Properties (ADR 0029).
     static func rows(for emulator: Emulator, platformId: Int64) -> [EmulatorSettingRow] {
         switch emulator {
-        case .mesenCE, .duckStation:
+        case .mesenCE:
             [
                 EmulatorSettingRow(
                     title: "Run-ahead",
-                    explanation: "Frames \(emulator.name) runs ahead to hide the game's own input lag. Set it to the game's lag "
+                    explanation: "Frames MesenCE runs ahead to hide the game's own input lag. Set it to the game's lag "
                         + "in frames; too high makes sprites jitter.",
                     value: \.runAheadFrames,
                     choices: EmulatorSettings.runAheadRange.map { ("\($0) frame\($0 == 1 ? "" : "s")", $0) },
                     defaultLabel: "0 frames", summary: { "Run-ahead \($0)" })
             ]
-                + (emulator == .mesenCE && GameBoyModel.applies(to: platformId) ? [gameBoyModel] : [])
-                + (emulator == .duckStation ? [cdReadSpeedup, cdSeekSpeedup] : [])
+                + (GameBoyModel.applies(to: platformId) ? [gameBoyModel] : [])
         case .ares:
             [
                 EmulatorSettingRow(
@@ -52,30 +52,6 @@ struct EmulatorSettingRow: Identifiable {
             value: \.gameBoyModelChoice,
             choices: GameBoyModel.allCases.enumerated().map { ($1.label, $0) },
             defaultLabel: "Auto", summary: { GameBoyModel.allCases[$0].label })
-    }
-
-    private static var cdReadSpeedup: EmulatorSettingRow {
-        EmulatorSettingRow(
-            title: "CD read speedup",
-            explanation: "How much faster DuckStation reads the disc, to shorten loading. Music and video streamed from the "
-                + "disc play at their own speed. It can break games that expect a real drive's timing; DuckStation keeps it "
-                + "off for the ones it knows, whatever is chosen here.",
-            value: \.cdReadSpeedup,
-            choices: [("Off", 1)] + (2...6).map { ("\($0)x", $0) } + [("Maximum", 0)],
-            defaultLabel: "DuckStation's own",
-            summary: { $0 == 1 ? "CD speedup off" : $0 == 0 ? "CD maximum" : "CD \($0)x" })
-    }
-
-    private static var cdSeekSpeedup: EmulatorSettingRow {
-        EmulatorSettingRow(
-            title: "CD seek speedup",
-            explanation: "How much faster DuckStation moves to another part of the disc, to shorten loading. It's riskier than "
-                + "the read speedup: games that expect a real drive's timing can crash, and Maximum is safer than 2x to 6x. "
-                + "DuckStation keeps it off for the ones it knows, whatever is chosen here.",
-            value: \.cdSeekSpeedup,
-            choices: [("Off", 1)] + (2...6).map { ("\($0)x", $0) } + [("Maximum", 0)],
-            defaultLabel: "DuckStation's own",
-            summary: { $0 == 1 ? "Seek speedup off" : $0 == 0 ? "Seek maximum" : "Seek \($0)x" })
     }
 }
 

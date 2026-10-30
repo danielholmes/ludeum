@@ -219,13 +219,12 @@ import Testing
                 duckStation: DuckStationSettings(ludeum: ludeum), running: { _ in running })
     }
 
-    @Test func aPlayWritesTheStandingSettingsAndTheGamesOwnIntoItsPerGameFileThenOpensTheROM() throws {
+    @Test func aPlayWritesTheStandingSettingsThenOpensTheROM() throws {
         let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
         let cue = try ps1.add("Resident Evil - Director's Cut (USA).cue")
 
         let outcome = press(
-            rom("Resident Evil - Director's Cut (USA).cue", serials: .read(["SLUS-00551"])), settings: EmulatorSettings(runAheadFrames: 1),
-            in: ps1)
+            rom("Resident Evil - Director's Cut (USA).cue", serials: .read(["SLUS-00551"])), settings: EmulatorSettings(), in: ps1)
 
         #expect(outcome == .open(app: duckStation, arguments: ["--", cue.path(percentEncoded: false)], warning: nil))
         let standing = try String(contentsOf: data.appending(path: "settings.ini"), encoding: .utf8)
@@ -233,47 +232,17 @@ import Testing
             Ini.value("SaveStates", in: "Folders", of: standing)
                 == String(ludeum.duckStationSaveStates.path(percentEncoded: false).dropLast()))
         #expect(Ini.value("CheckAtStartup", in: "AutoUpdater", of: standing) == "false")
-        // The per-game file is where the Standing settings keep them: in the Data folder.
-        #expect(
-            try String(contentsOf: ludeum.duckStation(.gameSettings).appending(path: "SLUS-00551.ini"), encoding: .utf8)
-                == "[Main]\nRunaheadFrameCount = 1\n\n")
+        // The per-game file is DuckStation's own (ADR 0029).
+        #expect(!FileManager.default.fileExists(atPath: ludeum.duckStation(.gameSettings).appending(path: "SLUS-00551.ini").path()))
     }
 
-    @Test func aGameWithNoSettingsOfItsOwnPlaysWithoutItsSerial() throws {
+    @Test func aGamePlaysWithoutItsSerial() throws {
         let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
         let cue = try ps1.add("Ape Escape (USA).cue")
 
         let outcome = press(rom("Ape Escape (USA).cue", serials: .notRead), settings: EmulatorSettings(), in: ps1)
 
         #expect(outcome == .open(app: duckStation, arguments: ["--", cue.path(percentEncoded: false)], warning: nil))
-        #expect(!FileManager.default.fileExists(atPath: ludeum.duckStation(.gameSettings).appending(path: "Ape Escape (USA).ini").path()))
-    }
-
-    @Test func aGameWithSettingsOfItsOwnIsRefusedWithoutItsSerial() {
-        func refusal(_ fileName: String, _ serials: Serials, _ settings: EmulatorSettings = EmulatorSettings(runAheadFrames: 1)) -> Play
-            .Refusal?
-        {
-            Play(
-                platformId: ROMPlatform.ps1, platformName: "PlayStation", roms: [rom(fileName, serials: serials)], settings: settings
-            ).availability.refusal
-        }
-
-        #expect(
-            refusal("Ape Escape (USA).cue", .notRead)?.message
-                == "Its Serial hasn't been read yet, and its own DuckStation settings need it: it's read at the next Import. "
-                + "Set them back to Default to Play meanwhile.")
-        #expect(
-            refusal("Ape Escape (USA).cue", .read([nil]), EmulatorSettings(cdReadSpeedup: 4))?.message
-                == "Its Disc has no Serial DuckStation can use, so it can't have DuckStation settings of its own: set them back to Default to Play."
-        )
-        // DuckStation goes by Disc 1's.
-        #expect(refusal("Final Fantasy VII (USA).m3u", .read([nil, "SCUS-94164"])) == .noSerial(.noneOnDisc))
-        #expect(
-            refusal("Ape Escape (USA).chd", .notRead)?.message
-                == "Its Serial can't be read from a .chd yet, so it can't have DuckStation settings of its own: set them back to Default to Play."
-        )
-        #expect(refusal("Ape Escape (USA).cue", .read(["SCUS-94423"])) == nil)
-        #expect(refusal("Ape Escape (USA).cue", .notRead, EmulatorSettings()) == nil)
     }
 
     @Test func withoutTheDuckStationLudeumInstallsPlayIsRefused() throws {
@@ -298,16 +267,18 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: data.appending(path: "settings.ini").path()))
     }
 
-    @Test func aPlaylistOfDiscsInAFormNotReadYetSaysSoWhenPressed() throws {
+    @Test func aPlaylistOfDiscsInAFormNotReadYetPlays() throws {
         let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
         try ps1.add("Final Fantasy IX (USA)/Final Fantasy IX (USA) (Disc 1).chd")
-        try ps1.add("Final Fantasy IX (USA)/Final Fantasy IX (USA).m3u", "Final Fantasy IX (USA) (Disc 1).chd\n")
+        let m3u = try ps1.add("Final Fantasy IX (USA)/Final Fantasy IX (USA).m3u", "Final Fantasy IX (USA) (Disc 1).chd\n")
         let rom = LudeumROM(
             id: 1, folderName: "Final Fantasy IX (USA)", platformId: ROMPlatform.ps1,
             fileName: "Final Fantasy IX (USA)/Final Fantasy IX (USA).m3u", name: "Final Fantasy IX (USA)", version: "", disc: nil,
             missing: false, archived: false)
 
-        #expect(press(rom, settings: EmulatorSettings(runAheadFrames: 1), in: ps1) == .refused(.noSerial(.unreadForm("chd"))))
+        #expect(
+            press(rom, settings: EmulatorSettings(), in: ps1)
+                == .open(app: duckStation, arguments: ["--", m3u.path(percentEncoded: false)], warning: nil))
     }
 
     // MARK: Starting on a Disc (ADR 0026)

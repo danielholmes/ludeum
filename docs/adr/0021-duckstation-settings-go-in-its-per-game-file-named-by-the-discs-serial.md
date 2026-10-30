@@ -1,5 +1,7 @@
 # DuckStation settings go in its per-game file, named by the disc's Serial
 
+Superseded by [0029](0029-a-playstation-games-own-settings-are-duckstations.md) for a Game's own settings: Ludeum no longer writes the per-game file, which is DuckStation's, and a Game is never refused for want of a Serial.
+
 Amended by [0024](0024-ludeum-installs-duckstation-and-says-where-it-keeps-things.md): fast boot, input latency and the memory card keys leave the per-game file, which carries only the Game's own settings.
 
 Amends [0008](0008-journal-owns-per-game-emulator-settings.md) for DuckStation: its Play no longer passes every setting, defaults included, for that launch only.

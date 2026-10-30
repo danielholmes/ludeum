@@ -29,9 +29,6 @@ public struct Play: Sendable {
         case couldntWriteSettings(Emulator, String)
         /// An Xbox ROM that's a full Redump image, which xemu can't boot.
         case needsXISO
-        /// A PlayStation Game with settings of its own whose ROM's Serial (Disc 1's) isn't known, so its per-game file
-        /// can't be named (ADR 0021).
-        case noSerial(SerialMissing)
         /// DuckStation, MesenCE or ares is open: Ludeum writes its settings before each Play, which an open DuckStation
         /// or ares would write over (ADRs 0024, 0028) and an open MesenCE wouldn't read (ADR 0027).
         case running(Emulator)
@@ -39,15 +36,6 @@ public struct Play: Sendable {
         case installing(Emulator)
         /// The installed Emulator's build needs a library from Homebrew that isn't installed (MesenCE 2.2.1's SDL2).
         case needs(Emulator, HomebrewLibrary)
-
-        public enum SerialMissing: Sendable, Equatable {
-            /// Not read off its Discs yet: it will be at the next Import.
-            case notReadYet
-            /// Its Disc 1 has none DuckStation goes by.
-            case noneOnDisc
-            /// Kept in a form whose Serials aren't read yet: `chd`, `pbp`.
-            case unreadForm(String)
-        }
 
         public var message: String {
             switch self {
@@ -65,13 +53,6 @@ public struct Play: Sendable {
             case .couldntLook(let file, let why): "Couldn't look for \(file): \(why)"
             case .couldntWriteSettings(let emulator, let why): "Couldn't write \(emulator.name)'s settings: \(why)"
             case .needsXISO: "It's a full Redump image, and xemu boots only an XISO: make one with `xdvdfs pack`, then put it in its place."
-            case .noSerial(.notReadYet):
-                "Its Serial hasn't been read yet, and its own DuckStation settings need it: it's read at the next Import. "
-                    + "Set them back to Default to Play meanwhile."
-            case .noSerial(.noneOnDisc):
-                "Its Disc has no Serial DuckStation can use, so it can't have DuckStation settings of its own: set them back to Default to Play."
-            case .noSerial(.unreadForm(let ext)):
-                "Its Serial can't be read from a .\(ext) yet, so it can't have DuckStation settings of its own: set them back to Default to Play."
             case .running(.mesenCE):
                 "MesenCE is open. Quit it, then Play: Ludeum says where to keep this Platform's saves before each Play, "
                     + "which an open MesenCE wouldn't read."
@@ -115,17 +96,9 @@ public struct Play: Sendable {
         }
         if roms.contains(where: { busyROMs.contains($0.id) }) { return .refused(.busy) }
         if rom?.needsPlaylist == true { return .refused(.needsPlaylist) }
-        if emulator == .duckStation, settings.hasDuckStationSettings, let rom, rom.serials.first == nil {
-            return .refused(.noSerial(Self.serialMissing(rom)))
-        }
         return .ready(emulator)
     }
 
-    private static func serialMissing(_ rom: LudeumROM) -> Refusal.SerialMissing {
-        let ext = (rom.fileName as NSString).pathExtension.lowercased()
-        if Serials.unreadForms.contains(ext) { return .unreadForm(ext) }
-        return rom.serials == .notRead ? .notReadYet : .noneOnDisc
-    }
     /// The Emulator's installed version, as the version checks found it.
     public enum VersionStatus: Sendable, Equatable {
         case ok
@@ -223,14 +196,6 @@ public struct Play: Sendable {
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
-        case .refused(.noSerial(.notReadYet)):
-            // Its playlist's Discs may be in a form whose Serials aren't read yet, which only its files say.
-            if let rom, let file = try? locator.file(of: rom, ready: true),
-                let ext = ROMFiles.files(of: file).map({ $0.pathExtension.lowercased() }).first(where: Serials.unreadForms.contains)
-            {
-                return .refused(.noSerial(.unreadForm(ext)))
-            }
-            return .refused(.noSerial(.notReadYet))
         case .refused(let refusal): return .refused(refusal)
         case .ready(let ready): emulator = ready
         }
@@ -286,7 +251,7 @@ public struct Play: Sendable {
         let warning: String? = if case .warn(let warning) = version { warning } else { nil }
         do {
             let arguments = try emulator.arguments(
-                rom: opened, platformId: platformId, settings: settings, serials: rom.serials, saveState: saveState,
+                rom: opened, platformId: platformId, settings: settings, saveState: saveState,
                 duckStation: duckStation, mesen: mesen, ares: ares)
             return .open(app: app, arguments: arguments, warning: warning, startsOn: startsOn)
         } catch {
