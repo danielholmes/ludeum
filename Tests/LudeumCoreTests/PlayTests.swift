@@ -236,7 +236,7 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: ludeum.duckStation(.gameSettings).appending(path: "SLUS-00551.ini").path()))
     }
 
-    @Test func aGamePlaysWithoutItsSerial() throws {
+    @Test func aPlayStationGamePlaysWithoutItsSerial() throws {
         let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
         let cue = try ps1.add("Ape Escape (USA).cue")
 

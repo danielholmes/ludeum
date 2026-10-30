@@ -442,7 +442,7 @@ struct GameDetailView: View {
                 .tint(services.versions.refusalMessage(emulator) == nil ? nil : .red)
                 .disabled(refusal == .busy)
                 .help(refusal?.message ?? "Play in \(emulator.name)")
-                // Dolphin has no per-Game settings: every Game gets the same ones.
+                // Dolphin has no per-Game settings, and DuckStation's are its own (ADR 0029).
                 if !EmulatorSettingRow.rows(for: emulator, platformId: platformId).isEmpty {
                     EmulatorSettingsButton(emulator: emulator, platformId: platformId, settings: emulatorSettings) { settings in
                         save { try $0.setEmulatorSettings(id, settings) }

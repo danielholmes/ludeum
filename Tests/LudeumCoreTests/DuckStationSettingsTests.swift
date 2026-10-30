@@ -111,7 +111,7 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: ludeum.data.path(percentEncoded: false)))
     }
 
-    // MARK: A Game's own settings
+    // MARK: Its per-game files
 
     @Test func aPlayWritesTheStandingSettingsAndLeavesThePerGameFileAsDuckStationMadeIt() throws {
         try write("[Main]\nRewindEnable = false\n", to: settingsFile)

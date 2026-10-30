@@ -739,7 +739,7 @@ enum LudeumSchema {
         // columns, so it goes first and comes back watching the rest; no row's timestamps change.
         migrator.registerMigration("v43 no duckstation settings") { db in
             try db.execute(sql: "DROP TRIGGER game_updatedAt")
-            try db.execute(sql: "UPDATE game SET runAheadFrames = NULL WHERE platformId = 7")
+            try db.execute(sql: "UPDATE game SET runAheadFrames = NULL WHERE platformId = 7")  // PlayStation
             try db.alter(table: "game") { t in
                 t.drop(column: "cdReadSpeedup")
                 t.drop(column: "cdSeekSpeedup")
