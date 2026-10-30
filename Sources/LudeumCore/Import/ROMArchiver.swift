@@ -40,7 +40,7 @@ extension ArchiveError: LocalizedError {
 public struct UnarchivePlan: Sendable, Equatable {
     public let archive: URL
     public let romName: String
-    /// Everything in the archive, all of it kept.
+    /// What's kept of the archive: everything but its Clutter.
     public let entries: [SevenZip.Entry]
     /// Where the archive's contents go: the ROM's folder, named after it, or (on a Platform that unpacks to a single
     /// file) its one file, named after it.
@@ -87,9 +87,9 @@ public struct ROMArchiver: Sendable {
     // MARK: Unarchive
 
     static func unarchivePlan(listing: [SevenZip.Entry], archive: URL, romName: String, folder: ROMFolder) throws -> UnarchivePlan {
+        // Clutter (a readme, or a `.DS_Store` packed with its subfolder) stays behind.
+        let files = listing.filter { !folder.isClutter($0.path) }
         if folder.archiving == .singleFile {
-            // Hidden files beside the game (a `.DS_Store` packed with its subfolder) stay behind.
-            let files = listing.filter { !Self.isHiddenExtra($0.path, in: folder) }
             guard let image = files.first else { throw ArchiveError.noImage }
             guard files.count == 1 else { throw ArchiveError.notOneFile(files.map(\.fileName)) }
             let ext = (image.path as NSString).pathExtension.lowercased()
@@ -99,17 +99,16 @@ public struct ROMArchiver: Sendable {
         }
         // The folder only plays if it holds the game, as a scan of the ROM folder finds it.
         let destination = folder.url.appending(path: romName, directoryHint: .isDirectory)
-        let files = listing.map { destination.appending(path: $0.path, directoryHint: .notDirectory) }
-        if folder.game(among: files) == nil {
-            let images = listing.filter { folder.readyExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
+        if folder.game(among: files.map { destination.appending(path: $0.path, directoryHint: .notDirectory) }) == nil {
+            let images = files.filter { folder.readyExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
             throw images.isEmpty ? ArchiveError.noImage : ArchiveError.ambiguous(images.map(\.fileName))
         }
-        return UnarchivePlan(archive: archive, romName: romName, entries: listing, destination: destination)
+        return UnarchivePlan(archive: archive, romName: romName, entries: files, destination: destination)
     }
 
-    /// Unarchives everything in the archive into a folder named after the ROM (or, on a Platform that unpacks to a single
-    /// file, its one file named after the ROM), checks every file's size against the listing, then sends the archive to
-    /// the Trash.
+    /// Unarchives everything in the archive but its Clutter into a folder named after the ROM (or, on a Platform that
+    /// unpacks to a single file, its one file named after the ROM), checks every file's size against the listing, then
+    /// sends the archive to the Trash.
     public func unarchive(
         _ archive: URL, romName: String, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws {
@@ -122,6 +121,7 @@ public struct ROMArchiver: Sendable {
         defer { try? FileManager.default.removeItem(at: work) }
         let unpacked = work.appending(path: romName, directoryHint: .isDirectory)
         try await sevenZip.extract(archive, paths: [], to: unpacked, progress: progress)
+        try folder.removeClutter(in: unpacked)
         for entry in plan.entries {
             let size = try? unpacked.appending(path: entry.path).resourceValues(forKeys: [.fileSizeKey]).fileSize
             guard size.map(Int64.init) == entry.size else { throw ArchiveError.checkFailed(entry.fileName) }
@@ -133,7 +133,7 @@ public struct ROMArchiver: Sendable {
 
     // MARK: Archive
 
-    /// Packs the ROM into `<name>.7z` at maximum compression: its folder's contents, or a loose
+    /// Packs the ROM into `<name>.7z` at maximum compression: its folder's contents but their Clutter, or a loose
     /// file (a cue sheet with its tracks). Tests the archive and checks its listing, moves it into the
     /// ROM folder, then sends what it packed to the Trash.
     public func archive(_ name: String, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws {
@@ -145,8 +145,8 @@ public struct ROMArchiver: Sendable {
 
     /// Packs the ROM into `<name>.<compact extension>` at maximum compression, the archive its Emulator opens
     /// directly, then sends what it packed to the Trash, as Archive does. An Archived ROM (a `.7z` ares can't open) is
-    /// repacked instead: unpacked, packed again, and its listing checked against the `.7z`'s before that goes to the
-    /// Trash.
+    /// repacked instead: unpacked, packed again without its Clutter, and its listing checked against the `.7z`'s before
+    /// that goes to the Trash.
     public func compact(_ name: String, in folder: ROMFolder, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws {
         guard let format = folder.compactExtension, let rom = try folder.rom(named: name) else {
             throw ArchiveError.nothingToDo
@@ -175,6 +175,7 @@ public struct ROMArchiver: Sendable {
         defer { try? FileManager.default.removeItem(at: work) }
         let unpacked = work.appending(path: "unpacked", directoryHint: .isDirectory)
         try await sevenZip.extract(archive, paths: [], to: unpacked) { progress($0 / 2) }
+        try folder.removeClutter(in: unpacked)
         let packed = work.appending(path: destination.lastPathComponent)
         try await sevenZip.create(
             packed, format: format, files: try FileManager.default.contentsOfDirectory(atPath: unpacked.path(percentEncoded: false)),
@@ -182,7 +183,7 @@ public struct ROMArchiver: Sendable {
         ) { progress(0.5 + $0 / 2) }
         try await sevenZip.test(packed)
         let byPath: ([SevenZip.Entry]) -> [SevenZip.Entry] = { $0.sorted { $0.path < $1.path } }
-        guard byPath(try await sevenZip.list(packed)) == byPath(listing) else {
+        guard byPath(try await sevenZip.list(packed)) == byPath(listing.filter { !folder.isClutter($0.path) }) else {
             throw ArchiveError.checkFailed(destination.lastPathComponent)
         }
         try FileManager.default.moveItem(at: packed, to: destination)
@@ -203,16 +204,14 @@ public struct ROMArchiver: Sendable {
         let packing: (root: URL, items: [String], trash: [URL])
         if let romFolder = folder.subfolder(of: name, holding: ready) {
             if folder.archiving == .singleFile {
-                // Unarchive gives back one loose file, so only the game goes in: hidden files beside it are left out,
-                // and anything else is refused rather than lost.
-                let files = try FileManager.default.subpathsOfDirectory(atPath: romFolder.path(percentEncoded: false))
-                    .filter { !Self.isHiddenExtra($0, in: folder) }.map { romFolder.appending(path: $0, directoryHint: .notDirectory) }
-                    .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
-                guard files.count == 1 else { throw ArchiveError.notOneFile(files.map(\.lastPathComponent).sorted()) }
+                // Unarchive gives back one loose file, so only the game goes in: Clutter beside it is left out, and
+                // anything else is refused rather than lost.
+                let files = try Self.files(in: romFolder, of: folder)
+                guard files.count == 1 else { throw ArchiveError.notOneFile(files.map { ($0 as NSString).lastPathComponent }.sorted()) }
                 packing = (ready.deletingLastPathComponent(), [ready.lastPathComponent], [romFolder])
             } else {
-                let items = try FileManager.default.contentsOfDirectory(atPath: romFolder.path(percentEncoded: false))
-                packing = (romFolder, items, [romFolder])
+                // Clutter is left out, and goes to the Trash with the folder.
+                packing = (romFolder, try Self.files(in: romFolder, of: folder), [romFolder])
             }
         } else {
             let tracks = ready.pathExtension.lowercased() == "cue" ? ROMFolder.cueTracks(ready) : []
@@ -256,13 +255,13 @@ public struct ROMArchiver: Sendable {
 
     // MARK: -
 
-    /// Whether a path, in a subfolder or an archive, is a hidden file that isn't the game: Finder's `.DS_Store` and `._`
-    /// companions, and any other hidden file the Emulator can't open. A game's own name can start with a dot
-    /// (`.hack--Link (Japan).iso`).
-    private static func isHiddenExtra(_ path: String, in folder: ROMFolder) -> Bool {
-        guard (path as NSString).pathComponents.contains(where: { $0.hasPrefix(".") }) else { return false }
-        let name = (path as NSString).lastPathComponent
-        return name.hasPrefix("._") || !folder.readyExtensions.contains((name as NSString).pathExtension.lowercased())
+    /// The paths of a ROM's subfolder's files, at any depth, less its Clutter.
+    private static func files(in romFolder: URL, of folder: ROMFolder) throws -> [String] {
+        try FileManager.default.subpathsOfDirectory(atPath: romFolder.path(percentEncoded: false)).filter { path in
+            !folder.isClutter(path)
+                && (try? romFolder.appending(path: path, directoryHint: .notDirectory).resourceValues(forKeys: [.isRegularFileKey])
+                    .isRegularFile) == true
+        }
     }
 
     private func checkSpace(_ needed: Int64, in folder: ROMFolder) throws {

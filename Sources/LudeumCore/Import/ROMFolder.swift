@@ -118,6 +118,35 @@ public struct ROMFolder: Sendable, Equatable {
         return discs.first.map { ($0, readyExtensions.contains("m3u") ? discs : []) }
     }
 
+    /// The kinds of file that come with a downloaded game but aren't part of it: readmes, links back to where it came
+    /// from, documents, fonts and pictures.
+    static let clutterExtensions: Set<String> = [
+        "url", "htm", "html", "txt", "nfo", "md", "pdf", "doc", "docx", "otf",
+        "jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff", "heic", "ico",
+    ]
+
+    /// Whether a path, in a subfolder or an archive, is Clutter: a hidden file the Emulator can't open (Finder's
+    /// `.DS_Store` and `._` companions), or one of `clutterExtensions` the Emulator doesn't open (a Mega Drive game is a
+    /// `.md`). A game's own name can start with a dot (`.hack--Link (Japan).iso`).
+    func isClutter(_ path: String) -> Bool {
+        let name = (path as NSString).lastPathComponent
+        let ext = (name as NSString).pathExtension.lowercased()
+        if (path as NSString).pathComponents.contains(where: { $0.hasPrefix(".") }) {
+            return name.hasPrefix("._") || !readyExtensions.contains(ext)
+        }
+        return Self.clutterExtensions.contains(ext) && !readyExtensions.contains(ext)
+    }
+
+    /// Deletes the Clutter in a folder being made into a ROM, at any depth.
+    func removeClutter(in folder: URL) throws {
+        for path in try FileManager.default.subpathsOfDirectory(atPath: folder.path(percentEncoded: false)) where isClutter(path) {
+            let file = folder.appending(path: path, directoryHint: .notDirectory)
+            if (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
+                try FileManager.default.removeItem(at: file)
+            }
+        }
+    }
+
     /// The files in Disc order, when there are two or more and each is a different Disc; else none.
     static func discs(_ files: [URL]) -> [URL] {
         let numbered = files.compactMap { file in ROMName(file.deletingPathExtension().lastPathComponent).disc.map { ($0, file) } }

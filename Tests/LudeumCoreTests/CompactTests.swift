@@ -69,8 +69,12 @@ import Testing
         #expect(p.entries.map(\.path) == [".hack--Link (Japan).iso"])
     }
 
-    @Test func anythingBesideTheImageIsRefused() {
-        #expect(throws: ArchiveError.notOneFile(["lumines.iso", "readme.txt"])) { try plan(["lumines.iso", "readme.txt"]) }
+    @Test func clutterBesideTheImageIsLeftBehind() throws {
+        #expect(try plan(["CDRomance.url", "cover.JPG", "lumines.iso", "readme.txt"]).entries.map(\.path) == ["lumines.iso"])
+    }
+
+    @Test func anythingElseBesideTheImageIsRefused() {
+        #expect(throws: ArchiveError.notOneFile(["lumines.iso", "lumines.sfv"])) { try plan(["lumines.iso", "lumines.sfv"]) }
     }
 
     @Test func aFileTheEmulatorCantOpenIsRefused() {
@@ -162,13 +166,41 @@ struct CompactTests {
     @Test func aPSPROMsSubfolderHoldingMoreThanTheGameIsntArchived() async throws {
         let psp = try FakeROMFolder(in: directory, platform: ROMPlatform.psp)
         try psp.add("Lumines (USA)/Lumines (USA).iso", String(repeating: "PSP", count: 10_000))
-        try psp.add("Lumines (USA)/readme.txt", "notes")
+        try psp.add("Lumines (USA)/Lumines (USA).sfv", "checksums")
 
-        await #expect(throws: ArchiveError.notOneFile(["Lumines (USA).iso", "readme.txt"])) {
+        await #expect(throws: ArchiveError.notOneFile(["Lumines (USA).iso", "Lumines (USA).sfv"])) {
             try await archiver.archive("Lumines (USA)", in: psp.folder)
         }
         #expect(try trashed().isEmpty)
         #expect(try psp.folder.scan().map(\.fileName) == ["Lumines (USA)/Lumines (USA).iso"])
+    }
+
+    @Test func aPSPROMsSubfolderHoldingClutterArchivesWithoutIt() async throws {
+        let psp = try FakeROMFolder(in: directory, platform: ROMPlatform.psp)
+        try psp.add("Lumines (USA)/Lumines (USA).iso", String(repeating: "PSP", count: 10_000))
+        try psp.add("Lumines (USA)/readme.txt", "notes")
+
+        try await archiver.archive("Lumines (USA)", in: psp.folder)
+
+        #expect(try await SevenZip.find()!.contents(of: psp.url.appending(path: "Lumines (USA).7z")).map(\.path) == ["Lumines (USA).iso"])
+        #expect(try trashed() == ["Lumines (USA)"])
+    }
+
+    @Test func compactingA7zAresCantOpenLeavesItsClutterOut() async throws {
+        let megaDrive = try FakeROMFolder(in: directory, platform: 29)
+        let sevenZip = SevenZip.find()!
+        try megaDrive.add("work/Sonic (USA).md", String(repeating: "MD", count: 10_000))
+        try megaDrive.add("work/readme.txt", "hi")
+        try await sevenZip.create(
+            megaDrive.url.appending(path: "Sonic (USA).7z"), files: ["Sonic (USA).md", "readme.txt"],
+            in: megaDrive.url.appending(path: "work"), progress: { _ in })
+        try megaDrive.remove("work")
+
+        try await archiver.compact("Sonic (USA)", in: megaDrive.folder)
+
+        let rom = try #require(try megaDrive.folder.scan().first)
+        #expect(try await sevenZip.contents(of: rom.ready!).map(\.path) == ["Sonic (USA).md"])
+        #expect(try trashed() == ["Sonic (USA).7z"])
     }
 
     @Test func aPSPROMArchivesAndUnarchivesAsOneLooseFile() async throws {

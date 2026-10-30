@@ -217,6 +217,37 @@ struct AddROMTests {
         #expect(try Data(contentsOf: megaDrive.url.appending(path: "Sonic (USA).zip")) == Data(contentsOf: zip))
     }
 
+    @Test func anArchiveItsEmulatorOpensHoldingClutterIsRepackedWithoutIt() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        try pick("work/Tetris (World).gb", String(repeating: "GB", count: 1000))
+        try pick("work/CDRomance.url", "link")
+        let archive = picked.appending(path: "Tetris (World).7z")
+        try await sevenZip.create(archive, files: ["Tetris (World).gb", "CDRomance.url"], in: picked.appending(path: "work")) { _ in }
+
+        try await adder.add(ROMSource([archive]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true)
+
+        let rom = try #require(try gameBoy.folder.scan().first)
+        #expect(rom.fileName == "Tetris (World).7z")
+        #expect(try await sevenZip.contents(of: rom.ready!).map(\.path) == ["Tetris (World).gb"])
+    }
+
+    @Test func aFoldersClutterIsLeftOut() async throws {
+        let ps2 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps2)
+        try pick("Okami (USA)/Okami (USA).iso", "PS2")
+        try pick("Okami (USA)/readme.html", "readme")
+        try pick("Okami (USA)/Scans/Cover.jpg", "cover")
+        try pick("Okami (USA)/Manual.pdf", "manual")
+        let folder = picked.appending(path: "Okami (USA)", directoryHint: .isDirectory)
+
+        try await adder.add(ROMSource([folder]), to: ps2.folder, match: igdb(4, "Okami", on: 8), keepingOriginals: true)
+
+        let subfolder = ps2.url.appending(path: "Okami (USA)", directoryHint: .isDirectory)
+        let files = try FileManager.default.subpathsOfDirectory(atPath: subfolder.path(percentEncoded: false)).filter {
+            (try? subfolder.appending(path: $0).resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        }
+        #expect(files == ["Okami (USA).iso"])
+    }
+
     @Test func discsGoIntoASubfolderWithAPlaylist() async throws {
         let ps1 = try FakeROMFolder(in: directory, platform: 7)
         var discs: [URL] = []

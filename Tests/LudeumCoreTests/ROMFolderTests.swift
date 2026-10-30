@@ -451,3 +451,28 @@ struct FakeROMFolder {
         #expect(try ps2.folder.files(named: "ICO") == [archive])
     }
 }
+
+@Suite struct ClutterTests {
+    func folder(_ platform: Int64) -> ROMFolder { .platform(platform, URL(filePath: "/Games", directoryHint: .isDirectory))! }
+
+    @Test func readmesLinksDocumentsFontsAndPicturesAreClutter() {
+        let ps2 = folder(ROMPlatform.ps2)
+        for path in ["readme.TXT", "CDRomance.url", "info.htm", "Scans/Cover.jpeg", "Manual.pdf", "Font.otf", "README.md", "release.nfo"] {
+            #expect(ps2.isClutter(path), "\(path)")
+        }
+        #expect(!ps2.isClutter("Okami (USA).iso"))
+        #expect(!ps2.isClutter("Okami (USA).sfv"))
+    }
+
+    @Test func aKindItsEmulatorOpensIsntClutter() {
+        #expect(!folder(29).isClutter("Sonic (USA).md"))
+        #expect(!folder(ROMPlatform.ps1).isClutter("Fear Effect (USA).img"))
+    }
+
+    @Test func hiddenFilesTheEmulatorCantOpenAreClutterButAGameNamedWithADotIsnt() {
+        let psp = folder(ROMPlatform.psp)
+        #expect(psp.isClutter(".DS_Store"))
+        #expect(psp.isClutter("._.hack--Link (Japan).iso"))
+        #expect(!psp.isClutter(".hack--Link (Japan).iso"))
+    }
+}

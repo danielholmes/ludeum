@@ -173,7 +173,8 @@ public enum AddROMNaming: Sendable, Equatable {
 /// Add ROM: puts a game picked from elsewhere into its Platform's ROM folder in the form the Platform keeps, then records
 /// it and Matches it by hand. A Compactable Platform's ROM is Compacted; a Platform whose ROMs are kept in subfolders
 /// gets one named after the ROM, with a playlist for its Discs; anything else is one Playable file named after the ROM.
-/// An archive is unpacked first unless it's already the one its Emulator opens. Everything is made in a hidden work
+/// An archive is unpacked first unless it's already the one its Emulator opens, with no Clutter in it; Clutter is left
+/// out of what goes in. Everything is made in a hidden work
 /// folder inside the ROM folder and moves into place only once it's all there; with `keepingOriginals` false, the
 /// picked files go to the Trash last of all, once the ROM is in the journal.
 public struct AddROM: Sendable {
@@ -396,11 +397,14 @@ public struct AddROM: Sendable {
     private func make(
         _ source: ROMSource, named name: String, in folder: ROMFolder, work: URL, progress: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
-        // Already the archive its Emulator opens: it goes in as it is.
+        // Already the archive its Emulator opens, and holding no Clutter: it goes in as it is.
         if let archive = source.archive, let compact = folder.compactExtension, archive.pathExtension.lowercased() == compact {
-            let copy = work.appending(path: "\(name).\(compact)")
-            try FileManager.default.copyItem(at: archive, to: copy)
-            return copy
+            guard let sevenZip else { throw ArchiveError.noSevenZip }
+            if !(try await sevenZip.list(archive)).contains(where: { folder.isClutter($0.path) }) {
+                let copy = work.appending(path: "\(name).\(compact)")
+                try FileManager.default.copyItem(at: archive, to: copy)
+                return copy
+            }
         }
         // Everything picked, unpacked if it's an archive, in a folder named after the ROM. Copies are clones on APFS.
         let staged = work.appending(path: name, directoryHint: .isDirectory)
@@ -417,6 +421,7 @@ public struct AddROM: Sendable {
                 try FileManager.default.copyItem(at: file, to: staged.appending(path: file.lastPathComponent))
             }
         }
+        try folder.removeClutter(in: staged)
         let files = ROMSource.files(in: staged)
 
         if folder.archiving == .intoFolder {

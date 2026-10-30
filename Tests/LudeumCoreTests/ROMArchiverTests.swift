@@ -13,11 +13,13 @@ import Testing
         try ROMArchiver.unarchivePlan(listing: entries, archive: archive, romName: "ICO", folder: folder)
     }
 
-    @Test func everythingInTheArchiveIsKept() throws {
-        let p = try plan([entry("ICO (USA).bin", 638), entry("readme.html", 1)])
+    @Test func everythingInTheArchiveButItsClutterIsKept() throws {
+        let p = try plan([
+            entry("ICO (USA).bin", 638), entry("ICO (USA).sbi", 2), entry("readme.html", 1), entry("Scans/Cover.png", 5),
+        ])
 
-        #expect(p.entries.map(\.path) == ["ICO (USA).bin", "readme.html"])
-        #expect(p.bytesNeeded == 639)
+        #expect(p.entries.map(\.path) == ["ICO (USA).bin", "ICO (USA).sbi"])
+        #expect(p.bytesNeeded == 640)
         #expect(p.destination == URL(filePath: "/Games/PS2/ICO", directoryHint: .isDirectory))
     }
 
@@ -110,17 +112,36 @@ struct ROMArchiverTests {
         #expect(try trashed() == ["ICO.7z", "ICO.bin"])
     }
 
-    @Test func archivingAROMsFolderPacksItsContentsAndTrashesTheFolder() async throws {
+    @Test func archivingAROMsFolderPacksItsContentsButItsClutterAndTrashesTheFolder() async throws {
         try ps2.add("ICO/ICO (USA).bin", "image")
+        try ps2.add("ICO/Patches/ICO (USA).ppf", "patch")
         try ps2.add("ICO/readme.html", "readme")
+        try ps2.add("ICO/Patches/CDRomance.url", "link")
 
         try await archiver().archive("ICO", in: ps2.folder)
         #expect(try ps2.folder.scan().map(\.archived) == [true])
         #expect(try trashed() == ["ICO"])
+        #expect(
+            try await SevenZip.find()!.contents(of: ps2.url.appending(path: "ICO.7z")).map(\.path).sorted()
+                == ["ICO (USA).bin", "Patches/ICO (USA).ppf"])
         try await archiver().unarchive(ps2.url.appending(path: "ICO.7z"), romName: "ICO", in: ps2.folder)
 
         #expect(try ps2.folder.scan().first?.fileName == "ICO/ICO (USA).bin")
-        #expect(FileManager.default.fileExists(atPath: ps2.url.appending(path: "ICO/readme.html").path(percentEncoded: false)))
+        #expect(FileManager.default.fileExists(atPath: ps2.url.appending(path: "ICO/Patches/ICO (USA).ppf").path(percentEncoded: false)))
+    }
+
+    @Test func unarchivingLeavesTheArchivesClutterBehind() async throws {
+        try ps2.add("work/ICO (USA).bin", "image")
+        try ps2.add("work/readme.html", "readme")
+        try await SevenZip.find()!.create(
+            ps2.url.appending(path: "ICO.7z"), files: ["ICO (USA).bin", "readme.html"], in: ps2.url.appending(path: "work"),
+            progress: { _ in })
+        try ps2.remove("work")
+
+        try await archiver().unarchive(ps2.url.appending(path: "ICO.7z"), romName: "ICO", in: ps2.folder)
+
+        let unpacked = ps2.url.appending(path: "ICO", directoryHint: .isDirectory)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: unpacked.path(percentEncoded: false)) == ["ICO (USA).bin"])
     }
 
     @Test func aFolderOfTheROMsNameThatDoesntHoldTheGameIsLeftAloneAndTheLooseFileIsPacked() async throws {
@@ -136,12 +157,12 @@ struct ROMArchiverTests {
 
     @Test func anArchivesContentsCanBeListedWithoutUnarchivingIt() async throws {
         try ps2.add("ICO/ICO.bin", "image")
-        try ps2.add("ICO/readme.html", "readme")
+        try ps2.add("ICO/ICO.sbi", "subchannel")
         try await archiver().archive("ICO", in: ps2.folder)
 
         let contents = try await SevenZip.find()!.contents(of: ps2.url.appending(path: "ICO.7z"))
 
-        #expect(contents.map(\.path).sorted() == ["ICO.bin", "readme.html"])
+        #expect(contents.map(\.path).sorted() == ["ICO.bin", "ICO.sbi"])
         #expect(contents.first { $0.path == "ICO.bin" }?.size == 5)
     }
 
