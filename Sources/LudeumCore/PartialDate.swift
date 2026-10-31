@@ -25,6 +25,12 @@ public struct PartialDate: Hashable, Comparable, Sendable {
         self.text = text
     }
 
+    /// The day `date` falls on in `calendar`: `1996-03-17`.
+    public init(day date: Date, in calendar: Calendar = .current) {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        self.text = String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
+    }
+
     /// Whether `other` falls within this date: `2024` contains `2024-03` and itself.
     public func contains(_ other: PartialDate) -> Bool {
         other.text.hasPrefix(text)

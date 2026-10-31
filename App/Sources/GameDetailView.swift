@@ -952,8 +952,8 @@ struct PlaythroughSheet: View {
 
     var body: some View {
         Form {
-            TextField("Start", text: $start, prompt: Text("YYYY, YYYY-MM or YYYY-MM-DD"))
-            TextField("End", text: $end, prompt: Text("YYYY, YYYY-MM or YYYY-MM-DD"))
+            PartialDateField("Start", text: $start)
+            PartialDateField("End", text: $end)
             Picker("Outcome", selection: $outcome) {
                 Text("In progress").tag(Outcome?.none)
                 Text("Finished").tag(Outcome?.some(.finished))

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import LudeumCore
@@ -12,6 +13,15 @@ import Testing
     @Test(arguments: ["", "96", "1996-3", "1996-13", "1996-02-30", "1996-03-17T10:00", "March 1996"])
     func refusesAnythingElse(_ text: String) {
         #expect(PartialDate(text) == nil)
+    }
+
+    @Test func aDayIsTheDayItFallsOnInTheCalendar() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Australia/Sydney")!
+        // 1996-03-16 20:00 UTC, already the 17th in Sydney.
+        let date = Date(timeIntervalSince1970: 827_006_400)
+
+        #expect(PartialDate(day: date, in: calendar) == PartialDate("1996-03-17"))
     }
 
     @Test func aLessPreciseDateSortsBeforeTheDatesWithinIt() {

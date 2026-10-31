@@ -40,7 +40,6 @@ struct CopySheet: View {
 
     private var rom: LudeumROM? { if case .rom(let r) = edit { r } else { nil } }
     private var existingCopy: Copy? { if case .copy(let c) = edit { c } else { nil } }
-    private static let datePrompt = Text("YYYY, YYYY-MM or YYYY-MM-DD")
 
     var body: some View {
         Form {
@@ -56,7 +55,7 @@ struct CopySheet: View {
                 .pickerStyle(.segmented)
             }
             RegionsEditor(regions: $regions, suggestions: regionSuggestions)
-            TextField("Acquired on", text: $acquiredOn, prompt: Self.datePrompt)
+            PartialDateField("Acquired on", text: $acquiredOn)
             TextField("Acquired from", text: $acquiredFrom)
             LabeledContent("Price") {
                 HStack {
@@ -69,7 +68,7 @@ struct CopySheet: View {
             if rom == nil {
                 Toggle("No longer owned", isOn: $gone)
                 if gone {
-                    TextField("Gone on", text: $goneOn, prompt: Self.datePrompt)
+                    PartialDateField("Gone on", text: $goneOn)
                     TextField("Gone to", text: $goneTo, prompt: Text("Sold on eBay, given to a friend, lost…"))
                 }
             }
