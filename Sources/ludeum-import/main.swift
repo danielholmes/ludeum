@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import LudeumCore
 
@@ -6,7 +5,6 @@ import LudeumCore
 //
 //   ludeum-import check                    Live check of IGDB and Hasheous through the real cache.
 //   ludeum-import mesence [--run]          Moves MesenCE's own saves into the Data folder (ADR 0027): once, then goes.
-//   ludeum-import gamecube-discs [--run]   Makes each multi-disc GameCube Version one ROM (ADR 0031): once, then goes.
 //
 // Every command first needs the Data folder, and refuses without it in the app's words.
 // Credentials come from the environment or a .env file in the current directory
@@ -86,44 +84,9 @@ func mesence(run: Bool) async throws {
     print("Done.")
 }
 
-/// Makes each multi-disc GameCube Version one ROM, a folder of its Discs with a playlist (ADR 0031): a plan unless
-/// `--run`. Once, with Ludeum closed; Dropbox brings down any Disc it keeps online only. Then this command goes.
-func gameCubeDiscs(run: Bool) async throws {
-    // Each line as it happens, even into a file and even if the run stops short.
-    setvbuf(stdout, nil, _IOLBF, 0)
-    requireDataFolder()
-    // Its launch clears the ROM folders' work folders, where an Archive is being written, and its Import would find the
-    // Discs half moved.
-    if run, !NSRunningApplication.runningApplications(withBundleIdentifier: "org.danielholmes.Ludeum").isEmpty {
-        fail("Quit Ludeum first, and keep it closed until this is done.")
-    }
-    let ludeum = LudeumFolder.standard
-    guard let url = ludeum.romFolder(platform: 21), let folder = ROMFolder.platform(21, url) else { fail("No GameCube ROM folder.") }
-    let archiver: ROMArchiver
-    do { archiver = try ROMArchiver.installed() } catch { fail(error.localizedDescription) }
-    let backups = Backups(folder: ludeum.backups)
-    let journal = try LudeumStore(directory: ludeum.url, backups: backups)
-    let migration = GameCubeDiscsMigration(journal: journal, folder: folder, archiver: archiver, backups: backups)
-    let plan = try migration.plan()
-    for merge in plan.merges {
-        let discs = merge.discs.map(\.name).joined(separator: " + ")
-        let already = merge.gathered ? " (its Discs already in its folder)" : ""
-        print("merge \(merge.game): \(discs)  →  \(merge.name)\(merge.archived ? ".7z" : "/"), keeping ROM \(merge.discs[0].id)\(already)")
-    }
-    for left in plan.left { print("leave \(left.rom): \(left.why)") }
-    print("\(plan.merges.count) to merge, \(plan.left.count) left")
-    guard run else {
-        print("A plan: nothing was changed. Run again with --run, with Ludeum closed.")
-        return
-    }
-    try await migration.run(plan) { print($0) }
-    print("Done.")
-}
-
 switch CommandLine.arguments.dropFirst().first {
 case "check": try await check()
 case "mesence": try await mesence(run: CommandLine.arguments.contains("--run"))
-case "gamecube-discs": try await gameCubeDiscs(run: CommandLine.arguments.contains("--run"))
 default:
-    fail("usage: ludeum-import check | mesence [--run] | gamecube-discs [--run]")
+    fail("usage: ludeum-import check | mesence [--run]")
 }
