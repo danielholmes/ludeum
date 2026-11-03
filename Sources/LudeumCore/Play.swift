@@ -260,7 +260,7 @@ public struct Play: Sendable {
         do {
             let arguments = try emulator.arguments(
                 rom: opened, platformId: platformId, settings: settings, saveState: saveState,
-                duckStation: duckStation, mesen: mesen, ares: ares)
+                duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2)
             return .open(app: app, arguments: arguments, warning: warning, startsOn: startsOn)
         } catch {
             return .refused(.couldntWriteSettings(emulator, error.localizedDescription))
