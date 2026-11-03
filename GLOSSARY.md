@@ -35,7 +35,7 @@ A game file in a ROM folder that the journal has recorded, and a Copy of the Gam
 _Avoid_: File, image
 
 **ROM folder**:
-The folder of one Platform's ROMs. The journal says which ROMs there are, and the folder says how their files are now (present or missing, Archived, Compacted). Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state, and so is Compacting `Tetris (World).gb` into `Tetris (World).7z`. A ROM is never kept in both forms at once (a Compacted `.7z` alone is one form): when it is, it waits in the Review queue.
+The folder of one Platform's ROMs. The journal says which ROMs there are, and the folder says how their files are now (present or missing, Archived, Compacted). Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder, and so does a GameCube ROM of several Discs. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state, and so is Compacting `Tetris (World).gb` into `Tetris (World).7z`. A ROM is never kept in both forms at once (a Compacted `.7z` alone is one form): when it is, it waits in the Review queue.
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
@@ -47,7 +47,7 @@ A present ROM that isn't Archived. Every present ROM is either Playable or Archi
 _Avoid_: Active, unarchived, ordinary ROM
 
 **Archive / Unarchive**:
-Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played (a PSP, Vita, GameCube, Wii or Xbox ROM, always one file, unpacks to that file, named after the ROM). Either way its Clutter is left out, and only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2, PSP, Vita, GameCube, Wii, Xbox and the Disc Platforms' (PS1, Sega CD, Saturn, PC Engine CD) ROMs can be Archived or Unarchived so far.
+Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played (a PSP, Vita, GameCube, Wii or Xbox ROM, one file, unpacks to that file, named after the ROM; a GameCube ROM of several Discs unpacks into its folder). Either way its Clutter is left out, and only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2, PSP, Vita, GameCube, Wii, Xbox and the Disc Platforms' (PS1, Sega CD, Saturn, PC Engine CD) ROMs can be Archived or Unarchived so far.
 _Avoid_: Extract, compress, decompress
 
 **Compact**:
@@ -67,7 +67,7 @@ Renaming a ROM to its Standard name in every form it's kept in: its subfolder, i
 _Avoid_: Move, retitle
 
 **Disc**:
-One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" are Discs too. On a disc Platform they're one ROM: a subfolder holding the Discs and a playlist that loads them. Elsewhere (GameCube) each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version. Any Disc can be the one a Play starts on, and the others can still be swapped in.
+One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" are Discs too. On a disc Platform, and on GameCube, they're one ROM, and so one Copy: a subfolder holding the Discs and a playlist that loads them. Elsewhere each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version. Any Disc can be the one a Play starts on, and the others can still be swapped in.
 _Avoid_: Part, volume, CD
 
 **Disc label**:

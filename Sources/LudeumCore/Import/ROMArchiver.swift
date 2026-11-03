@@ -47,6 +47,8 @@ public struct UnarchivePlan: Sendable, Equatable {
     public let destination: URL
 
     public var bytesNeeded: Int64 { entries.reduce(0) { $0 + $1.size } }
+    /// Whether it unpacks to its one file, rather than into the ROM's folder.
+    var isOneFile: Bool { destination.lastPathComponent != romName }
 }
 
 /// Archive, Unarchive and Compact for a ROM folder's ROMs. Work happens in a hidden folder inside the ROM
@@ -89,7 +91,8 @@ public struct ROMArchiver: Sendable {
     static func unarchivePlan(listing: [SevenZip.Entry], archive: URL, romName: String, folder: ROMFolder) throws -> UnarchivePlan {
         // Clutter (a readme, or a `.DS_Store` packed with its subfolder) stays behind.
         let files = listing.filter { !folder.isClutter($0.path) }
-        if folder.archiving == .singleFile {
+        // Several Discs, where the Emulator reads a playlist of them, unpack into a folder as on a disc Platform.
+        if folder.archiving == .singleFile, files.count == 1 || !folder.readsPlaylists {
             guard let image = files.first else { throw ArchiveError.noImage }
             guard files.count == 1 else { throw ArchiveError.notOneFile(files.map(\.fileName)) }
             let ext = (image.path as NSString).pathExtension.lowercased()
@@ -126,7 +129,7 @@ public struct ROMArchiver: Sendable {
             let size = try? unpacked.appending(path: entry.path).resourceValues(forKeys: [.fileSizeKey]).fileSize
             guard size.map(Int64.init) == entry.size else { throw ArchiveError.checkFailed(entry.fileName) }
         }
-        let unpackedFile = folder.archiving == .singleFile ? plan.entries.first.map { unpacked.appending(path: $0.path) } : nil
+        let unpackedFile = plan.isOneFile ? plan.entries.first.map { unpacked.appending(path: $0.path) } : nil
         try FileManager.default.moveItem(at: unpackedFile ?? unpacked, to: plan.destination)
         try moveToTrash(archive)
     }
@@ -203,15 +206,15 @@ public struct ROMArchiver: Sendable {
         }
         let packing: (root: URL, items: [String], trash: [URL])
         if let romFolder = folder.subfolder(of: name, holding: ready) {
-            if folder.archiving == .singleFile {
+            let files = try Self.files(in: romFolder, of: folder)
+            if folder.archiving == .singleFile, !(folder.readsPlaylists && ready.pathExtension.lowercased() == "m3u") {
                 // Unarchive gives back one loose file, so only the game goes in: Clutter beside it is left out, and
-                // anything else is refused rather than lost.
-                let files = try Self.files(in: romFolder, of: folder)
+                // anything else is refused rather than lost. A playlist with its Discs unpacks into a folder again.
                 guard files.count == 1 else { throw ArchiveError.notOneFile(files.map { ($0 as NSString).lastPathComponent }.sorted()) }
                 packing = (ready.deletingLastPathComponent(), [ready.lastPathComponent], [romFolder])
             } else {
                 // Clutter is left out, and goes to the Trash with the folder.
-                packing = (romFolder, try Self.files(in: romFolder, of: folder), [romFolder])
+                packing = (romFolder, files, [romFolder])
             }
         } else {
             let tracks = ready.pathExtension.lowercased() == "cue" ? ROMFolder.cueTracks(ready) : []

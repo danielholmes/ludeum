@@ -58,7 +58,8 @@ public struct ROMSource: Sendable, Equatable {
 
     /// Files picked at once as several ROMs, in name order: each folder and each archive is one, and so is each other
     /// file, less any that another brings along (a cue sheet's tracks, a playlist's Discs). The Discs of one Version are
-    /// one ROM together, unless no Platform reads them that way (GameCube keeps each Disc a ROM of its own).
+    /// one ROM together, unless no Platform reads them that way (none keeps its Discs together but the disc Platforms and
+    /// GameCube).
     public static func split(_ urls: [URL]) async -> [ROMSource] {
         func key(_ url: URL) -> String { url.standardizedFileURL.path(percentEncoded: false) }
         let loose = urls.filter { ROMSource([$0]).isFolder == false && ROMSource([$0]).archive == nil }
@@ -99,8 +100,9 @@ public struct ROMSource: Sendable, Equatable {
         urls.count == 1 && !isFolder && ["7z", "zip"].contains(urls[0].pathExtension.lowercased()) ? urls[0] : nil
     }
 
-    /// The Platforms whose ROM folders read it, by IGDB platform id: a folder, or several Discs, only where ROMs are kept
-    /// in subfolders. An archive is read by what's inside it, so needs 7-Zip.
+    /// The Platforms whose ROM folders read it, by IGDB platform id: a folder only where ROMs are kept in subfolders, and
+    /// several Discs only where they're kept together in one (on GameCube too). An archive is read by what's inside it,
+    /// so needs 7-Zip.
     public func platforms(sevenZip: SevenZip?) async throws -> [Int64] {
         guard !urls.isEmpty else { throw AddROMError.notOneGame }
         if urls.count > 1 && ROMFolder.discs(urls).isEmpty { throw AddROMError.notOneGame }
@@ -115,7 +117,8 @@ public struct ROMSource: Sendable, Equatable {
         }
         let extensions = Set(inside.filter { !Self.isHidden($0) }.map { ($0 as NSString).pathExtension.lowercased() })
         let platforms = ROMPlatform.all.filter { _, platform in
-            if (isFolder || urls.count > 1) && platform.archiving != .intoFolder { return false }
+            if isFolder && platform.archiving != .intoFolder { return false }
+            if urls.count > 1 && !platform.keepsDiscsTogether { return false }
             // A Compacted archive is read as it is.
             if let archive, archive.pathExtension.lowercased() == platform.compactExtension { return true }
             return !extensions.isDisjoint(with: platform.readyExtensions)
@@ -424,10 +427,12 @@ public struct AddROM: Sendable {
         try folder.removeClutter(in: staged)
         let files = ROMSource.files(in: staged)
 
-        if folder.archiving == .intoFolder {
+        // Several images go into a folder of the ROM's name with a playlist, where its Emulator reads one (GameCube's
+        // Discs, ADR 0031), as everything does on a Platform whose ROMs are always in one.
+        let ready = files.filter { folder.readyExtensions.contains($0.pathExtension.lowercased()) }
+        if folder.archiving == .intoFolder || (folder.readsPlaylists && ready.count > 1) {
             guard let game = folder.game(among: files) else {
-                let images = files.filter { folder.readyExtensions.contains($0.pathExtension.lowercased()) }
-                throw images.isEmpty ? AddROMError.noImage : AddROMError.ambiguous(images.map(\.lastPathComponent))
+                throw ready.isEmpty ? AddROMError.noImage : AddROMError.ambiguous(ready.map(\.lastPathComponent))
             }
             if !game.discsWithoutPlaylist.isEmpty { try writePlaylist(named: name, for: game.discsWithoutPlaylist, in: staged) }
             return staged

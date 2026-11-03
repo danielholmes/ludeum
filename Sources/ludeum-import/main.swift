@@ -5,6 +5,7 @@ import LudeumCore
 //
 //   ludeum-import check                    Live check of IGDB and Hasheous through the real cache.
 //   ludeum-import mesence [--run]          Moves MesenCE's own saves into the Data folder (ADR 0027): once, then goes.
+//   ludeum-import gamecube-discs [--run]   Makes each multi-disc GameCube Version one ROM (ADR 0031): once, then goes.
 //
 // Every command first needs the Data folder, and refuses without it in the app's words.
 // Credentials come from the environment or a .env file in the current directory
@@ -84,9 +85,36 @@ func mesence(run: Bool) async throws {
     print("Done.")
 }
 
+/// Makes each multi-disc GameCube Version one ROM, a folder of its Discs with a playlist (ADR 0031): a plan unless
+/// `--run`. Once, with Ludeum closed; Dropbox brings down any Disc it keeps online only. Then this command goes.
+func gameCubeDiscs(run: Bool) async throws {
+    requireDataFolder()
+    let ludeum = LudeumFolder.standard
+    guard let url = ludeum.romFolder(platform: 21), let folder = ROMFolder.platform(21, url) else { fail("No GameCube ROM folder.") }
+    let archiver: ROMArchiver
+    do { archiver = try ROMArchiver.installed() } catch { fail(error.localizedDescription) }
+    let backups = Backups(folder: ludeum.backups)
+    let journal = try LudeumStore(directory: ludeum.url, backups: backups)
+    let migration = GameCubeDiscsMigration(journal: journal, folder: folder, archiver: archiver, backups: backups)
+    let plan = try migration.plan()
+    for merge in plan.merges {
+        let discs = merge.discs.map(\.name).joined(separator: " + ")
+        print("merge \(merge.game): \(discs)  →  \(merge.name)\(merge.archived ? ".7z" : "/"), keeping ROM \(merge.discs[0].id)")
+    }
+    for left in plan.left { print("leave \(left.rom): \(left.why)") }
+    print("\(plan.merges.count) to merge, \(plan.left.count) left")
+    guard run else {
+        print("A plan: nothing was changed. Run again with --run, with Ludeum closed.")
+        return
+    }
+    try await migration.run(plan) { print($0) }
+    print("Done.")
+}
+
 switch CommandLine.arguments.dropFirst().first {
 case "check": try await check()
 case "mesence": try await mesence(run: CommandLine.arguments.contains("--run"))
+case "gamecube-discs": try await gameCubeDiscs(run: CommandLine.arguments.contains("--run"))
 default:
-    fail("usage: ludeum-import check | mesence [--run]")
+    fail("usage: ludeum-import check | mesence [--run] | gamecube-discs [--run]")
 }

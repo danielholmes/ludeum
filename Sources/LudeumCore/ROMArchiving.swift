@@ -32,9 +32,20 @@ import Foundation
         return rom.archived ? .unarchive : .archive
     }
 
-    /// Whether the ROM's Unarchive unpacks its one file loose, rather than everything into a folder named after it.
-    public nonisolated static func unarchivesToOneFile(_ rom: LudeumROM) -> Bool {
-        ROMPlatform.all[rom.platformId]?.archiving == .singleFile
+    /// What the ROM's Unarchive unpacks to.
+    public enum Unpacking: Sendable, Equatable {
+        /// Its one file, loose.
+        case oneFile
+        /// Everything, into a folder named after it.
+        case folder
+        /// Its one file, or several Discs into a folder with their playlist: which, only its archive says (GameCube).
+        case oneFileOrDiscs
+    }
+
+    /// What the ROM's Unarchive unpacks to: its one file loose, or everything into a folder named after it.
+    public nonisolated static func unpacking(_ rom: LudeumROM) -> Unpacking {
+        guard let platform = ROMPlatform.all[rom.platformId], platform.archiving == .singleFile else { return .folder }
+        return platform.readsPlaylists ? .oneFileOrDiscs : .oneFile
     }
 
     /// The file a Compact makes, e.g. `Tetris (World).7z`; nil when the ROM can't be Compacted.

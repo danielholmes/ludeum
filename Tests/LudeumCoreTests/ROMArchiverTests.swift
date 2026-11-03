@@ -211,6 +211,36 @@ struct ROMArchiverTests {
         #expect(try gameCube.folder.scan().map(\.fileName) == ["Metroid Prime (USA).rvz"])
     }
 
+    @Test func aMultiDiscGameCubeROMArchivesItsFolderAndUnarchivesIntoItAgain() async throws {
+        let gameCube = try FakeROMFolder(in: directory, platform: 21)
+        try gameCube.add(
+            "Resident Evil (USA)/Resident Evil (USA).m3u", "Resident Evil (USA) (Disc 1).rvz\nResident Evil (USA) (Disc 2).rvz\n")
+        try gameCube.add("Resident Evil (USA)/Resident Evil (USA) (Disc 1).rvz", String(repeating: "D1", count: 10_000))
+        try gameCube.add("Resident Evil (USA)/Resident Evil (USA) (Disc 2).rvz", String(repeating: "D2", count: 10_000))
+        try gameCube.add("Resident Evil (USA)/readme.txt")
+
+        try await archiver().archive("Resident Evil (USA)", in: gameCube.folder)
+        #expect(try gameCube.folder.scan().map(\.fileName) == ["Resident Evil (USA).7z"])
+        try await archiver().unarchive(
+            gameCube.url.appending(path: "Resident Evil (USA).7z"), romName: "Resident Evil (USA)", in: gameCube.folder)
+
+        #expect(try gameCube.folder.scan().map(\.fileName) == ["Resident Evil (USA)/Resident Evil (USA).m3u"])
+        #expect(
+            try FileManager.default.contentsOfDirectory(atPath: gameCube.url.appending(path: "Resident Evil (USA)").path).sorted() == [
+                "Resident Evil (USA) (Disc 1).rvz", "Resident Evil (USA) (Disc 2).rvz", "Resident Evil (USA).m3u",
+            ])
+    }
+
+    @Test func aGameCubeFolderOfDiscsWithNoPlaylistIsntArchived() async throws {
+        let gameCube = try FakeROMFolder(in: directory, platform: 21)
+        try gameCube.add("Resident Evil (USA)/Resident Evil (USA) (Disc 1).rvz", "D1")
+        try gameCube.add("Resident Evil (USA)/Resident Evil (USA) (Disc 2).rvz", "D2")
+
+        await #expect(throws: ArchiveError.notOneFile(["Resident Evil (USA) (Disc 1).rvz", "Resident Evil (USA) (Disc 2).rvz"])) {
+            try await archiver().archive("Resident Evil (USA)", in: gameCube.folder)
+        }
+    }
+
     @Test func aWiiWareWADUnarchivesToItsOneFile() async throws {
         let wii = try FakeROMFolder(in: directory, platform: 5)
         try wii.add("World of Goo (USA) (WiiWare).wad", String(repeating: "WAD", count: 10_000))

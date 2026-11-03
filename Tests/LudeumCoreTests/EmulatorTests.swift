@@ -49,15 +49,21 @@ import Testing
     }
 }
 
-@Test func everyDolphinPlayLowersInputLatencyForThatLaunchOnly() throws {
+@Test func everyDolphinPlayLowersInputLatencyAndSwapsDiscsForThatLaunchOnly() throws {
     let rom = URL(filePath: "/Games/GameCube/Pikmin (USA).rvz")
 
     #expect(
         try Emulator.dolphin.arguments(rom: rom, platformId: 21, settings: EmulatorSettings())
             == [
-                "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-e",
-                "/Games/GameCube/Pikmin (USA).rvz",
+                "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-C",
+                "Main.Core.AutoDiscChange=True", "-e", "/Games/GameCube/Pikmin (USA).rvz",
             ])
+}
+
+@Test func aMultiDiscGameCubeROMPlaysFromItsPlaylist() throws {
+    let rom = URL(filePath: "/Games/GameCube/Resident Evil (USA)/Resident Evil (USA).m3u")
+
+    #expect(try Emulator.dolphin.arguments(rom: rom, platformId: 21, settings: EmulatorSettings()).suffix(2) == ["-e", rom.path])
 }
 
 @Test func aWiiWareWADPlaysInDolphinLikeADisc() throws {

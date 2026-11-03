@@ -674,6 +674,16 @@ struct GameDetailView: View {
 
     // MARK: Archive, Unarchive and Compact
 
+    /// What Unarchive unpacks the ROM to.
+    private func unarchiveHelp(_ rom: LudeumROM) -> String {
+        switch ROMArchiving.unpacking(rom) {
+        case .oneFile: "Unpack its file, so it can be Played. The .7z goes to the Trash."
+        case .folder: "Unpack it into a folder named after it, so it can be Played. The .7z goes to the Trash."
+        case .oneFileOrDiscs:
+            "Unpack its file, or its Discs into a folder named after it, so it can be Played. The .7z goes to the Trash."
+        }
+    }
+
     /// Archive, Unarchive or Compact, as a Background task; while it's queued or running, its progress.
     @ViewBuilder private func archiveButton(_ rom: LudeumROM) -> some View {
         if let task = services.tasks.active(.rom(rom.id)) {
@@ -682,10 +692,7 @@ struct GameDetailView: View {
             switch ROMArchiving.action(for: rom) {
             case .unarchive:
                 Button("Unarchive", systemImage: "archivebox") { startArchiving(rom) }
-                    .help(
-                        ROMArchiving.unarchivesToOneFile(rom)
-                            ? "Unpack its file, so it can be Played. The .7z goes to the Trash."
-                            : "Unpack it into a folder named after it, so it can be Played. The .7z goes to the Trash.")
+                    .help(unarchiveHelp(rom))
             case .archive:
                 Button("Archive", systemImage: "archivebox") { startArchiving(rom) }
                     .help("Pack it into a .7z at maximum compression. What it packed goes to the Trash.")

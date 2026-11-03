@@ -402,6 +402,9 @@ struct AddROMConfirmation: View {
                 ? "It's Compacted into a .\(compact) its Emulator opens directly."
                 : unpacked + "its game is Compacted into a .\(compact) its Emulator opens directly."
         }
+        if !unpacked.isEmpty, platform?.readsPlaylists == true {
+            return unpacked + "its game is kept as one file named after it, or its Discs in a folder of its name with a playlist."
+        }
         return unpacked.isEmpty ? "It's kept as one file named after it." : unpacked + "its game is kept as one file named after it."
     }
 }

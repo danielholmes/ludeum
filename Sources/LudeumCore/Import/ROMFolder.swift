@@ -31,6 +31,9 @@ public struct ROMFolder: Sendable, Equatable {
     /// How its ROMs are Archived, when they can be.
     var archiving: ROMPlatform.Archiving? { ROMPlatform.all[platformId]?.archiving }
 
+    /// Whether its Emulator opens a playlist of a multi-disc Version's Discs, kept with them in the ROM's subfolder.
+    var readsPlaylists: Bool { readyExtensions.contains("m3u") }
+
     /// Whether a file with this name, at the top of the folder, is a ROM to it: ready, or a `.7z`.
     func reads(fileName: String) -> Bool {
         let ext = (fileName as NSString).pathExtension.lowercased()
@@ -115,7 +118,7 @@ public struct ROMFolder: Sendable, Equatable {
         if candidates.count == 1 { return (candidates[0], []) }
         let discs = Self.discs(candidates)
         // A playlist is only missing where the Emulator would read one.
-        return discs.first.map { ($0, readyExtensions.contains("m3u") ? discs : []) }
+        return discs.first.map { ($0, readsPlaylists ? discs : []) }
     }
 
     /// The kinds of file that come with a downloaded game but aren't part of it: readmes, links back to where it came

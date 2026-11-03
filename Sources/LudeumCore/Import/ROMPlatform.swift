@@ -22,7 +22,9 @@ public struct ROMPlatform: Sendable, Equatable {
     public enum Archiving: Sendable, Equatable {
         /// Everything in the archive, into a folder named after the ROM (PS2 and the disc Platforms).
         case intoFolder
-        /// Its one file, named after the ROM, loose in the ROM folder (PSP, Vita, GameCube, Wii and Xbox).
+        /// Its one file, named after the ROM, loose in the ROM folder (PSP, Vita, GameCube, Wii and Xbox); on a Platform
+        /// whose Emulator reads playlists (GameCube), a ROM of several Discs is everything into a folder named after it,
+        /// as `intoFolder` (ADR 0031).
         case singleFile
     }
 
@@ -42,6 +44,14 @@ public struct ROMPlatform: Sendable, Equatable {
         self.archiving = archiving
         self.naming = naming
     }
+
+    /// Whether its Emulator opens an `.m3u` playlist of a multi-disc Version's Discs, so its ROM folder keeps those Discs
+    /// together as one ROM, in a subfolder with the playlist (the disc Platforms, and GameCube: ADR 0031).
+    public var readsPlaylists: Bool { readyExtensions.contains("m3u") }
+
+    /// Whether a ROM's Discs are kept together, in its subfolder: where every ROM is kept in one, or the Emulator reads
+    /// a playlist of them.
+    var keepsDiscsTogether: Bool { archiving == .intoFolder || readsPlaylists }
 
     /// Whether a ROM whose file is `fileName` can still be Compacted: its Emulator opens an archive the file isn't yet.
     func canCompact(fileName: String) -> Bool {
@@ -84,7 +94,8 @@ public struct ROMPlatform: Sendable, Equatable {
         20: .init(
             name: "Nintendo DS", folderName: "DS", readyExtensions: ["nds"], compactExtension: "7z"),
         21: .init(
-            name: "Nintendo GameCube", folderName: "GameCube", readyExtensions: ["rvz", "iso", "gcm", "ciso", "gcz", "wbfs"],
+            // A multi-disc Version's playlist, which Dolphin boots and swaps Discs from (ADR 0031).
+            name: "Nintendo GameCube", folderName: "GameCube", readyExtensions: ["rvz", "iso", "gcm", "ciso", "gcz", "wbfs", "m3u"],
             archiving: .singleFile, naming: .redump),
         // Not `.nfs`: a Wii U eShop Wii game is a folder with a key file.
         5: .init(

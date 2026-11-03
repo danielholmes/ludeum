@@ -40,14 +40,14 @@ import Testing
         #expect(ROMArchiving.action(for: rom("Gravity Rush (USA)", on: ROMPlatform.vita, "Gravity Rush (USA).vpk")) == .archive)
         let archived = rom("Gravity Rush (USA)", on: ROMPlatform.vita, "Gravity Rush (USA).7z", archived: true)
         #expect(ROMArchiving.action(for: archived) == .unarchive)
-        #expect(ROMArchiving.unarchivesToOneFile(archived))
+        #expect(ROMArchiving.unpacking(archived) == .oneFile)
     }
 
     @Test func anXboxROMCanBeArchivedAndUnarchivesToItsOneFile() {
         #expect(ROMArchiving.action(for: rom("Halo (USA)", on: ROMPlatform.xbox, "Halo (USA).iso")) == .archive)
         let archived = rom("Halo (USA)", on: ROMPlatform.xbox, "Halo (USA).7z", archived: true)
         #expect(ROMArchiving.action(for: archived) == .unarchive)
-        #expect(ROMArchiving.unarchivesToOneFile(archived))
+        #expect(ROMArchiving.unpacking(archived) == .oneFile)
     }
 
     // PS1, Sega CD, Saturn and PC Engine CD: cue sheets with their tracks, or disc images.
@@ -56,13 +56,14 @@ import Testing
         #expect(ROMPlatform.all[platform]?.archiving == .intoFolder)
     }
 
-    @Test func pspGameCubeAndWiiROMsUnarchiveToOneFileAndDiscROMsIntoAFolder() {
-        #expect(ROMArchiving.unarchivesToOneFile(rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).7z", archived: true)))
-        #expect(ROMArchiving.unarchivesToOneFile(rom("Metroid Prime (USA)", on: 21, "Metroid Prime (USA).7z", archived: true)))
+    @Test func pspAndWiiROMsUnarchiveToOneFileGameCubesToOneOrItsDiscsAndDiscROMsIntoAFolder() {
+        #expect(ROMArchiving.unpacking(rom("Lumines (USA)", on: ROMPlatform.psp, "Lumines (USA).7z", archived: true)) == .oneFile)
         #expect(
-            ROMArchiving.unarchivesToOneFile(rom("World of Goo (USA) (WiiWare)", on: 5, "World of Goo (USA) (WiiWare).7z", archived: true)))
-        #expect(!ROMArchiving.unarchivesToOneFile(rom("Vagrant Story (USA)", on: 7, "Vagrant Story (USA).7z", archived: true)))
-        #expect(!ROMArchiving.unarchivesToOneFile(rom("ICO", on: ROMPlatform.ps2, "ICO.7z", archived: true)))
+            ROMArchiving.unpacking(rom("World of Goo (USA) (WiiWare)", on: 5, "World of Goo (USA) (WiiWare).7z", archived: true))
+                == .oneFile)
+        #expect(ROMArchiving.unpacking(rom("Metroid Prime (USA)", on: 21, "Metroid Prime (USA).7z", archived: true)) == .oneFileOrDiscs)
+        #expect(ROMArchiving.unpacking(rom("Vagrant Story (USA)", on: 7, "Vagrant Story (USA).7z", archived: true)) == .folder)
+        #expect(ROMArchiving.unpacking(rom("ICO", on: ROMPlatform.ps2, "ICO.7z", archived: true)) == .folder)
     }
 
     @Test func aLooseCartridgeROMCanBeCompactedIntoA7z() {

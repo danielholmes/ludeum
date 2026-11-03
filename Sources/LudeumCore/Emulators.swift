@@ -58,10 +58,11 @@ public struct Emulator: Sendable, Hashable {
             try mesen.arguments(rom: rom, platformId: platformId, settings: settings, saveState: saveState)
         case .dolphin:
             // Lower input latency for every Game, for this launch only: frames shown as soon as
-            // they're ready, with their timing smoothed. Immediately Present XFB stays off: it breaks some Games.
+            // they're ready, with their timing smoothed. Immediately Present XFB stays off: it breaks some Games. A
+            // multi-disc ROM's playlist swaps to the Disc its Game asks for (ADR 0031).
             [
-                "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-e",
-                rom.path(percentEncoded: false),
+                "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-C",
+                "Main.Core.AutoDiscChange=True", "-e", rom.path(percentEncoded: false),
             ]
         case .ares:
             try ares.arguments(rom: rom, platformId: platformId, settings: settings, saveState: saveState)

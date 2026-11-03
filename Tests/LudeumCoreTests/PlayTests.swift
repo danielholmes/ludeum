@@ -73,8 +73,8 @@ import Testing
                 == .open(
                     app: dolphin,
                     arguments: [
-                        "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-e",
-                        rom.path(percentEncoded: false),
+                        "-C", "Main.Core.RushFramePresentation=True", "-C", "Main.Core.SmoothEarlyPresentation=True", "-C",
+                        "Main.Core.AutoDiscChange=True", "-e", rom.path(percentEncoded: false),
                     ],
                     warning: nil))
     }

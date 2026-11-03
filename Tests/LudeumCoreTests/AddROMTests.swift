@@ -94,11 +94,28 @@ import Testing
     }
 
     @Test func discsThatNoPlatformReadsTogetherAreEachTheirOwnROM() async throws {
-        let discs = [try file("Tales of Symphonia (USA) (Disc 1).rvz"), try file("Tales of Symphonia (USA) (Disc 2).rvz")]
+        // A `.wia` is the Wii's alone, and its ROM folder keeps no Discs together.
+        let discs = [try file("Xenoblade (USA) (Disc 1).wia"), try file("Xenoblade (USA) (Disc 2).wia")]
 
         let roms = await ROMSource.split(discs)
 
-        #expect(roms.map(\.romName) == ["Tales of Symphonia (USA) (Disc 1)", "Tales of Symphonia (USA) (Disc 2)"])
+        #expect(roms.map(\.romName) == ["Xenoblade (USA) (Disc 1)", "Xenoblade (USA) (Disc 2)"])
+    }
+
+    @Test func gameCubeDiscsAreOneROM() async throws {
+        let discs = [try file("Tales of Symphonia (USA) (Disc 2).rvz"), try file("Tales of Symphonia (USA) (Disc 1).rvz")]
+
+        let roms = await ROMSource.split(discs)
+
+        #expect(roms.map(\.romName) == ["Tales of Symphonia (USA)"])
+        #expect(try await roms[0].platforms(sevenZip: nil) == [21])
+    }
+
+    @Test func aFolderIsntReadOnGameCube() async throws {
+        try file("Tales of Symphonia (USA)/Tales of Symphonia (USA) (Disc 1).rvz")
+        let source = ROMSource([directory.appending(path: "Tales of Symphonia (USA)", directoryHint: .isDirectory)])
+
+        #expect(!(try await source.platforms(sevenZip: nil)).contains(21))
     }
 }
 
@@ -267,6 +284,44 @@ struct AddROMTests {
         #expect(try ps1.folder.files(named: "Fear Effect (USA)").count == 5)
         #expect(try trashed().count == 4)
         #expect(try romRow("Fear Effect (USA)")?["needsPlaylist"] as Bool? == false)
+    }
+
+    @Test func gameCubeDiscsGoIntoASubfolderWithAPlaylistAsOneROM() async throws {
+        let gameCube = try FakeROMFolder(in: directory, platform: 21)
+        let discs = try (1...2).map { try pick("Resident Evil (USA) (Disc \($0)).rvz", "disc \($0)") }
+
+        try await adder.add(ROMSource(discs), to: gameCube.folder, match: igdb(5, "Resident Evil", on: 21), keepingOriginals: false)
+
+        let rom = try #require(try gameCube.folder.scan().first)
+        #expect(try gameCube.folder.scan().count == 1)
+        #expect(rom.fileName == "Resident Evil (USA)/Resident Evil (USA).m3u")
+        #expect(
+            try String(contentsOf: rom.ready!, encoding: .utf8) == "Resident Evil (USA) (Disc 1).rvz\nResident Evil (USA) (Disc 2).rvz\n")
+        #expect(try romCount() == 1)
+    }
+
+    @Test func aGameCubeArchiveOfDiscsGoesInAsOneROMWithAPlaylist() async throws {
+        let gameCube = try FakeROMFolder(in: directory, platform: 21)
+        try pick("work/Resident Evil (USA) (Disc 1).iso", "disc 1")
+        try pick("work/Resident Evil (USA) (Disc 2).iso", "disc 2")
+        let archive = picked.appending(path: "Resident Evil (USA).7z")
+        try await sevenZip.create(
+            archive, files: ["Resident Evil (USA) (Disc 1).iso", "Resident Evil (USA) (Disc 2).iso"], in: picked.appending(path: "work")
+        ) { _ in }
+
+        try await adder.add(ROMSource([archive]), to: gameCube.folder, match: igdb(5, "Resident Evil", on: 21), keepingOriginals: true)
+
+        #expect(try gameCube.folder.scan().map(\.fileName) == ["Resident Evil (USA)/Resident Evil (USA).m3u"])
+    }
+
+    @Test func oneGameCubeDiscStillGoesInAsItsOneFile() async throws {
+        let gameCube = try FakeROMFolder(in: directory, platform: 21)
+
+        try await adder.add(
+            ROMSource([try pick("Metroid Prime (USA).rvz", "GC")]), to: gameCube.folder, match: igdb(6, "Metroid Prime", on: 21),
+            keepingOriginals: true)
+
+        #expect(try gameCube.folder.scan().map(\.fileName) == ["Metroid Prime (USA).rvz"])
     }
 
     @Test func aFolderBecomesTheROMsSubfolder() async throws {

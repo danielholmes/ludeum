@@ -69,12 +69,32 @@ import Testing
     }
 
     @Test func aPlatformThatDoesntReadPlaylistsIgnoresThem() throws {
+        let wii = try FakeROMFolder(in: directory, platform: 5)
+        try wii.add("Xenoblade/Xenoblade.m3u")
+        let disc1 = try wii.add("Xenoblade/Xenoblade (USA) (Disc 1).rvz")
+        try wii.add("Xenoblade/Xenoblade (USA) (Disc 2).rvz")
+
+        #expect(try wii.folder.scan().first?.ready == disc1)
+    }
+
+    @Test func aGameCubeSubfolderOfDiscsWithAPlaylistIsOneROMOpeningItsPlaylist() throws {
         let gameCube = try FakeROMFolder(in: directory, platform: 21)
-        try gameCube.add("Resident Evil/Resident Evil.m3u")
-        let disc1 = try gameCube.add("Resident Evil/Resident Evil (USA) (Disc 1).rvz")
-        try gameCube.add("Resident Evil/Resident Evil (USA) (Disc 2).rvz")
+        let playlist = try gameCube.add("Resident Evil (USA)/Resident Evil (USA).m3u")
+        try gameCube.add("Resident Evil (USA)/Resident Evil (USA) (Disc 1).rvz")
+        try gameCube.add("Resident Evil (USA)/Resident Evil (USA) (Disc 2).rvz")
+
+        #expect(try gameCube.folder.scan().map(\.name) == ["Resident Evil (USA)"])
+        #expect(try gameCube.folder.scan().first?.ready == playlist)
+        #expect(try gameCube.folder.scan().first?.needsPlaylist == false)
+    }
+
+    @Test func aGameCubeSubfolderOfDiscsWithNoPlaylistWaitsForOne() throws {
+        let gameCube = try FakeROMFolder(in: directory, platform: 21)
+        let disc1 = try gameCube.add("Resident Evil (USA)/Resident Evil (USA) (Disc 1).rvz")
+        try gameCube.add("Resident Evil (USA)/Resident Evil (USA) (Disc 2).rvz")
 
         #expect(try gameCube.folder.scan().first?.ready == disc1)
+        #expect(try gameCube.folder.scan().first?.needsPlaylist == true)
     }
 }
 
