@@ -231,7 +231,7 @@ One save inside a memory card, made by a game: its title as the game wrote it, i
 _Avoid_: Save slot, block, file
 
 **Play**:
-Opening a present ROM of a Game, or of a Bundle that contains it, in its Platform's Emulator, with the Game's Emulator settings, or from one of its Save states. A multi-disc ROM starts on the Disc it last started on (Disc 1 at first) unless I choose another of its Discs. Play changes no journal data but that. A Game can't be Played while a Background task is working on one of its ROMs.
+Opening a present ROM of a Game, or of a Bundle that contains it, in its Platform's Emulator, with the Game's Emulator settings, or from one of its Save states. A press of Play, or a double-click on the Game's Cover, starts from the Game's Resume state when its Emulator keeps one (ADR 0034); else a multi-disc ROM starts on the Disc it last started on (Disc 1 at first); Play's menu offers every way it can start, a fresh start and each Disc, and the button says which it will take. Play changes no journal data but the last Disc. A Game can't be Played while a Background task is working on one of its ROMs.
 _Avoid_: Launch, run
 
 **Background task**:

@@ -23,6 +23,9 @@ struct GameDetailView: View {
     @State private var playROMs: [LudeumROM] = []
     /// The Discs its Play can start on, when it opens a multi-disc ROM.
     @State private var discs: [PlayDisc] = []
+    /// The Resume state its Play starts from, when its Emulator keeps one (ADR 0034): read when the ROMs change, when a
+    /// state is deleted here and whenever Ludeum becomes active, back from the Emulator that saves it.
+    @State private var resume: SaveState?
     /// The hand-recorded Copies; the ROMs are Copies too.
     @State private var copies: [Copy] = []
     @State private var editingCopy: CopyEdit?
@@ -240,7 +243,15 @@ struct GameDetailView: View {
         }
         .formStyle(.grouped)
         .task(id: services.changes.revision) { load() }
-        .onChange(of: id) { playError = nil }
+        .task(id: ResumeKey(roms: playROMs, revision: services.changes.savesRevision)) { await loadResume() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await loadResume() }
+        }
+        .onChange(of: id) {
+            playError = nil
+            // The last Game's Resume state isn't this one's.
+            resume = nil
+        }
         .errorAlert($versionAlert)
         // Again when a ROM changes file (Archive, Compact), not only when the ROMs do.
         .task(id: roms) {
@@ -453,22 +464,25 @@ struct GameDetailView: View {
                 if let rom = playROMs.first(where: { !$0.missing && $0.archived }) { archiveButton(rom) }
             }
         } else if let emulator, let platformId = game?.platformId {
+            let start = playing.start(discs: discs, resume: resume)
+            let starts = playing.starts(discs: discs, resume: resume)
             SideBySideOrStacked {
                 Group {
-                    if let start = playing.startingDisc(among: discs) {
-                        // A multi-disc ROM starts on the Disc it last started on, or the one chosen (ADR 0026).
+                    if starts.count > 1 {
+                        // Resume from the Resume state when there is one (ADR 0034), else a multi-disc ROM starts on the
+                        // Disc it last started on (ADR 0026); the menu has every way it can start.
                         Menu {
-                            ForEach(discs) { disc in Button(disc.numberAndLabel) { play(in: emulator, disc: disc.number) } }
+                            ForEach(starts) { choice in Button(choice.menuTitle) { play(in: emulator, start: choice) } }
                         } label: {
-                            Label("Play · \(start.labelOrNumber)", systemImage: "play.fill")
+                            Label(start.title, systemImage: start.saveState == nil ? "play.fill" : "memories")
                         } primaryAction: {
-                            play(in: emulator)
+                            play(in: emulator, start: start)
                         }
                         .menuStyle(.button)
                         .fixedSize()
                     } else {
                         Button {
-                            play(in: emulator)
+                            play(in: emulator, start: start)
                         } label: {
                             Label("Play", systemImage: "play.fill")
                         }
@@ -477,7 +491,7 @@ struct GameDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(services.versions.refusalMessage(emulator) == nil ? nil : .red)
                 .disabled(refusal == .busy)
-                .help(refusal?.message ?? "Play in \(emulator.name)")
+                .help(refusal?.message ?? playHelp(start, in: emulator))
                 // Dolphin has no per-Game settings, and DuckStation's are its own (ADR 0029).
                 if !EmulatorSettingRow.rows(for: emulator, platformId: platformId).isEmpty {
                     EmulatorSettingsButton(emulator: emulator, platformId: platformId, settings: emulatorSettings) { settings in
@@ -792,6 +806,41 @@ struct GameDetailView: View {
         startPlay(
             playing, in: emulator, services: services, saveState: saveState, disc: disc, refused: { playError = $0 },
             alert: { versionAlert = ($0, $1) })
+    }
+
+    /// Plays the Game from `start`: its Resume state, a chosen Disc, or just its ROM (ADR 0034).
+    private func play(in emulator: Emulator, start: PlayStart) {
+        play(in: emulator, from: start.saveState, disc: start.disc)
+    }
+
+    /// What Play's button does: resumes from where the Emulator left off, saying when that was and on which Disc, or Plays.
+    private func playHelp(_ start: PlayStart, in emulator: Emulator) -> String {
+        guard case .resume(let state) = start else { return "Play in \(emulator.name)" }
+        let disc = discs.first { $0.serial == state.serial }.map { " on \($0.numberAndLabel)" } ?? ""
+        return
+            "Resume in \(emulator.name) from where it left off\(disc), saved \(state.saved.formatted(date: .abbreviated, time: .shortened))"
+    }
+
+    /// Reads the Resume state Play would start from, off the main thread: the Emulator's state folder is in the Data
+    /// folder, and MesenCE's name for a ROM in an archive comes from listing it.
+    private func loadResume() async {
+        let playing = playing
+        guard let rom = playing.rom else {
+            resume = nil
+            return
+        }
+        let locator = locator
+        let ludeum = services.settings.folder
+        let found = await Task.detached(priority: .userInitiated) { await playing.resumeState(locator: locator, ludeum: ludeum) }.value
+        // A read for the Game shown before this one, landing late, isn't its Resume state.
+        guard !Task.isCancelled, self.playing.rom?.id == rom.id else { return }
+        resume = found
+    }
+
+    /// When the Resume state is read again: the ROMs Play opens, and a Save state deleted here.
+    private struct ResumeKey: Equatable {
+        let roms: [LudeumROM]
+        let revision: Int
     }
 
     /// The Serials of the ROMs Play opens, in Disc order: the ones its save states are named by.

@@ -7,7 +7,8 @@ import GRDB
 /// name.
 public struct SaveState: Sendable, Equatable, Identifiable {
     public enum Slot: Sendable, Hashable, Comparable {
-        /// The one DuckStation saves on closing the game.
+        /// The one DuckStation and PCSX2 save on closing the game, and MesenCE every minute of play (its slot 11): what a
+        /// Play starts from when there is one (ADR 0034).
         case resume
         case numbered(Int)
     }

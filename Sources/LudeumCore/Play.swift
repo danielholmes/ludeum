@@ -178,6 +178,42 @@ public struct Play: Sendable {
             ?? discs.first
     }
 
+    /// The Resume state its Play starts from, when its Emulator keeps one for its ROM (ADR 0034): the one DuckStation or
+    /// PCSX2 saved on closing, by each Disc's Serial (the latest saved, where more than one Disc has one), or MesenCE's
+    /// automatic state of the ROM's name. Nil where there's none, for a ROM whose Serials aren't read, for an archive
+    /// MesenCE's name can't be read from, and for ares and the rest, which keep none Ludeum knows.
+    public func resumeState(locator: ROMLocator, ludeum: LudeumFolder) async -> SaveState? {
+        guard let rom else { return nil }
+        let emulator = Emulator.of(platformId: platformId)
+        let states: [SaveState]
+        if emulator == .duckStation {
+            states = DuckStationSaveStates(ludeum: ludeum).states(of: rom.serials.known)
+        } else if emulator == .pcsx2 {
+            states = PCSX2SaveStates(ludeum: ludeum).states(of: rom.serials.known)
+        } else if emulator == .mesenCE {
+            guard let folders = MesenSaveStates(ludeum: ludeum, platformId: platformId), let file = try? locator.file(of: rom, ready: true),
+                let name = await MesenROMName.of(file, platformId: platformId)?.name
+            else { return nil }
+            states = folders.states(of: name)
+        } else {
+            return nil
+        }
+        return states.filter { $0.slot == .resume && !$0.previous }.max { $0.saved < $1.saved }
+    }
+
+    /// What a press of Play starts from, and a double-click on the Game's Cover (ADR 0034): `resume` when there is one,
+    /// ahead of the Disc a multi-disc ROM last started on; else that Disc; else just its ROM.
+    public func start(discs: [PlayDisc], resume: SaveState?) -> PlayStart {
+        if let resume { return .resume(resume) }
+        return startingDisc(among: discs).map(PlayStart.disc) ?? .rom
+    }
+
+    /// Every way its Play can start, for Play's menu: Resume when there's a Resume state, then each Disc of a multi-disc
+    /// ROM, or just its ROM. One way alone is a plain button.
+    public func starts(discs: [PlayDisc], resume: SaveState?) -> [PlayStart] {
+        (resume.map { [PlayStart.resume($0)] } ?? []) + (discs.isEmpty ? [.rom] : discs.map(PlayStart.disc))
+    }
+
     /// The Disc a Save state was saved on, by its Serial.
     private func disc(savedIn saveState: URL) -> Int? {
         guard let rom, case .read(let serials) = rom.serials,
@@ -284,4 +320,48 @@ public struct PlayDisc: Sendable, Equatable, Identifiable {
 
     /// "Gran Turismo Mode", or "Disc 2" without a Disc label: what Play says it starts on.
     public var labelOrNumber: String { label ?? "Disc \(number)" }
+}
+
+/// What a Play starts from (ADR 0034): its Resume state, when its Emulator keeps one; else the Disc a multi-disc ROM
+/// starts on; else just its ROM. Play's button says it and does it, and so does a double-click on the Game's Cover.
+public enum PlayStart: Sendable, Equatable, Identifiable {
+    case resume(SaveState)
+    case disc(PlayDisc)
+    case rom
+
+    public var id: String {
+        switch self {
+        case .resume: "resume"
+        case .disc(let disc): "disc \(disc.number)"
+        case .rom: "rom"
+        }
+    }
+
+    /// What the Play button says: "Resume", "Play · Gran Turismo Mode", "Play".
+    public var title: String {
+        switch self {
+        case .resume: "Resume"
+        case .disc(let disc): "Play · \(disc.labelOrNumber)"
+        case .rom: "Play"
+        }
+    }
+
+    /// What its entry in the Play button's menu says: "Resume", "Play Disc 2 · Gran Turismo Mode", "Play".
+    public var menuTitle: String {
+        switch self {
+        case .resume: "Resume"
+        case .disc(let disc): "Play \(disc.numberAndLabel)"
+        case .rom: "Play"
+        }
+    }
+
+    /// The state it Plays from, as `Play.prepare` takes it.
+    public var saveState: URL? {
+        if case .resume(let state) = self { state.file } else { nil }
+    }
+
+    /// The Disc it chooses, as `Play.prepare` takes it.
+    public var disc: Int? {
+        if case .disc(let disc) = self { disc.number } else { nil }
+    }
 }

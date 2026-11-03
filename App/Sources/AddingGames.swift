@@ -6,7 +6,10 @@ import SwiftUI
     private(set) var revision = 0
     /// Bumped only when a Cover changes, so the covers view doesn't refetch on every edit.
     private(set) var coverRevision = 0
+    /// Bumped when a Save state is deleted in Ludeum, so what Play starts from follows (ADR 0034).
+    private(set) var savesRevision = 0
     func changed() { revision += 1 }
+    func savesChanged() { savesRevision += 1 }
     func coverChanged() {
         coverRevision += 1
         revision += 1

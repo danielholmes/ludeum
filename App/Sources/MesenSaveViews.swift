@@ -146,6 +146,8 @@ struct MesenSavesSection: View {
         do {
             try folders?.delete(state)
             error = nil
+            // Play's Resume follows a deleted Resume state (ADR 0034).
+            services.changes.savesChanged()
         } catch {
             self.error = error.localizedDescription
         }

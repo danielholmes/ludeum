@@ -413,6 +413,145 @@ import Testing
     }
 }
 
+/// What a Play starts from: the Resume state its Emulator saved on closing, before the Disc it last started on, else
+/// just its ROM (ADR 0034). The Play button says it and does it, and so does a double-click on the Game's Cover.
+@Suite struct PlayStartTests {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "play start \(UUID().uuidString)")
+    var ludeum: LudeumFolder { LudeumFolder(url: directory.appending(path: "Ludeum", directoryHint: .isDirectory)) }
+
+    init() throws {
+        try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
+    }
+
+    /// Writes a state file, saved at `saved` seconds since 1970.
+    @discardableResult
+    func save(_ file: URL, saved: TimeInterval = 1_000_000) throws -> URL {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("state".utf8).write(to: file)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: saved)], ofItemAtPath: file.path(percentEncoded: false))
+        return file
+    }
+
+    func rom(_ fileName: String, platform: Int64, serials: Serials = .notRead, lastDisc: Int? = nil) -> LudeumROM {
+        let name = ((fileName as NSString).lastPathComponent as NSString).deletingPathExtension
+        var rom = LudeumROM(
+            id: 1, folderName: name, platformId: platform, fileName: fileName, name: name, version: "", disc: nil, missing: false,
+            archived: false, serials: serials)
+        rom.lastDisc = lastDisc
+        return rom
+    }
+
+    func play(_ rom: LudeumROM) -> Play {
+        Play(platformId: rom.platformId, platformName: "", roms: [rom], settings: EmulatorSettings())
+    }
+
+    @Test func aMultiDiscROMResumesFromTheLatestResumeStateOfItsDiscsBeforeTheDiscItLastStartedOn() async throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let gt2 = PlayStationPlayTests.gt2
+        for disc in PlayStationPlayTests.gt2Discs { try ps1.add("\(gt2)/\(disc)") }
+        try ps1.add("\(gt2)/\(gt2).m3u", PlayStationPlayTests.gt2Discs.joined(separator: "\n") + "\n")
+        let locator = ROMLocator(romFolders: [ps1.folder])
+        let play = play(rom("\(gt2)/\(gt2).m3u", platform: ROMPlatform.ps1, serials: .read(["SCES-02380", "SCES-12380"]), lastDisc: 2))
+        let discs = play.discs(locator: locator)
+
+        // Without a Resume state, it starts on the Disc it last started on, and its menu offers each Disc.
+        #expect(await play.resumeState(locator: locator, ludeum: ludeum) == nil)
+        #expect(play.start(discs: discs, resume: nil) == .disc(discs[1]))
+        #expect(
+            play.starts(discs: discs, resume: nil).map(\.menuTitle) == [
+                "Play Disc 1 · Arcade Mode Disc", "Play Disc 2 · Gran Turismo Mode",
+            ])
+        #expect(play.start(discs: discs, resume: nil).title == "Play · Gran Turismo Mode")
+
+        // DuckStation saves a Resume state for each Disc's Serial: the latest is the one to resume from.
+        try save(ludeum.duckStationSaveStates.appending(path: "SCES-12380_resume.sav"), saved: 1_000_000)
+        let latest = try save(ludeum.duckStationSaveStates.appending(path: "SCES-02380_resume.sav"), saved: 2_000_000)
+        let resume = try #require(await play.resumeState(locator: locator, ludeum: ludeum))
+        #expect(resume.file == latest)
+        #expect(resume.slot == .resume)
+        #expect(play.start(discs: discs, resume: resume) == .resume(resume))
+        #expect(play.start(discs: discs, resume: resume).title == "Resume")
+        #expect(
+            play.starts(discs: discs, resume: resume).map(\.menuTitle)
+                == ["Resume", "Play Disc 1 · Arcade Mode Disc", "Play Disc 2 · Gran Turismo Mode"])
+        // It's Played as from any state: on the state's own Disc, which is remembered.
+        #expect(PlayStart.resume(resume).saveState == latest)
+        #expect(PlayStart.resume(resume).disc == nil)
+        #expect(PlayStart.disc(discs[1]).disc == 2)
+    }
+
+    @Test func aROMOfOneDiscResumesFromItsResumeStateElseJustPlays() async throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        try ps1.add("Ape Escape (USA).cue")
+        let locator = ROMLocator(romFolders: [ps1.folder])
+        let play = play(rom("Ape Escape (USA).cue", platform: ROMPlatform.ps1, serials: .read(["SCUS-94423"])))
+
+        #expect(play.start(discs: [], resume: nil) == .rom)
+        #expect(play.start(discs: [], resume: nil).title == "Play")
+        #expect(play.starts(discs: [], resume: nil) == [.rom])
+
+        try save(ludeum.duckStationSaveStates.appending(path: "SCUS-94423_resume.sav"))
+        let resume = try #require(await play.resumeState(locator: locator, ludeum: ludeum))
+        #expect(play.start(discs: [], resume: resume) == .resume(resume))
+        #expect(play.starts(discs: [], resume: resume).map(\.menuTitle) == ["Resume", "Play"])
+    }
+
+    @Test func aSlotAPreviousResumeStateOrAStateOfAnUnreadSerialIsntResumedFrom() async throws {
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        try ps1.add("Ape Escape (USA).cue")
+        let locator = ROMLocator(romFolders: [ps1.folder])
+        try save(ludeum.duckStationSaveStates.appending(path: "SCUS-94423_3.sav"))
+        try save(ludeum.duckStationSaveStates.appending(path: "SCUS-94423_resume.bak"))
+
+        #expect(
+            await play(rom("Ape Escape (USA).cue", platform: ROMPlatform.ps1, serials: .read(["SCUS-94423"]))).resumeState(
+                locator: locator, ludeum: ludeum) == nil)
+
+        try save(ludeum.duckStationSaveStates.appending(path: "SCUS-94423_resume.sav"))
+        #expect(await play(rom("Ape Escape (USA).cue", platform: ROMPlatform.ps1)).resumeState(locator: locator, ludeum: ludeum) == nil)
+    }
+
+    @Test func aPlayStation2ROMResumesFromPCSX2sResumeState() async throws {
+        let ps2 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps2)
+        try ps2.add("Gran Turismo 3 (USA)/Gran Turismo 3 (USA).iso")
+        let locator = ROMLocator(romFolders: [ps2.folder])
+        let play = play(rom("Gran Turismo 3 (USA)/Gran Turismo 3 (USA).iso", platform: ROMPlatform.ps2, serials: .read(["SCUS-97102"])))
+        try save(ludeum.pcsx2SaveStates.appending(path: "SCUS-97102 (85AE91B3).01.p2s"))
+        #expect(await play.resumeState(locator: locator, ludeum: ludeum) == nil)
+
+        let resume = try save(ludeum.pcsx2SaveStates.appending(path: "SCUS-97102 (85AE91B3).resume.p2s"))
+
+        #expect(await play.resumeState(locator: locator, ludeum: ludeum)?.file == resume)
+        #expect(await play.resumeState(locator: locator, ludeum: ludeum)?.title == "Resume")
+    }
+
+    @Test func aMesenCEROMResumesFromItsAutomaticState() async throws {
+        let nes = try FakeROMFolder(in: directory, platform: 18)
+        try nes.add("DuckTales (USA).nes")
+        let locator = ROMLocator(romFolders: [nes.folder])
+        let play = play(rom("DuckTales (USA).nes", platform: 18))
+        let states = try #require(ludeum.mesen(.saveStates, platform: 18))
+        try save(states.appending(path: "DuckTales (USA)_1.mss"))
+        #expect(await play.resumeState(locator: locator, ludeum: ludeum) == nil)
+
+        let resume = try save(states.appending(path: "DuckTales (USA)_11.mss"))
+
+        #expect(await play.resumeState(locator: locator, ludeum: ludeum)?.file == resume)
+        #expect(await play.resumeState(locator: locator, ludeum: ludeum)?.slot == .resume)
+    }
+
+    @Test func anAresROMHasNoResumeState() async throws {
+        let n64 = try FakeROMFolder(in: directory, platform: 4)
+        try n64.add("Super Mario 64 (USA).z64")
+        let locator = ROMLocator(romFolders: [n64.folder])
+        let play = play(rom("Super Mario 64 (USA).z64", platform: 4))
+
+        #expect(await play.resumeState(locator: locator, ludeum: ludeum) == nil)
+        #expect(play.starts(discs: [], resume: nil) == [.rom])
+    }
+}
+
 /// The Disc a multi-disc ROM last started on, kept on the ROM and nothing else about the Play (ADR 0026).
 @Suite struct LastDiscTests {
     let h: LudeumHarness

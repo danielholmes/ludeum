@@ -280,8 +280,9 @@ struct CoverCell: View {
     var rank: Int? = nil
     /// Why a double-click's Play didn't open, or a version check's warning.
     @State private var playProblem: (title: String, message: String)?
-    /// The Disc a double-click starts a multi-disc ROM on, read on hovering, as Play may have changed it since.
-    @State private var disc: PlayDisc?
+    /// What a double-click starts from (its Resume state, or a multi-disc ROM's Disc), read on hovering, as a Play or a
+    /// deleted state may have changed it since.
+    @State private var start: PlayStart?
 
     var body: some View {
         VStack(spacing: 4) {
@@ -289,9 +290,9 @@ struct CoverCell: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(selection == row.id ? Color.accentColor : .clear, lineWidth: 3))
                 .onHover { inside in
                     guard inside, row.offersPlay, let play = try? libraryPlay(row, services: services) else { return }
-                    disc = startingDisc(of: play, services: services)
+                    Task { start = await playStart(of: play, services: services) }
                 }
-                .help(disc.map { "Play · \($0.labelOrNumber)" } ?? "")
+                .help(start.map { $0 == .rom ? "" : $0.title } ?? "")
             Text(rank.map { "\($0). \(row.name)" } ?? row.name).font(.subheadline).lineLimit(2).multilineTextAlignment(.center)
         }
         .onTapGesture { selection = row.id }

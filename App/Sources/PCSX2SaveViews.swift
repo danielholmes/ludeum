@@ -127,6 +127,8 @@ struct PCSX2SavesSection: View {
         do {
             try saveStates.delete(state)
             error = nil
+            // Play's Resume follows a deleted Resume state (ADR 0034).
+            services.changes.savesChanged()
         } catch {
             self.error = error.localizedDescription
         }

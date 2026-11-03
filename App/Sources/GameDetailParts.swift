@@ -460,8 +460,8 @@ enum FactStyle {
 
 /// Opens `play`'s ROM in `emulator`, with every Emulator setting on the command line. `refused` gets why it couldn't,
 /// then or once the Emulator fails to open; `alert` gets a version check's title and message. `saveState` starts
-/// DuckStation, MesenCE or ares from that state; else a multi-disc ROM starts on `disc`, or the one it last started on, which
-/// it then remembers.
+/// DuckStation, MesenCE, ares or PCSX2 from that state (a Resume state included, ADR 0034); else a multi-disc ROM starts
+/// on `disc`, or the one it last started on, which it then remembers.
 @MainActor func startPlay(
     _ play: Play, in emulator: Emulator, services: Services, saveState: URL? = nil, disc: Int? = nil,
     refused: @escaping @MainActor (String) -> Void, alert: (_ title: String, _ message: String) -> Void
@@ -511,11 +511,12 @@ enum FactStyle {
     }
 }
 
-/// Plays a Library row's Game as Game detail's Play does, reading its ROMs and Emulator settings first: a double-click
-/// on its Cover. `refused` and `alert` as `startPlay(_:in:services:refused:alert:)`.
+/// Plays a Library row's Game as a press of Game detail's Play does, reading its ROMs and Emulator settings first, and
+/// starting from what Play would (ADR 0034): a double-click on its Cover. `refused` and `alert` as
+/// `startPlay(_:in:services:saveState:disc:refused:alert:)`.
 @MainActor func startPlay(
     _ row: LibraryRow, services: Services, refused: @escaping @MainActor (String) -> Void,
-    alert: (_ title: String, _ message: String) -> Void
+    alert: @escaping @MainActor (_ title: String, _ message: String) -> Void
 ) {
     guard let emulator = Emulator.of(platformId: row.platformId) else { return }
     let play: Play
@@ -526,7 +527,10 @@ enum FactStyle {
         refused("Couldn't read its ROMs and Emulator settings: \(error.localizedDescription)")
         return
     }
-    startPlay(play, in: emulator, services: services, refused: refused, alert: alert)
+    Task {
+        let start = await playStart(of: play, services: services)
+        startPlay(play, in: emulator, services: services, saveState: start.saveState, disc: start.disc, refused: refused, alert: alert)
+    }
 }
 
 /// A Library row's Play, from its ROMs and Emulator settings as the journal has them now.
@@ -538,9 +542,16 @@ enum FactStyle {
         busyROMs: Set(roms.map(\.id).filter { services.tasks.isActive(.rom($0)) }))
 }
 
-/// The Disc a multi-disc ROM's Play starts on, which Play says; nil for a ROM of one Disc.
-@MainActor func startingDisc(of play: Play, services: Services) -> PlayDisc? {
-    play.startingDisc(among: play.discs(locator: ROMLocator(romFolders: services.settings.romFolders)))
+/// What a press of `play` starts from, which Play says and a double-click on the Game's Cover does (ADR 0034): its
+/// Resume state, else the Disc a multi-disc ROM last started on, else its ROM. Read off the main thread: the playlist
+/// and the Emulator's state folder are in the Data folder.
+@MainActor func playStart(of play: Play, services: Services) async -> PlayStart {
+    let locator = ROMLocator(romFolders: services.settings.romFolders)
+    let ludeum = services.settings.folder
+    let (discs, resume) = await Task.detached(priority: .userInitiated) {
+        (play.discs(locator: locator), await play.resumeState(locator: locator, ludeum: ludeum))
+    }.value
+    return play.start(discs: discs, resume: resume)
 }
 
 /// Under an Expansion's name: "Expansion of" its Base game, a link when it's my Game on the same Platform,
