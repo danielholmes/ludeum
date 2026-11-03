@@ -44,7 +44,7 @@ struct MemoryCardSection: View {
                     }
                 }
             } else {
-                Text("Couldn't read it as a memory card.").foregroundStyle(.red)
+                ErrorText("Couldn't read it as a memory card.")
             }
         } else {
             Text("No saves yet. Save in DuckStation and its memory card shows here, kept in the Data folder.")

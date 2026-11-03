@@ -101,7 +101,7 @@ struct PlayersSection: View {
                     id: nil, draft: PlayerDraft(firstName: "", lastName: "", colour: (try? journal?.nextPlayerColour()) ?? .red))
             }
             .disabled(journal == nil)
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
         } header: {
             Text("Players")
         } footer: {
@@ -178,7 +178,7 @@ struct PlayerSheet: View {
                 }
             }
             LabeledContent("Badge") { PlayerBadge(player: draft, size: 28) }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }

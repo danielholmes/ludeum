@@ -88,7 +88,7 @@ struct SettingsView: View {
             BackupsSection(journal: journal, backups: settings.backups())
 
             if let saveError {
-                Text(saveError).foregroundStyle(.red)
+                ErrorText(saveError)
             }
         }
         .formStyle(.grouped)
@@ -107,7 +107,7 @@ struct SettingsView: View {
         case .idle: EmptyView()
         case .running: ProgressView().controlSize(.small)
         case .passed(let summary): Label(summary, systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-        case .failed(let message): Label(message, systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+        case .failed(let message): ErrorText(message, systemImage: "xmark.octagon.fill")
         }
     }
 

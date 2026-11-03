@@ -27,7 +27,7 @@ struct AttachmentsSection: View {
                 Button("Add Attachment…", systemImage: "paperclip") { pick(manual: false) }
                     .buttonStyle(.hover).help("Any file about this Game, such as a map or a guide. Or drop files here.")
             }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
         }
         .disabled(working)
         .dropDestination(for: URL.self) { urls, _ in

@@ -80,6 +80,6 @@ struct CacheRefreshOnLaunch: ViewModifier {
                 // Not tied to the window: closing it mustn't stop the refresh.
                 Task { await services.work.refreshCache(services: services) }
             }
-            .launchWarning(Bindable(services.work).launchBoxWarning)
+            .errorAlert(Bindable(services.work).launchBoxWarning)
     }
 }

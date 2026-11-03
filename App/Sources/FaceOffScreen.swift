@@ -27,7 +27,7 @@ struct FaceOffScreen: View {
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             .padding()
             if let error {
-                Text(error).foregroundStyle(.red).font(.callout).padding(.bottom)
+                ErrorText(error, font: .callout).padding(.bottom)
             }
             switch tab {
             case .battles: battles
@@ -212,7 +212,7 @@ private struct DisagreementRow: View {
                     Button("Set Rating", action: setRating)
                     Button("Keep \(ratingText(game.rating))") { save { try $0.keepRating(game.id) } }
                         .help("Stand by this Rating until it fights another Battle")
-                    if invalid { Text("0.0 to 10.0, in steps of 0.1").font(.caption).foregroundStyle(.red) }
+                    if invalid { ErrorText("0.0 to 10.0, in steps of 0.1", font: .caption) }
                 }
             }
         }

@@ -57,7 +57,7 @@ struct IGDBFactsRows: View {
                 }
             }
             if !facts.keywords.isEmpty { KeywordsRow(keywords: facts.keywords) }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
         }
         .task(id: services.changes.revision) { pins = Set((try? services.journal?.pins()) ?? []) }
     }
@@ -166,7 +166,7 @@ struct ScreenshotsSection: View {
             } action: {
                 layout = $0
             }
-            if let note { Text(note).foregroundStyle(.red) }
+            if let note { ErrorText(note) }
         }
         .onChange(of: screenshots) { showingAll = false }
         .sheet(item: $viewing) { shot in

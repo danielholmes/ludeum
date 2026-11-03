@@ -68,7 +68,7 @@ struct RestoreSheet: View {
                 }
             }
             .frame(minHeight: 240)
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }

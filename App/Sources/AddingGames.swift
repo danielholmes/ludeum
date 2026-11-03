@@ -202,7 +202,7 @@ struct IGDBSearchView: View {
                 }
             }
             if !filters.isEmpty { SearchFilterPills(filters: $filters) }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             List(
                 browse == nil ? results : sort.sorted(results, ascending: ascending), selection: browse == nil ? .constant(nil) : $selected
             ) { result in
@@ -377,7 +377,7 @@ private struct CompanyPickerSheet: View {
                     .onSubmit(run)
                 if searching { ProgressView().controlSize(.small) }
             }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             List(companies) { company in
                 Button(company.name) { done(company) }.buttonStyle(.hover)
             }
@@ -559,7 +559,7 @@ struct AddByHandSheet: View {
             LabeledContent("Platform") {
                 PlatformMenu(title: platform?.name ?? "Choose…", platforms: platforms, used: used) { platform = $0 }
             }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { done(nil) }
@@ -649,7 +649,7 @@ struct LinkGameSheet: View {
                     self.error = "Couldn't link it: \(error.localizedDescription)"
                 }
             }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }

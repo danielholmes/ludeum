@@ -175,7 +175,7 @@ struct AddROMFlow<Buttons: View>: View {
                 } else {
                     Text("Set IGDB credentials in Settings to search IGDB.").foregroundStyle(.secondary)
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { ErrorText(error) }
                 HStack {
                     Button("Make by hand…") { makingByHand = true }
                         .help("For a game IGDB doesn't have: a new Game with no IGDB link, which can be linked later")
@@ -219,7 +219,7 @@ private struct AddROMByHand: View {
                         ForEach(platforms, id: \.id) { Text($0.name).tag(IGDBPlatform?.some($0)) }
                     }
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { ErrorText(error) }
             }
             HStack {
                 Button("Back", action: back)
@@ -538,7 +538,7 @@ struct AddROMsSheet: View {
                 doneView(fate)
             } else if let problem = row.problem {
                 Text("Add \(row.source.romName)").font(.title2)
-                Text(problem).foregroundStyle(.red)
+                ErrorText(problem)
                 Spacer()
                 HStack {
                     Spacer()
@@ -558,7 +558,7 @@ struct AddROMsSheet: View {
                     withoutAMatch
                 }
                 .id(step)
-                if let clashMessage { Text(clashMessage).foregroundStyle(.red) }
+                if let clashMessage { ErrorText(clashMessage) }
             }
         }
         .padding()

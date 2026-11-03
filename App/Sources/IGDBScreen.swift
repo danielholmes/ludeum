@@ -28,7 +28,7 @@ struct IGDBScreen: View {
                 ContentUnavailableView(
                     "IGDB isn't set up", systemImage: "key", description: Text("Add IGDB credentials in Settings to search."))
             }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             Button("Add by hand…") { byHand = true }.disabled(services.journal == nil || services.work.journalLocked)
         }
         .padding()
@@ -116,7 +116,7 @@ struct IGDBGameDetailView: View {
                                 .disabled(services.work.journalLocked)
                         }
                         .controlSize(.small)
-                        if let error { Text(error).foregroundStyle(.red) }
+                        if let error { ErrorText(error) }
                         IGDBFactsRows(services: services, facts: facts, browse: browse)
                     }
                 }

@@ -297,13 +297,7 @@ struct CoverCell: View {
         .onTapGesture { selection = row.id }
         // Simultaneous, so the first click still selects at once rather than waiting to see if a second follows.
         .simultaneousGesture(TapGesture(count: 2).onEnded { play() }, isEnabled: row.offersPlay)
-        .alert(
-            playProblem?.title ?? "", isPresented: Binding(get: { playProblem != nil }, set: { if !$0 { playProblem = nil } })
-        ) {
-            Button("OK") {}
-        } message: {
-            Text(playProblem?.message ?? "")
-        }
+        .errorAlert($playProblem)
     }
 
     private func play() {

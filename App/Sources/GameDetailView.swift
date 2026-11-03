@@ -105,7 +105,7 @@ struct GameDetailView: View {
                         if !game.isBundle, !playROMs.isEmpty, !playROMs.allSatisfy(\.missing) {
                             playControls
                             if let message = playError ?? emulator.flatMap(services.versions.refusalMessage) {
-                                Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                                ErrorText(message)
                             }
                         }
                     }
@@ -236,18 +236,12 @@ struct GameDetailView: View {
             AttachmentsSection(services: services, game: id)
             ForEach(bundles.filter { !$0.attachments.isEmpty }) { BundleAttachmentsSection(share: $0, open: open) }
 
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
         }
         .formStyle(.grouped)
         .task(id: services.changes.revision) { load() }
         .onChange(of: id) { playError = nil }
-        .alert(
-            versionAlert?.title ?? "", isPresented: Binding(get: { versionAlert != nil }, set: { if !$0 { versionAlert = nil } })
-        ) {
-            Button("OK") {}
-        } message: {
-            Text(versionAlert?.message ?? "")
-        }
+        .errorAlert($versionAlert)
         // Again when a ROM changes file (Archive, Compact), not only when the ROMs do.
         .task(id: roms) {
             // Off the main thread: it reads the ROM folders and the files' attributes.
@@ -1044,7 +1038,7 @@ struct PlaythroughSheet: View {
                 .help("The Copy it was played on. While a Playthrough says it, that Copy can't be deleted.")
             }
             TextField("Notes", text: $notes, axis: .vertical).lineLimit(3...8)
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 if edit.id != nil { Button("Delete…", role: .destructive) { confirmingDelete = true } }
                 Spacer()

@@ -333,8 +333,7 @@ private struct ReviewItemDetail: View {
                                 .background(match ? AnyShapeStyle(Color.green) : AnyShapeStyle(.quaternary), in: .capsule)
                         }
                         if rom.regions != nil, matching.isEmpty {
-                            Label("No release in this ROM's region", systemImage: "xmark.octagon.fill").font(.caption)
-                                .foregroundStyle(.red)
+                            ErrorText("No release in this ROM's region", font: .caption, systemImage: "xmark.octagon.fill")
                         }
                     }
                     .help("Releases on this ROM's platform")
@@ -468,13 +467,7 @@ private struct ReviewItemDetail: View {
         } message: {
             Text(item.missing ? "It leaves the Review queue." : "Its files go to the Trash and it leaves the Review queue.")
         }
-        .alert(
-            versionAlert?.title ?? "", isPresented: Binding(get: { versionAlert != nil }, set: { if !$0 { versionAlert = nil } })
-        ) {
-            Button("OK") {}
-        } message: {
-            Text(versionAlert?.message ?? "")
-        }
+        .errorAlert($versionAlert)
     }
 
     private var reason: String {
@@ -520,7 +513,7 @@ private struct ReviewItemDetail: View {
         .disabled(playing == nil || refusal != nil)
         .help(refusal?.message ?? "Play in \(emulator.name), to see what it is")
         if let message = playError ?? refusal?.message ?? services.versions.refusalMessage(emulator) {
-            Text(message).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            ErrorText(message)
         }
     }
 

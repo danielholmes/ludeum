@@ -42,7 +42,7 @@ struct MesenSavesSection: View {
                 ForEach(saves) { rom in
                     ForEach(rom.states) { row($0, of: rom) }
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { ErrorText(error) }
             }
             Section(saves.flatMap(\.gameSaves).count == 1 ? "Game save" : "Game saves") {
                 if loaded, saves.allSatisfy(\.gameSaves.isEmpty) {

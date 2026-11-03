@@ -28,7 +28,7 @@ struct RenameROMSheet: View {
             Section {
                 LabeledContent("Now", value: offer.rom.folderName)
                 LabeledContent("Renamed") { Text(name).textSelection(.enabled) }
-                if isTaken(name) { Text("Another ROM has this name.").foregroundStyle(.red) }
+                if isTaken(name) { ErrorText("Another ROM has this name.") }
             } footer: {
                 Text(
                     "Named as No-Intro (or Redump, on disc Platforms) would name it, with its Regions, in every form it's kept in. "

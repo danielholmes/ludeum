@@ -94,7 +94,7 @@ struct BackgroundTasksPanel: View {
             switch item.state {
             case .queued: Text("Waiting").font(.caption2).foregroundStyle(.secondary)
             case .running: ProgressView(value: item.progress ?? 0).controlSize(.small)
-            case .failed(let message): Text(message).font(.caption2).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            case .failed(let message): ErrorText(message, font: .caption2)
             }
         }
     }

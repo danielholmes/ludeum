@@ -129,7 +129,7 @@ struct BundleContentsSection: View {
             }
             Button("Add Game…", systemImage: "plus") { adding = true }.buttonStyle(.hover)
                 .help("Add a Game from the Library, or one IGDB lists for this Bundle")
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
         }
         .task(id: services.changes.revision) { games = (try? services.journal?.bundleGames(bundle.id)) ?? [] }
         .sheet(isPresented: $adding) { AddToBundleSheet(services: services, bundle: bundle, contained: Set(games.map(\.id))) }
@@ -175,7 +175,7 @@ struct AddToBundleSheet: View {
                 Button(row.name) { add(row.id) }.buttonStyle(.link)
             }
             .frame(minHeight: 200)
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
@@ -260,7 +260,7 @@ struct AddBundleSheet: View {
                 .toggleStyle(.checkbox)
             }
             .frame(minHeight: 180)
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 Button("Add as a Game Instead") {
                     dismiss()

@@ -170,7 +170,7 @@ struct CoverEditor: View {
             }
             .controlSize(.small)
             Text("Or drop an image on the Cover.").font(.caption).foregroundStyle(.secondary)
-            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+            if let error { ErrorText(error, font: .caption) }
         }
         .fileImporter(isPresented: $choosing, allowedContentTypes: [.image]) { result in
             guard case .success(let url) = result else { return }

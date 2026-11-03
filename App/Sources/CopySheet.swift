@@ -72,7 +72,7 @@ struct CopySheet: View {
                     TextField("Gone to", text: $goneTo, prompt: Text("Sold on eBay, given to a friend, lost…"))
                 }
             }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 if existingCopy != nil { Button("Delete…", role: .destructive) { confirmingDelete = true } }
                 Spacer()

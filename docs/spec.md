@@ -35,6 +35,7 @@ Phone or remote access; several Macs; importing from Steam or Xbox; exceptions t
 - **Progress and interruption:**
   - Import has no screen of its own: it runs in the background and writes in one transaction at the end, so stopping it part-way writes nothing. Lookups already made survive in the cache, so a rerun is quick. Quitting mid-Import asks first.
   - The background refresh shows only a small status indicator. Its errors are logged, not shown as alerts.
+- **Errors:** every error, refusal or problem the app shows as text goes through one view, `ErrorText` (red, selectable so it can be copied, with Copy in its context menu, an optional font and an optional SF Symbol for a status in a table), and every error alert through one modifier, `errorAlert` (OK and a Copy button that puts the title and message on the pasteboard, as an alert's text can't be selected), so what can be done with an error lives in one place.
 
 ### Games and identity
 - A Game is a title on one Platform. It can have one IGDB link or none ([ADR 0002](adr/0002-game-identity-is-journal-owned.md)).

@@ -28,7 +28,7 @@ struct SaveStatesSection: View {
                     .foregroundStyle(.secondary)
             }
             ForEach(states) { row($0) }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
         }
         .task(id: serials) { await load() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in

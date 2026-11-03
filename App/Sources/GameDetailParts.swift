@@ -264,7 +264,7 @@ struct EditGameSheet: View {
             Section {
                 Button("Delete Game…", role: .destructive) { close(then: delete) }
             }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { ErrorText(error) }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
@@ -360,7 +360,7 @@ struct RatingEditor: View {
                     .onSubmit(commit)
                     .onExitCommand { editing = false }
                     .onChange(of: focused) { _, now in if !now, editing { commit() } }
-                if invalid { Text("0.0 to 10.0, in steps of 0.1").font(.caption).foregroundStyle(.red) }
+                if invalid { ErrorText("0.0 to 10.0, in steps of 0.1", font: .caption) }
             } else {
                 Button(action: startEditing) {
                     RatingBadge(rating: rating)

@@ -30,7 +30,7 @@ struct PCSX2SavesSection: View {
                     Text("No save states. Save one in PCSX2 and it shows here, kept in the Data folder.").foregroundStyle(.secondary)
                 }
                 ForEach(states) { row($0) }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { ErrorText(error) }
             }
             Section(cardSaves.count == 1 ? "Game save" : "Game saves") {
                 if loaded, cardSaves.isEmpty {

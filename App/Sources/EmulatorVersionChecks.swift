@@ -166,21 +166,7 @@ struct SystemToolsOnLaunch: ViewModifier {
                 Self.started = true
                 warning = SystemTool.warning(missing: SystemTool.missing())
             }
-            .launchWarning($warning)
-    }
-}
-
-extension View {
-    /// An alert showing `warning` while there is one, cleared when it's dismissed: what a launch check found.
-    func launchWarning(_ warning: Binding<(title: String, message: String)?>) -> some View {
-        alert(
-            warning.wrappedValue?.title ?? "",
-            isPresented: Binding(get: { warning.wrappedValue != nil }, set: { if !$0 { warning.wrappedValue = nil } })
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(warning.wrappedValue?.message ?? "")
-        }
+            .errorAlert($warning)
     }
 }
 
@@ -232,12 +218,12 @@ struct EmulatorsSheet: View {
                     + "An Emulator's own settings are changed in it during a Play."
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if let installError { Text(installError).font(.callout).foregroundStyle(.red) }
+            if let installError { ErrorText(installError, font: .callout) }
             ForEach(Emulator.all.filter(\.isLudeums), id: \.bundleIdentifier) { emulator in
                 if let failed = services.tasks.items.first(where: { $0.subject == .emulator(emulator) }),
                     case .failed(let why) = failed.state
                 {
-                    Text("Installing \(emulator.name) failed: \(why)").font(.callout).foregroundStyle(.red)
+                    ErrorText("Installing \(emulator.name) failed: \(why)", font: .callout)
                 }
             }
             HStack {
@@ -258,12 +244,12 @@ struct EmulatorsSheet: View {
         } else if checks.notInstalled.contains(id) {
             Label("Not installed", systemImage: "minus.circle").foregroundStyle(.secondary)
         } else if checks.notLudeums.contains(id) {
-            Label("Not Ludeum's copy: install again", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+            ErrorText("Not Ludeum's copy: install again", systemImage: "xmark.octagon.fill")
         } else {
             switch checks.result(emulator) {
             case .ok: Label("OK", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-            case .tooOld: Label("Too old: can't Play", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
-            case .wrongBuild: Label("Wrong build: install again", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+            case .tooOld: ErrorText("Too old: can't Play", systemImage: "xmark.octagon.fill")
+            case .wrongBuild: ErrorText("Wrong build: install again", systemImage: "xmark.octagon.fill")
             case .newerMajor: Label("Newer major version", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             case .unreadable: Label("Version unreadable", systemImage: "questionmark.circle.fill").foregroundStyle(.orange)
             case nil:

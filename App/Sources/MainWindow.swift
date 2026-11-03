@@ -162,11 +162,7 @@ struct MainWindow: View {
         .sheet(item: $addingROMs) { picked in
             AddROMsSheet(services: services, picked: picked) { importModel.importNow(showingMatched: true, adding: $0) }
         }
-        .alert("Couldn't add the ROM", isPresented: Binding(get: { addROMError != nil }, set: { if !$0 { addROMError = nil } })) {
-            Button("OK") {}
-        } message: {
-            Text(addROMError ?? "")
-        }
+        .errorAlert("Couldn't add the ROM", message: $addROMError)
         .toolbar {
             ToolbarItem {
                 HStack(spacing: 6) {
@@ -245,11 +241,7 @@ struct Sidebar: View {
                 }
             }
         }
-        .alert("Couldn't unpin", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("OK") {}
-        } message: {
-            Text(error ?? "")
-        }
+        .errorAlert("Couldn't unpin", message: $error)
     }
 
     /// `running` swaps the icon while an Import runs.
