@@ -113,7 +113,7 @@ public struct ROMPlatform: Sendable, Equatable {
             name: "PlayStation Vita", folderName: "Vita", readyExtensions: ["vpk"],
             archiving: .singleFile),
         8: .init(
-            name: "PlayStation 2", folderName: "PS2", readyExtensions: ["iso", "chd", "cso", "zso", "gz", "cue", "bin", "mdf"],
+            name: "PlayStation 2", folderName: "PS2", readyExtensions: ["iso", "chd", "cso", "zso", "gz", "bin", "mdf"],
             archiving: .intoFolder, naming: .redump),
         29: .init(
             name: "Sega Mega Drive/Genesis", folderName: "Mega Drive", readyExtensions: ["md", "gen", "smd", "bin"],

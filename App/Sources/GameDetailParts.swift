@@ -483,7 +483,7 @@ enum FactStyle {
         locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState,
         disc: disc, duckStation: DuckStationSettings(ludeum: services.settings.folder),
         mesen: MesenSettings(ludeum: services.settings.folder), ares: AresSettings(ludeum: services.settings.folder),
-        running: \.isRunning)
+        pcsx2: PCSX2Settings(ludeum: services.settings.folder), running: \.isRunning)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)

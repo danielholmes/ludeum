@@ -60,8 +60,11 @@ public struct ROMFolder: Sendable, Equatable {
             .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
         let folders = items.map { url.appending(path: $0, directoryHint: .isDirectory) }
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
-        // A cue sheet's tracks belong to it.
-        let tracks = Set(files.filter { $0.pathExtension.lowercased() == "cue" }.flatMap(Self.cueTracks).map { $0.lowercased() })
+        // A cue sheet's tracks belong to it, where the Emulator opens cue sheets; where it doesn't (PCSX2), the image is
+        // the ROM and the cue sheet is just another file beside it.
+        let readsCues = readyExtensions.contains("cue")
+        let tracks = Set(
+            files.filter { readsCues && $0.pathExtension.lowercased() == "cue" }.flatMap(Self.cueTracks).map { $0.lowercased() })
         var ready: [String: URL] = [:]
         var archives: [String: URL] = [:]
         var discs: [String: [URL]] = [:]

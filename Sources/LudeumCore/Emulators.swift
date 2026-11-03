@@ -18,9 +18,9 @@ public struct Emulator: Sendable, Hashable {
 
     public static let all: [Emulator] = [.mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu]
 
-    /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024), MesenCE (ADR 0027)
-    /// and ares (ADR 0028).
-    public var isLudeums: Bool { self == .duckStation || self == .mesenCE || self == .ares }
+    /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024), MesenCE (ADR 0027),
+    /// ares (ADR 0028) and PCSX2 (ADR 0032).
+    public var isLudeums: Bool { self == .duckStation || self == .mesenCE || self == .ares || self == .pcsx2 }
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
@@ -42,14 +42,15 @@ public struct Emulator: Sendable, Hashable {
     }
 
     /// The command line for a Play. It sets every Emulator setting, with the default where the Game
-    /// has none (ADR 0008). DuckStation and PPSSPP take settings only as a whole file, so their Plays write one first
-    /// (`DuckStationSettings`, `PPSSPPSettings`); DuckStation's are only its Standing settings, as a Game's own are set in
-    /// DuckStation (ADR 0029). MesenCE's and ares's Standing settings go into their own settings files (`MesenSettings`,
-    /// `AresSettings`), the Game's own on their command lines. DuckStation, MesenCE and ares start from a `saveState`.
+    /// has none (ADR 0008). DuckStation, PCSX2 and PPSSPP take settings only as a whole file, so their Plays write one
+    /// first (`DuckStationSettings`, `PCSX2Settings`, `PPSSPPSettings`); DuckStation's and PCSX2's are only their Standing
+    /// settings, as a Game's own are set in the Emulator (ADRs 0029, 0032). MesenCE's and ares's Standing settings go into
+    /// their own settings files (`MesenSettings`, `AresSettings`), the Game's own on their command lines. DuckStation,
+    /// MesenCE, ares and PCSX2 start from a `saveState`.
     public func arguments(
         rom: URL, platformId: Int64, settings: EmulatorSettings, saveState: URL? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
-        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2GameSettings = .init()
+        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2Settings = .init()
     ) throws -> [String] {
         switch self {
         case .duckStation:
@@ -70,8 +71,7 @@ public struct Emulator: Sendable, Hashable {
             // No settings: it just opens the Game.
             [rom.path(percentEncoded: false)]
         case .pcsx2:
-            // The game settings layer comes from Ludeum's file; PCSX2's own settings (controllers, BIOS) still apply.
-            ["-batch", "-fastboot", "-gamecfg", try pcsx2.write().path(percentEncoded: false), "--", rom.path(percentEncoded: false)]
+            try pcsx2.arguments(rom: rom, saveState: saveState)
         case .xemu:
             // No settings: xemu has no run-ahead, and its one latency setting, VSync, stays its own. The disc isn't saved
             // into its settings.
@@ -384,22 +384,5 @@ extension LudeumStore {
                 sql: "UPDATE game SET runAheadFrames = ?, gameBoyModel = ? WHERE id = ?",
                 arguments: [settings.runAheadFrames, settings.gameBoyModel?.rawValue, game])
         }
-    }
-}
-
-/// The game settings file every PCSX2 Play uses, in place of PCSX2's own per-game settings: Optimal
-/// Frame Pacing (no frames queued for VSync), the lowest input latency PCSX2 has. PS2 emulators have no run-ahead.
-public struct PCSX2GameSettings: Sendable {
-    let file: URL
-
-    public init(file: URL = LudeumFolder.standard.url.appending(path: "PCSX2 game settings.ini")) {
-        self.file = file
-    }
-
-    /// Writes the file and returns where it is.
-    func write() throws -> URL {
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try "[EmuCore/GS]\nVsyncQueueSize = 0\n".write(to: file, atomically: true, encoding: .utf8)
-        return file
     }
 }

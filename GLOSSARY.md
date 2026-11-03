@@ -161,7 +161,7 @@ Where a Copy was released for, e.g. Europe, USA, World, Australia or Japan: the 
 _Avoid_: Territory, locale
 
 **Serial**:
-The product code a disc is pressed with, e.g. SLUS-00551, as the disc itself says it: for a PlayStation disc, the executable its `SYSTEM.CNF` boots, named as DuckStation names it. A ROM has one per Disc, in Disc order, read off its Discs once (only PlayStation's so far); a Disc can have none. They tell exactly which version a ROM is, and name DuckStation's per-game settings file for it. They're never typed in or taken from a ROM's name.
+The product code a disc is pressed with, e.g. SLUS-00551, as the disc itself says it: for a PlayStation disc, the executable its `SYSTEM.CNF` boots, named as DuckStation names it, and for a PlayStation 2 disc the one its `BOOT2` line boots, named as PCSX2 names it. A ROM has one per Disc, in Disc order, read off its Discs once (PlayStation's and PlayStation 2's so far); a Disc can have none. They tell exactly which version a ROM is, name DuckStation's per-game settings file for it, and find PCSX2's Save states and Card saves for it. They're never typed in or taken from a ROM's name.
 _Avoid_: Product code, game ID, catalogue number, serial number
 
 **Gone**:
@@ -203,11 +203,11 @@ _Avoid_: Disagreement (that's about one Game, and needs more evidence)
 ### Playing
 
 **Emulator**:
-The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation, MesenCE and ares itself, in the Ludeum folder at the release it chooses, and none can be Played with until that's done; the others I install. An Emulator's own settings are changed in it, during a Play.
+The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation, MesenCE, ares and PCSX2 itself, in the Ludeum folder at the release it chooses, and none can be Played with until that's done; the others I install. An Emulator's own settings are changed in it, during a Play.
 _Avoid_: Core, player
 
 **Standing settings**:
-The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, fast boot, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. Not Emulator settings, which are one Game's own. Only DuckStation, MesenCE and ares have them so far; MesenCE's say the Play's Platform's folders, as it names what it keeps by the ROM's file name alone, and ares makes its own folders, one for the Mega Drive and Sega CD and one for the N64.
+The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, fast boot, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. Not Emulator settings, which are one Game's own. Only DuckStation, MesenCE, ares and PCSX2 have them so far; MesenCE's say the Play's Platform's folders, as it names what it keeps by the ROM's file name alone, and ares makes its own folders, one for the Mega Drive and Sega CD and one for the N64.
 _Avoid_: Global settings, defaults, config
 
 **Emulator settings**:
@@ -219,15 +219,15 @@ An Emulator setting for Game Boy and Game Boy Color Games: the hardware the Emul
 _Avoid_: Forced platform, hardware mode
 
 **Save state**:
-A snapshot of a game mid-play that DuckStation, MesenCE or ares saves and loads, in one of a ROM's slots (1 to 10, ares's 1 to 9), or as its Resume state, which DuckStation saves on closing the game and MesenCE every minute of play, or as DuckStation's Previous one of a slot, kept when it's saved over. Save states are made and managed in the Emulator, which keeps them in the Data folder, as its Standing settings say: DuckStation names them by the disc's Serial, MesenCE by the ROM's file name, in a folder for each Platform, and ares by the ROM's file name, the Mega Drive and Sega CD in one folder and the N64 in another. Ludeum lists a Game's, Plays from one and deletes one. A save state has no name: it's its slot, when it was saved and its screenshot (ares's have none). One of ares's loads only in the ares release that saved it. Not a Game save, which the game writes itself.
+A snapshot of a game mid-play that DuckStation, MesenCE, ares or PCSX2 saves and loads, in one of a ROM's slots (1 to 10, ares's 1 to 9), or as its Resume state, which DuckStation and PCSX2 save on closing the game and MesenCE every minute of play, or as DuckStation's or PCSX2's Previous one of a slot, kept when it's saved over. Save states are made and managed in the Emulator, which keeps them in the Data folder, as its Standing settings say: DuckStation names them by the disc's Serial, PCSX2 by the disc's Serial and its boot program's checksum, MesenCE by the ROM's file name, in a folder for each Platform, and ares by the ROM's file name, the Mega Drive and Sega CD in one folder and the N64 in another. Ludeum lists a Game's, Plays from one and deletes one. A save state has no name: it's its slot, when it was saved and its screenshot (ares's have none). One of ares's loads only in the ares release that saved it. Not a Game save, which the game writes itself.
 _Avoid_: Snapshot, save (alone), quick save
 
 **Game save**:
-The file or folder where an Emulator keeps what one Game has saved itself, as the real hardware would on a memory card or in the cartridge's battery-backed memory, e.g. a PlayStation Game's memory card, the `.srm` MesenCE keeps for a Game Boy cartridge, or the `.ram` ares keeps for a Mega Drive one. A container every game saves into, such as a PS2's shared memory card or the Sega CD's backup RAM, is no one Game's Game save. Not a Save state.
+The file or folder where an Emulator keeps what one Game has saved itself, as the real hardware would on a memory card or in the cartridge's battery-backed memory, e.g. a PlayStation Game's memory card, the `.srm` MesenCE keeps for a Game Boy cartridge, or the `.ram` ares keeps for a Mega Drive one. A container every game saves into, such as a PS2 memory card kept as one file or the Sega CD's backup RAM, is no one Game's Game save; a PlayStation 2 Game's Game saves are its Card saves on PCSX2's folder memory cards, each a folder of its own. Not a Save state.
 _Avoid_: Save (alone), battery save, save file, SRAM
 
 **Card save**:
-One save inside a memory card, made by a game: its title as the game wrote it, its icon and the blocks it takes. A card can hold another game's Card saves too.
+One save inside a memory card, made by a game: its title as the game wrote it, its icon and the blocks it takes. A card can hold another game's Card saves too. On a PCSX2 folder memory card each is a folder, named as the game named it with the disc's Serial in the name, and PCSX2 shows a running game only its own.
 _Avoid_: Save slot, block, file
 
 **Play**:
@@ -245,7 +245,7 @@ The one place on this Mac where Ludeum keeps everything it owns: the live journa
 _Avoid_: App folder, library
 
 **Data folder**:
-The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the Game saves and Save states of PlayStation Games, of MesenCE's Platforms' (each of those Platforms' apart) and of ares's, DuckStation's BIOS files, per-game settings, input profiles and screenshots, and the Game saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
+The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the Game saves and Save states of PlayStation Games, of PlayStation 2 Games, of MesenCE's Platforms' (each of those Platforms' apart) and of ares's, DuckStation's and PCSX2's BIOS files, per-game settings, input profiles and screenshots (PCSX2's cheats, patches and textures too), and the Game saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
 _Avoid_: Kept folder, backup-worthy, Library folder
 
 **Backup**:

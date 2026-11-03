@@ -1,7 +1,9 @@
 import Foundation
 
 /// A PlayStation disc's Serial, read off its data track as DuckStation reads it (`System::GetGameDetailsFromImage`), so
-/// it's the name DuckStation gives the disc's per-game settings file (ADR 0021).
+/// it's the name DuckStation gives the disc's per-game settings file (ADR 0021); or a PlayStation 2 disc's, from its
+/// `BOOT2` line, as PCSX2 reads it (`GetPS2ElfName`), so it's the name PCSX2 gives the disc's Save states and the saves
+/// on its folder memory cards (ADR 0032).
 enum PlayStationDisc {
     /// Bytes of the image that weren't read are needed.
     struct NeedsMore: Error, Equatable {
@@ -23,7 +25,8 @@ enum PlayStationDisc {
 
     /// The executable `SYSTEM.CNF`'s `BOOT` line names, as a path on the disc: `SLUS_005.51` from `BOOT = cdrom:\SLUS_005.51;1`
     /// (or `cdrom:SLUS_005.51;1`), without `cdrom:`, leading slashes or `;1`, and with all whitespace dropped. `PSX.EXE`
-    /// when there's no `BOOT` line.
+    /// when there's no `BOOT` line. A PlayStation 2 disc's `BOOT2` line (`BOOT2 = cdrom0:\SLUS_200.62;1`) comes first,
+    /// as PCSX2 reads it, without its `cdrom0:`.
     static func executable(systemCNF: Data) -> String {
         var lines: [(key: String, value: String)] = []
         var key = ""
@@ -41,8 +44,10 @@ enum PlayStationDisc {
             }
         }
         if !key.isEmpty { lines.append((key, value)) }
-        guard var code = lines.first(where: { $0.key.lowercased() == "boot" })?.value else { return fallbackExecutable }
-        if code.hasPrefix("cdrom:") { code.removeFirst(6) }
+        guard
+            var code = (lines.first { $0.key.lowercased() == "boot2" } ?? lines.first { $0.key.lowercased() == "boot" })?.value
+        else { return fallbackExecutable }
+        if code.hasPrefix("cdrom0:") { code.removeFirst(7) } else if code.hasPrefix("cdrom:") { code.removeFirst(6) }
         while code.first == "/" || code.first == "\\" { code.removeFirst() }
         if let version = code.lastIndex(of: ";") { code = String(code[..<version]) }
         return code
