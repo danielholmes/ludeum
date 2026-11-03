@@ -35,6 +35,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         var failingHashes: Set<String> = []  // answered with a 500, keyed as `hashes`
         // The LaunchBox Games Database's daily dump, `Metadata.zip`
         var launchBoxDump: Data?
+        // Images served at a path on IGDB's or LaunchBox's image host, in place of the one they serve for any other
+        var images: [String: Data] = [:]
         // Failure injection, keyed by host
         var down: Set<String> = []
         var rateLimitOnce: [String: Int] = [:]  // host → Retry-After seconds
@@ -72,6 +74,9 @@ final class FakeInternet: HTTPTransport, Sendable {
     func addPlatform(_ id: Int, _ name: String, abbreviation: String? = nil) {
         state.withLock { $0.platforms.append(["id": id, "name": name, "abbreviation": abbreviation as Any? ?? NSNull()]) }
     }
+
+    /// An image served at `path` on IGDB's or LaunchBox's image host, e.g. `/igdb/image/upload/t_original/sc1.jpg`.
+    func addImage(_ path: String, _ data: Data) { state.withLock { $0.images[path] = data } }
 
     func addGenre(_ id: Int, _ name: String) { state.withLock { $0.genres.append(["id": id, "name": name]) } }
     func addTheme(_ id: Int, _ name: String) { state.withLock { $0.themes.append(["id": id, "name": name]) } }
@@ -143,12 +148,12 @@ final class FakeInternet: HTTPTransport, Sendable {
             switch host {
             case Hosts.twitch: return Self.token(&s)
             case Hosts.igdb: return Self.igdb(request, s)
-            case Hosts.igdbImages: return (200, [:], Self.coverJPEG)
+            case Hosts.igdbImages: return (200, [:], s.images[request.url?.path() ?? ""] ?? Self.coverJPEG)
             case Hosts.hasheous: return Self.hasheous(request, s)
             case Hosts.launchBox:
                 guard request.url?.path() == "/Metadata.zip", let dump = s.launchBoxDump else { return (404, [:], Data()) }
                 return (200, [:], dump)
-            case Hosts.launchBoxImages: return (200, [:], Self.boxartPNG)
+            case Hosts.launchBoxImages: return (200, [:], s.images[request.url?.path() ?? ""] ?? Self.boxartPNG)
             default: return (404, [:], Data())
             }
         }

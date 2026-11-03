@@ -40,6 +40,9 @@ struct GameDetailView: View {
     @State private var facts = GameFacts.none
     /// LaunchBox's community rating, the rest of its Players' score.
     @State private var launchBoxScore: CommunityScore?
+    /// LaunchBox's Screenshots for it that IGDB doesn't have, shown after IGDB's; whether they couldn't be looked up.
+    @State private var launchBoxScreenshots: [String] = []
+    @State private var launchBoxScreenshotsFailed = false
     /// What it's an Expansion of, if it's one; and its Expansions in the journal, if it has any.
     @State private var baseGame: BaseGameLine?
     @State private var expansions: [Game] = []
@@ -174,11 +177,15 @@ struct GameDetailView: View {
                     IGDBFactsRows(services: services, facts: facts, browse: browse, showsScores: false)
                 }
             }
-            if !facts.screenshots.isEmpty, let igdb = services.igdb {
+            // Screenshots: IGDB's, then LaunchBox's title screens and gameplay that IGDB doesn't have.
+            let screenshots =
+                (services.igdb == nil ? [] : facts.screenshots.map { ShownScreenshot.igdb(imageID: $0) })
+                + launchBoxScreenshots.map { .launchBox(file: $0) }
+            if !screenshots.isEmpty || launchBoxScreenshotsFailed {
                 ScreenshotsSection(
-                    loader: ScreenshotLoader(igdb: igdb), screenshots: facts.screenshots.map { .igdb(imageID: $0) }, shape: screenshotShape)
+                    loader: ScreenshotLoader(igdb: services.igdb, covers: services.covers), screenshots: screenshots,
+                    shape: screenshotShape, note: launchBoxScreenshotsFailed ? "Couldn't look up LaunchBox's Screenshots." : nil)
             }
-            LaunchBoxScreenshotsSection(services: services, game: id, shape: screenshotShape)
 
             // Copies: the ROMs (checked now and then), then the ones recorded by hand.
             Section("Copies") {
@@ -261,6 +268,10 @@ struct GameDetailView: View {
             launchBoxScore = try? await offMain {
                 try launchBox.playerScores([id: try journal.launchBoxLookup(id, facts: facts)])[id]
             }
+        }
+        // Again when its Covers change: its names or IGDB link, which LaunchBox's are found by.
+        .task(id: LaunchBoxScreenshotsKey(game: id, igdbGameId: game.igdbGameId, coverRevision: services.changes.coverRevision)) {
+            await lookUpLaunchBoxScreenshots(igdbGameId: game.igdbGameId)
         }
         .sheet(isPresented: $editingGame) {
             EditGameSheet(
@@ -736,6 +747,25 @@ struct GameDetailView: View {
     private var emulator: Emulator? { game.flatMap { Emulator.of(platformId: $0.platformId) } }
     private var screenshotShape: ScreenshotShape { .of(platformId: game?.platformId) }
 
+    /// LaunchBox's Screenshots for it that IGDB doesn't have. IGDB's are read here rather than waited for from the facts,
+    /// so LaunchBox's never show before the ones of theirs IGDB has are left out. The last ones found stay until the new
+    /// ones are; a look-up overtaken by another (its key changed) changes nothing.
+    private func lookUpLaunchBoxScreenshots(igdbGameId: Int64?) async {
+        var igdbScreenshots: [String] = []
+        if let igdbGameId, let igdb = services.igdb {
+            igdbScreenshots = (try? await igdb.facts(igdbGameId: igdbGameId))?.screenshots ?? []
+        }
+        let found: [String]?
+        do {
+            found = try await services.covers?.launchBoxScreenshots(for: id, besides: igdbScreenshots) ?? []
+        } catch {
+            found = nil
+        }
+        guard !Task.isCancelled else { return }
+        launchBoxScreenshots = found ?? []
+        launchBoxScreenshotsFailed = found == nil
+    }
+
     /// Plays the Game in its Emulator, with every Emulator setting on the command line, from `saveState` if given, else
     /// on `disc` of a multi-disc ROM if given. A running Emulator gets the ROM in its open window.
     private func play(in emulator: Emulator, from saveState: URL? = nil, disc: Int? = nil) {
@@ -1066,4 +1096,11 @@ struct PlaythroughSheet: View {
 
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// What Game detail's LaunchBox Screenshots are looked up again for.
+private struct LaunchBoxScreenshotsKey: Hashable {
+    let game: GameID
+    let igdbGameId: Int64?
+    let coverRevision: Int
 }

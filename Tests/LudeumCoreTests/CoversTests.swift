@@ -373,6 +373,45 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
     }
 
+    @Test func launchBoxsScreenshotsThatIGDBHasAreLeftOut() async throws {
+        try await launchBox([
+            LaunchBoxGame(
+                id: 1, name: "Super Metroid", platform: Self.snes,
+                otherImages: [
+                    ("Screenshot - Game Title", "title.png"), ("Screenshot - Gameplay", "same.png"),
+                    ("Screenshot - Gameplay", "new.png"),
+                ])
+        ])
+        h.internet.addImage("/title.png", screenshotImage(seed: 1, width: 256, height: 224))
+        h.internet.addImage("/same.png", screenshotImage(seed: 2, width: 256, height: 224))
+        h.internet.addImage("/new.png", screenshotImage(seed: 3, width: 256, height: 224))
+        h.internet.addImage("/igdb/image/upload/t_original/sc2.jpg", screenshotImage(seed: 2, width: 1024, height: 896, type: .jpeg))
+        h.internet.addImage("/igdb/image/upload/t_original/sc4.jpg", screenshotImage(seed: 4, width: 1024, height: 896, type: .jpeg))
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
+
+        #expect(try await covers.launchBoxScreenshots(for: game, besides: ["sc2", "sc4"]) == ["title.png", "new.png"])
+    }
+
+    @Test func onlyWithIGDBScreenshotsAreLaunchBoxsDownloadedToCompare() async throws {
+        try await launchBox([
+            LaunchBoxGame(id: 1, name: "Super Metroid", platform: Self.snes, otherImages: [("Screenshot - Gameplay", "sm1.jpg")])
+        ])
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
+
+        #expect(try await covers.launchBoxScreenshots(for: game, besides: []) == ["sm1.jpg"])
+        #expect(h.internet.sent(to: FakeInternet.Hosts.launchBoxImages).isEmpty)
+    }
+
+    @Test func aLaunchBoxScreenshotThatCantBeDownloadedIsKept() async throws {
+        try await launchBox([
+            LaunchBoxGame(id: 1, name: "Super Metroid", platform: Self.snes, otherImages: [("Screenshot - Gameplay", "sm1.jpg")])
+        ])
+        h.internet.setDown(FakeInternet.Hosts.launchBoxImages, true)
+        let game = try superMetroid(["Super Metroid (USA).sfc"])
+
+        #expect(try await covers.launchBoxScreenshots(for: game, besides: ["sc1"]) == ["sm1.jpg"])
+    }
+
     @Test func screenshotsAreFoundByIGDBsAlternativeNamesWhenItsOwnFindNone() async throws {
         h.internet.addGame(
             2006, "Commander Keen in Invasion of the Vorticons: Marooned on Mars",

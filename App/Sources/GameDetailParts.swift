@@ -148,39 +148,6 @@ struct ScreenshotLoader {
     }
 }
 
-/// LaunchBox's Screenshots for the Game (`Covers.launchBoxScreenshots(for:)`), title screens first, below IGDB's and
-/// shown as they are: nothing while they're looked for, or when LaunchBox has none.
-struct LaunchBoxScreenshotsSection: View {
-    let services: Services
-    let game: GameID
-    let shape: ScreenshotShape
-    @State private var screenshots: [String] = []
-    @State private var failed = false
-
-    var body: some View {
-        Group {
-            let title = "LaunchBox Screenshots"
-            if !screenshots.isEmpty {
-                ScreenshotsSection(
-                    loader: ScreenshotLoader(covers: services.covers), screenshots: screenshots.map { .launchBox(file: $0) }, title: title,
-                    shape: shape)
-            } else if failed {
-                Section(title) { Text("Couldn't load").foregroundStyle(.red) }
-            }
-        }
-        // Again when the Game's Covers change: its names or IGDB link, which the Screenshots are found by.
-        .task(id: "\(game) \(services.changes.coverRevision)") {
-            failed = false
-            do {
-                screenshots = try await services.covers?.launchBoxScreenshots(for: game) ?? []
-            } catch {
-                screenshots = []
-                failed = true
-            }
-        }
-    }
-}
-
 /// A screenshot filling its frame, cropped to it, downloaded on first view; a grey box until then.
 struct ScreenshotImage: View {
     let loader: ScreenshotLoader
@@ -202,12 +169,13 @@ struct ScreenshotImage: View {
     }
 }
 
-/// A screenshot's original, whole: as large as its frame allows without going over its own size in pixels, and never
-/// cropped. One under 200 pixels either way has its own size scaled up by a whole amount (`screenshotScale`). A
-/// spinner until it's downloaded.
+/// A screenshot's original, whole and never cropped, as big as `space` allows (`screenshotFit`): a small one the most
+/// whole times its own size that fits, sharp, any other filling it, smoothed. A spinner until it's downloaded.
 struct WholeScreenshot: View {
     let loader: ScreenshotLoader
     let screenshot: ShownScreenshot
+    /// The room it has, in points.
+    let space: CGSize
     @State private var image: NSImage?
     @State private var failed = false
 
@@ -215,12 +183,11 @@ struct WholeScreenshot: View {
         ZStack {
             if let image {
                 let pixels = Self.pixelSize(of: image)
-                let scale = CGFloat(screenshotScale(pixelWidth: Int(pixels.width), pixelHeight: Int(pixels.height)))
+                let fit = screenshotFit(
+                    pixelWidth: Int(pixels.width), pixelHeight: Int(pixels.height), width: space.width, height: space.height)
                 Image(nsImage: image).resizable()
-                    // Scaled up, each pixel stays a sharp square of them; shrunk to fit, it's smoothed.
-                    .interpolation(scale > 1 ? .none : .high)
-                    .scaledToFit()
-                    .frame(maxWidth: pixels.width * scale, maxHeight: pixels.height * scale)
+                    .interpolation(fit.sharp ? .none : .high)
+                    .frame(width: fit.width, height: fit.height)
             } else if failed {
                 Text("Couldn't download it.").foregroundStyle(.secondary)
             } else {

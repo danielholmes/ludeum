@@ -232,12 +232,24 @@ extension IGDBClient {
     }
 }
 
-/// How many times bigger to show a screenshot: 1 for one at least 200 pixels each way, else the least whole amount that
-/// takes its shorter side to 200, so each of its pixels becomes a square of them.
-public func screenshotScale(pixelWidth: Int, pixelHeight: Int) -> Int {
-    let shorter = min(pixelWidth, pixelHeight)
-    guard shorter > 0, shorter < 200 else { return 1 }
-    return (200 + shorter - 1) / shorter
+/// How big a screenshot is shown in the gallery, in points, and whether it's scaled up sharp.
+public struct ScreenshotFit: Sendable, Equatable {
+    public let width: Double
+    public let height: Double
+    /// Each of its pixels a sharp square of them, rather than smoothed.
+    public let sharp: Bool
+}
+
+/// How big to show a screenshot of `pixelWidth` × `pixelHeight` in `width` × `height` points: the most whole times its
+/// own size that fits, sharp, when that's at least twice (a Game Boy's 160 × 144 four times in 1129 × 635, a
+/// PlayStation's 320 × 240 twice); else as big as fits, smoothed (IGDB's 640 × 480, scaled up already, or a 1080p one
+/// shrunk).
+public func screenshotFit(pixelWidth: Int, pixelHeight: Int, width: Double, height: Double) -> ScreenshotFit {
+    guard pixelWidth > 0, pixelHeight > 0 else { return ScreenshotFit(width: 0, height: 0, sharp: false) }
+    let scale = min(width / Double(pixelWidth), height / Double(pixelHeight))
+    let whole = scale.rounded(.down)
+    if whole >= 2 { return ScreenshotFit(width: Double(pixelWidth) * whole, height: Double(pixelHeight) * whole, sharp: true) }
+    return ScreenshotFit(width: Double(pixelWidth) * scale, height: Double(pixelHeight) * scale, sharp: false)
 }
 
 /// How a Game's Screenshots are tiled before "+N more": each the shape of its Platform's screen, the shape most of

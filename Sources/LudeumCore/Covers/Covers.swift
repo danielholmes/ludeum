@@ -184,13 +184,36 @@ public struct Covers: Sendable {
     }
 
     /// LaunchBox's Screenshots for the Game, title screens first, by their file names there: all of the one game matched,
-    /// found as its Box art is, by the Game's names, else IGDB's alternative names.
-    public func launchBoxScreenshots(for game: GameID) async throws -> [String] {
+    /// found as its Box art is, by the Game's names, else IGDB's alternative names; but not those that are the same
+    /// Screenshot as one of `igdbScreenshots` (IGDB's image ids), as the two often have the same ones. Telling them apart downloads
+    /// each of LaunchBox's and IGDB's originals, so there's nothing to download without IGDB's. One that can't be
+    /// downloaded, or is blank, is kept (`ScreenshotFingerprint`).
+    public func launchBoxScreenshots(for game: GameID, besides igdbScreenshots: [String] = []) async throws -> [String] {
         guard let launchBox else { return [] }
-        return try await byNamesThenAlternatives(game) { lookup, record -> [String]? in
-            let found = try launchBox.screenshots(platform: lookup.platform, titles: lookup.titles, year: record?.releaseYear)
-            return found.isEmpty ? nil : found
-        } ?? []
+        let found =
+            try await byNamesThenAlternatives(game) { lookup, record -> [String]? in
+                let found = try launchBox.screenshots(platform: lookup.platform, titles: lookup.titles, year: record?.releaseYear)
+                return found.isEmpty ? nil : found
+            } ?? []
+        guard !found.isEmpty, !igdbScreenshots.isEmpty, let igdb else { return found }
+        async let igdbPrints = Self.fingerprints(igdbScreenshots) { try await igdb.screenshot(imageID: $0, original: true) }
+        let launchBoxPrints = await Self.fingerprints(found) { try await launchBox.image($0) }
+        return ScreenshotFingerprint.unmatched(Array(zip(found, launchBoxPrints)), by: await igdbPrints.compactMap { $0 })
+    }
+
+    /// The fingerprint of each image, in order, downloaded by `file` all at once: nil for one that can't be downloaded
+    /// or is blank.
+    private static func fingerprints(
+        _ images: [String], _ file: @escaping @Sendable (String) async throws -> URL
+    ) async -> [ScreenshotFingerprint?] {
+        await withTaskGroup(of: (Int, ScreenshotFingerprint?).self) { group in
+            for (index, image) in images.enumerated() {
+                group.addTask { (index, (try? await file(image)).flatMap { ScreenshotFingerprint(contentsOf: $0) }) }
+            }
+            var prints = [ScreenshotFingerprint?](repeating: nil, count: images.count)
+            for await (index, print) in group { prints[index] = print }
+            return prints
+        }
     }
 
     /// One of LaunchBox's Screenshots, by its file name there, downloaded the first time: nil when LaunchBox isn't to

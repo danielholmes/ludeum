@@ -144,7 +144,7 @@ IGDB's clean artwork for a game, without the box's branding. Kept for every link
 _Avoid_: Box art
 
 **Screenshot**:
-An image of a game being played, or its title screen. From IGDB (several per game) and the LaunchBox Games Database (any number of gameplay shots and title screens).
+An image of a game being played, or its title screen. From IGDB (several per game) and the LaunchBox Games Database (any number of gameplay shots and title screens), less those of LaunchBox's that are the same as one of IGDB's.
 
 ### Copies
 

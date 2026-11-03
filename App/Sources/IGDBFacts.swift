@@ -97,9 +97,9 @@ struct IGDBFactsRows: View {
 struct ScreenshotsSection: View {
     let loader: ScreenshotLoader
     let screenshots: [ShownScreenshot]
-    /// Its heading, as LaunchBox's have their own.
-    var title = "Screenshots"
     var shape = ScreenshotShape.widescreen
+    /// A problem to show under them: some couldn't be looked up.
+    var note: String?
     @State private var showingAll = false
     /// The tiles for the width it has; for a narrow Game detail panel's until that's known.
     @State private var layout: ScreenshotLayout?
@@ -108,7 +108,7 @@ struct ScreenshotsSection: View {
     private nonisolated static let spacing: CGFloat = 12
 
     var body: some View {
-        Section(title) {
+        Section("Screenshots") {
             let tiles = layout ?? shape.layout(width: ScreenshotShape.narrowPanelWidth, spacing: Self.spacing)
             let limit = tiles.limit
             let collapsed = !showingAll && screenshots.count > limit
@@ -146,6 +146,7 @@ struct ScreenshotsSection: View {
             } action: {
                 layout = $0
             }
+            if let note { Text(note).foregroundStyle(.red) }
         }
         .onChange(of: screenshots) { showingAll = false }
         .sheet(item: $viewing) { shot in
@@ -158,7 +159,8 @@ struct ScreenshotsSection: View {
 /// back and on, round from the last to the first; click one in the strip to see it.
 struct ScreenshotGallery: View {
     let loader: ScreenshotLoader
-    let screenshots: [ShownScreenshot]
+    /// The ones there were when it opened: LaunchBox's, looked up again behind it, never move what it's showing.
+    @State private var screenshots: [ShownScreenshot]
     /// The strip's thumbnails are its shape: its Platform's screen.
     let shape: ScreenshotShape
     @State private var index: Int
@@ -168,7 +170,7 @@ struct ScreenshotGallery: View {
 
     init(loader: ScreenshotLoader, screenshots: [ShownScreenshot], showing screenshot: ShownScreenshot, shape: ScreenshotShape) {
         self.loader = loader
-        self.screenshots = screenshots
+        _screenshots = State(initialValue: screenshots)
         self.shape = shape
         _index = State(initialValue: screenshots.firstIndex(of: screenshot) ?? 0)
     }
@@ -176,7 +178,7 @@ struct ScreenshotGallery: View {
     var body: some View {
         let stage = stageSize
         VStack(spacing: 12) {
-            WholeScreenshot(loader: loader, screenshot: screenshots[index])
+            WholeScreenshot(loader: loader, screenshot: screenshots[index], space: stage)
                 // A spinner while the next one downloads, not the last one.
                 .id(screenshots[index])
                 .frame(width: stage.width, height: stage.height)
