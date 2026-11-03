@@ -24,7 +24,11 @@ import Testing
     }
 
     @Test func aCueSheetWithItsTracksIsAGame() throws {
-        _ = try plan([entry("ICO.cue", 1), entry("ICO (Track 1).bin"), entry("ICO (Track 2).bin")])
+        // On PlayStation: PCSX2 opens no cue sheet, so the PS2 folder doesn't read one (ADR 0032).
+        let ps1 = ROMFolder.platform(ROMPlatform.ps1, URL(filePath: "/Games/PS1", directoryHint: .isDirectory))!
+        _ = try ROMArchiver.unarchivePlan(
+            listing: [entry("ICO.cue", 1), entry("ICO (Track 1).bin"), entry("ICO (Track 2).bin")],
+            archive: URL(filePath: "/Games/PS1/ICO.7z"), romName: "ICO", folder: ps1)
     }
 
     @Test func severalImagesWithoutACueSheetAreRefused() {

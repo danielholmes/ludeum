@@ -211,6 +211,12 @@ struct GameDetailView: View {
             if !game.isBundle, emulator == .duckStation, !memoryCardROMs.isEmpty {
                 MemoryCardSection(services: services, roms: memoryCardROMs)
             }
+            // Save states and Game saves: PCSX2's, by the ROMs' Serials, in the Data folder.
+            if !game.isBundle, emulator == .pcsx2, !saveStateSerials.isEmpty {
+                PCSX2SavesSection(services: services, serials: saveStateSerials, refusal: playing.availability.refusal?.message) {
+                    state in play(in: .pcsx2, from: state.file)
+                }
+            }
             // Save states and Game saves: MesenCE's, in its Platform's folders in the Data folder.
             if !game.isBundle, emulator == .mesenCE, playROMs.contains(where: { !$0.missing && !$0.archived }) {
                 MesenSavesSection(

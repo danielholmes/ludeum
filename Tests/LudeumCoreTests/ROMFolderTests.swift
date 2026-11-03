@@ -98,20 +98,29 @@ struct FakeROMFolder {
         #expect(try ps2.folder.scan() == [FolderROMFile(name: "Okami (USA)", ready: iso, archive: archive)])
     }
 
+    // Cue sheets are PlayStation's: PCSX2 opens none, so the PS2 folder doesn't read them (ADR 0032).
     @Test func aCueSheetsTracksArentROMsOfTheirOwn() throws {
-        let ps2 = try FakeROMFolder(in: directory)
-        let cue = try ps2.add("Ape Escape 2 (USA).cue", "FILE \"Ape Escape 2 (USA) (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n")
-        try ps2.add("Ape Escape 2 (USA) (Track 1).bin")
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let cue = try ps1.add("Ape Escape (USA).cue", "FILE \"Ape Escape (USA) (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n")
+        try ps1.add("Ape Escape (USA) (Track 1).bin")
 
-        #expect(try ps2.folder.scan() == [FolderROMFile(name: "Ape Escape 2 (USA)", ready: cue, archive: nil)])
+        #expect(try ps1.folder.scan() == [FolderROMFile(name: "Ape Escape (USA)", ready: cue, archive: nil)])
     }
 
     @Test func aCueSheetsTracksMatchIgnoringCaseAndFolders() throws {
-        let ps2 = try FakeROMFolder(in: directory)
-        let cue = try ps2.add("Ape Escape 2 (USA).cue", "FILE \"tracks\\APE ESCAPE 2 (USA).BIN\" BINARY\n")
-        try ps2.add("Ape Escape 2 (USA).bin")
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let cue = try ps1.add("Ape Escape (USA).cue", "FILE \"tracks\\APE ESCAPE (USA).BIN\" BINARY\n")
+        try ps1.add("Ape Escape (USA).bin")
 
-        #expect(try ps2.folder.scan() == [FolderROMFile(name: "Ape Escape 2 (USA)", ready: cue, archive: nil)])
+        #expect(try ps1.folder.scan() == [FolderROMFile(name: "Ape Escape (USA)", ready: cue, archive: nil)])
+    }
+
+    @Test func aPS2CueSheetIsntAROMAsPCSX2CantOpenOne() throws {
+        let ps2 = try FakeROMFolder(in: directory)
+        try ps2.add("Ape Escape 2 (USA).cue", "FILE \"Ape Escape 2 (USA).bin\" BINARY\n")
+        let bin = try ps2.add("Ape Escape 2 (USA).bin")
+
+        #expect(try ps2.folder.scan() == [FolderROMFile(name: "Ape Escape 2 (USA)", ready: bin, archive: nil)])
     }
 
     @Test func aSubfolderHoldingOneImageIsAReadyROMNamedAfterTheFolder() throws {
@@ -125,11 +134,11 @@ struct FakeROMFolder {
     }
 
     @Test func aSubfolderWithACueSheetPlaysTheCueSheet() throws {
-        let ps2 = try FakeROMFolder(in: directory)
-        let cue = try ps2.add("Ape Escape 2/Disc/Ape Escape 2.cue", "FILE \"Ape Escape 2 (Track 1).bin\" BINARY\n")
-        try ps2.add("Ape Escape 2/Disc/Ape Escape 2 (Track 1).bin")
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        let cue = try ps1.add("Ape Escape/Disc/Ape Escape.cue", "FILE \"Ape Escape (Track 1).bin\" BINARY\n")
+        try ps1.add("Ape Escape/Disc/Ape Escape (Track 1).bin")
 
-        #expect(try ps2.folder.scan() == [FolderROMFile(name: "Ape Escape 2", ready: cue, archive: nil)])
+        #expect(try ps1.folder.scan() == [FolderROMFile(name: "Ape Escape", ready: cue, archive: nil)])
     }
 
     @Test func aSubfolderWithSeveralImagesAndNoCueSheetIsntAROM() throws {
@@ -156,32 +165,33 @@ struct FakeROMFolder {
     }
 
     @Test func oneROMLookedUpByNameIsWhatAScanFindsForIt() throws {
-        let ps2 = try FakeROMFolder(in: directory)
-        try ps2.add("Okami (USA).7z")
-        let okami = try ps2.add("Okami (USA).iso")
-        try ps2.add("ICO/ICO (USA).bin")
-        try ps2.add("ICO.7z")
-        try ps2.add("Ape Escape 2 (USA).cue", "FILE \"Ape Escape 2 (USA) (Track 1).bin\" BINARY\n")
-        try ps2.add("Ape Escape 2 (USA) (Track 1).bin")
-        try ps2.add("Bully (USA) v1.2.iso")
-        try ps2.add("Demos/a.iso")
-        try ps2.add("Demos/b.iso")
-        try ps2.add("notes.txt")
+        // PlayStation: the one disc Platform whose folder reads loose images, archives and cue sheets alike.
+        let ps1 = try FakeROMFolder(in: directory, platform: ROMPlatform.ps1)
+        try ps1.add("Okami (USA).7z")
+        let okami = try ps1.add("Okami (USA).iso")
+        try ps1.add("ICO/ICO (USA).bin")
+        try ps1.add("ICO.7z")
+        try ps1.add("Ape Escape 2 (USA).cue", "FILE \"Ape Escape 2 (USA) (Track 1).bin\" BINARY\n")
+        try ps1.add("Ape Escape 2 (USA) (Track 1).bin")
+        try ps1.add("Bully (USA) v1.2.iso")
+        try ps1.add("Demos/a.iso")
+        try ps1.add("Demos/b.iso")
+        try ps1.add("notes.txt")
 
-        let scanned = try ps2.folder.scan()
+        let scanned = try ps1.folder.scan()
 
         #expect(scanned.map(\.name) == ["Ape Escape 2 (USA)", "Bully (USA) v1.2", "ICO", "Okami (USA)"])
         for rom in scanned {
-            let found = try ps2.folder.rom(named: rom.name)
+            let found = try ps1.folder.rom(named: rom.name)
             #expect(found == rom)
             #expect(found?.fileName == rom.fileName)
         }
-        #expect(try ps2.folder.rom(named: "Okami (USA)")?.ready == okami)
+        #expect(try ps1.folder.rom(named: "Okami (USA)")?.ready == okami)
         // A cue sheet's track, a folder that isn't a game, and nothing at all.
-        #expect(try ps2.folder.rom(named: "Ape Escape 2 (USA) (Track 1)") == nil)
-        #expect(try ps2.folder.rom(named: "Demos") == nil)
-        #expect(try ps2.folder.rom(named: "Bully (USA) v1") == nil)
-        #expect(try ps2.folder.rom(named: "Shadow of the Colossus (USA)") == nil)
+        #expect(try ps1.folder.rom(named: "Ape Escape 2 (USA) (Track 1)") == nil)
+        #expect(try ps1.folder.rom(named: "Demos") == nil)
+        #expect(try ps1.folder.rom(named: "Bully (USA) v1") == nil)
+        #expect(try ps1.folder.rom(named: "Shadow of the Colossus (USA)") == nil)
     }
 
     @Test func aFolderThatIsntThereCantBeScanned() {

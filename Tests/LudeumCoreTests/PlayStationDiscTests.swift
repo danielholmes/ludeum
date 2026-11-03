@@ -34,6 +34,14 @@ import Testing
         #expect(executable("TCB = 4\n") == "PSX.EXE")
     }
 
+    @Test func aPlayStation2DiscsBOOT2LineIsReadAsPCSX2ReadsIt() {
+        func executable(_ systemCNF: String) -> String { PlayStationDisc.executable(systemCNF: Data(systemCNF.utf8)) }
+        #expect(executable("BOOT2 = cdrom0:\\SLUS_200.62;1\r\nVER = 1.00\r\nVMODE = NTSC\r\n") == "SLUS_200.62")
+        // A disc with both lines is a PlayStation 2 disc.
+        #expect(executable("BOOT = cdrom:\\SLUS_005.51;1\nBOOT2 = cdrom0:\\SLUS_200.62;1\n") == "SLUS_200.62")
+        #expect(PlayStationDisc.serial(booting: "SLUS_200.62") == "SLUS-20062")
+    }
+
     @Test func theSerialIsTheExecutablesFileNameUpperCased() {
         #expect(PlayStationDisc.serial(booting: "slus_005.51") == "SLUS-00551")
         #expect(PlayStationDisc.serial(booting: #"DATA\GAME.EXE"#) == "GAMEEXE")

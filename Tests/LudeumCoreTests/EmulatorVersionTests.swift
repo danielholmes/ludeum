@@ -5,19 +5,29 @@ import Testing
 
 @Suite struct EmulatorVersionCheckTests {
     @Test func theExpectedVersionOrLaterIsFine() {
-        #expect(EmulatorVersions.check(found: "v2.9.103", for: .pcsx2) == .ok)
-        #expect(EmulatorVersions.check(found: "PCSX2 v2.10.1\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
-        #expect(EmulatorVersions.check(found: "2.9.103", for: .pcsx2) == .ok)
+        #expect(EmulatorVersions.check(found: "v1.20.4", for: .ppsspp) == .ok)
+        #expect(EmulatorVersions.check(found: "PPSSPP v1.21.1", for: .ppsspp) == .ok)
+        #expect(EmulatorVersions.check(found: "1.20.4", for: .ppsspp) == .ok)
     }
 
     @Test func anOlderVersionIsTooOld() {
-        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.99", for: .pcsx2) == .tooOld(found: "2.9.99"))
+        #expect(EmulatorVersions.check(found: "PPSSPP v1.20.3", for: .ppsspp) == .tooOld(found: "1.20.3"))
         #expect(EmulatorVersions.check(found: "1.20", for: .ppsspp) == .tooOld(found: "1.20"))
     }
 
     @Test func aNewerMajorVersionIsWarnedAbout() {
-        #expect(EmulatorVersions.check(found: "3.0.0", for: .pcsx2) == .newerMajor(found: "3.0.0"))
+        #expect(EmulatorVersions.check(found: "2.0.0", for: .ppsspp) == .newerMajor(found: "2.0.0"))
         #expect(EmulatorVersions.check(found: "2.0", for: .melonDS) == .newerMajor(found: "2.0"))
+    }
+
+    @Test func pcsx2MustBeTheReleaseLudeumInstalls() {
+        #expect(PCSX2Release.pinned.version == "2.9.152")
+        #expect(Emulator.pcsx2.expectedVersion == "2.9.152")
+        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.152\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
+        // Older and newer alike: it's installed again.
+        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.99", for: .pcsx2) == .wrongBuild(found: "2.9.99"))
+        #expect(EmulatorVersions.check(found: "PCSX2 v2.10.1\nhttps://pcsx2.net/", for: .pcsx2) == .wrongBuild(found: "2.10.1"))
+        #expect(EmulatorVersions.check(found: "3.0.0", for: .pcsx2) == .wrongBuild(found: "3.0.0"))
     }
 
     @Test func emulatorsWithoutMeaningfulMajorsAreOnlyCheckedForBeingTooOld() {
@@ -41,7 +51,7 @@ import Testing
         // Each Emulator's real `--version` / `-version` output, from the installed apps.
         #expect(EmulatorVersions.check(found: "v148", for: .ares) == .ok)
         #expect(EmulatorVersions.check(found: "v1.20.4", for: .ppsspp) == .ok)
-        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
+        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.152\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
         #expect(
             EmulatorVersions.check(
                 found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)

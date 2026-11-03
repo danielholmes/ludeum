@@ -29,13 +29,15 @@ public struct Play: Sendable {
         case couldntWriteSettings(Emulator, String)
         /// An Xbox ROM that's a full Redump image, which xemu can't boot.
         case needsXISO
-        /// DuckStation, MesenCE or ares is open: Ludeum writes its settings before each Play, which an open DuckStation
-        /// or ares would write over (ADRs 0024, 0028) and an open MesenCE wouldn't read (ADR 0027).
+        /// DuckStation, MesenCE, ares or PCSX2 is open: Ludeum writes its settings before each Play, which an open
+        /// DuckStation, ares or PCSX2 would write over (ADRs 0024, 0028, 0032) and an open MesenCE wouldn't read (ADR 0027).
         case running(Emulator)
-        /// DuckStation, MesenCE or ares is being installed, so there's nothing to open yet.
+        /// DuckStation, MesenCE, ares or PCSX2 is being installed, so there's nothing to open yet.
         case installing(Emulator)
         /// The installed Emulator's build needs a library from Homebrew that isn't installed (MesenCE 2.2.1's SDL2).
         case needs(Emulator, HomebrewLibrary)
+        /// PCSX2 has no PlayStation 2 BIOS to boot with: none in the Data folder's BIOS folder, at this path (ADR 0032).
+        case noBIOS(String)
 
         public var message: String {
             switch self {
@@ -61,6 +63,7 @@ public struct Play: Sendable {
             case .installing(let emulator): "\(emulator.name) is being installed."
             case .needs(let emulator, let library):
                 "\(emulator.name) needs \(library.name), which isn't installed: install it with `\(library.install)`, then Play."
+            case .noBIOS(let folder): "No PlayStation 2 BIOS. Put one in \(folder), then Play."
             }
         }
     }
@@ -185,14 +188,14 @@ public struct Play: Sendable {
     }
 
     /// What a press of Play does. It writes the settings files of an Emulator that takes them only
-    /// that way. `app` finds an installed app by its bundle identifier; DuckStation, MesenCE and ares are the ones Ludeum
-    /// installs (`duckStation.app`, `mesen.app`, `ares.app`), refused while any copy is `running`. `saveState` starts the
-    /// Play from that state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last
-    /// started on.
+    /// that way. `app` finds an installed app by its bundle identifier; DuckStation, MesenCE, ares and PCSX2 are the ones
+    /// Ludeum installs (`duckStation.app`, `mesen.app`, `ares.app`, `pcsx2.app`), refused while any copy is `running`, and
+    /// PCSX2 until it has a BIOS. `saveState` starts the Play from that state, DuckStation's on its own Disc; else a
+    /// multi-disc ROM starts on `disc`, or the one it last started on.
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
-        running: (Emulator) -> Bool = { _ in false }
+        pcsx2: PCSX2Settings = .init(), running: (Emulator) -> Bool = { _ in false }
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -214,6 +217,11 @@ public struct Play: Sendable {
             guard ares.isInstalled else { return .refused(.notInstalled(emulator)) }
             if running(emulator) { return .refused(.running(emulator)) }
             app = ares.app
+        } else if emulator == .pcsx2 {
+            guard pcsx2.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if running(emulator) { return .refused(.running(emulator)) }
+            guard pcsx2.hasBIOS else { return .refused(.noBIOS(pcsx2.ludeum.pcsx2BIOS.path(percentEncoded: false))) }
+            app = pcsx2.app
         } else {
             guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
             app = found
