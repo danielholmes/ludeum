@@ -106,17 +106,32 @@ public final class LaunchBoxGamesDB: Sendable {
         }?.fileName
     }
 
-    /// The file names of a game's Screenshots, title screens first, all of the one game matched by title as for its Box
-    /// art: its own name beats another's alternate name, then the game released closest to `year` is preferred, then
-    /// the shortest name, then the lowest LaunchBox id. Empty when nothing matches.
-    public func screenshots(platform: Int64, titles: [String], year: Int?) throws -> [String] {
+    /// The file names of a game's Screenshots: one title screen, then every gameplay shot, of the one game matched by
+    /// title as for its Box art: its own name beats another's alternate name, then the game released closest to `year`
+    /// is preferred, then the shortest name, then the lowest LaunchBox id. LaunchBox has a title screen for each region
+    /// a game came out in, and the one shown is the one for `regions`, else Australia's, the World's, the US's, the
+    /// UK's, Europe's, one with no region, any other's (`titleScreenOrder`), then the first in the dump. Empty when
+    /// nothing matches.
+    public func screenshots(platform: Int64, titles: [String], regions: Set<NameRegion>, year: Int?) throws -> [String] {
         guard let platforms = Self.platforms[platform] else { return [] }
         let shots = try images(of: LaunchBoxImageType.screenshots, platforms: platforms, titles: titles)
         guard let best = shots.min(by: { Self.rank($0.match, year) < Self.rank($1.match, year) }) else { return [] }
+        let its = shots.filter { $0.gameID == best.gameID }
+        let ownRegions = Self.ownTitleScreenRegions(regions)
+        let titleScreen = its.filter { $0.type == .titleScreen }.min { a, b in
+            func rank(_ shot: LaunchBoxImage) -> (Int, Int, Int) {
+                (
+                    ownRegions.contains(shot.region) ? 0 : 1,
+                    Self.titleScreenOrder.firstIndex { $0.contains(shot.region) } ?? Self.titleScreenOrder.count, shot.position
+                )
+            }
+            return rank(a) < rank(b)
+        }
+        var shown: [LaunchBoxImage] = []
+        if let titleScreen { shown.append(titleScreen) }
+        shown += its.filter { $0.type == .gameplay }.sorted { $0.position < $1.position }
         var seen: Set<String> = []
-        return shots.filter { $0.gameID == best.gameID && seen.insert($0.fileName).inserted }
-            .sorted { ($0.type.rawValue, $0.position) < ($1.type.rawValue, $1.position) }
-            .map(\.fileName)
+        return shown.filter { seen.insert($0.fileName).inserted }.map(\.fileName)
     }
 
     /// LaunchBox's community rating for each of `games`, the half of its Players' score that isn't IGDB's: that of the
@@ -192,24 +207,42 @@ public final class LaunchBoxGamesDB: Sendable {
     }
 
     /// The regions a box can be for, best first: `own`'s, then North America's, the World's, none, Europe's, Japan's,
-    /// Korea's. LaunchBox names countries as well as regions; a European country counts as Europe, as do Australia and
-    /// Oceania, which get PAL releases.
+    /// Korea's, each by LaunchBox's `names` for it.
     static func regionOrder(_ own: Set<NameRegion>) -> [Set<String?>] {
         let preferred: [NameRegion] = [.usa, .europe, .japan, .korea]
-        func names(_ region: NameRegion) -> Set<String?> {
-            switch region {
-            case .usa: ["North America", "United States", "Canada"]
-            case .europe:
-                [
-                    "Europe", "United Kingdom", "Germany", "France", "Spain", "Italy", "The Netherlands", "Sweden",
-                    "Finland", "Norway", "Greece", "Russia", "Australia", "Oceania",
-                ]
-            case .japan: ["Japan"]
-            case .korea: ["Korea"]
-            }
-        }
         return preferred.filter(own.contains).map(names)
             + [names(.usa), ["World"], [nil], names(.europe), names(.japan), names(.korea)]
+    }
+
+    /// The regions a title screen can be for after a Game's own, best first: Australia's (and Oceania's), the World's,
+    /// the US's, the UK's, Europe's, one with no region, which is often the English one; any other region's (Japan's,
+    /// a European country's) comes after them all. Only one title screen shows, and these are the English ones.
+    static let titleScreenOrder: [Set<String?>] = [
+        ["Australia", "Oceania"], ["World"], names(.usa), ["United Kingdom"], ["Europe"], [nil],
+    ]
+
+    /// The regions a title screen for a Game's own Regions can be for: LaunchBox's `names` for each, but for Europe
+    /// only the English-speaking ones (Europe's, the UK's, Australia's, Oceania's): a (Europe) ROM's title screen is
+    /// English, while a German or French one is that country's own release, in its language.
+    static func ownTitleScreenRegions(_ own: Set<NameRegion>) -> Set<String?> {
+        own.reduce(into: []) { regions, region in
+            regions.formUnion(region == .europe ? ["Europe", "United Kingdom", "Australia", "Oceania"] : names(region))
+        }
+    }
+
+    /// LaunchBox's names for a ROM's region: it names countries as well as regions; a European country counts as
+    /// Europe, as do Australia and Oceania, which get PAL releases.
+    static func names(_ region: NameRegion) -> Set<String?> {
+        switch region {
+        case .usa: ["North America", "United States", "Canada"]
+        case .europe:
+            [
+                "Europe", "United Kingdom", "Germany", "France", "Spain", "Italy", "The Netherlands", "Sweden",
+                "Finland", "Norway", "Greece", "Russia", "Australia", "Oceania",
+            ]
+        case .japan: ["Japan"]
+        case .korea: ["Korea"]
+        }
     }
 
     /// LaunchBox's platforms for each IGDB platform it has games for. IGDB splits some it doesn't (the Famicom and NES,

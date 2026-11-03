@@ -9,7 +9,9 @@ struct LaunchBoxGame {
     var alternateNames: [String] = []
     /// Box - Front scans, (region or nil, file name).
     var boxes: [(region: String?, file: String)] = []
-    /// Other images, (type, file name).
+    /// Screenshot - Game Title images, (region or nil, file name), written after the boxes.
+    var titleScreens: [(region: String?, file: String)] = []
+    /// Other images, (type, file name), written last and with no region.
     var otherImages: [(type: String, file: String)] = []
     /// Its community rating, 0–5, and how many it averages, as the dump writes them ("4.25"); nil leaves them out.
     var rating: String? = nil
@@ -38,7 +40,10 @@ struct LaunchBoxGame {
             }
         }
         for g in games {
-            let images = g.boxes.map { ("Box - Front", $0.file, $0.region) } + g.otherImages.map { ($0.type, $0.file, nil) }
+            let images =
+                g.boxes.map { ("Box - Front", $0.file, $0.region) }
+                + g.titleScreens.map { ("Screenshot - Game Title", $0.file, $0.region) }
+                + g.otherImages.map { ($0.type, $0.file, nil) }
             for (type, file, region) in images {
                 xml += "  <GameImage>\n    <DatabaseID>\(g.id)</DatabaseID>\n    <FileName>\(file)</FileName>\n"
                 xml += "    <Type>\(type)</Type>\n"

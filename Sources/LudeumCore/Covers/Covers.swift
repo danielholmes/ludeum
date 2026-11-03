@@ -192,7 +192,8 @@ public struct Covers: Sendable {
         guard let launchBox else { return [] }
         let found =
             try await byNamesThenAlternatives(game) { lookup, record -> [String]? in
-                let found = try launchBox.screenshots(platform: lookup.platform, titles: lookup.titles, year: record?.releaseYear)
+                let found = try launchBox.screenshots(
+                    platform: lookup.platform, titles: lookup.titles, regions: lookup.regions, year: record?.releaseYear)
                 return found.isEmpty ? nil : found
             } ?? []
         guard !found.isEmpty, !igdbScreenshots.isEmpty, let igdb else { return found }

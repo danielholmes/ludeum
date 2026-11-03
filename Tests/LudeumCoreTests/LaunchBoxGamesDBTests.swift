@@ -16,6 +16,10 @@ import Testing
         try launchBox.boxart(platform: platform, titles: titles, regions: regions, year: year)
     }
 
+    func screenshots(_ platform: Int64, _ titles: [String], regions: Set<NameRegion> = [], year: Int? = nil) throws -> [String] {
+        try launchBox.screenshots(platform: platform, titles: titles, regions: regions, year: year)
+    }
+
     @Test func aGameFindsItsBoxFrontByTitleOnItsPlatform() async throws {
         h.internet.setLaunchBox([Self.redAlert2])
 
@@ -80,6 +84,44 @@ import Testing
         #expect(try boxart(6, ["Germany"]) == "de3.jpg")
     }
 
+    @Test func oneTitleScreenShowsForItsOwnRegionsElseAustraliaWorldUSUKEuropeNoneOther() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Every Region", platform: "Windows",
+                titleScreens: [
+                    ("Japan", "j.png"), (nil, "n.png"), ("France", "fr.png"), ("Europe", "e.png"), ("United Kingdom", "uk.png"),
+                    ("North America", "na.png"), ("World", "w.png"), ("Australia", "au.png"),
+                ],
+                otherImages: [("Screenshot - Gameplay", "play.png")]),
+            LaunchBoxGame(id: 2, name: "No Australia", platform: "Windows", titleScreens: [("Japan", "j2.png"), ("World", "w2.png")]),
+            LaunchBoxGame(
+                id: 3, name: "US and UK", platform: "Windows", titleScreens: [("United Kingdom", "uk3.png"), ("United States", "us3.png")]),
+            LaunchBoxGame(
+                id: 4, name: "UK and Europe", platform: "Windows", titleScreens: [("Europe", "e4.png"), ("United Kingdom", "uk4.png")]),
+            LaunchBoxGame(id: 5, name: "Europe and None", platform: "Windows", titleScreens: [(nil, "n5.png"), ("Europe", "e5.png")]),
+            LaunchBoxGame(id: 6, name: "None and Japan", platform: "Windows", titleScreens: [("Japan", "j6.png"), (nil, "n6.png")]),
+            LaunchBoxGame(id: 7, name: "Japan and Korea", platform: "Windows", titleScreens: [("Korea", "k7.png"), ("Japan", "j7.png")]),
+            LaunchBoxGame(id: 8, name: "Two of None", platform: "Windows", titleScreens: [(nil, "n8a.png"), (nil, "n8b.png")]),
+            LaunchBoxGame(id: 9, name: "France and None", platform: "Windows", titleScreens: [("France", "fr9.png"), (nil, "n9.png")]),
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(try screenshots(6, ["Every Region"]) == ["au.png", "play.png"])
+        #expect(try screenshots(6, ["Every Region"], regions: [.japan]) == ["j.png", "play.png"])
+        #expect(try screenshots(6, ["Every Region"], regions: [.usa]) == ["na.png", "play.png"])
+        #expect(try screenshots(6, ["Every Region"], regions: [.europe]) == ["au.png", "play.png"])
+        #expect(try screenshots(6, ["No Australia"]) == ["w2.png"])
+        #expect(try screenshots(6, ["US and UK"]) == ["us3.png"])
+        #expect(try screenshots(6, ["UK and Europe"]) == ["uk4.png"])
+        #expect(try screenshots(6, ["Europe and None"]) == ["e5.png"])
+        #expect(try screenshots(6, ["None and Japan"]) == ["n6.png"])
+        #expect(try screenshots(6, ["Japan and Korea"]) == ["k7.png"])
+        #expect(try screenshots(6, ["Two of None"]) == ["n8a.png"])
+        // A (Europe) ROM's own title screen is an English one, not a European country's.
+        #expect(try screenshots(6, ["France and None"], regions: [.europe]) == ["n9.png"])
+    }
+
     @Test func aGamesScreenshotsAreFoundTitleScreensFirst() async throws {
         h.internet.setLaunchBox([
             LaunchBoxGame(
@@ -93,8 +135,8 @@ import Testing
 
         try await launchBox.refresh()
 
-        #expect(try launchBox.screenshots(platform: 6, titles: ["Half-Life"], year: nil) == ["hlt.jpg", "hl1.jpg", "hl2.jpg"])
-        #expect(try launchBox.screenshots(platform: 6, titles: ["Command & Conquer: Red Alert 2"], year: nil) == ["ra2-shot.jpg"])
+        #expect(try screenshots(6, ["Half-Life"], year: nil) == ["hlt.jpg", "hl1.jpg", "hl2.jpg"])
+        #expect(try screenshots(6, ["Command & Conquer: Red Alert 2"], year: nil) == ["ra2-shot.jpg"])
         #expect(try boxart(6, ["Half-Life"]) == nil)
     }
 
@@ -108,8 +150,8 @@ import Testing
 
         try await launchBox.refresh()
 
-        #expect(try launchBox.screenshots(platform: 6, titles: ["Doom"], year: 2016) == ["d16.jpg"])
-        #expect(try launchBox.screenshots(platform: 6, titles: ["Doom"], year: nil) == ["d93.jpg"])
+        #expect(try screenshots(6, ["Doom"], year: 2016) == ["d16.jpg"])
+        #expect(try screenshots(6, ["Doom"], year: nil) == ["d93.jpg"])
     }
 
     @Test func aDumpReadBeforeScreenshotsWereKeptIsReadAgain() throws {
@@ -250,7 +292,7 @@ import Testing
 
         #expect(try boxart(19, ["Monopoly"], year: 1991) == "m92.jpg")
         #expect(try boxart(19, ["Monopoly"], year: 1994) == "m95.jpg")
-        #expect(try launchBox.screenshots(platform: 19, titles: ["Monopoly"], year: 1991) == ["m92-shot.jpg"])
+        #expect(try screenshots(19, ["Monopoly"], year: 1991) == ["m92-shot.jpg"])
     }
 
     @Test func aPCGameFindsItsMSDOSBoxAndTheYearPicksTheOriginalOverAWindowsRebootOfTheSameName() async throws {
@@ -268,7 +310,7 @@ import Testing
 
         #expect(try boxart(6, ["Syndicate"], year: 1993) == "s93.jpg")
         #expect(try boxart(6, ["Syndicate"], year: 2012) == "s12.jpg")
-        #expect(try launchBox.screenshots(platform: 6, titles: ["Syndicate"], year: 1993) == ["s93-shot.jpg"])
+        #expect(try screenshots(6, ["Syndicate"], year: 1993) == ["s93-shot.jpg"])
         #expect(try boxart(6, ["Syndicate Wars"]) == "sw.jpg")
     }
 

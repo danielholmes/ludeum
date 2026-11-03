@@ -373,6 +373,18 @@ func testImage(width: Int, height: Int, type: UTType = .png) -> Data {
         #expect(try Data(contentsOf: file) == FakeInternet.boxartPNG)
     }
 
+    @Test func theOneTitleScreenIsForTheROMsRegions() async throws {
+        try await launchBox([
+            LaunchBoxGame(
+                id: 1, name: "Super Metroid", platform: Self.snes,
+                titleScreens: [("North America", "na.png"), ("Europe", "e.png")],
+                otherImages: [("Screenshot - Gameplay", "play.png")])
+        ])
+        let game = try superMetroid(["Super Metroid (Europe).sfc"])
+
+        #expect(try await covers.launchBoxScreenshots(for: game) == ["e.png", "play.png"])
+    }
+
     @Test func launchBoxsScreenshotsThatIGDBHasAreLeftOut() async throws {
         try await launchBox([
             LaunchBoxGame(
