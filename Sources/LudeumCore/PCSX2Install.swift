@@ -3,13 +3,13 @@ import Foundation
 /// The PCSX2 release Ludeum installs (ADR 0032): a versioned tag of `PCSX2/pcsx2` (every nightly is one, with a SHA-256
 /// digest per asset in GitHub's release API, and nothing ages off) and its macOS tar's digest. A bump is both, in code.
 public struct PCSX2Release: Sendable, Equatable {
-    /// `2.9.103`, tagged `v2.9.103`.
+    /// `2.9.152`, tagged `v2.9.152`.
     public let version: String
     /// The tar's SHA-256, lowercase hex, as GitHub's release API gives it.
     public let sha256: String
 
     public static let pinned = PCSX2Release(
-        version: "2.9.103", sha256: "42ddda7193846d8bf4c3ee3c2629f537b799e9babfe9327c0fd18a3a0fbe3b0b")
+        version: "2.9.152", sha256: "efd8e76bed5febf22c0f0bdf7938bcf358cd13651195390364949b3da117353f")
 
     /// Where the macOS tar is: `pcsx2-v<version>-macos-Qt.tar.xz`, holding `PCSX2-v<version>.app`.
     public var url: URL {

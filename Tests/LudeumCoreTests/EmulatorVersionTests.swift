@@ -21,9 +21,9 @@ import Testing
     }
 
     @Test func pcsx2MustBeTheReleaseLudeumInstalls() {
-        #expect(PCSX2Release.pinned.version == "2.9.103")
-        #expect(Emulator.pcsx2.expectedVersion == "2.9.103")
-        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
+        #expect(PCSX2Release.pinned.version == "2.9.152")
+        #expect(Emulator.pcsx2.expectedVersion == "2.9.152")
+        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.152\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
         // Older and newer alike: it's installed again.
         #expect(EmulatorVersions.check(found: "PCSX2 v2.9.99", for: .pcsx2) == .wrongBuild(found: "2.9.99"))
         #expect(EmulatorVersions.check(found: "PCSX2 v2.10.1\nhttps://pcsx2.net/", for: .pcsx2) == .wrongBuild(found: "2.10.1"))
@@ -51,7 +51,7 @@ import Testing
         // Each Emulator's real `--version` / `-version` output, from the installed apps.
         #expect(EmulatorVersions.check(found: "v148", for: .ares) == .ok)
         #expect(EmulatorVersions.check(found: "v1.20.4", for: .ppsspp) == .ok)
-        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
+        #expect(EmulatorVersions.check(found: "PCSX2 v2.9.152\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
         #expect(
             EmulatorVersions.check(
                 found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)

@@ -178,7 +178,7 @@ public struct PCSX2Settings: Sendable {
         ("AutoUpdater", "CheckAtStartup", "false"),
     ]
 
-    /// What PCSX2 writes only when it makes `PCSX2.ini` itself (`VMManager::SetDefaultSettings` at v2.9.103): the
+    /// What PCSX2 writes only when it makes `PCSX2.ini` itself (`VMManager::SetDefaultSettings`, the same at v2.9.103 and v2.9.152): the
     /// settings version, controller 1 as a DualShock 2 on the keyboard (`Pad::SetDefaultControllerConfig`, its generic
     /// keyboard mapping) and its hotkeys (`Pad::SetDefaultHotkeyConfig`). Everything else it defaults in code.
     static let firstRun = """

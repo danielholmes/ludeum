@@ -88,10 +88,10 @@ import Testing
     }
 
     @Test func anAppThatIsntThePinnedVersionIsRefused() async throws {
-        let (tar, release) = try self.release(prints: "PCSX2 v2.9.152")
+        let (tar, release) = try self.release(prints: "PCSX2 v2.9.103")
         let (installer, _) = installer(release, tars: [release.url: tar])
 
-        await #expect(throws: PCSX2InstallError.wrongBuild(found: "2.9.152")) { try await installer.install() }
+        await #expect(throws: PCSX2InstallError.wrongBuild(found: "2.9.103")) { try await installer.install() }
         #expect(!FileManager.default.fileExists(atPath: installed.path(percentEncoded: false)))
     }
 
