@@ -69,6 +69,32 @@ import SwiftUI
         return client
     }
 
+    /// Nil until a RetroAchievements key is set in Settings. The same client until it changes, as it holds
+    /// RetroAchievements' rate limiter.
+    var retroAchievements: RetroAchievementsClient? {
+        guard let key = settings.retroAchievementsKey, let cache else { return nil }
+        if let kept = clients.retroAchievements, kept.key == key { return kept.client }
+        let client = RetroAchievementsClient(key: key, cache: cache)
+        clients.retroAchievements = (key, client)
+        return client
+    }
+
+    /// One client for every use, as it holds Wikidata's rate limiter.
+    var wikidata: WikidataClient? {
+        guard let cache else { return nil }
+        if let kept = clients.wikidata { return kept }
+        let client = WikidataClient(cache: cache)
+        clients.wikidata = client
+        return client
+    }
+
+    /// A Game's RetroAchievements time; nil without a RetroAchievements key.
+    var retroAchievementsTimes: RetroAchievementsTimes? {
+        guard let journal, let retroAchievements else { return nil }
+        return RetroAchievementsTimes(
+            journal: journal, retroAchievements: retroAchievements, hasheous: hasheous, igdb: igdb, wikidata: wikidata)
+    }
+
     var reviewQueue: ReviewQueue? {
         guard let igdb, let journal else { return nil }
         return ReviewQueue(journal: journal, igdb: igdb)
@@ -84,11 +110,13 @@ import SwiftUI
     var attachments: Attachments? { journal.map { Attachments(journal: $0, root: settings.folder.attachments) } }
 }
 
-/// The IGDB and Hasheous clients last made, kept while their settings stay the same. A client holds its service's rate
-/// limiter, so a new one for every use would let every screen send at once.
+/// The IGDB, Hasheous, RetroAchievements and Wikidata clients last made, kept while their settings stay the same. A
+/// client holds its service's rate limiter, so a new one for every use would let every screen send at once.
 @MainActor private final class Clients {
     var igdb: (credentials: IGDBCredentials, client: IGDBClient)?
     var hasheous: (key: String?, client: HasheousClient)?
+    var retroAchievements: (key: String, client: RetroAchievementsClient)?
+    var wikidata: WikidataClient?
 }
 
 /// The one IGDB search component: a search box, a Base games / Expansions toggle, an optional Platform filter, genre,

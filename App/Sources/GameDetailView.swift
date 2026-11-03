@@ -38,6 +38,10 @@ struct GameDetailView: View {
     /// ROMs whose files are shown.
     @State private var expandedROMs: Set<Int64> = []
     @State private var facts = GameFacts.none
+    /// How long RetroAchievements' players take with the set for its Platform, shown under IGDB's time to beat.
+    @State private var retroAchievementsTime: RetroAchievementsTime?
+    /// What its RetroAchievements time is found by: the Game, its IGDB link and its ROMs.
+    private var retroAchievementsLookup: [Int64] { [id, game?.igdbGameId ?? -1] + roms.map(\.id) }
     /// LaunchBox's community rating, the rest of its Players' score.
     @State private var launchBoxScore: CommunityScore?
     /// LaunchBox's Screenshots for it that IGDB doesn't have, shown after IGDB's; whether they couldn't be looked up.
@@ -171,10 +175,11 @@ struct GameDetailView: View {
 
             }
 
-            // About: what IGDB says about it.
-            if facts != .none {
+            // About: what IGDB says about it, and RetroAchievements' time to beat.
+            if facts != .none || retroAchievementsTime != nil {
                 Section("About") {
-                    IGDBFactsRows(services: services, facts: facts, browse: browse, showsScores: false)
+                    IGDBFactsRows(
+                        services: services, facts: facts, browse: browse, showsScores: false, retroAchievements: retroAchievementsTime)
                 }
             }
             // Screenshots: IGDB's, then LaunchBox's title screens and gameplay that IGDB doesn't have.
@@ -259,6 +264,13 @@ struct GameDetailView: View {
             facts = .none
             if let link = game.igdbGameId, let igdb = services.igdb { facts = (try? await igdb.facts(igdbGameId: link)) ?? .none }
             readExpansions()
+        }
+        // Found by its ROMs' checksums, else its IGDB link, so again when either changes. One that can't be looked up
+        // shows none, and is looked up again the next time.
+        .task(id: retroAchievementsLookup) {
+            retroAchievementsTime = nil
+            guard let times = services.retroAchievementsTimes else { return }
+            retroAchievementsTime = try? await times.time(of: id)
         }
         // Found by its names and IGDB's facts for it, so again when it's renamed or linked to another.
         .task(id: LaunchBoxScoreKey(name: game.name, facts: facts)) {

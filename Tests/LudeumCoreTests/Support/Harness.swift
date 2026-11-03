@@ -41,6 +41,18 @@ final class Harness {
 }
 
 extension Harness {
+    /// A RetroAchievements client with the key the fake internet takes, on the current cache.
+    var retroAchievements: RetroAchievementsClient {
+        RetroAchievementsClient(key: "ra-key", cache: cache, transport: internet, clock: clock)
+    }
+
+    var wikidata: WikidataClient { WikidataClient(cache: cache, transport: internet, clock: clock) }
+
+    /// RetroAchievements times for `journal`'s Games, with every source wired to the fake internet.
+    func retroAchievementsTimes(_ journal: LudeumStore) -> RetroAchievementsTimes {
+        RetroAchievementsTimes(journal: journal, retroAchievements: retroAchievements, hasheous: hasheous, igdb: igdb, wikidata: wikidata)
+    }
+
     /// Covers with every source wired to the fake internet.
     func covers(_ journal: LudeumStore) -> Covers {
         Covers(journal: journal, igdb: igdb, launchBox: launchBox)

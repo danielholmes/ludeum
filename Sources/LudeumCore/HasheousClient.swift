@@ -8,12 +8,14 @@ public enum HasheousResult: Sendable, Hashable {
     public var match: HasheousMatch? { if case .match(let m) = self { m } else { nil } }
 }
 
-/// A Hasheous record for a ROM, kept verbatim, with the IGDB ids pulled out.
+/// A Hasheous record for a ROM, kept verbatim, with the IGDB and RetroAchievements ids pulled out.
 public struct HasheousMatch: Sendable, Hashable {
     public let record: JSONValue
 
-    public var igdbGameID: Int? { Self.igdbID(in: record["metadata"]) }
-    public var igdbPlatformID: Int? { Self.igdbID(in: record["platform"]?["metadata"]) }
+    public var igdbGameID: Int? { Self.mappedID("IGDB", in: record["metadata"]) }
+    public var igdbPlatformID: Int? { Self.mappedID("IGDB", in: record["platform"]?["metadata"]) }
+    /// The RetroAchievements set whose hashes include the checksum: that console's set.
+    public var retroAchievementsGameID: Int? { Self.mappedID("RetroAchievements", in: record["metadata"]) }
 
     /// The Regions of the DAT entry the checksum is, in their shown order: its name's region tags, read as a ROM's are
     /// (`ROMName`), else the countries its signature lists for it. Its name is more faithful where it has tags No-Intro's or
@@ -33,10 +35,10 @@ public struct HasheousMatch: Sendable, Hashable {
     /// Hasheous's names for countries that a ROM's Regions name otherwise, as No-Intro's tags do.
     private static let countryRegions = ["United States": "USA", "Worldwide": "World", "United Kingdom": "UK"]
 
-    /// The `immutableId` of the mapped IGDB entry (`id` can be a slug).
-    private static func igdbID(in metadata: JSONValue?) -> Int? {
+    /// The `immutableId` of the mapped entry from `source` (its `id` can be a slug).
+    private static func mappedID(_ source: String, in metadata: JSONValue?) -> Int? {
         metadata?.array?
-            .first { $0["source"]?.string == "IGDB" && $0["status"]?.string == "Mapped" }?["immutableId"]?
+            .first { $0["source"]?.string == source && $0["status"]?.string == "Mapped" }?["immutableId"]?
             .string.flatMap(Int.init)
     }
 }

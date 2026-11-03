@@ -2,7 +2,7 @@ import AppKit
 import LudeumCore
 import SwiftUI
 
-/// The ⌘, Settings window: IGDB credentials with "Test connection", the optional Hasheous key,
+/// The ⌘, Settings window: IGDB credentials with "Test connection", the optional Hasheous and RetroAchievements keys,
 /// where the Data folder is (its locations are fixed, not settings), and backups. Players and Emulators have sheets
 /// of their own.
 struct SettingsView: View {
@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var clientID = ""
     @State private var clientSecret = ""
     @State private var hasheousKey = ""
+    @State private var retroAchievementsKey = ""
     @State private var needsCredentials = false
     @State private var check: CheckState = .idle
     /// Bumped by every edit, so a test that finishes after one doesn't report on values no longer shown.
@@ -57,6 +58,17 @@ struct SettingsView: View {
             }
 
             Section {
+                SecureField("Web API key (optional)", text: $retroAchievementsKey)
+            } header: {
+                Text("RetroAchievements")
+            } footer: {
+                Text(
+                    "With a key, Game detail shows how long RetroAchievements' players take to beat and master a Game, beside IGDB's time to beat. It's on the [RetroAchievements settings page](https://retroachievements.org/settings), under Authentication."
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            Section {
                 LabeledContent("Data folder") {
                     HStack {
                         Text(settings.folder.data.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle)
@@ -87,6 +99,7 @@ struct SettingsView: View {
         .onChange(of: clientID) { edited() }
         .onChange(of: clientSecret) { edited() }
         .onChange(of: hasheousKey) { edited() }
+        .onChange(of: retroAchievementsKey) { edited() }
     }
 
     @ViewBuilder private var checkStatus: some View {
@@ -102,6 +115,7 @@ struct SettingsView: View {
         clientID = settings.igdbCredentials?.clientID ?? clientID
         clientSecret = settings.igdbCredentials?.clientSecret ?? clientSecret
         hasheousKey = settings.hasheousKey ?? hasheousKey
+        retroAchievementsKey = settings.retroAchievementsKey ?? retroAchievementsKey
         needsCredentials = settings.needsCredentials
     }
 
@@ -115,6 +129,7 @@ struct SettingsView: View {
         do {
             try settings.setIGDBCredentials(IGDBCredentials(clientID: clientID, clientSecret: clientSecret))
             try settings.setHasheousKey(hasheousKey)
+            try settings.setRetroAchievementsKey(retroAchievementsKey)
             saveError = nil
             needsCredentials = settings.needsCredentials
         } catch {

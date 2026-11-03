@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 @testable import LudeumCore
 
-/// Fake versions of the external services (Twitch auth, IGDB, IGDB images, Hasheous),
+/// Fake versions of the external services (Twitch auth, IGDB, IGDB images, Hasheous, RetroAchievements, Wikidata),
 /// routed by host. Each request is recorded along with the time it was sent.
 final class FakeInternet: HTTPTransport, Sendable {
     struct SentRequest {
@@ -31,8 +31,14 @@ final class FakeInternet: HTTPTransport, Sendable {
         var firstValidToken = 1  // tokens numbered below this are rejected
         // Hasheous
         var hashes: [String: (game: Int, platform: Int)] = [:]  // "md5/<hash>" or "crc/<hash>"
+        var hashSets: [String: Int] = [:]  // the RetroAchievements set a hash is mapped to, keyed as `hashes`
         var signatures: [String: (romName: String?, country: [String: String])] = [:]  // the DAT entry's, keyed as `hashes`
         var failingHashes: Set<String> = []  // answered with a 500, keyed as `hashes`
+        // RetroAchievements: each set's `API_GetGameProgression` answer, and the key it takes
+        var progressions: [Int: Data] = [:]
+        var retroAchievementsKey = "ra-key"
+        // Wikidata: the RetroAchievements set ids (P11393) of the item with an IGDB slug (P5794)
+        var wikidataSets: [String: [Int]] = [:]
         // The LaunchBox Games Database's daily dump, `Metadata.zip`
         var launchBoxDump: Data?
         // Images served at a path on IGDB's or LaunchBox's image host, in place of the one they serve for any other
@@ -86,20 +92,51 @@ final class FakeInternet: HTTPTransport, Sendable {
     }
 
     /// A checksum Hasheous knows, with its DAT entry's name and countries in its signature when given.
-    func addHash(md5: String, game: Int, platform: Int, romName: String? = nil, country: [String: String] = [:]) {
-        addHash("md5/\(md5.lowercased())", game, platform, romName, country)
+    /// With `retroAchievements`, Hasheous maps it to that RetroAchievements set too.
+    func addHash(
+        md5: String, game: Int, platform: Int, romName: String? = nil, country: [String: String] = [:], retroAchievements: Int? = nil
+    ) {
+        addHash("md5/\(md5.lowercased())", game, platform, romName, country, retroAchievements)
     }
 
-    func addHash(crc: String, game: Int, platform: Int, romName: String? = nil, country: [String: String] = [:]) {
-        addHash("crc/\(crc.lowercased())", game, platform, romName, country)
+    func addHash(
+        crc: String, game: Int, platform: Int, romName: String? = nil, country: [String: String] = [:], retroAchievements: Int? = nil
+    ) {
+        addHash("crc/\(crc.lowercased())", game, platform, romName, country, retroAchievements)
     }
 
-    private func addHash(_ key: String, _ game: Int, _ platform: Int, _ romName: String?, _ country: [String: String]) {
+    private func addHash(
+        _ key: String, _ game: Int, _ platform: Int, _ romName: String?, _ country: [String: String], _ retroAchievements: Int?
+    ) {
         state.withLock {
             $0.hashes[key] = (game, platform)
             if romName != nil || !country.isEmpty { $0.signatures[key] = (romName, country) }
+            $0.hashSets[key] = retroAchievements
         }
     }
+
+    /// A RetroAchievements set on `console`, with its medians (seconds) and how many players each is from.
+    func addSet(
+        _ id: Int, console: Int, beat: (Int, players: Int)? = nil, beatHardcore: (Int, players: Int)? = nil,
+        master: (Int, players: Int)? = nil, complete: (Int, players: Int)? = nil
+    ) {
+        var record: [String: Any] = ["ID": id, "ConsoleID": console, "Title": "Set \(id)", "NumAchievements": 30]
+        let medians: [(String, String, (Int, players: Int)?)] = [
+            ("MedianTimeToBeat", "TimesUsedInBeatMedian", beat),
+            ("MedianTimeToBeatHardcore", "TimesUsedInHardcoreBeatMedian", beatHardcore),
+            ("MedianTimeToMaster", "TimesUsedInMasteryMedian", master),
+            ("MedianTimeToComplete", "TimesUsedInCompletionMedian", complete),
+        ]
+        for (median, players, value) in medians {
+            record[median] = value?.0 ?? NSNull()
+            record[players] = value?.players ?? 0
+        }
+        let data = try! JSONSerialization.data(withJSONObject: record)
+        state.withLock { $0.progressions[id] = data }
+    }
+
+    /// Wikidata's RetroAchievements set ids for the item with IGDB slug `slug`.
+    func addWikidataSets(igdbSlug slug: String, _ ids: [Int]) { state.withLock { $0.wikidataSets[slug] = ids } }
 
     /// The LaunchBox Games Database's dump, `Metadata.zip` holding `games` as its `Metadata.xml`.
     func setLaunchBox(_ games: [LaunchBoxGame]) {
@@ -150,6 +187,8 @@ final class FakeInternet: HTTPTransport, Sendable {
             case Hosts.igdb: return Self.igdb(request, s)
             case Hosts.igdbImages: return (200, [:], s.images[request.url?.path() ?? ""] ?? Self.coverJPEG)
             case Hosts.hasheous: return Self.hasheous(request, s)
+            case Hosts.retroAchievements: return Self.retroAchievements(request, s)
+            case Hosts.wikidata: return Self.wikidata(request, s)
             case Hosts.launchBox:
                 guard request.url?.path() == "/Metadata.zip", let dump = s.launchBoxDump else { return (404, [:], Data()) }
                 return (200, [:], dump)
@@ -172,6 +211,8 @@ final class FakeInternet: HTTPTransport, Sendable {
         static let igdb = "api.igdb.com"
         static let igdbImages = "images.igdb.com"
         static let hasheous = "hasheous.org"
+        static let retroAchievements = "retroachievements.org"
+        static let wikidata = "query.wikidata.org"
         static let launchBox = "gamesdb.launchbox-app.com"
         static let launchBoxImages = "images.launchbox-app.com"
     }
@@ -296,7 +337,9 @@ final class FakeInternet: HTTPTransport, Sendable {
             ],
             "metadata": [
                 ["objectType": "Game", "id": "slug", "immutableId": "\(hit.game)", "source": "IGDB", "status": "Mapped"],
-                ["objectType": "Game", "id": "77", "immutableId": "77", "source": "RetroAchievements", "status": "Mapped"],
+                s.hashSets[key].map {
+                    ["objectType": "Game", "id": "\($0)", "immutableId": "\($0)", "source": "RetroAchievements", "status": "Mapped"]
+                } ?? ["objectType": "Game", "id": "", "immutableId": "", "source": "RetroAchievements", "status": "NotMapped"],
             ],
         ]
         if let signature = s.signatures[key] {
@@ -305,6 +348,25 @@ final class FakeInternet: HTTPTransport, Sendable {
             json["signature"] = ["game": ["name": "Some Game", "country": [:] as [String: String]], "rom": rom]
         }
         return (200, [:], try! JSONSerialization.data(withJSONObject: json))
+    }
+
+    private static func retroAchievements(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
+        let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String? { query.first { $0.name == name }?.value }
+        guard value("y") == s.retroAchievementsKey else { return (401, [:], Data(#"{"message":"Unauthenticated."}"#.utf8)) }
+        guard request.url!.path() == "/API/API_GetGameProgression.php",
+            let record = value("i").flatMap(Int.init).flatMap({ s.progressions[$0] })
+        else { return (404, [:], Data("[]".utf8)) }
+        return (200, [:], record)
+    }
+
+    private static func wikidata(_ request: URLRequest, _ s: State) -> (Int, [String: String], Data) {
+        let query =
+            URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "query" }?.value ?? ""
+        guard request.url!.path() == "/sparql", query.contains("wdt:P11393") else { return (400, [:], Data()) }
+        let slug = query.components(separatedBy: "wdt:P5794 \"").dropFirst().first?.components(separatedBy: "\"").first ?? ""
+        let rows = (s.wikidataSets[slug] ?? []).map { ["id": ["type": "literal", "value": "\($0)"]] }
+        return (200, [:], try! JSONSerialization.data(withJSONObject: ["head": ["vars": ["id"]], "results": ["bindings": rows]]))
     }
 
     private struct Block {

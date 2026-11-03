@@ -48,7 +48,8 @@ import os
     func refreshCache(services: Services) async {
         guard let cache = services.cache, let hasheous = services.hasheous else { return }
         let refresh = CacheRefresh(
-            cache: cache, igdb: services.igdb, hasheous: hasheous, launchBox: services.launchBox, gate: gate)
+            cache: cache, igdb: services.igdb, hasheous: hasheous, launchBox: services.launchBox,
+            retroAchievements: services.retroAchievements, wikidata: services.wikidata, gate: gate)
         let result = await Task.detached(priority: .background) {
             await refresh.run { done, total in
                 Task { @MainActor in self.advance(done, total) }

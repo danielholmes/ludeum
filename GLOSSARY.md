@@ -92,6 +92,10 @@ _Avoid_: Stars, score
 How much other players liked a Game, from 0.0 to 10.0: IGDB's players' score and the LaunchBox Games Database's community rating (out of 5, doubled) averaged by how many ratings each has, with their counts added, so a Game few rated on either can still have enough to rank by (10). LaunchBox's is that of the game its names find on its Platform, as its Screenshots are found, so an unlinked Game can have one too. The critics' score beside it is IGDB's alone.
 _Avoid_: Community rating, user score (a Rating is mine)
 
+**Time to beat**:
+How long other players take with a Game, from two sources shown side by side, each named: IGDB's (rushed, normally and 100%, what its players say they took) and RetroAchievements' (the median time its players spent in the emulator to beat the set for the Game's Platform, and to master it, each from at least 5 players). RetroAchievements' set is found by the Game's ROMs' checksums at Hasheous, else by its IGDB game at Wikidata, and needs a RetroAchievements key (ADR 0030).
+_Avoid_: Length, playtime, HowLongToBeat (not a source: its terms forbid it)
+
 **Rating history**:
 Every Rating a Game has had, each with the date it was set, including being cleared back to unrated. There is at most one entry per day: changing a Rating again that day replaces the day's entry.
 _Avoid_: Rating log, previous ratings

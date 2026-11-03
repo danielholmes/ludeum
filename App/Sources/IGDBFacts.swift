@@ -10,6 +10,8 @@ struct IGDBFactsRows: View {
     let browse: (LibraryFilter) -> Void
     /// Game detail shows the scores beside my Rating instead.
     var showsScores = true
+    /// Game detail's RetroAchievements time, shown under IGDB's time to beat.
+    var retroAchievements: RetroAchievementsTime? = nil
     @State private var pins: Set<Pin> = []
     @State private var allCompanies = false
     @State private var error: String?
@@ -25,11 +27,20 @@ struct IGDBFactsRows: View {
             if !franchises.isEmpty { pinnable("Franchise", .franchise, franchises) }
             if !facts.series.isEmpty { pinnable("Series", .series, facts.series) }
             if !facts.credits.isEmpty { companies }
-            if let t = facts.timeToBeat, let text = timeToBeatText(t) {
+            let igdbTime = facts.timeToBeat.flatMap(timeToBeatText)
+            let retroAchievementsTime = retroAchievements.flatMap(retroAchievementsTimeText)
+            if igdbTime != nil || retroAchievementsTime != nil {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Time to beat").font(FactStyle.label).foregroundStyle(.secondary).frame(
                         width: FactStyle.labelWidth, alignment: .leading)
-                    Text(text).font(FactStyle.value)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let igdbTime { timeLine(igdbTime, source: "IGDB", help: "What IGDB's players say they took") }
+                        if let retroAchievementsTime {
+                            timeLine(
+                                retroAchievementsTime, source: "RetroAchievements",
+                                help: "The median time RetroAchievements' players spent in the emulator to beat it and to master it")
+                        }
+                    }
                 }
             }
             if !facts.links.isEmpty || facts.trailer != nil {
@@ -49,6 +60,15 @@ struct IGDBFactsRows: View {
             if let error { Text(error).foregroundStyle(.red) }
         }
         .task(id: services.changes.revision) { pins = Set((try? services.journal?.pins()) ?? []) }
+    }
+
+    /// One source's times, then the source, so neither is taken for the other's.
+    private func timeLine(_ text: String, source: String, help: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(text).font(FactStyle.value)
+            Text(source).font(.caption).foregroundStyle(.secondary)
+        }
+        .help(help)
     }
 
     /// Each company once, its roles in brackets: "Capcom (Developer, Publisher)". Developers and the
@@ -269,13 +289,21 @@ private struct SummaryText: View {
     }
 }
 
+/// "3.5 h" under 10 hours, else whole hours: "12 h". Nil for none.
+private func hours(_ seconds: Int?) -> String? {
+    guard let seconds, seconds > 0 else { return nil }
+    let h = Double(seconds) / 3600
+    return h < 10 ? String(format: "%.1f h", h) : "\(Int(h.rounded())) h"
+}
+
+/// "Beat 8.4 h · Master 17 h", leaving out what too few players have done.
+func retroAchievementsTimeText(_ t: RetroAchievementsTime) -> String? {
+    let parts = [hours(t.beat).map { "Beat \($0)" }, hours(t.master).map { "Master \($0)" }].compactMap { $0 }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
+}
+
 /// "Rushed 3.5 h · Normally 10 h · 100% 12 h", leaving out what IGDB doesn't know.
 func timeToBeatText(_ t: TimeToBeat) -> String? {
-    func hours(_ seconds: Int?) -> String? {
-        guard let seconds, seconds > 0 else { return nil }
-        let h = Double(seconds) / 3600
-        return h < 10 ? String(format: "%.1f h", h) : "\(Int(h.rounded())) h"
-    }
     let parts = [
         hours(t.hastily).map { "Rushed \($0)" }, hours(t.normally).map { "Normally \($0)" },
         hours(t.completely).map { "100% \($0)" },

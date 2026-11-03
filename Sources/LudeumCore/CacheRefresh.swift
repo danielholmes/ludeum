@@ -16,13 +16,20 @@ public struct CacheRefresh: Sendable {
     let igdb: IGDBClient?
     let hasheous: HasheousClient
     let launchBox: LaunchBoxGamesDB?
+    let retroAchievements: RetroAchievementsClient?
+    let wikidata: WikidataClient?
     let gate: WorkGate
 
-    public init(cache: CacheStore, igdb: IGDBClient?, hasheous: HasheousClient, launchBox: LaunchBoxGamesDB?, gate: WorkGate) {
+    public init(
+        cache: CacheStore, igdb: IGDBClient?, hasheous: HasheousClient, launchBox: LaunchBoxGamesDB?,
+        retroAchievements: RetroAchievementsClient? = nil, wikidata: WikidataClient? = nil, gate: WorkGate
+    ) {
         self.cache = cache
         self.igdb = igdb
         self.hasheous = hasheous
         self.launchBox = launchBox
+        self.retroAchievements = retroAchievements
+        self.wikidata = wikidata
         self.gate = gate
     }
 
@@ -30,8 +37,11 @@ public struct CacheRefresh: Sendable {
     public func run(progress: @escaping @Sendable (Int, Int) -> Void = { _, _ in }) async -> CacheRefreshResult {
         var result = CacheRefreshResult()
         let keys: [String]
+        /// RetroAchievements' and Wikidata's answers are kept longer than the rest.
+        let longExpired: Set<String>
         do {
             keys = try cache.expiredKeys(maxAge: CacheStore.defaultMaxAge)
+            longExpired = Set(try cache.expiredKeys(maxAge: RetroAchievementsClient.maxAge))
         } catch {
             result.errors.append("Reading the cache: \(error.localizedDescription)")
             return result
@@ -62,6 +72,12 @@ public struct CacheRefresh: Sendable {
             case ("hasheous", "crc") where parts.count == 3:
                 let hasheous = hasheous
                 steps.append((1, key, { _ = try await hasheous.lookup(crc: parts[2], servesStale: false) }))
+            case ("retroachievements", "progression") where parts.count == 3:
+                guard let retroAchievements, longExpired.contains(key), let id = Int(parts[2]) else { continue }
+                steps.append((1, key, { _ = try await retroAchievements.progression(gameID: id, servesStale: false) }))
+            case ("wikidata", "retroachievements") where parts.count == 3:
+                guard let wikidata, longExpired.contains(key) else { continue }
+                steps.append((1, key, { _ = try await wikidata.retroAchievementsIDs(igdbSlug: parts[2], servesStale: false) }))
             default:
                 continue  // e.g. the CLI's Twitch token, which manages its own expiry
             }

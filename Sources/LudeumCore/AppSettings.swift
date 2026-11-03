@@ -48,6 +48,14 @@ public final class AppSettings: @unchecked Sendable {
         try setSecret(key.isEmpty ? nil : key, for: Keys.hasheousKey)
     }
 
+    /// A RetroAchievements account's web API key: without one, no RetroAchievements time is shown.
+    public var retroAchievementsKey: String? { secret(Keys.retroAchievementsKey) }
+
+    public func setRetroAchievementsKey(_ key: String) throws {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        try setSecret(key.isEmpty ? nil : key, for: Keys.retroAchievementsKey)
+    }
+
     /// A secret, read from the store the first time. A read that fails is nil and is tried again next time.
     private func secret(_ key: String) -> String? {
         if let value = known.withLock({ $0[key] }) { return value }
@@ -79,5 +87,6 @@ public final class AppSettings: @unchecked Sendable {
         static let igdbClientID = "igdb-client-id"
         static let igdbClientSecret = "igdb-client-secret"
         static let hasheousKey = "hasheous-api-key"
+        static let retroAchievementsKey = "retroachievements-api-key"
     }
 }
