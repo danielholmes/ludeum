@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import LudeumCore
 
@@ -88,7 +89,14 @@ func mesence(run: Bool) async throws {
 /// Makes each multi-disc GameCube Version one ROM, a folder of its Discs with a playlist (ADR 0031): a plan unless
 /// `--run`. Once, with Ludeum closed; Dropbox brings down any Disc it keeps online only. Then this command goes.
 func gameCubeDiscs(run: Bool) async throws {
+    // Each line as it happens, even into a file and even if the run stops short.
+    setvbuf(stdout, nil, _IOLBF, 0)
     requireDataFolder()
+    // Its launch clears the ROM folders' work folders, where an Archive is being written, and its Import would find the
+    // Discs half moved.
+    if run, !NSRunningApplication.runningApplications(withBundleIdentifier: "org.danielholmes.Ludeum").isEmpty {
+        fail("Quit Ludeum first, and keep it closed until this is done.")
+    }
     let ludeum = LudeumFolder.standard
     guard let url = ludeum.romFolder(platform: 21), let folder = ROMFolder.platform(21, url) else { fail("No GameCube ROM folder.") }
     let archiver: ROMArchiver
@@ -99,7 +107,8 @@ func gameCubeDiscs(run: Bool) async throws {
     let plan = try migration.plan()
     for merge in plan.merges {
         let discs = merge.discs.map(\.name).joined(separator: " + ")
-        print("merge \(merge.game): \(discs)  →  \(merge.name)\(merge.archived ? ".7z" : "/"), keeping ROM \(merge.discs[0].id)")
+        let already = merge.gathered ? " (its Discs already in its folder)" : ""
+        print("merge \(merge.game): \(discs)  →  \(merge.name)\(merge.archived ? ".7z" : "/"), keeping ROM \(merge.discs[0].id)\(already)")
     }
     for left in plan.left { print("leave \(left.rom): \(left.why)") }
     print("\(plan.merges.count) to merge, \(plan.left.count) left")

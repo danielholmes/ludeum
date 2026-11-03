@@ -101,6 +101,46 @@ struct GameCubeDiscsMigrationTests {
         #expect(try migration.plan().merges.isEmpty)
     }
 
+    @Test func aRunCutShortAfterGatheringTheDiscsIsFinished() async throws {
+        // Unarchived into their folder, then an Import found the Discs missing and the folder a Stray file.
+        let snakes = try game("Metal Gear Solid: The Twin Snakes")
+        try gameCube.add("MGS (Europe)/MGS (Europe) (Disc 1).iso", String(repeating: "D1", count: 5_000))
+        try gameCube.add("MGS (Europe)/MGS (Europe) (Disc 2).iso", String(repeating: "D2", count: 5_000))
+        try gameCube.add("MGS (Europe)/MGS (Europe).m3u", "MGS (Europe) (Disc 1).iso\nMGS (Europe) (Disc 2).iso\n")
+        let disc1 = try rom("MGS (Europe) (Disc 1)", "MGS (Europe) (Disc 1).7z", of: snakes, archived: true)
+        try rom("MGS (Europe) (Disc 2)", "MGS (Europe) (Disc 2).7z", of: snakes, archived: true)
+        try await j.journal.db.write { db in
+            try db.execute(sql: "UPDATE rom SET missing = 1")
+            try db.execute(
+                sql: "INSERT INTO strayFile (platformId, name, fileName) VALUES (21, 'MGS (Europe)', 'MGS (Europe)/MGS (Europe).m3u')")
+        }
+
+        let plan = try migration.plan()
+        #expect(plan.merges.map(\.gathered) == [true])
+        try await migration.run(plan)
+
+        #expect(try gameCube.folder.scan().map(\.fileName) == ["MGS (Europe).7z"])
+        let rows = try rows()
+        #expect(rows.map { $0["id"] as Int64 } == [disc1])
+        #expect(rows[0]["fileName"] as String == "MGS (Europe).7z")
+        #expect(rows[0]["missing"] as Bool == false)
+        #expect(try await j.journal.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM strayFile") } == 0)
+    }
+
+    @Test func aFolderOfTheVersionsNameHoldingSomethingElseIsLeft() async throws {
+        let snakes = try game("Metal Gear Solid: The Twin Snakes")
+        try gameCube.add("MGS (Europe) (Disc 1).rvz", "D1")
+        try gameCube.add("MGS (Europe) (Disc 2).rvz", "D2")
+        try gameCube.add("MGS (Europe)/MGS (Europe).iso", "other")
+        try rom("MGS (Europe) (Disc 1)", "MGS (Europe) (Disc 1).rvz", of: snakes, archived: false)
+        try rom("MGS (Europe) (Disc 2)", "MGS (Europe) (Disc 2).rvz", of: snakes, archived: false)
+
+        let plan = try migration.plan()
+
+        #expect(plan.merges.isEmpty)
+        #expect(plan.left.map(\.why) == ["MGS (Europe) is already in the ROM folder"])
+    }
+
     @Test func looseDiscsBecomeOneFolderNotArchived() async throws {
         let zero = try game("Resident Evil Zero")
         try gameCube.add("Resident Evil Zero (USA) (Disc 1).rvz", "D1")
