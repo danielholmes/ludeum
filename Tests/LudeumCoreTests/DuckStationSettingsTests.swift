@@ -61,16 +61,20 @@ import Testing
         }
     }
 
-    @Test func theStandingSettingsFastBootWithTheLowestLatencyAndKeepDuckStationFromUpdatingItself() throws {
-        try write("[BIOS]\nPatchFastBoot = false\n\n[AutoUpdater]\nCheckAtStartup = true\nUpdateTag = latest\n", to: settingsFile)
+    @Test func theStandingSettingsKeepDuckStationFromUpdatingItselfAndLeaveFastBootAndFramePacingAsSetInDuckStation() throws {
+        // Fast boot and frame pacing are DuckStation's own (ADR 0033): off stays off, and unset stays unset.
+        try write(
+            "[BIOS]\nPatchFastBoot = false\n\n[Display]\nOptimalFramePacing = false\n\n[AutoUpdater]\nCheckAtStartup = true\nUpdateTag = latest\n",
+            to: settingsFile
+        )
 
         try settings.writeStanding()
 
         let ini = try #require(contents(settingsFile))
-        #expect(Ini.value("PatchFastBoot", in: "BIOS", of: ini) == "true")
-        #expect(Ini.value("FastForwardBoot", in: "BIOS", of: ini) == "true")
-        #expect(Ini.value("OptimalFramePacing", in: "Display", of: ini) == "true")
-        #expect(Ini.value("PreFrameSleep", in: "Display", of: ini) == "true")
+        #expect(Ini.value("PatchFastBoot", in: "BIOS", of: ini) == "false")
+        #expect(Ini.value("FastForwardBoot", in: "BIOS", of: ini) == nil)
+        #expect(Ini.value("OptimalFramePacing", in: "Display", of: ini) == "false")
+        #expect(Ini.value("PreFrameSleep", in: "Display", of: ini) == nil)
         #expect(Ini.value("CheckAtStartup", in: "AutoUpdater", of: ini) == "false")
         #expect(Ini.value("UpdateTag", in: "AutoUpdater", of: ini) == "latest")
     }

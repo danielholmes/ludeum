@@ -1,5 +1,7 @@
 # Ludeum installs DuckStation, portable, and says where it keeps things
 
+Amended by [0033](0033-how-duckstation-plays-is-set-in-duckstation.md): fast boot and frame pacing leave the Standing settings, which are now only where DuckStation keeps things, the game list folder and no self-updating.
+
 Amended by [0029](0029-a-playstation-games-own-settings-are-duckstations.md): a Play no longer writes the per-game file, so what every Play wrote into it before this is no longer taken out as a Play meets it, and a Game needs a Serial only for its Save states and memory card.
 
 Amended by [0027](0027-ludeum-installs-mesence-with-a-folder-per-platform.md): Open leaves the Emulators sheet, so the Standing settings are written before every Play and after Install, and DuckStation's own settings are reached during a Play.

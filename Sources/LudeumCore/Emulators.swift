@@ -120,12 +120,9 @@ public enum DuckStationFolder: CaseIterable, Sendable {
 /// so its data root is its own `Contents/MacOS`, where its `settings.ini` lives, and no other DuckStation shares it.
 ///
 /// Its **Standing settings** are written before every launch Ludeum gives it: every folder worth keeping into the Data
-/// folder (`DuckStationFolder`), no checking for updates (DuckStation would replace its own bundle), and for every Game
-/// fast boot, skipping the BIOS logo and running unthrottled to its first frame, unless DuckStation's game database
-/// says that breaks it (its `ForceFullBoot`, which `-fastboot` would override), and its lowest input latency, presenting
-/// each frame on time and running it as late as it can before then. The PlayStation ROM folder is among its game list's
-/// folders, so a lone Disc of a set can swap to the set's others (ADR 0026). Everything else in the file is DuckStation's
-/// own.
+/// folder (`DuckStationFolder`), and no checking for updates (DuckStation would replace its own bundle). The PlayStation
+/// ROM folder is among its game list's folders, so a lone Disc of a set can swap to the set's others (ADR 0026).
+/// Everything else in the file is DuckStation's own, fast boot and frame pacing included (ADR 0033).
 ///
 /// A Game's own settings are DuckStation's, set in its Game Properties and kept in its per-game files in the Data
 /// folder's `Game Settings`, which Ludeum doesn't write (ADR 0029).
@@ -185,14 +182,13 @@ public struct DuckStationSettings: Sendable {
     }
 
     /// `ini` with the Standing settings: each folder's key an absolute path into the Data folder, `[AutoUpdater]
-    /// CheckAtStartup` off, fast boot and the lowest input latency on, and the PlayStation ROM folder in `[GameList]
-    /// RecursivePaths`, beside any of DuckStation's own.
+    /// CheckAtStartup` off, and the PlayStation ROM folder in `[GameList] RecursivePaths`, beside any of DuckStation's
+    /// own.
     static func standing(in ini: String, ludeum: LudeumFolder) -> String {
         var ini = ini
         for folder in DuckStationFolder.allCases {
             ini = Ini.setting(folder.setting.key, to: path(ludeum.duckStation(folder)), in: folder.setting.section, of: ini)
         }
-        for (section, key) in standingKeys { ini = Ini.setting(key, to: "true", in: section, of: ini) }
         if let ps1 = ludeum.romFolder(platform: ROMPlatform.ps1) {
             ini = Ini.including(path(ps1), as: "RecursivePaths", in: "GameList", of: ini)
         }
@@ -204,11 +200,6 @@ public struct DuckStationSettings: Sendable {
         let path = folder.path(percentEncoded: false)
         return path.hasSuffix("/") ? String(path.dropLast()) : path
     }
-
-    /// The keys on for every Game (the sleep needs the pacing).
-    static let standingKeys = [
-        ("BIOS", "PatchFastBoot"), ("BIOS", "FastForwardBoot"), ("Display", "OptimalFramePacing"), ("Display", "PreFrameSleep"),
-    ]
 
     /// Where DuckStation keeps its per-game files.
     var gameSettingsFolder: URL { folder("GameSettings", default: "gamesettings") }

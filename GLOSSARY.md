@@ -207,7 +207,7 @@ The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Pl
 _Avoid_: Core, player
 
 **Standing settings**:
-The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, fast boot, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. Not Emulator settings, which are one Game's own. Only DuckStation, MesenCE, ares and PCSX2 have them so far; MesenCE's say the Play's Platform's folders, as it names what it keeps by the ROM's file name alone, and ares makes its own folders, one for the Mega Drive and Sega CD and one for the N64.
+The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. DuckStation's are only where it keeps things, its game list's folder and no self-updating; how it plays, fast boot and frame pacing included, is set in DuckStation and stays (ADR 0033). Not Emulator settings, which are one Game's own. Only DuckStation, MesenCE, ares and PCSX2 have them so far; MesenCE's say the Play's Platform's folders, as it names what it keeps by the ROM's file name alone, and ares makes its own folders, one for the Mega Drive and Sega CD and one for the N64.
 _Avoid_: Global settings, defaults, config
 
 **Emulator settings**:
