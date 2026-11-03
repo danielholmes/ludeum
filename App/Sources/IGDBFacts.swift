@@ -19,7 +19,7 @@ struct IGDBFactsRows: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let summary = facts.summary { SummaryText(text: summary) }
-            if showsScores { CommunityScores(players: facts.playerScore, critics: facts.criticScore) }
+            if showsScores { CommunityScores(igdbPlayers: facts.playerScore, critics: facts.criticScore) }
             if !facts.genres.isEmpty { PillRow(title: "Genre", items: facts.genres, open: { browse(LibraryFilter(genre: $0)) }) }
             if !facts.themes.isEmpty { pinnable("Theme", .theme, facts.themes) }
             // A franchise that only repeats the series (Metroid and Metroid) says nothing new.

@@ -45,7 +45,7 @@ struct GameDetailView: View {
     @State private var retroAchievementsTime: RetroAchievementsTime?
     /// What its RetroAchievements time is found by: the Game, its IGDB link and its ROMs.
     private var retroAchievementsLookup: [Int64] { [id, game?.igdbGameId ?? -1] + roms.map(\.id) }
-    /// LaunchBox's community rating, the rest of its Players' score.
+    /// LaunchBox's community rating: its LaunchBox players' score, shown beside IGDB's.
     @State private var launchBoxScore: CommunityScore?
     /// LaunchBox's Screenshots for it that IGDB doesn't have, shown after IGDB's; whether they couldn't be looked up.
     @State private var launchBoxScreenshots: [String] = []
@@ -125,7 +125,7 @@ struct GameDetailView: View {
             } else {
                 // My journal: what I think of it and when I played it.
                 Section("My journal") {
-                    // Mine, Players and Critics alike: a label above the value, lined up along the bottom.
+                    // Mine, the players' and the critics' alike: a label above the value, lined up along the bottom.
                     HStack(alignment: .lastTextBaseline, spacing: 28) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Mine").font(FactStyle.label).foregroundStyle(.secondary)
@@ -134,7 +134,7 @@ struct GameDetailView: View {
                                 set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
                         }
                         CommunityScores(
-                            players: .players(igdb: facts.playerScore, launchBox: launchBoxScore), critics: facts.criticScore,
+                            igdbPlayers: facts.playerScore, launchBoxPlayers: launchBoxScore, critics: facts.criticScore,
                             stacked: true)
                     }
                     HStack {

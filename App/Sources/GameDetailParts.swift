@@ -404,26 +404,22 @@ func readableVersion(_ version: String?) -> String? {
     return version.map { $0.components(separatedBy: " · ").map { codes[$0] ?? $0 }.joined(separator: " · ") }
 }
 
-/// Others' scores beside mine: players' (on Game detail, the Players' score, IGDB's and LaunchBox's) and IGDB's
-/// critics', each with how many it averages, so a score from a handful of ratings reads as the guess it is.
+/// Others' scores beside mine: IGDB's players', LaunchBox's players' (on Game detail) and IGDB's critics', each on its
+/// own, as IGDB's and LaunchBox's players can differ a lot, and each with how many it averages, so a score from a
+/// handful of ratings reads as the guess it is.
 struct CommunityScores: View {
-    let players: CommunityScore?
+    let igdbPlayers: CommunityScore?
+    var launchBoxPlayers: CommunityScore? = nil
     let critics: CommunityScore?
     /// Label above value, to sit beside my Rating on Game detail.
     var stacked = false
 
-    /// Where the scores shown come from, IGDB first.
-    private var sources: String {
-        let shown = Set([players, critics].compactMap { $0 }.flatMap(\.sources).map(\.source))
-        return ScoreSource.allCases.filter(shown.contains).map(\.rawValue).joined(separator: " · ")
-    }
-
     var body: some View {
-        if players != nil || critics != nil {
+        if igdbPlayers != nil || launchBoxPlayers != nil || critics != nil {
             HStack(alignment: .lastTextBaseline, spacing: stacked ? 24 : 14) {
-                if let players { score("Players", players, noun: "player rating", short: "rating") }
+                if let igdbPlayers { score("IGDB", igdbPlayers, noun: "player rating", short: "rating") }
+                if let launchBoxPlayers { score("LaunchBox", launchBoxPlayers, noun: "player rating", short: "rating") }
                 if let critics { score("Critics", critics, noun: "critic review", short: "review") }
-                Text(sources).font(.caption2).foregroundStyle(.tertiary)
             }
         }
     }
@@ -445,7 +441,7 @@ struct CommunityScores: View {
                 }
             }
         }
-        .help("\(title): \(String(format: "%.1f", s.score / 10)) from \(s.countText(noun))")
+        .help("\(String(format: "%.1f", s.score / 10)) from \(s.countText(noun))")
     }
 }
 

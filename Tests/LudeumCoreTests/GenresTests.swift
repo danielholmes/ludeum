@@ -219,17 +219,19 @@ import Testing
         }
         let facts = try await LibraryFacts(igdb: h.igdb).byGame([1, 2, 3, 4])
 
-        let best = try j.journal.library(LibraryFilter(), sort: .players, ascending: false, facts: facts)
-        let worst = try j.journal.library(LibraryFilter(), sort: .players, ascending: true, facts: facts)
+        let best = try j.journal.library(LibraryFilter(), sort: .igdbPlayers, ascending: false, facts: facts)
+        let worst = try j.journal.library(LibraryFilter(), sort: .igdbPlayers, ascending: true, facts: facts)
 
         #expect(best.map(\.name) == ["Super Metroid", "Super Mario World", "Obscure Gem", "Unrated"])
         #expect(worst.map(\.name) == ["Super Mario World", "Super Metroid", "Obscure Gem", "Unrated"])
-        #expect(best[2].playerScore == CommunityScore(score: 98, count: 3))  // shown, but not ranked
-        #expect(!LibrarySort.players.defaultAscending)
+        #expect(best[2].igdbPlayerScore == CommunityScore(score: 98, count: 3))  // shown, but not ranked
+        #expect(!LibrarySort.igdbPlayers.defaultAscending)
+        #expect(!LibrarySort.launchBoxPlayers.defaultAscending)
+        #expect(LibrarySort(rawValue: "players") == .igdbPlayers)  // as a Library sorted by Players was saved
         #expect(CommunityScore(score: 98, count: 3).isReliable == false)
     }
 
-    @Test func thePlayersScoreAddsLaunchBoxsRatingsToIGDBsSoAFewOfEachCanRank() async throws {
+    @Test func igdbsAndLaunchBoxsPlayersScoresAreEachTheirOwnAndRankApart() async throws {
         let h = try Harness()
         let j = try LudeumHarness()
         try j.journal.addPlatform(id: 19, name: "SNES")
@@ -243,7 +245,7 @@ import Testing
         h.internet.setLaunchBox([
             LaunchBoxGame(
                 id: 1, name: "Obscure Gem", platform: "Super Nintendo Entertainment System", boxes: [(nil, "g.jpg")], rating: "3.5",
-                ratingCount: "6"),
+                ratingCount: "11"),
             LaunchBoxGame(
                 id: 2, name: "Shiranai Gēmu", platform: "Super Nintendo Entertainment System", boxes: [(nil, "k.jpg")],
                 rating: "5", ratingCount: "12"),
@@ -255,17 +257,22 @@ import Testing
         let facts = try await LibraryFacts(igdb: h.igdb).byGame([1, 2, 3])
         let launchBox = try h.launchBox.playerScores(try j.journal.launchBoxLookups(facts: facts))
 
-        let best = try j.journal.library(LibraryFilter(), sort: .players, ascending: false, facts: facts, launchBox: launchBox)
+        func names(_ sort: LibrarySort) throws -> [String] {
+            try j.journal.library(LibraryFilter(), sort: sort, ascending: false, facts: facts, launchBox: launchBox).map(\.name)
+        }
 
-        // 4 at 9.0 and 6 at 7.0: 10 ratings at 7.8, enough to rank.
-        #expect(best.map(\.name) == ["Known Elsewhere", "Super Mario World", "Obscure Gem", "Unlinked Hack"])
-        let score = try #require(best.first { $0.id == gem }?.playerScore)
-        #expect(score.count == 10)
-        #expect(abs(score.score - 78) < 0.001)
-        #expect(score.isReliable)
-        #expect(score.countText("player rating") == "10 player ratings: 4 on IGDB (9.0), 6 on LaunchBox (7.0)")
-        #expect(best[0].playerScore?.countText("player rating") == "12 player ratings on LaunchBox")
-        #expect(best[3].playerScore?.count == 2)
+        // IGDB's 4 ratings of the Gem are too few to rank by, LaunchBox's 11 aren't.
+        #expect(try names(.igdbPlayers) == ["Super Mario World", "Known Elsewhere", "Obscure Gem", "Unlinked Hack"])
+        #expect(try names(.launchBoxPlayers) == ["Known Elsewhere", "Obscure Gem", "Super Mario World", "Unlinked Hack"])
+        let rows = try j.journal.library(LibraryFilter(), sort: .name, ascending: true, facts: facts, launchBox: launchBox)
+        let row = try #require(rows.first { $0.id == gem })
+        #expect(row.igdbPlayerScore == CommunityScore(score: 90, count: 4))
+        #expect(row.launchBoxPlayerScore == CommunityScore(score: 70, count: 11, source: .launchBox))
+        #expect(row.igdbPlayerScore?.countText("player rating") == "4 player ratings on IGDB")
+        #expect(row.launchBoxPlayerScore?.countText("player rating") == "11 player ratings on LaunchBox")
+        let hack = try #require(rows.first { $0.name == "Unlinked Hack" })
+        #expect(hack.igdbPlayerScore == nil)
+        #expect(hack.launchBoxPlayerScore?.count == 2)
     }
 
     @Test func yearSortUsesIGDBsReleaseYearNewestFirstUndatedLast() async throws {

@@ -75,7 +75,7 @@ public final class CacheStore: Sendable {
             try db.execute(sql: "DELETE FROM entry WHERE key LIKE 'libretro:%'")
             try? FileManager.default.removeItem(at: directory.appending(path: "images/libretro", directoryHint: .isDirectory))
         }
-        // A LaunchBox game's community rating, 0–5, and how many it averages, for a Game's Players' score. Filled in when
+        // A LaunchBox game's community rating, 0–5, and how many it averages, for a Game's LaunchBox players' score. Filled in when
         // the dump is next read (its read key changed with it).
         migrator.registerMigration("v6") { db in
             try db.execute(

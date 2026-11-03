@@ -69,7 +69,7 @@ import LudeumCore
         return facts
     }
 
-    /// Every Game's LaunchBox community rating, by Game, for its Players' score: `facts` (by IGDB game id) give IGDB's
+    /// Every Game's LaunchBox community rating, by Game, its LaunchBox players' score: `facts` (by IGDB game id) give IGDB's
     /// alternative names and year for it. Games with none are absent. Only Games whose names, link or facts have changed
     /// since the last ask are looked up, off the main thread; on a failure, what was found before is what's shown.
     func launchBoxScores(_ services: Services, facts: [Int64: GameFacts]) async -> [GameID: CommunityScore] {

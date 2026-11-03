@@ -89,7 +89,7 @@ My score for how much I liked a Game, from 0.0 to 10.0 in steps of 0.1. A Game w
 _Avoid_: Stars, score
 
 **Players' score**:
-How much other players liked a Game, from 0.0 to 10.0: IGDB's players' score and the LaunchBox Games Database's community rating (out of 5, doubled) averaged by how many ratings each has, with their counts added, so a Game few rated on either can still have enough to rank by (10). LaunchBox's is that of the game its names find on its Platform, as its Screenshots are found, so an unlinked Game can have one too. The critics' score beside it is IGDB's alone.
+How much other players liked a Game, from 0.0 to 10.0, as one source has it: IGDB's players' score, or the LaunchBox Games Database's (its community rating, out of 5, doubled). A Game has up to two, shown side by side and never combined, as the two can differ a lot; each ranks only with 10 or more ratings of its own. LaunchBox's is that of the game its names find on its Platform, as its Screenshots are found, so an unlinked Game can have one too. The critics' score beside them is IGDB's alone.
 _Avoid_: Community rating, user score (a Rating is mine)
 
 **Time to beat**:

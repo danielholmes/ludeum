@@ -130,8 +130,11 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     /// IGDB's first release year. It lives in the cache, so only `library(_:sort:ascending:facts:)`
     /// applies it; without facts the order is by name.
     case year
-    /// IGDB players' average rating, counting only scores with 10 or more ratings. From the cache, like `year`.
-    case players
+    /// IGDB's players' score, counting only scores with 10 or more ratings. From the cache, like `year`. Its raw value is
+    /// from when this was the one Players sort, so a Library saved sorted by that stays sorted by players.
+    case igdbPlayers = "players"
+    /// LaunchBox's players' score, the same way.
+    case launchBoxPlayers
     /// Playing, then Finished, Dropped and never played.
     case played
     case childhood
@@ -140,7 +143,15 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     public var defaultAscending: Bool {
         switch self {
         case .name, .platform, .year: true
-        case .rating, .intentSet, .players, .played, .childhood: false
+        case .rating, .intentSet, .igdbPlayers, .launchBoxPlayers, .played, .childhood: false
+        }
+    }
+
+    /// Whether it sorts by something from the cache, not the journal, so needs the facts to sort at all.
+    public var comesFromCache: Bool {
+        switch self {
+        case .year, .igdbPlayers, .launchBoxPlayers: true
+        case .name, .platform, .rating, .intentSet, .played, .childhood: false
         }
     }
 }
@@ -167,8 +178,9 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let owned: Bool
     /// IGDB's first release year, when the rows came with IGDB's facts (`withIGDBFacts(_:launchBox:)`).
     public var releaseYear: Int? = nil
-    /// The Players' score, IGDB's and LaunchBox's, with the same proviso.
-    public var playerScore: CommunityScore? = nil
+    /// IGDB's players' score and LaunchBox's, each on its own, with the same proviso.
+    public var igdbPlayerScore: CommunityScore? = nil
+    public var launchBoxPlayerScore: CommunityScore? = nil
 
     /// It has a ROM, on a Platform with an Emulator: Play is offered, and says why if it can't open (Archived, missing).
     public var offersPlay: Bool { roms != .noROMs && Emulator.of(platformId: platformId) != nil }
@@ -309,7 +321,7 @@ extension LudeumStore {
             case .platform: "platformName COLLATE NOCASE \(direction), \(name)"
             case .rating: "r.rating IS NULL, r.rating \(direction), \(name)"
             case .intentSet: "g.intentSetAt IS NULL, g.intentSetAt \(direction), \(name)"
-            case .year, .players: name
+            case .year, .igdbPlayers, .launchBoxPlayers: name
             case .played:
                 "CASE WHEN playing THEN 3 WHEN outcomes LIKE '%finished%' THEN 2 WHEN outcomes LIKE '%dropped%' THEN 1 ELSE 0 END \(direction), \(name)"
             case .childhood: "g.childhood \(direction), \(name)"

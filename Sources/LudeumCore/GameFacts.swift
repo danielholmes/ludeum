@@ -17,8 +17,8 @@ public struct GameFacts: Sendable, Equatable {
     public var companies: Set<String> { Set(credits.map(\.name)) }
     /// Reference and store pages, most useful first (social media left out).
     public let links: [GameLink]
-    /// IGDB users' average score, and IGDB's average of critics' reviews. A Game's Players' score adds LaunchBox's to
-    /// IGDB's (`CommunityScore.players`).
+    /// IGDB's players' score, and IGDB's average of critics' reviews. LaunchBox's players' score is found apart
+    /// (`LaunchBoxGamesDB.playerScores`) and shown beside IGDB's, never combined with it.
     public let playerScore: CommunityScore?
     public let criticScore: CommunityScore?
     /// The year of IGDB's first release date, anywhere.
@@ -74,34 +74,22 @@ public struct TimeToBeat: Sendable, Equatable {
 }
 
 /// Where a score's ratings or reviews come from.
-public enum ScoreSource: String, Sendable, CaseIterable {
+public enum ScoreSource: String, Sendable {
     case igdb = "IGDB"
     case launchBox = "LaunchBox"
 }
 
-/// An average score, 0–100, and how many ratings or reviews it averages: IGDB's, LaunchBox's (its 0–5 community rating
-/// times 20), or a Players' score of both.
+/// An average score, 0–100, and how many ratings or reviews it averages, from one source: IGDB's, or LaunchBox's (its
+/// 0–5 community rating times 20).
 public struct CommunityScore: Sendable, Equatable {
     public let score: Double
     public let count: Int
-    /// Each source's own score and count, IGDB's first: one, unless it's a Players' score of both.
-    public let sources: [Part]
-
-    /// One source's share of a score.
-    public struct Part: Sendable, Equatable {
-        public let source: ScoreSource
-        public let score: Double
-        public let count: Int
-    }
+    public let source: ScoreSource
 
     public init(score: Double, count: Int, source: ScoreSource = .igdb) {
-        self.init(score: score, count: count, sources: [Part(source: source, score: score, count: count)])
-    }
-
-    private init(score: Double, count: Int, sources: [Part]) {
         self.score = score
         self.count = count
-        self.sources = sources
+        self.source = source
     }
 
     init?(_ score: JSONValue?, count: JSONValue?) {
@@ -109,26 +97,13 @@ public struct CommunityScore: Sendable, Equatable {
         self.init(score: score, count: count)
     }
 
-    /// A Game's Players' score: IGDB's players' score and LaunchBox's community rating, averaged by how many ratings
-    /// each has, with their counts added. Nil when neither has one.
-    public static func players(igdb: CommunityScore?, launchBox: CommunityScore?) -> CommunityScore? {
-        guard let igdb, let launchBox else { return igdb ?? launchBox }
-        let count = igdb.count + launchBox.count
-        let score = (igdb.score * Double(igdb.count) + launchBox.score * Double(launchBox.count)) / Double(count)
-        return CommunityScore(score: score, count: count, sources: igdb.sources + launchBox.sources)
-    }
-
-    /// How many `noun`s it averages and where from: "34 player ratings: 21 on IGDB (8.1), 13 on LaunchBox (7.4)", or
-    /// "21 player ratings on IGDB" from one source.
-    public func countText(_ noun: String) -> String {
-        func many(_ n: Int) -> String { "\(n) \(noun)\(n == 1 ? "" : "s")" }
-        guard sources.count > 1 else { return "\(many(count)) on \(sources.first?.source.rawValue ?? "IGDB")" }
-        let parts = sources.map { "\($0.count) on \($0.source.rawValue) (\(String(format: "%.1f", $0.score / 10)))" }
-        return "\(many(count)): \(parts.joined(separator: ", "))"
-    }
+    /// How many `noun`s it averages and where from: "21 player ratings on IGDB".
+    public func countText(_ noun: String) -> String { "\(count) \(noun)\(count == 1 ? "" : "s") on \(source.rawValue)" }
 
     /// Enough ratings to rank by: fewer than 10 is shown, but sorts with the unrated.
     public var isReliable: Bool { count >= 10 }
+    /// The score to rank by: nil, with the unrated, when it isn't reliable.
+    var rankable: Double? { isReliable ? score : nil }
 
     /// On the journal's 0–10 scale, to one decimal place.
     public var rating: Rating { Rating(tenths: Int(score.rounded()))! }

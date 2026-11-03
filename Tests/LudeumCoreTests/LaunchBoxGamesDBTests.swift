@@ -180,7 +180,7 @@ import Testing
         let score = try #require(try playerScore(6, ["Half-Life"]))
         #expect(score.score == 85)
         #expect(score.count == 120)
-        #expect(score.sources.map(\.source) == [.launchBox])
+        #expect(score.source == .launchBox)
         #expect(try playerScore(6, ["Daikatana"]) == nil)
         #expect(try playerScore(7, ["Half-Life"]) == nil)
     }

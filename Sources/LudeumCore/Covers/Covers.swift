@@ -87,7 +87,7 @@ extension LudeumStore {
         }
     }
 
-    /// What every Game is found in LaunchBox by for its Players' score, as its Box art is but for Regions: its names,
+    /// What every Game is found in LaunchBox by for its LaunchBox players' score, as its Box art is but for Regions: its names,
     /// then IGDB's alternative names for it, near IGDB's release year, both from `facts` (by IGDB game id).
     public func launchBoxLookups(facts: [Int64: GameFacts]) throws -> [GameID: LaunchBoxLookup] {
         try db.read { db in

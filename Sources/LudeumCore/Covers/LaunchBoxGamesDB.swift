@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// The LaunchBox Games Database: retail box scans for nearly every Platform, and Screenshots: the source of every Game's
-/// Box art, and of half a Game's Players' score. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB
+/// Box art, and of its LaunchBox players' score. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB
 /// unzipped), made daily. It's read at most every 30 days, by the launch refresh, downloaded to a file and streamed out of
 /// the zip without unpacking it, and only what finds a Game's images and score is kept, in the cache: each game on a
 /// Platform `platforms` maps, with its year, community rating, names and their title keys, and its Box - Front and
@@ -134,7 +134,7 @@ public final class LaunchBoxGamesDB: Sendable {
         return shown.filter { seen.insert($0.fileName).inserted }.map(\.fileName)
     }
 
-    /// LaunchBox's community rating for each of `games`, the half of its Players' score that isn't IGDB's: that of the
+    /// LaunchBox's community rating for each of `games`, its LaunchBox players' score: that of the
     /// one game matched by title as for its Screenshots, by the Game's names, else (only once they match nothing) IGDB's
     /// alternative names for it. A Game whose game has no ratings, or that matches nothing, is absent.
     public func playerScores(_ games: [GameID: LaunchBoxLookup]) throws -> [GameID: CommunityScore] {
@@ -341,7 +341,7 @@ struct LaunchBoxGameMatch: Sendable {
     let ratingCount: Int
 }
 
-/// What a Game is found in LaunchBox by, for its Players' score: its Platform, its names (the one shown, IGDB's and its
+/// What a Game is found in LaunchBox by, for its LaunchBox players' score: its Platform, its names (the one shown, IGDB's and its
 /// own), IGDB's alternative names for it, tried only once its names find nothing, and IGDB's release year for it.
 public struct LaunchBoxLookup: Sendable, Equatable {
     public let platform: Int64

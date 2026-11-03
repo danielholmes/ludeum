@@ -29,14 +29,15 @@ extension Array where Element == LibraryRow {
 }
 
 extension [LibraryRow] {
-    /// The rows with IGDB's release year filled in from the facts, and their Players' score from IGDB's players' score
-    /// in them and LaunchBox's community rating (`launchBox`, by Game).
+    /// The rows with IGDB's release year and players' score filled in from the facts, and LaunchBox's players' score
+    /// (`launchBox`, by Game).
     public func withIGDBFacts(_ facts: [Int64: GameFacts], launchBox: [GameID: CommunityScore] = [:]) -> [LibraryRow] {
         map { row in
             var row = row
             let f = row.igdbGameId.flatMap { facts[$0] }
             row.releaseYear = f?.releaseYear
-            row.playerScore = .players(igdb: f?.playerScore, launchBox: launchBox[row.id])
+            row.igdbPlayerScore = f?.playerScore
+            row.launchBoxPlayerScore = launchBox[row.id]
             return row
         }
     }
@@ -65,8 +66,8 @@ extension LudeumStore {
 
     /// The Library with the IGDB facts applied: the filter's genre, theme, franchise, series and
     /// company, and a search that also matches the Game's companies, franchises and series. It stops
-    /// early with `CancellationError` when its task is cancelled (a newer search replaced it). Players sorts by the
-    /// Players' score, with LaunchBox's community ratings (`launchBox`, by Game).
+    /// early with `CancellationError` when its task is cancelled (a newer search replaced it). The players' sorts are
+    /// by IGDB's players' score or LaunchBox's (`launchBox`, by Game), each ranking only one with 10 or more ratings.
     public func library(
         _ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts],
         launchBox: [GameID: CommunityScore] = [:]
@@ -74,7 +75,8 @@ extension LudeumStore {
         let rows = try matching(filter, sort: sort, ascending: ascending, facts: facts).withIGDBFacts(facts, launchBox: launchBox)
         switch sort {
         case .year: return rows.sorted(by: { $0.releaseYear.map(Double.init) }, ascending: ascending)
-        case .players: return rows.sorted(by: { $0.playerScore.flatMap { $0.isReliable ? $0.score : nil } }, ascending: ascending)
+        case .igdbPlayers: return rows.sorted(by: { $0.igdbPlayerScore?.rankable }, ascending: ascending)
+        case .launchBoxPlayers: return rows.sorted(by: { $0.launchBoxPlayerScore?.rankable }, ascending: ascending)
         default: return rows
         }
     }

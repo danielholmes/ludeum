@@ -86,13 +86,14 @@ struct LibraryScreen: View {
                     TableColumn("Rating", sortUsing: KeyPathComparator(\LibraryRow.ratingSortKey)) {
                         Text($0.rating.map(ratingText) ?? "–")
                     }.width(60)
-                    TableColumn("Players", sortUsing: KeyPathComparator(\LibraryRow.playersSortKey)) { row in
-                        if let p = row.playerScore {
-                            Text(ratingText(p.rating)).foregroundStyle(p.isReliable ? .primary : .tertiary)
-                                .help(p.countText("player rating") + (p.isReliable ? "" : ". Too few to rank by"))
-                        }
+                    TableColumn("IGDB", sortUsing: KeyPathComparator(\LibraryRow.igdbPlayersSortKey)) {
+                        PlayersScoreCell(score: $0.igdbPlayerScore)
                     }
                     .width(60)
+                    TableColumn("LaunchBox", sortUsing: KeyPathComparator(\LibraryRow.launchBoxPlayersSortKey)) {
+                        PlayersScoreCell(score: $0.launchBoxPlayerScore)
+                    }
+                    .width(85)
                     TableColumn("Intent", sortUsing: KeyPathComparator(\LibraryRow.intentSetSortKey)) {
                         Text($0.intent.map(intentText) ?? "")
                     }.width(70)
@@ -130,7 +131,8 @@ struct LibraryScreen: View {
                 let order: SortOrder = ascending ? .forward : .reverse
                 return switch sort {
                 case .year: [KeyPathComparator(\LibraryRow.yearSortKey, order: order)]
-                case .players: [KeyPathComparator(\LibraryRow.playersSortKey, order: order)]
+                case .igdbPlayers: [KeyPathComparator(\LibraryRow.igdbPlayersSortKey, order: order)]
+                case .launchBoxPlayers: [KeyPathComparator(\LibraryRow.launchBoxPlayersSortKey, order: order)]
                 case .played: [KeyPathComparator(\LibraryRow.playedSortKey, order: order)]
                 case .childhood: [KeyPathComparator(\LibraryRow.childhoodSortKey, order: order)]
                 case .name: [KeyPathComparator(\LibraryRow.name, order: order)]
@@ -148,7 +150,8 @@ struct LibraryScreen: View {
                     case \LibraryRow.ratingSortKey: .rating
                     case \LibraryRow.intentSetSortKey: .intentSet
                     case \LibraryRow.yearSortKey: .year
-                    case \LibraryRow.playersSortKey: .players
+                    case \LibraryRow.igdbPlayersSortKey: .igdbPlayers
+                    case \LibraryRow.launchBoxPlayersSortKey: .launchBoxPlayers
                     case \LibraryRow.playedSortKey: .played
                     case \LibraryRow.childhoodSortKey: .childhood
                     default: nil
@@ -178,7 +181,7 @@ struct LibraryScreen: View {
         let effective = filter.scoped(by: scope)
         do {
             let (effective, sort, ascending) = (effective, sort, ascending)
-            if !effective.usesIGDBFacts, effective.name.trimmed.isEmpty, sort != .year, sort != .players {
+            if !effective.usesIGDBFacts, effective.name.trimmed.isEmpty, !sort.comesFromCache {
                 let found = try await offMain {
                     try journal.library(effective, sort: sort, ascending: ascending)
                 }
@@ -186,14 +189,14 @@ struct LibraryScreen: View {
                 guard !Task.isCancelled else { return }
                 rows = found
                 loaded = true
-                // The Year and Players columns and the Add filter menu's genres and themes can follow.
+                // The Year, IGDB and LaunchBox columns and the Add filter menu's genres and themes can follow.
                 facts = await services.memory.facts(services)
                 let launchBox = await services.memory.launchBoxScores(services, facts: facts)
                 guard !Task.isCancelled else { return }
                 rows = found.withIGDBFacts(facts, launchBox: launchBox)
             } else {
                 // A search also matches companies, franchises and series, Year sorts by IGDB's release year, and
-                // Players by the Players' score, IGDB's and LaunchBox's: all live in the cache.
+                // IGDB and LaunchBox by their players' scores: all live in the cache.
                 facts = await services.memory.facts(services)
                 let facts = facts
                 let launchBox = await services.memory.launchBoxScores(services, facts: facts)
@@ -216,6 +219,18 @@ struct LibraryScreen: View {
     }
 }
 
+/// A Library row's IGDB or LaunchBox players' score, greyed when it's from too few ratings to rank by.
+private struct PlayersScoreCell: View {
+    let score: CommunityScore?
+
+    var body: some View {
+        if let score {
+            Text(ratingText(score.rating)).foregroundStyle(score.isReliable ? .primary : .tertiary)
+                .help(score.countText("player rating") + (score.isReliable ? "" : ". Too few to rank by"))
+        }
+    }
+}
+
 /// The Platforms, Lists and Players the filter menu offers.
 func filterChoices(_ journal: LudeumStore) throws -> ([IGDBPlatform], [Player]) {
     (try journal.shownPlatforms(), try journal.players())
@@ -228,7 +243,8 @@ func sortText(_ sort: LibrarySort) -> String {
     case .rating: "Rating"
     case .intentSet: "Intent set"
     case .year: "Year"
-    case .players: "Players' rating"
+    case .igdbPlayers: "IGDB players' score"
+    case .launchBoxPlayers: "LaunchBox players' score"
     case .played: "Played"
     case .childhood: "Childhood"
     }
@@ -547,8 +563,9 @@ extension LibraryRow {
     var intentSetSortKey: Date { intentSetAt ?? .distantPast }
     /// For the table's Year column (the Library sorts it, with no year last).
     var yearSortKey: Int { releaseYear ?? 0 }
-    /// For the table's Players column (the Library sorts it, ranking only scores with 10 or more ratings).
-    var playersSortKey: Double { playerScore.map(\.score) ?? 0 }
+    /// For the table's IGDB and LaunchBox columns (the Library sorts them, ranking only scores with 10 or more ratings).
+    var igdbPlayersSortKey: Double { igdbPlayerScore.map(\.score) ?? 0 }
+    var launchBoxPlayersSortKey: Double { launchBoxPlayerScore.map(\.score) ?? 0 }
     /// For the table's Played and Childhood columns (the Library sorts them).
     var playedSortKey: Int { isPlaying ? 3 : outcomes.contains(.finished) ? 2 : outcomes.contains(.dropped) ? 1 : 0 }
     var childhoodSortKey: Int { childhood ? 1 : 0 }

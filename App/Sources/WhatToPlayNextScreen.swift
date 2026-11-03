@@ -60,7 +60,7 @@ struct WhatToPlayNextScreen: View {
                 players: players
             ) {
                 LibrarySortMenu(
-                    sort: $sort, ascending: $ascending, sorts: LibrarySort.allCases.filter { $0 != .year && $0 != .players },
+                    sort: $sort, ascending: $ascending, sorts: LibrarySort.allCases.filter { !$0.comesFromCache },
                     offersDefault: true)
                 ViewModeControls(showCovers: $showCovers, coverWidth: $coverWidth)
             }
