@@ -17,7 +17,8 @@ public struct GameFacts: Sendable, Equatable {
     public var companies: Set<String> { Set(credits.map(\.name)) }
     /// Reference and store pages, most useful first (social media left out).
     public let links: [GameLink]
-    /// IGDB users' average score, and IGDB's average of critics' reviews.
+    /// IGDB users' average score, and IGDB's average of critics' reviews. A Game's Players' score adds LaunchBox's to
+    /// IGDB's (`CommunityScore.players`).
     public let playerScore: CommunityScore?
     public let criticScore: CommunityScore?
     /// The year of IGDB's first release date, anywhere.
@@ -36,6 +37,8 @@ public struct GameFacts: Sendable, Equatable {
     public var expansion: ExpansionOf? = nil
     /// IGDB's Expansions of it, by IGDB id.
     public var expansionIDs: [Int] = []
+    /// IGDB's other names for it, which LaunchBox is looked in by once the Game's own find nothing.
+    public var alternativeNames: [String] = []
 
     public init(
         genres: [String], themes: [String], franchises: [String] = [], series: [String] = [], credits: [CompanyCredit] = [],
@@ -70,19 +73,58 @@ public struct TimeToBeat: Sendable, Equatable {
     }
 }
 
-/// An average score from IGDB, 0–100, and how many ratings or reviews it averages.
+/// Where a score's ratings or reviews come from.
+public enum ScoreSource: String, Sendable, CaseIterable {
+    case igdb = "IGDB"
+    case launchBox = "LaunchBox"
+}
+
+/// An average score, 0–100, and how many ratings or reviews it averages: IGDB's, LaunchBox's (its 0–5 community rating
+/// times 20), or a Players' score of both.
 public struct CommunityScore: Sendable, Equatable {
     public let score: Double
     public let count: Int
+    /// Each source's own score and count, IGDB's first: one, unless it's a Players' score of both.
+    public let sources: [Part]
 
-    public init(score: Double, count: Int) {
+    /// One source's share of a score.
+    public struct Part: Sendable, Equatable {
+        public let source: ScoreSource
+        public let score: Double
+        public let count: Int
+    }
+
+    public init(score: Double, count: Int, source: ScoreSource = .igdb) {
+        self.init(score: score, count: count, sources: [Part(source: source, score: score, count: count)])
+    }
+
+    private init(score: Double, count: Int, sources: [Part]) {
         self.score = score
         self.count = count
+        self.sources = sources
     }
 
     init?(_ score: JSONValue?, count: JSONValue?) {
         guard let score = score?.number, let count = count?.int, count > 0 else { return nil }
         self.init(score: score, count: count)
+    }
+
+    /// A Game's Players' score: IGDB's players' score and LaunchBox's community rating, averaged by how many ratings
+    /// each has, with their counts added. Nil when neither has one.
+    public static func players(igdb: CommunityScore?, launchBox: CommunityScore?) -> CommunityScore? {
+        guard let igdb, let launchBox else { return igdb ?? launchBox }
+        let count = igdb.count + launchBox.count
+        let score = (igdb.score * Double(igdb.count) + launchBox.score * Double(launchBox.count)) / Double(count)
+        return CommunityScore(score: score, count: count, sources: igdb.sources + launchBox.sources)
+    }
+
+    /// How many `noun`s it averages and where from: "34 player ratings: 21 on IGDB (8.1), 13 on LaunchBox (7.4)", or
+    /// "21 player ratings on IGDB" from one source.
+    public func countText(_ noun: String) -> String {
+        func many(_ n: Int) -> String { "\(n) \(noun)\(n == 1 ? "" : "s")" }
+        guard sources.count > 1 else { return "\(many(count)) on \(sources.first?.source.rawValue ?? "IGDB")" }
+        let parts = sources.map { "\($0.count) on \($0.source.rawValue) (\(String(format: "%.1f", $0.score / 10)))" }
+        return "\(many(count)): \(parts.joined(separator: ", "))"
     }
 
     /// Enough ratings to rank by: fewer than 10 is shown, but sorts with the unrated.
@@ -172,6 +214,7 @@ extension IGDBGame {
             .flatMap { URL(string: "https://www.youtube.com/watch?v=\($0)") }
         facts.expansion = expansionOf
         facts.expansionIDs = expansionIDs
+        facts.alternativeNames = alternativeNames
         return facts
     }
 }

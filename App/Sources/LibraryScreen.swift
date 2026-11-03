@@ -89,9 +89,7 @@ struct LibraryScreen: View {
                     TableColumn("Players", sortUsing: KeyPathComparator(\LibraryRow.playersSortKey)) { row in
                         if let p = row.playerScore {
                             Text(ratingText(p.rating)).foregroundStyle(p.isReliable ? .primary : .tertiary)
-                                .help(
-                                    "\(p.count) player rating\(p.count == 1 ? "" : "s") on IGDB\(p.isReliable ? "" : ": too few to rank by")"
-                                )
+                                .help(p.countText("player rating") + (p.isReliable ? "" : ". Too few to rank by"))
                         }
                     }
                     .width(60)
@@ -188,18 +186,20 @@ struct LibraryScreen: View {
                 guard !Task.isCancelled else { return }
                 rows = found
                 loaded = true
-                // The Year column and the Add filter menu's genres and themes can follow.
+                // The Year and Players columns and the Add filter menu's genres and themes can follow.
                 facts = await services.memory.facts(services)
+                let launchBox = await services.memory.launchBoxScores(services, facts: facts)
                 guard !Task.isCancelled else { return }
-                rows = found.withIGDBFacts(facts)
+                rows = found.withIGDBFacts(facts, launchBox: launchBox)
             } else {
-                // A search also matches companies, franchises and series, and Year and Players sort by IGDB's
-                // release year and rating: all live in the cache.
+                // A search also matches companies, franchises and series, Year sorts by IGDB's release year, and
+                // Players by the Players' score, IGDB's and LaunchBox's: all live in the cache.
                 facts = await services.memory.facts(services)
                 let facts = facts
+                let launchBox = await services.memory.launchBoxScores(services, facts: facts)
                 // Off the main thread, so typing stays smooth while it filters.
                 let found = try await offMain {
-                    try journal.library(effective, sort: sort, ascending: ascending, facts: facts)
+                    try journal.library(effective, sort: sort, ascending: ascending, facts: facts, launchBox: launchBox)
                 }
                 guard !Task.isCancelled else { return }
                 rows = found

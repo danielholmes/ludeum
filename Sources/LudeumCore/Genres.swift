@@ -29,13 +29,14 @@ extension Array where Element == LibraryRow {
 }
 
 extension [LibraryRow] {
-    /// The rows with IGDB's release year and players' rating filled in from the facts.
-    public func withIGDBFacts(_ facts: [Int64: GameFacts]) -> [LibraryRow] {
+    /// The rows with IGDB's release year filled in from the facts, and their Players' score from IGDB's players' score
+    /// in them and LaunchBox's community rating (`launchBox`, by Game).
+    public func withIGDBFacts(_ facts: [Int64: GameFacts], launchBox: [GameID: CommunityScore] = [:]) -> [LibraryRow] {
         map { row in
             var row = row
             let f = row.igdbGameId.flatMap { facts[$0] }
             row.releaseYear = f?.releaseYear
-            row.playerScore = f?.playerScore
+            row.playerScore = .players(igdb: f?.playerScore, launchBox: launchBox[row.id])
             return row
         }
     }
@@ -64,11 +65,13 @@ extension LudeumStore {
 
     /// The Library with the IGDB facts applied: the filter's genre, theme, franchise, series and
     /// company, and a search that also matches the Game's companies, franchises and series. It stops
-    /// early with `CancellationError` when its task is cancelled (a newer search replaced it).
-    public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts]) throws
-        -> [LibraryRow]
-    {
-        let rows = try matching(filter, sort: sort, ascending: ascending, facts: facts).withIGDBFacts(facts)
+    /// early with `CancellationError` when its task is cancelled (a newer search replaced it). Players sorts by the
+    /// Players' score, with LaunchBox's community ratings (`launchBox`, by Game).
+    public func library(
+        _ filter: LibraryFilter, sort: LibrarySort, ascending: Bool, facts: [Int64: GameFacts],
+        launchBox: [GameID: CommunityScore] = [:]
+    ) throws -> [LibraryRow] {
+        let rows = try matching(filter, sort: sort, ascending: ascending, facts: facts).withIGDBFacts(facts, launchBox: launchBox)
         switch sort {
         case .year: return rows.sorted(by: { $0.releaseYear.map(Double.init) }, ascending: ascending)
         case .players: return rows.sorted(by: { $0.playerScore.flatMap { $0.isReliable ? $0.score : nil } }, ascending: ascending)

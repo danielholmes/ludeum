@@ -229,6 +229,45 @@ import Testing
         #expect(CommunityScore(score: 98, count: 3).isReliable == false)
     }
 
+    @Test func thePlayersScoreAddsLaunchBoxsRatingsToIGDBsSoAFewOfEachCanRank() async throws {
+        let h = try Harness()
+        let j = try LudeumHarness()
+        try j.journal.addPlatform(id: 19, name: "SNES")
+        h.internet.addGame(1, "Obscure Gem", fields: ["rating": 90.0, "rating_count": 4])
+        h.internet.addGame(2, "Super Mario World", fields: ["rating": 88.0, "rating_count": 10])
+        h.internet.addGame(3, "Known Elsewhere", fields: ["alternative_names": [["name": "Shiranai Gēmu"]]])
+        let gem = try j.journal.addGame(platformId: 19, name: "Obscure Gem", igdbGameId: 1, igdbName: "Obscure Gem")
+        try j.journal.addGame(platformId: 19, name: "Super Mario World", igdbGameId: 2, igdbName: "Super Mario World")
+        try j.journal.addGame(platformId: 19, name: "Known Elsewhere", igdbGameId: 3, igdbName: "Known Elsewhere")
+        try j.journal.addGame(platformId: 19, name: "Unlinked Hack")
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Obscure Gem", platform: "Super Nintendo Entertainment System", boxes: [(nil, "g.jpg")], rating: "3.5",
+                ratingCount: "6"),
+            LaunchBoxGame(
+                id: 2, name: "Shiranai Gēmu", platform: "Super Nintendo Entertainment System", boxes: [(nil, "k.jpg")],
+                rating: "5", ratingCount: "12"),
+            LaunchBoxGame(
+                id: 3, name: "Unlinked Hack", platform: "Super Nintendo Entertainment System", boxes: [(nil, "u.jpg")], rating: "4",
+                ratingCount: "2"),
+        ])
+        try await h.launchBox.refresh()
+        let facts = try await LibraryFacts(igdb: h.igdb).byGame([1, 2, 3])
+        let launchBox = try h.launchBox.playerScores(try j.journal.launchBoxLookups(facts: facts))
+
+        let best = try j.journal.library(LibraryFilter(), sort: .players, ascending: false, facts: facts, launchBox: launchBox)
+
+        // 4 at 9.0 and 6 at 7.0: 10 ratings at 7.8, enough to rank.
+        #expect(best.map(\.name) == ["Known Elsewhere", "Super Mario World", "Obscure Gem", "Unlinked Hack"])
+        let score = try #require(best.first { $0.id == gem }?.playerScore)
+        #expect(score.count == 10)
+        #expect(abs(score.score - 78) < 0.001)
+        #expect(score.isReliable)
+        #expect(score.countText("player rating") == "10 player ratings: 4 on IGDB (9.0), 6 on LaunchBox (7.0)")
+        #expect(best[0].playerScore?.countText("player rating") == "12 player ratings on LaunchBox")
+        #expect(best[3].playerScore?.count == 2)
+    }
+
     @Test func yearSortUsesIGDBsReleaseYearNewestFirstUndatedLast() async throws {
         let h = try Harness()
         let j = try LudeumHarness()

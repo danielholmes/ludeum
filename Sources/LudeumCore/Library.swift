@@ -165,9 +165,9 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let roms: LibraryROMState
     /// Owned: it has a Copy that isn't Gone (a ROM, or a hand-recorded one).
     public let owned: Bool
-    /// IGDB's first release year, when the rows came with IGDB's facts (`withIGDBFacts(_:)`).
+    /// IGDB's first release year, when the rows came with IGDB's facts (`withIGDBFacts(_:launchBox:)`).
     public var releaseYear: Int? = nil
-    /// IGDB players' average rating, with the same proviso.
+    /// The Players' score, IGDB's and LaunchBox's, with the same proviso.
     public var playerScore: CommunityScore? = nil
 
     /// It has a ROM, on a Platform with an Emulator: Play is offered, and says why if it can't open (Archived, missing).

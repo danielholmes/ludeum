@@ -118,6 +118,84 @@ import Testing
         #expect(try launchBox.isStale())
     }
 
+    func playerScore(_ platform: Int64, _ titles: [String], alternatives: [String] = [], year: Int? = nil) throws
+        -> CommunityScore?
+    {
+        let game: GameID = 1
+        return try launchBox.playerScores([
+            game: LaunchBoxLookup(platform: platform, titles: titles, alternatives: alternatives, year: year)
+        ])[game]
+    }
+
+    @Test func aGamesCommunityRatingIsKeptOutOf100WithItsCount() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Half-Life", platform: "Windows", boxes: [(nil, "hl.jpg")], rating: "4.25", ratingCount: "120"),
+            LaunchBoxGame(id: 2, name: "Daikatana", platform: "Windows", boxes: [(nil, "dk.jpg")]),
+        ])
+
+        try await launchBox.refresh()
+
+        let score = try #require(try playerScore(6, ["Half-Life"]))
+        #expect(score.score == 85)
+        #expect(score.count == 120)
+        #expect(score.sources.map(\.source) == [.launchBox])
+        #expect(try playerScore(6, ["Daikatana"]) == nil)
+        #expect(try playerScore(7, ["Half-Life"]) == nil)
+    }
+
+    @Test func aRatingWithNoCountOrOutOfRangeIsNoRating() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(id: 1, name: "Doom", platform: "Windows", boxes: [(nil, "d.jpg")], rating: "4", ratingCount: "0"),
+            LaunchBoxGame(id: 2, name: "Quake", platform: "Windows", boxes: [(nil, "q.jpg")], rating: "4"),
+            LaunchBoxGame(id: 3, name: "Heretic", platform: "Windows", boxes: [(nil, "h.jpg")], rating: "7", ratingCount: "5"),
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(try playerScore(6, ["Doom"]) == nil)
+        #expect(try playerScore(6, ["Quake"]) == nil)
+        #expect(try playerScore(6, ["Heretic"]) == nil)
+    }
+
+    @Test func theScoreIsTheOneGameTheYearPicksEvenWhenItHasNoRatings() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Doom", platform: "Windows", released: "1993-12-10", boxes: [(nil, "d93.jpg")], rating: "4.5",
+                ratingCount: "300"),
+            LaunchBoxGame(id: 2, name: "Doom", platform: "Windows", released: "2016-05-13", boxes: [(nil, "d16.jpg")]),
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(try playerScore(6, ["Doom"], year: 1993)?.score == 90)
+        // 2016's has none, and 1993's isn't borrowed for it.
+        #expect(try playerScore(6, ["Doom"], year: 2016) == nil)
+    }
+
+    @Test func igdbsAlternativeNamesAreTriedOnlyOnceTheGamesOwnFindNothing() async throws {
+        h.internet.setLaunchBox([
+            LaunchBoxGame(
+                id: 1, name: "Commander Keen 1 - Marooned on Mars", platform: "MS-DOS", boxes: [(nil, "k.jpg")], rating: "4",
+                ratingCount: "30"),
+            LaunchBoxGame(id: 2, name: "Commando", platform: "MS-DOS", boxes: [(nil, "c.jpg")], rating: "2", ratingCount: "8"),
+            LaunchBoxGame(id: 3, name: "Command & Conquer: Renegade", platform: "Windows", boxes: [(nil, "r.jpg")]),
+        ])
+
+        try await launchBox.refresh()
+
+        #expect(
+            try playerScore(6, ["Commander Keen in Invasion of the Vorticons"], alternatives: ["Commander Keen 1 - Marooned on Mars"])?
+                .score == 80)
+        // Renegade's own name finds its unrated game, so its working title isn't tried.
+        #expect(try playerScore(6, ["Command & Conquer: Renegade"], alternatives: ["Commando"]) == nil)
+    }
+
+    @Test func aDumpReadBeforeRatingsWereKeptIsReadAgain() throws {
+        try h.cache.store(["launchbox:metadata:2": Data()])
+
+        #expect(try launchBox.isStale())
+    }
+
     @Test func aGamesOwnNameBeatsAnothersAlternateName() async throws {
         h.internet.setLaunchBox([
             LaunchBoxGame(id: 2, name: "Descent 3", platform: "Windows", alternateNames: ["Descent"], boxes: [(nil, "d3.jpg")]),

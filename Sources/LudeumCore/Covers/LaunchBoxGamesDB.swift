@@ -2,11 +2,12 @@ import Foundation
 import GRDB
 
 /// The LaunchBox Games Database: retail box scans for nearly every Platform, and Screenshots: the source of every Game's
-/// Box art. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB unzipped), made daily.
-/// It's read at most every 30 days, by the launch refresh, downloaded to a file and streamed out of the zip without
-/// unpacking it, and only what finds a Game's images is kept, in the cache: each game on a Platform `platforms` maps, with
-/// its year, names and their title keys, and its Box - Front and Screenshot images (about 73 MB). Images come from
-/// `images.launchbox-app.com` by file name, downloaded the first time one's shown.
+/// Box art, and of half a Game's Players' score. The whole database is one dump, `Metadata.zip` (about 110 MB, 575 MB
+/// unzipped), made daily. It's read at most every 30 days, by the launch refresh, downloaded to a file and streamed out of
+/// the zip without unpacking it, and only what finds a Game's images and score is kept, in the cache: each game on a
+/// Platform `platforms` maps, with its year, community rating, names and their title keys, and its Box - Front and
+/// Screenshot images (about 73 MB). Images come from `images.launchbox-app.com` by file name, downloaded the first time
+/// one's shown.
 public final class LaunchBoxGamesDB: Sendable {
     let cache: CacheStore
     let transport: HTTPTransport
@@ -18,7 +19,7 @@ public final class LaunchBoxGamesDB: Sendable {
     static let dumpURL = URL(string: "https://gamesdb.launchbox-app.com/Metadata.zip")!
     /// The cache entry whose `fetched_at` says when the dump was last read. Its number goes up whenever what's kept of a
     /// dump changes, so the next launch reads it again rather than wait for it to be 30 days old.
-    static let readKey = "launchbox:metadata:2"
+    static let readKey = "launchbox:metadata:3"
     /// The cache entry whose `fetched_at` says when a dump last couldn't be downloaded or read.
     static let failedKey = "launchbox:failed"
 
@@ -35,6 +36,12 @@ public final class LaunchBoxGamesDB: Sendable {
         if let failed = entries[Self.failedKey], now.timeIntervalSince(failed.fetchedAt) < Self.retryAfter { return false }
         guard let read = entries[Self.readKey] else { return true }
         return now.timeIntervalSince(read.fetchedAt) > Self.maxAge
+    }
+
+    /// When what's kept was read: nil before any dump has been. A new date means a new dump, whose games may score
+    /// differently.
+    public func readAt() throws -> Date? {
+        try cache.entries([Self.readKey])[Self.readKey]?.fetchedAt
     }
 
     /// Downloads the dump and replaces what's kept of the last one. One that can't be downloaded or read throws
@@ -105,14 +112,38 @@ public final class LaunchBoxGamesDB: Sendable {
     public func screenshots(platform: Int64, titles: [String], year: Int?) throws -> [String] {
         guard let platforms = Self.platforms[platform] else { return [] }
         let shots = try images(of: LaunchBoxImageType.screenshots, platforms: platforms, titles: titles)
-        func rank(_ shot: LaunchBoxImage) -> (Int, Int, Int, Int) {
-            (shot.own ? 0 : 1, Self.yearsApart(shot.year, from: year), shot.nameLength, shot.gameID)
-        }
-        guard let best = shots.min(by: { rank($0) < rank($1) }) else { return [] }
+        guard let best = shots.min(by: { Self.rank($0.match, year) < Self.rank($1.match, year) }) else { return [] }
         var seen: Set<String> = []
         return shots.filter { $0.gameID == best.gameID && seen.insert($0.fileName).inserted }
             .sorted { ($0.type.rawValue, $0.position) < ($1.type.rawValue, $1.position) }
             .map(\.fileName)
+    }
+
+    /// LaunchBox's community rating for each of `games`, the half of its Players' score that isn't IGDB's: that of the
+    /// one game matched by title as for its Screenshots, by the Game's names, else (only once they match nothing) IGDB's
+    /// alternative names for it. A Game whose game has no ratings, or that matches nothing, is absent.
+    public func playerScores(_ games: [GameID: LaunchBoxLookup]) throws -> [GameID: CommunityScore] {
+        try cache.db.read { db in
+            var scores: [GameID: CommunityScore] = [:]
+            for (game, lookup) in games {
+                guard let platforms = Self.platforms[lookup.platform] else { continue }
+                for titles in [lookup.titles, lookup.alternatives] where !titles.isEmpty {
+                    let found = try Self.matches(db, platforms: platforms, titles: titles)
+                    guard let best = found.min(by: { Self.rank($0, lookup.year) < Self.rank($1, lookup.year) }) else { continue }
+                    if let rating = best.rating, best.ratingCount > 0 {
+                        scores[game] = CommunityScore(score: rating * 20, count: best.ratingCount, source: .launchBox)
+                    }
+                    break
+                }
+            }
+            return scores
+        }
+    }
+
+    /// The order the one game matched by title is picked in: a game's own name beats another's alternate name, then the
+    /// game released closest to `year`, then the shortest name, then the lowest LaunchBox id.
+    static func rank(_ match: LaunchBoxGameMatch, _ year: Int?) -> (Int, Int, Int, Int) {
+        (match.own ? 0 : 1, yearsApart(match.year, from: year), match.nameLength, match.gameID)
     }
 
     /// How many years a game released in `released` is from `year`, for ranking: a regional release or a port can be a
@@ -127,16 +158,27 @@ public final class LaunchBoxGamesDB: Sendable {
     /// Every image of `types` of the games on `platforms` that the first title to match any finds: each of `titles` in
     /// turn (then spelled out), by title key, then by loose title key.
     private func images(of types: [LaunchBoxImageType], platforms: [String], titles: [String]) throws -> [LaunchBoxImage] {
-        let spelled = titles.map(TitleKey.spelledOut).filter { !titles.contains($0) }
-        for tier in TitleKey.allCases {
-            for title in titles + spelled {
-                let key = tier.of(title)
-                guard !key.isEmpty else { continue }
-                let found = try cache.launchBoxImages(types, tier, key, platforms: platforms)
-                if !found.isEmpty { return found }
-            }
+        for (tier, key) in Self.keys(titles) {
+            let found = try cache.launchBoxImages(types, tier, key, platforms: platforms)
+            if !found.isEmpty { return found }
         }
         return []
+    }
+
+    /// The games on `platforms` that the first title to match any finds, tried in the order `images` tries them.
+    private static func matches(_ db: Database, platforms: [String], titles: [String]) throws -> [LaunchBoxGameMatch] {
+        for (tier, key) in keys(titles) {
+            let found = try CacheStore.launchBoxGames(db, tier, key, platforms: platforms)
+            if !found.isEmpty { return found }
+        }
+        return []
+    }
+
+    /// The title keys a Game's `titles` are looked for by, in turn: each title (then each spelled out) by title key, then
+    /// all again by loose title key.
+    private static func keys(_ titles: [String]) -> [(TitleKey, String)] {
+        let spelled = titles.map(TitleKey.spelledOut).filter { !titles.contains($0) }
+        return TitleKey.allCases.flatMap { tier in (titles + spelled).map { (tier, tier.of($0)) } }.filter { !$0.1.isEmpty }
     }
 
     /// An image by its file name, from the cache or downloaded the first time.
@@ -246,6 +288,40 @@ struct LaunchBoxImage: Sendable {
     let nameLength: Int
     /// Its place in the dump.
     let position: Int
+
+    /// Its game, as found, for picking the one game of several (`LaunchBoxGamesDB.rank`).
+    var match: LaunchBoxGameMatch {
+        LaunchBoxGameMatch(gameID: gameID, own: own, year: year, nameLength: nameLength, rating: nil, ratingCount: 0)
+    }
+}
+
+/// One game a title key found, with its community rating.
+struct LaunchBoxGameMatch: Sendable {
+    let gameID: Int
+    /// Found by the game's own name, not an alternate one.
+    let own: Bool
+    let year: Int?
+    /// The length of the name it was found by.
+    let nameLength: Int
+    /// 0–5, from `ratingCount` ratings.
+    let rating: Double?
+    let ratingCount: Int
+}
+
+/// What a Game is found in LaunchBox by, for its Players' score: its Platform, its names (the one shown, IGDB's and its
+/// own), IGDB's alternative names for it, tried only once its names find nothing, and IGDB's release year for it.
+public struct LaunchBoxLookup: Sendable, Equatable {
+    public let platform: Int64
+    public let titles: [String]
+    public let alternatives: [String]
+    public let year: Int?
+
+    public init(platform: Int64, titles: [String], alternatives: [String] = [], year: Int? = nil) {
+        self.platform = platform
+        self.titles = titles
+        self.alternatives = alternatives.filter { !titles.contains($0) }
+        self.year = year
+    }
 }
 
 /// What's kept of a dump: the games on the Platforms `LaunchBoxGamesDB.platforms` maps that have an image of a kept type,
@@ -255,6 +331,9 @@ struct LaunchBoxDump: Sendable {
         let id: Int
         let platform: String
         let year: Int?
+        /// Its community rating, 0–5, from `ratingCount` ratings: nil with none.
+        var rating: Double? = nil
+        var ratingCount: Int = 0
     }
 
     struct Name: Sendable {
@@ -345,7 +424,7 @@ public enum LaunchBoxDumpError: LocalizedError, CustomStringConvertible {
 /// the like) unread.
 private final class DumpReader: NSObject, XMLParserDelegate {
     private static let fields: [String: Set<String>] = [
-        "Game": ["DatabaseID", "Name", "Platform", "ReleaseDate", "ReleaseYear"],
+        "Game": ["DatabaseID", "Name", "Platform", "ReleaseDate", "ReleaseYear", "CommunityRating", "CommunityRatingCount"],
         "GameAlternateName": ["DatabaseID", "AlternateName"],
         "GameImage": ["DatabaseID", "FileName", "Type", "Region"],
     ]
@@ -398,7 +477,13 @@ private final class DumpReader: NSObject, XMLParserDelegate {
             else { return }
             let year = values["ReleaseDate"].flatMap { Int($0.prefix(4)) } ?? values["ReleaseYear"].flatMap(Int.init)
             if games[id] == nil { gameOrder.append(id) }
-            games[id] = (LaunchBoxDump.Game(id: id, platform: platform, year: year), name)
+            // A rating with no count, or a count of none, is no rating.
+            let count = values["CommunityRatingCount"].flatMap(Int.init) ?? 0
+            let rating = count > 0 ? values["CommunityRating"].flatMap(Double.init).flatMap { (0...5).contains($0) ? $0 : nil } : nil
+            games[id] = (
+                LaunchBoxDump.Game(id: id, platform: platform, year: year, rating: rating, ratingCount: rating == nil ? 0 : count),
+                name
+            )
         case "GameAlternateName":
             if let name = values["AlternateName"], !name.isEmpty { alternateNames.append((id, name)) }
         case "GameImage":
@@ -431,8 +516,9 @@ extension CacheStore {
         let readAt = clock.now().timeIntervalSince1970
         try db.write { db in
             try db.execute(sql: "DELETE FROM launchbox_game; DELETE FROM launchbox_name; DELETE FROM launchbox_image")
-            let game = try db.makeStatement(sql: "INSERT INTO launchbox_game (id, platform, year) VALUES (?, ?, ?)")
-            for g in dump.games { try game.execute(arguments: [g.id, g.platform, g.year]) }
+            let game = try db.makeStatement(
+                sql: "INSERT INTO launchbox_game (id, platform, year, rating, rating_count) VALUES (?, ?, ?, ?, ?)")
+            for g in dump.games { try game.execute(arguments: [g.id, g.platform, g.year, g.rating, g.ratingCount]) }
             let name = try db.makeStatement(
                 sql: "INSERT INTO launchbox_name (game_id, own, length, title_key, loose_title_key) VALUES (?, ?, ?, ?, ?)")
             for n in dump.names {
@@ -453,6 +539,26 @@ extension CacheStore {
     /// Whether any dump's games are kept.
     func hasLaunchBoxGames() throws -> Bool {
         try db.read { try Bool.fetchOne($0, sql: "SELECT EXISTS (SELECT 1 FROM launchbox_game)") ?? false }
+    }
+
+    /// Every game on `platforms` with a name whose `titleKey` is `key`, once for each such name.
+    static func launchBoxGames(_ db: Database, _ titleKey: TitleKey, _ key: String, platforms: [String]) throws
+        -> [LaunchBoxGameMatch]
+    {
+        try Row.fetchAll(
+            db,
+            sql: """
+                SELECT g.id, n.own, g.year, n.length, g.rating, g.rating_count
+                FROM launchbox_name n
+                JOIN launchbox_game g ON g.id = n.game_id
+                WHERE n.\(titleKey.rawValue) = ? AND g.platform IN (\(platforms.map { _ in "?" }.joined(separator: ",")))
+                """,
+            arguments: StatementArguments([key] + platforms)
+        ).map { row in
+            LaunchBoxGameMatch(
+                gameID: row["id"], own: row["own"], year: row["year"], nameLength: row["length"], rating: row["rating"],
+                ratingCount: row["rating_count"])
+        }
     }
 
     /// Every image of `types` of the games on `platforms` with a name whose `titleKey` is `key`.

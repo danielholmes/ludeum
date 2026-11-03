@@ -1,8 +1,9 @@
 import AppKit
 import LudeumCore
 
-/// Decoded Covers and the Library's genres and themes, kept in memory so screens open without re-reading
-/// the cache. Covers are dropped when any Cover changes; a Game's facts when its record has been fetched again.
+/// Decoded Covers, the Library's genres and themes, and its LaunchBox ratings, kept in memory so screens open without
+/// re-reading the cache. Covers are dropped when any Cover changes; a Game's facts when its record has been fetched again;
+/// its LaunchBox rating when what it's found by changes, or a new dump is read.
 @MainActor final class MemoryCache {
     /// Tile-sized Covers, up to a limit: past it, or when the system is short of memory, some are dropped and decoded
     /// again when next shown.
@@ -19,6 +20,11 @@ import LudeumCore
     private var factsRead: Set<Int64> = []
     /// The read under way, so screens asking at once wait on the same one.
     private var factsLoad: Task<Void, Never>?
+    /// Each Game's LaunchBox community rating (nil for none), with what it was found by: a Game is looked up again only
+    /// once that changes (a rename, a new IGDB link, its facts read again), and every Game once a new dump is read.
+    private var launchBoxScores: [GameID: (lookup: LaunchBoxLookup, score: CommunityScore?)] = [:]
+    /// When the dump `launchBoxScores` were found in was read.
+    private var launchBoxReadAt: Date?
 
     /// A Game's Cover if it's been loaded since the last Cover change, decoded for at least `pixels` on its long edge
     /// (any size, by default): `.some(nil)` is the placeholder.
@@ -61,6 +67,28 @@ import LudeumCore
         factsLoad = load
         await load.value
         return facts
+    }
+
+    /// Every Game's LaunchBox community rating, by Game, for its Players' score: `facts` (by IGDB game id) give IGDB's
+    /// alternative names and year for it. Games with none are absent. Only Games whose names, link or facts have changed
+    /// since the last ask are looked up, off the main thread; on a failure, what was found before is what's shown.
+    func launchBoxScores(_ services: Services, facts: [Int64: GameFacts]) async -> [GameID: CommunityScore] {
+        guard let journal = services.journal, let launchBox = services.launchBox,
+            let lookups = try? journal.launchBoxLookups(facts: facts)
+        else { return [:] }
+        let readAt = try? launchBox.readAt()
+        if readAt != launchBoxReadAt {
+            launchBoxScores = [:]
+            launchBoxReadAt = readAt
+        }
+        let changed = lookups.filter { launchBoxScores[$0.key]?.lookup != $0.value }
+        if !changed.isEmpty, let found = try? await offMain({ try launchBox.playerScores(changed) }), readAt == launchBoxReadAt {
+            for (game, lookup) in changed { launchBoxScores[game] = (lookup, found[game]) }
+        }
+        // A deleted Game's is left out.
+        var scores: [GameID: CommunityScore] = [:]
+        for (game, entry) in launchBoxScores where lookups[game] != nil { scores[game] = entry.score }
+        return scores
     }
 }
 

@@ -38,6 +38,8 @@ struct GameDetailView: View {
     /// ROMs whose files are shown.
     @State private var expandedROMs: Set<Int64> = []
     @State private var facts = GameFacts.none
+    /// LaunchBox's community rating, the rest of its Players' score.
+    @State private var launchBoxScore: CommunityScore?
     /// What it's an Expansion of, if it's one; and its Expansions in the journal, if it has any.
     @State private var baseGame: BaseGameLine?
     @State private var expansions: [Game] = []
@@ -121,7 +123,9 @@ struct GameDetailView: View {
                                 rating: game.rating, hasHistory: !history.isEmpty,
                                 set: { rating in save { try $0.setRating(id, rating) } }, showHistory: { showingHistory = true })
                         }
-                        CommunityScores(players: facts.playerScore, critics: facts.criticScore, stacked: true)
+                        CommunityScores(
+                            players: .players(igdb: facts.playerScore, launchBox: launchBoxScore), critics: facts.criticScore,
+                            stacked: true)
                     }
                     HStack {
                         Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
@@ -248,6 +252,15 @@ struct GameDetailView: View {
             facts = .none
             if let link = game.igdbGameId, let igdb = services.igdb { facts = (try? await igdb.facts(igdbGameId: link)) ?? .none }
             readExpansions()
+        }
+        // Found by its names and IGDB's facts for it, so again when it's renamed or linked to another.
+        .task(id: LaunchBoxScoreKey(name: game.name, facts: facts)) {
+            launchBoxScore = nil
+            guard let journal = services.journal, let launchBox = services.launchBox else { return }
+            let (id, facts) = (id, facts)
+            launchBoxScore = try? await offMain {
+                try launchBox.playerScores([id: try journal.launchBoxLookup(id, facts: facts)])[id]
+            }
         }
         .sheet(isPresented: $editingGame) {
             EditGameSheet(
@@ -766,6 +779,13 @@ struct GameDetailView: View {
         guard let attachments = services.attachments else { return }
         delete({ [id] _ in try attachments.deleteGame(id) }, then: deleted)
     }
+}
+
+/// What a Game's LaunchBox rating is found by, beyond the Game itself: its name, and IGDB's facts for it (its other
+/// names and year).
+private struct LaunchBoxScoreKey: Equatable {
+    let name: String
+    let facts: GameFacts
 }
 
 /// Its views in a row while they fit unwrapped, else one above the other, so a narrow panel doesn't squeeze each into

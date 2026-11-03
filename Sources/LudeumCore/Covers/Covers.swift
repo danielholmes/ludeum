@@ -79,16 +79,42 @@ extension LudeumStore {
         try db.read { db in
             let row = try Row.fetchOne(
                 db, sql: "SELECT platformId, name, nameOverride, igdbName FROM game WHERE id = ?", arguments: [game])!
-            var titles: [String] = []
-            for title in [row["nameOverride"], row["igdbName"], row["name"]] as [String?] {
-                if let title, !titles.contains(title) { titles.append(title) }
-            }
             let regions = try String?.fetchAll(
                 db, sql: "SELECT regions FROM copy WHERE gameId = ? UNION ALL SELECT regions FROM rom WHERE gameId = ?",
                 arguments: [game, game]
             ).flatMap(Regions.decode)
-            return BoxArtLookup(platform: row["platformId"], titles: titles, regions: ROMName.regions(named: regions) ?? [])
+            return BoxArtLookup(platform: row["platformId"], titles: Self.titles(row), regions: ROMName.regions(named: regions) ?? [])
         }
+    }
+
+    /// What every Game is found in LaunchBox by for its Players' score, as its Box art is but for Regions: its names,
+    /// then IGDB's alternative names for it, near IGDB's release year, both from `facts` (by IGDB game id).
+    public func launchBoxLookups(facts: [Int64: GameFacts]) throws -> [GameID: LaunchBoxLookup] {
+        try db.read { db in
+            var lookups: [GameID: LaunchBoxLookup] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT id, platformId, name, nameOverride, igdbName, igdbGameId FROM game") {
+                let f = (row["igdbGameId"] as Int64?).flatMap { facts[$0] }
+                lookups[row["id"]] = LaunchBoxLookup(
+                    platform: row["platformId"], titles: Self.titles(row), alternatives: f?.alternativeNames ?? [],
+                    year: f?.releaseYear)
+            }
+            return lookups
+        }
+    }
+
+    /// One Game's `launchBoxLookups`, with its IGDB `facts`.
+    public func launchBoxLookup(_ game: GameID, facts: GameFacts) throws -> LaunchBoxLookup {
+        let row = try boxArtLookup(game)
+        return LaunchBoxLookup(platform: row.platform, titles: row.titles, alternatives: facts.alternativeNames, year: facts.releaseYear)
+    }
+
+    /// A Game's names, each once: the one shown, then IGDB's, then its own.
+    private static func titles(_ row: Row) -> [String] {
+        var titles: [String] = []
+        for title in [row["nameOverride"], row["igdbName"], row["name"]] as [String?] {
+            if let title, !titles.contains(title) { titles.append(title) }
+        }
+        return titles
     }
 }
 

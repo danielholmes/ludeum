@@ -11,6 +11,9 @@ struct LaunchBoxGame {
     var boxes: [(region: String?, file: String)] = []
     /// Other images, (type, file name).
     var otherImages: [(type: String, file: String)] = []
+    /// Its community rating, 0–5, and how many it averages, as the dump writes them ("4.25"); nil leaves them out.
+    var rating: String? = nil
+    var ratingCount: String? = nil
 
     /// `Metadata.xml` as LaunchBox writes it: every game, then every alternate name, then every image.
     static func xml(_ games: [LaunchBoxGame]) -> String {
@@ -22,7 +25,11 @@ struct LaunchBoxGame {
             xml += "  <Game>\n    <Name>\(escaped(g.name))</Name>\n"
             if let released = g.released { xml += "    <ReleaseDate>\(released)</ReleaseDate>\n" }
             xml += "    <Overview>A game &amp; its overview.</Overview>\n    <DatabaseID>\(g.id)</DatabaseID>\n"
-            xml += "    <Platform>\(escaped(g.platform))</Platform>\n    <Genres />\n  </Game>\n"
+            // LaunchBox writes the rating before the platform and its count after.
+            if let rating = g.rating { xml += "    <CommunityRating>\(rating)</CommunityRating>\n" }
+            xml += "    <Platform>\(escaped(g.platform))</Platform>\n"
+            if let count = g.ratingCount { xml += "    <CommunityRatingCount>\(count)</CommunityRatingCount>\n" }
+            xml += "    <Genres />\n  </Game>\n"
         }
         for g in games {
             for name in g.alternateNames {
