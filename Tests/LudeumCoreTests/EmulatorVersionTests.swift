@@ -28,6 +28,9 @@ import Testing
         #expect(EmulatorVersions.check(found: "PCSX2 v2.9.99", for: .pcsx2) == .wrongBuild(found: "2.9.99"))
         #expect(EmulatorVersions.check(found: "PCSX2 v2.10.1\nhttps://pcsx2.net/", for: .pcsx2) == .wrongBuild(found: "2.10.1"))
         #expect(EmulatorVersions.check(found: "3.0.0", for: .pcsx2) == .wrongBuild(found: "3.0.0"))
+        // Rosetta translates its x86_64 binary the first time it runs, about ten seconds for a freshly unpacked copy.
+        #expect(Emulator.pcsx2.versionSpec?.timeout == 60)
+        #expect(Emulator.ppsspp.versionSpec?.timeout == 10)
     }
 
     @Test func emulatorsWithoutMeaningfulMajorsAreOnlyCheckedForBeingTooOld() {

@@ -42,6 +42,8 @@ struct EmulatorVersionSpec: Sendable {
     var warnsOnNewerMajor = true
     /// Only `expected` will do: Ludeum installs it, so any other is `wrongBuild`.
     var exact = false
+    /// How long its command line is given to print the version before it's stopped and the version counted unreadable.
+    var timeout: TimeInterval = 10
 }
 
 extension Emulator {
@@ -65,8 +67,11 @@ extension Emulator {
         case .melonDS: EmulatorVersionSpec(expected: "1.1", source: .appVersion)
         case .ymir: EmulatorVersionSpec(expected: "0.3.3", source: .appVersion)
         case .ppsspp: EmulatorVersionSpec(expected: "1.20.4", source: .commandLine("--version"))
-        // Its `-version` prints and exits before it touches its settings or data root.
-        case .pcsx2: EmulatorVersionSpec(expected: PCSX2Release.pinned.version, source: .commandLine("-version"), exact: true)
+        // Its `-version` prints and exits before it touches its settings or data root. Its binary is x86_64, which Rosetta
+        // translates, with its 26 libraries, the first time it runs: about ten seconds on this Mac for a freshly
+        // unpacked copy (as Install's check is), a fifth of a second after that.
+        case .pcsx2:
+            EmulatorVersionSpec(expected: PCSX2Release.pinned.version, source: .commandLine("-version"), exact: true, timeout: 60)
         // Its `-version` prints QEMU's version, not xemu's.
         case .xemu: EmulatorVersionSpec(expected: "0.8.136", source: .appVersion)
         default: nil
@@ -120,12 +125,12 @@ public enum EmulatorVersions {
             return MesenRelease.Installed(app: app).map { "\($0.version)\n\($0.sha256)" }
         case .commandLine(let flag):
             guard let executable = info?["CFBundleExecutable"] as? String else { return nil }
-            return run(app.appending(path: "Contents/MacOS/\(executable)"), flag)
+            return run(app.appending(path: "Contents/MacOS/\(executable)"), flag, timeout: emulator.versionSpec?.timeout ?? 10)
         }
     }
 
-    /// Its output, given 10 seconds before it's stopped.
-    private static func run(_ executable: URL, _ flag: String) -> String? {
+    /// Its output, given `timeout` seconds before it's stopped.
+    private static func run(_ executable: URL, _ flag: String, timeout: TimeInterval) -> String? {
         let process = Process()
         process.executableURL = executable
         process.arguments = [flag]
@@ -144,7 +149,7 @@ public enum EmulatorVersions {
             output = pipe.fileHandleForReading.readDataToEndOfFile()
             read.signal()
         }.start()
-        if done.wait(timeout: .now() + 10) == .timedOut {
+        if done.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
             return nil
         }

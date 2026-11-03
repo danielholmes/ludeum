@@ -25,7 +25,7 @@ public enum PCSX2InstallError: LocalizedError, CustomStringConvertible, Equatabl
     /// The tar held no PCSX2.app.
     case noApp
     case couldntUnpack(String)
-    /// The app in the tar isn't the pinned version.
+    /// The app in the tar isn't the pinned version, or its version couldn't be read (nil).
     case wrongBuild(found: String?)
 
     public var errorDescription: String? { description }
@@ -38,8 +38,10 @@ public enum PCSX2InstallError: LocalizedError, CustomStringConvertible, Equatabl
             "The download isn't PCSX2's release: its SHA-256 is \(found), not \(expected)."
         case .noApp: "The download holds no PCSX2.app."
         case .couldntUnpack(let why): "Couldn't unpack the download: \(why)"
-        case .wrongBuild(let found):
-            "The download is PCSX2 v\(found ?? "?"), not v\(PCSX2Release.pinned.version)."
+        case .wrongBuild(.some(let found)):
+            "The download is PCSX2 v\(found), not v\(PCSX2Release.pinned.version)."
+        case .wrongBuild(nil):
+            "Couldn't read the download's version: its PCSX2 -version printed nothing Ludeum understood within a minute."
         }
     }
 }
