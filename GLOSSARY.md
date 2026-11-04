@@ -203,7 +203,7 @@ _Avoid_: Disagreement (that's about one Game, and needs more evidence)
 ### Playing
 
 **Emulator**:
-The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir itself, in the Ludeum folder at the release it chooses, and none can be Played with until that's done; the others I install. An Emulator's own settings are changed in it, during a Play.
+The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir itself, in the Ludeum folder at the release it chooses, and none can be Played with until that's done; the others I install. Always a whole app, its author's release, never a core run inside Ludeum (ADR 0038). An Emulator's own settings are changed in it, during a Play.
 _Avoid_: Core, player
 
 **Standing settings**:
