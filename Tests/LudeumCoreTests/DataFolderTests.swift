@@ -64,15 +64,12 @@ import Testing
         #expect(ludeum.romFolder(platform: 6) == nil)
     }
 
-    @Test func aDataFolderGivenForOneRunHoldsItsROMsBackupsAndArchive() {
+    @Test func aDataFolderGivenForOneRunHoldsItsROMsAndBackups() {
         let rehearsal = root.appending(path: "rehearsal", directoryHint: .isDirectory)
         let folder = LudeumFolder(url: ludeum.url, data: rehearsal)
 
         #expect(folder.romFolder(platform: 19)?.path(percentEncoded: false) == rehearsal.path(percentEncoded: false) + "ROMs/SNES/")
         #expect(folder.backups.path(percentEncoded: false) == rehearsal.path(percentEncoded: false) + "Backups/")
-        #expect(
-            folder.batterySaveArchive.path(percentEncoded: false) == rehearsal.path(percentEncoded: false)
-                + "OpenEmu Battery Saves archive/")
     }
 
     @Test func theStandardFoldersAreFixed() {

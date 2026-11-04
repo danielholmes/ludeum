@@ -19,7 +19,6 @@ import Foundation
 ///     Emulators/DuckStation/Memory Cards/
 ///     Emulators/DuckStation/BIOS/, Game Settings/, Input Profiles/, Screenshots/
 ///     Emulators/MesenCE/<Platform>/Save States/, Saves/, Screenshots/
-///     OpenEmu Battery Saves archive/
 /// ```
 public struct LudeumFolder: Sendable, Equatable {
     public let url: URL
@@ -61,9 +60,6 @@ public struct LudeumFolder: Sendable, Equatable {
 
     /// DuckStation's memory cards, named as it names them.
     public var duckStationMemoryCards: URL { duckStation(.memoryCards) }
-
-    /// Where the since-removed `migrate-openemu` copied OpenEmu's Game saves, keeping its `<Core>/Battery Saves/` layout.
-    public var batterySaveArchive: URL { data.appending(path: "OpenEmu Battery Saves archive", directoryHint: .isDirectory) }
 
     /// A Platform's ROM folder, named for it under `ROMs/`. Nil for a Platform without one. Created when first needed.
     public func romFolder(platform: Int64) -> URL? {

@@ -7,8 +7,6 @@ public struct StorageStats: Sendable, Equatable {
     /// One row per Platform group with a ROM folder that has anything in it, largest first.
     public var platforms: [PlatformStorage] = []
     public var backups: Int64 = 0
-    /// The battery saves archived from OpenEmu.
-    public var batterySaves: Int64 = 0
     /// Attachments' files.
     public var attachments: Int64 = 0
     /// The live journal, outside the Data folder.
@@ -17,7 +15,7 @@ public struct StorageStats: Sendable, Equatable {
     public var cache: Int64 = 0
 
     /// What I keep in Dropbox.
-    public var dataFolder: Int64 { platforms.reduce(0) { $0 + $1.total } + attachments + backups + batterySaves }
+    public var dataFolder: Int64 { platforms.reduce(0) { $0 + $1.total } + attachments + backups }
     public var total: Int64 { dataFolder + journal + cache }
 
     /// Measures it all. Slow for a big library: run it off the main thread.
@@ -33,7 +31,6 @@ public struct StorageStats: Sendable, Equatable {
         stats.platforms = rows.values.sorted { $0.total > $1.total }
         stats.attachments = Sizes.total(in: folder.attachments)
         stats.backups = Sizes.total(in: folder.backups)
-        stats.batterySaves = Sizes.total(in: folder.batterySaveArchive)
         stats.journal = ["journal.sqlite", "journal.sqlite-wal", "journal.sqlite-shm"]
             .reduce(0) { $0 + Sizes.size(of: folder.url.appending(path: $1)) }
         stats.cache = Sizes.total(in: cache)

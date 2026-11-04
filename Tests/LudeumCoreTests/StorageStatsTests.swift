@@ -195,18 +195,16 @@ import Testing
         try write(7, to: ludeum.url.appending(path: "journal.sqlite"))
         try write(3, to: ludeum.url.appending(path: "journal.sqlite-wal"))
         try write(100, to: ludeum.backups.appending(path: "2026-10-01 journal.sqlite"))
-        try write(20, to: ludeum.batterySaveArchive.appending(path: "Mesen/Battery Saves/Zelda (USA).sav"))
         try write(40, to: cache.appending(path: "covers/1.jpg"))
         try write(9, to: cache.appending(path: "cache.sqlite"))
         try add("Okami (USA).iso", bytes: 1000, to: romFolder(ROMPlatform.ps2))
 
         let stats = StorageStats.measure(ludeum, journal: j.journal, cache: cache)
         #expect(stats.backups == 100)
-        #expect(stats.batterySaves == 20)
-        #expect(stats.dataFolder == 1120)
+        #expect(stats.dataFolder == 1100)
         #expect(stats.journal == 10)
         #expect(stats.cache == 49)
-        #expect(stats.total == 1179)
+        #expect(stats.total == 1159)
     }
 
     @Test func aROMFolderLinkedElsewhereIsMeasuredThroughTheLink() throws {

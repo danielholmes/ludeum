@@ -76,7 +76,6 @@ struct StorageStatsSheet: View {
                 }
                 totalRow(Text("Attachments"), stats.attachments)
                 totalRow(Text("Backups"), stats.backups)
-                totalRow(Text("Battery saves"), stats.batterySaves)
                 Divider()
                 totalRow(Text("Data folder \(Text("in Dropbox").foregroundStyle(.secondary))"), stats.dataFolder).font(.headline)
                 totalRow(Text("Journal"), stats.journal)
