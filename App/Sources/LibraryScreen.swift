@@ -18,6 +18,9 @@ struct LibraryScreen: View {
     /// Cover width in the Covers view, in points.
     @AppStorage(CoverTileSize.widthKey) private var coverWidth = CoverTileSize.defaultWidth
     @State private var rows: [LibraryRow] = []
+    /// The order `rows` came in, set along with them. The table starts afresh when it changes: moving its rows into a new
+    /// order can keep the main thread for a minute (`NSTableView` building and removing a view for row after row).
+    @State private var rowsOrder: RowsOrder?
     @State private var platforms: [IGDBPlatform] = []
     @State private var players: [Player] = []
     @State private var error: String?
@@ -101,6 +104,7 @@ struct LibraryScreen: View {
                     TableColumn("Childhood", sortUsing: KeyPathComparator(\LibraryRow.childhoodSortKey)) { Text($0.childhood ? "Yes" : "") }
                         .width(70)
                 }
+                .id(rowsOrder)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -166,6 +170,11 @@ struct LibraryScreen: View {
             })
     }
 
+    private struct RowsOrder: Hashable {
+        let sort: LibrarySort
+        let ascending: Bool
+    }
+
     private struct Reload: Equatable {
         let revision: Int
         let filter: LibraryFilter
@@ -188,6 +197,7 @@ struct LibraryScreen: View {
                 // A newer reload has started: its rows win.
                 guard !Task.isCancelled else { return }
                 rows = found
+                rowsOrder = RowsOrder(sort: sort, ascending: ascending)
                 loaded = true
                 // The Year, IGDB and LaunchBox columns and the Add filter menu's genres and themes can follow.
                 facts = await services.memory.facts(services)
@@ -206,6 +216,7 @@ struct LibraryScreen: View {
                 }
                 guard !Task.isCancelled else { return }
                 rows = found
+                rowsOrder = RowsOrder(sort: sort, ascending: ascending)
                 loaded = true
             }
             (platforms, players) = try filterChoices(journal)
