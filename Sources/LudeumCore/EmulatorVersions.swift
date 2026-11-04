@@ -65,7 +65,8 @@ extension Emulator {
         // Its `--version` works, but the app version is the same, and running it rewrites its settings.
         case .ares: EmulatorVersionSpec(expected: AresRelease.pinned.version, source: .appVersion, warnsOnNewerMajor: false, exact: true)
         case .melonDS: EmulatorVersionSpec(expected: "1.1", source: .appVersion)
-        case .ymir: EmulatorVersionSpec(expected: "0.3.3", source: .appVersion)
+        // Its app's version needs no process, and it has no version flag: an unknown option stops it with an error.
+        case .ymir: EmulatorVersionSpec(expected: YmirRelease.pinned.version, source: .appVersion, exact: true)
         case .ppsspp: EmulatorVersionSpec(expected: "1.20.4", source: .commandLine("--version"))
         // Its `-version` prints and exits before it touches its settings or data root. Its binary is x86_64, which Rosetta
         // translates, with its 26 libraries, the first time it runs: about ten seconds on this Mac for a freshly

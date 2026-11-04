@@ -29,15 +29,17 @@ public struct Play: Sendable {
         case couldntWriteSettings(Emulator, String)
         /// An Xbox ROM that's a full Redump image, which xemu can't boot.
         case needsXISO
-        /// DuckStation, MesenCE, ares or PCSX2 is open: Ludeum writes its settings before each Play, which an open
-        /// DuckStation, ares or PCSX2 would write over (ADRs 0024, 0028, 0032) and an open MesenCE wouldn't read (ADR 0027).
+        /// DuckStation, MesenCE, ares, PCSX2 or Ymir is open: Ludeum writes its settings before each Play, which an open
+        /// DuckStation, ares, PCSX2 or Ymir would write over (ADRs 0024, 0028, 0032, 0036) and an open MesenCE wouldn't read
+        /// (ADR 0027).
         case running(Emulator)
-        /// DuckStation, MesenCE, ares or PCSX2 is being installed, so there's nothing to open yet.
+        /// DuckStation, MesenCE, ares, PCSX2 or Ymir is being installed, so there's nothing to open yet.
         case installing(Emulator)
         /// The installed Emulator's build needs a library from Homebrew that isn't installed (MesenCE 2.2.1's SDL2).
         case needs(Emulator, HomebrewLibrary)
-        /// PCSX2 has no PlayStation 2 BIOS to boot with: none in the Data folder's BIOS folder, at this path (ADR 0032).
-        case noBIOS(String)
+        /// PCSX2 or Ymir has no BIOS of this Platform's to boot with: none in the Data folder's BIOS folder, at this path
+        /// (ADRs 0032, 0036).
+        case noBIOS(platform: String, folder: String)
         /// An Amiga ROM that isn't Compacted: Amiberry would write a game's saves into its loose disk (ADR 0035).
         case needsCompacting
         /// An Amiga ROM's disks couldn't be listed from its archive or their save images made, with why.
@@ -69,7 +71,7 @@ public struct Play: Sendable {
             case .installing(let emulator): "\(emulator.name) is being installed."
             case .needs(let emulator, let library):
                 "\(emulator.name) needs \(library.name), which isn't installed: install it with `\(library.install)`, then Play."
-            case .noBIOS(let folder): "No PlayStation 2 BIOS. Put one in \(folder), then Play."
+            case .noBIOS(let platform, let folder): "No \(platform) BIOS. Put one in \(folder), then Play."
             case .needsCompacting: "Compact it to Play: a game saves to its disk, and a loose disk would be written over."
             case .couldntGetDisksReady(let why): "Couldn't get its disks ready: \(why)"
             }
@@ -233,14 +235,15 @@ public struct Play: Sendable {
     }
 
     /// What a press of Play does. It writes the settings files of an Emulator that takes them only
-    /// that way. `app` finds an installed app by its bundle identifier; DuckStation, MesenCE, ares, PCSX2 and Amiberry are
-    /// the ones Ludeum installs (`duckStation.app`, `mesen.app`, `ares.app`, `pcsx2.app`, `amiberry.app`), refused while any
-    /// copy is `running`, and PCSX2 until it has a BIOS. `saveState` starts the Play from that state, DuckStation's on its
-    /// own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on.
+    /// that way. `app` finds an installed app by its bundle identifier; DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir
+    /// are the ones Ludeum installs (`duckStation.app`, `mesen.app`, `ares.app`, `pcsx2.app`, `amiberry.app`, `ymir.app`),
+    /// refused while any copy is `running`, and PCSX2 and Ymir until they have a BIOS. `saveState` starts the Play from that
+    /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on.
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
-        pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), running: (Emulator) -> Bool = { _ in false }
+        pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), ymir: YmirSettings = .init(),
+        running: (Emulator) -> Bool = { _ in false }
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -265,8 +268,17 @@ public struct Play: Sendable {
         } else if emulator == .pcsx2 {
             guard pcsx2.isInstalled else { return .refused(.notInstalled(emulator)) }
             if running(emulator) { return .refused(.running(emulator)) }
-            guard pcsx2.hasBIOS else { return .refused(.noBIOS(pcsx2.ludeum.pcsx2BIOS.path(percentEncoded: false))) }
+            guard pcsx2.hasBIOS else {
+                return .refused(.noBIOS(platform: "PlayStation 2", folder: pcsx2.ludeum.pcsx2BIOS.path(percentEncoded: false)))
+            }
             app = pcsx2.app
+        } else if emulator == .ymir {
+            guard ymir.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if running(emulator) { return .refused(.running(emulator)) }
+            guard ymir.hasBIOS else {
+                return .refused(.noBIOS(platform: "Saturn", folder: ymir.ludeum.ymir(.bios).path(percentEncoded: false)))
+            }
+            app = ymir.app
         } else if emulator == .amiberry {
             guard amiberry.isInstalled else { return .refused(.notInstalled(emulator)) }
             if running(emulator) { return .refused(.running(emulator)) }
@@ -309,7 +321,7 @@ public struct Play: Sendable {
         do {
             let arguments = try emulator.arguments(
                 rom: opened, platformId: platformId, settings: settings, saveState: saveState,
-                duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2, amiberry: amiberry)
+                duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2, amiberry: amiberry, ymir: ymir)
             return .open(
                 app: app, arguments: arguments, warning: warning, startsOn: startsOn,
                 environment: emulator == .amiberry ? amiberry.environment : [:])

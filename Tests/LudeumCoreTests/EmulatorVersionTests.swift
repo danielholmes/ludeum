@@ -61,8 +61,11 @@ import Testing
         // ares is the copy Ludeum installs: older and newer alike are installed again.
         #expect(EmulatorVersions.check(found: "v147", for: .ares) == .wrongBuild(found: "147"))
         #expect(EmulatorVersions.check(found: "ares v200", for: .ares) == .wrongBuild(found: "200"))
-        // App versions: Ymir and melonDS have no version flag (Ymir's `--version` opens its window), and Dolphin's matches its flag.
-        #expect(EmulatorVersions.check(found: "0.3.3", for: .ymir) == .ok)
+        // Ymir is the copy Ludeum installs too, by its app's version, as it has no version flag.
+        #expect(EmulatorVersions.check(found: "0.4.1", for: .ymir) == .ok)
+        #expect(EmulatorVersions.check(found: "0.3.3", for: .ymir) == .wrongBuild(found: "0.3.3"))
+        #expect(EmulatorVersions.check(found: "0.4.2", for: .ymir) == .wrongBuild(found: "0.4.2"))
+        // App versions: melonDS has no version flag, and Dolphin's matches its flag.
         #expect(EmulatorVersions.check(found: "1.1", for: .melonDS) == .ok)
         #expect(EmulatorVersions.check(found: "2609", for: .dolphin) == .ok)
         #expect(EmulatorVersions.check(found: "Dolphin 2609", for: .dolphin) == .ok)

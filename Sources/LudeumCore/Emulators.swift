@@ -20,8 +20,10 @@ public struct Emulator: Sendable, Hashable {
     public static let all: [Emulator] = [.mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu, .amiberry]
 
     /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024), MesenCE (ADR 0027),
-    /// ares (ADR 0028), PCSX2 (ADR 0032) and Amiberry (ADR 0035).
-    public var isLudeums: Bool { self == .duckStation || self == .mesenCE || self == .ares || self == .pcsx2 || self == .amiberry }
+    /// ares (ADR 0028), PCSX2 (ADR 0032), Amiberry (ADR 0035) and Ymir (ADR 0036).
+    public var isLudeums: Bool {
+        self == .duckStation || self == .mesenCE || self == .ares || self == .pcsx2 || self == .amiberry || self == .ymir
+    }
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
@@ -49,11 +51,13 @@ public struct Emulator: Sendable, Hashable {
     /// settings, as a Game's own are set in the Emulator (ADRs 0029, 0032). MesenCE's and ares's Standing settings go into
     /// their own settings files (`MesenSettings`, `AresSettings`), the Game's own on their command lines. DuckStation,
     /// MesenCE, ares and PCSX2 start from a `saveState`. Amiberry's are all for the one launch, with its disks' save images
-    /// made first (`AmiberrySettings`).
+    /// made first (`AmiberrySettings`). Ymir's go into its own settings file, with what's in its first port for this Disc
+    /// (`YmirSettings`).
     public func arguments(
         rom: URL, platformId: Int64, settings: EmulatorSettings, saveState: URL? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
-        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init()
+        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(),
+        ymir: YmirSettings = .init()
     ) throws -> [String] {
         switch self {
         case .amiberry:
@@ -72,7 +76,9 @@ public struct Emulator: Sendable, Hashable {
             ]
         case .ares:
             try ares.arguments(rom: rom, platformId: platformId, settings: settings, saveState: saveState)
-        case .melonDS, .ymir:
+        case .ymir:
+            try ymir.arguments(rom: rom)
+        case .melonDS:
             // No settings: it just opens the Game.
             [rom.path(percentEncoded: false)]
         case .pcsx2:
@@ -283,6 +289,11 @@ enum Ini {
     /// the top of the section (else in a new section at the top) unless it's there already.
     static func including(_ value: String, as key: String, in section: String, of ini: String) -> String {
         values(key, in: section, of: ini).contains(value) ? ini : inserting("\(key) = \(value)", in: section, into: lines(of: ini))
+    }
+
+    /// Whether `ini` has a `[section]`.
+    static func hasSection(_ section: String, in ini: String) -> Bool {
+        lines(of: ini).contains { trimmed($0) == "[\(section)]" }
     }
 
     /// `lines` with `setting` at the top of `[section]`, else in a new section at the top, as one text.

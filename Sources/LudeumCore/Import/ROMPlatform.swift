@@ -64,6 +64,7 @@ public struct ROMPlatform: Sendable, Equatable {
 
     public static let ps1: Int64 = 7
     public static let ps2: Int64 = 8
+    public static let saturn: Int64 = 32
     public static let psp: Int64 = 38
     public static let vita: Int64 = 46
     public static let xbox: Int64 = 11
@@ -132,8 +133,10 @@ public struct ROMPlatform: Sendable, Equatable {
         78: .init(
             name: "Sega CD", folderName: "Sega CD", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"],
             archiving: .intoFolder, naming: .redump),
+        // What Ymir opens of these: not a playlist, so a multi-disc ROM opens at Disc 1's cue sheet and changes Disc in
+        // Ymir, and not a `.bin` without its cue sheet (ADR 0036).
         32: .init(
-            name: "Sega Saturn", folderName: "Saturn", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"],
+            name: "Sega Saturn", folderName: "Saturn", readyExtensions: ["chd", "cue", "iso"],
             archiving: .intoFolder, naming: .redump),
         150: .init(
             name: "Turbografx-16/PC Engine CD", folderName: "PC Engine CD", readyExtensions: ["m3u", "chd", "cue", "bin"],

@@ -57,8 +57,8 @@ public enum Serials: Sendable, Equatable {
         return String(decoding: try! JSONEncoder().encode(serials), as: UTF8.self)
     }
 
-    /// The Platforms whose ROMs' Serials are read: PlayStation (ADR 0021) and PlayStation 2 (ADR 0032).
-    static let platforms: Set<Int64> = [ROMPlatform.ps1, ROMPlatform.ps2]
+    /// The Platforms whose ROMs' Serials are read: PlayStation (ADR 0021), PlayStation 2 (ADR 0032) and Saturn (ADR 0036).
+    static let platforms: Set<Int64> = [ROMPlatform.ps1, ROMPlatform.ps2, ROMPlatform.saturn]
 
     /// Forms a Disc is kept in whose Serials aren't read yet.
     static let unreadForms: Set<String> = ["chd", "pbp"]
