@@ -72,11 +72,6 @@ import Testing
     #expect(try Emulator.dolphin.arguments(rom: rom, platformId: 5, settings: EmulatorSettings()).suffix(2) == ["-e", rom.path])
 }
 
-@Test func ymirJustOpensTheDisc() throws {
-    let rom = URL(filePath: "/Games/Saturn/Panzer Dragoon Saga (USA) (Disc 1).cue")
-    #expect(try Emulator.ymir.arguments(rom: rom, platformId: 32, settings: EmulatorSettings()) == [rom.path(percentEncoded: false)])
-}
-
 @Test func melonDSJustOpensTheGame() throws {
     let rom = URL(filePath: "/Games/DS/Advance Wars - Dual Strike (USA).nds")
     #expect(
@@ -275,7 +270,7 @@ import Testing
                 == .running(.pcsx2))
         #expect(
             play.prepare(locator: locator, version: .ok, app: { _ in nil }, pcsx2: settings).refusal
-                == .noBIOS(ludeum.pcsx2BIOS.path(percentEncoded: false)))
+                == .noBIOS(platform: "PlayStation 2", folder: ludeum.pcsx2BIOS.path(percentEncoded: false)))
 
         try FileManager.default.createDirectory(at: ludeum.pcsx2BIOS, withIntermediateDirectories: true)
         try Data(repeating: 0, count: 64).write(to: ludeum.pcsx2BIOS.appending(path: "SCPH-39001.bin"))

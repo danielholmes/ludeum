@@ -79,21 +79,21 @@ import Testing
                     warning: nil))
     }
     @Test func aMultiDiscVersionOpensItsPlaylist() throws {
-        // Saturn, in Ymir, which takes no settings at all.
-        let saturn = try FakeROMFolder(in: directory, platform: 32)
-        try saturn.add("Game (Disc 1).cue")
-        let playlist = try saturn.add("Game.m3u")
+        // GameCube, in Dolphin, which reads a playlist and isn't one Ludeum installs.
+        let gameCube = try FakeROMFolder(in: directory, platform: 21)
+        try gameCube.add("Game (Disc 1).iso")
+        let playlist = try gameCube.add("Game.m3u")
         func rom(_ id: Int64, _ fileName: String) -> LudeumROM {
             let name = (fileName as NSString).deletingPathExtension
             return LudeumROM(
-                id: id, folderName: name, platformId: 32, fileName: fileName, name: name, version: "", disc: nil, missing: false,
+                id: id, folderName: name, platformId: 21, fileName: fileName, name: name, version: "", disc: nil, missing: false,
                 archived: false)
         }
 
         let outcome = Play(
-            platformId: 32, platformName: "Sega Saturn", roms: [rom(1, "Game (Disc 1).cue"), rom(2, "Game.m3u")], settings: .init()
+            platformId: 21, platformName: "Nintendo GameCube", roms: [rom(1, "Game (Disc 1).iso"), rom(2, "Game.m3u")], settings: .init()
         )
-        .prepare(locator: ROMLocator(romFolders: [saturn.folder]), version: .ok, app: { _ in URL(filePath: "/Applications/Ymir.app") })
+        .prepare(locator: ROMLocator(romFolders: [gameCube.folder]), version: .ok, app: { _ in URL(filePath: "/Applications/Dolphin.app") })
 
         #expect(outcome.arguments?.last == playlist.path(percentEncoded: false))
     }

@@ -220,6 +220,10 @@ struct GameDetailView: View {
                     state in play(in: .pcsx2, from: state.file)
                 }
             }
+            // Save states and Game saves: Ymir's, by the ROMs' Serials, in the Data folder.
+            if !game.isBundle, emulator == .ymir, !saveStateSerials.isEmpty {
+                YmirSavesSection(services: services, serials: saveStateSerials)
+            }
             // Save states and Game saves: MesenCE's, in its Platform's folders in the Data folder.
             if !game.isBundle, emulator == .mesenCE, playROMs.contains(where: { !$0.missing && !$0.archived }) {
                 MesenSavesSection(

@@ -81,7 +81,7 @@ enum ROMSerials {
             var serials: [String?] = []
             for disc in discs {
                 guard let track = try await dataTrack(of: disc, in: files) else { return nil }
-                serials.append(try await serial(of: track, in: files))
+                serials.append(try await serial(of: track, in: files, platformId: folder.platformId))
             }
             return serials
         } catch {
@@ -98,12 +98,17 @@ enum ROMSerials {
         return try await files.firstTrack(of: disc)
     }
 
-    private static func serial(of track: String, in files: Files) async throws -> String? {
+    /// A disc's Serial through `read`, as its Platform's discs say one.
+    private static func serial(platformId: Int64, read: @escaping (Range<Int>) throws -> Data) throws -> String? {
+        platformId == ROMPlatform.saturn ? try SaturnDisc.serial(read: read) : try PlayStationDisc.serial(read: read)
+    }
+
+    private static func serial(of track: String, in files: Files, platformId: Int64) async throws -> String? {
         switch files {
         case .folder:
             let handle = try Files.open(track)
             defer { try? handle.close() }
-            return try PlayStationDisc.serial { range in
+            return try serial(platformId: platformId) { range in
                 try handle.seek(toOffset: UInt64(range.lowerBound))
                 return try handle.read(upToCount: range.count) ?? Data()
             }
@@ -112,7 +117,7 @@ enum ROMSerials {
             var read = [(start: 0, data: try await sevenZip.bytes(of: track, in: archive, count: firstRead))]
             for _ in 0...windows {
                 do {
-                    return try PlayStationDisc.serial { range in
+                    return try serial(platformId: platformId) { range in
                         let range = range.clamped(to: 0..<max(size, 0))
                         guard !range.isEmpty else { return Data() }
                         guard

@@ -4,9 +4,9 @@ import SwiftUI
 
 /// Each installed Emulator's version, checked once per launch in the background: Play is refused
 /// for one older than Ludeum expects, and warns (once per launch) about a newer major version or
-/// one that couldn't be read. DuckStation (ADR 0024), MesenCE (ADR 0027), ares (ADR 0028), PCSX2 (ADR 0032) and Amiberry
-/// (ADR 0035) are copies Ludeum installs, checked again after each Install: Play is refused until each is there, Ludeum's
-/// own and the pinned build.
+/// one that couldn't be read. DuckStation (ADR 0024), MesenCE (ADR 0027), ares (ADR 0028), PCSX2 (ADR 0032), Amiberry
+/// (ADR 0035) and Ymir (ADR 0036) are copies Ludeum installs, checked again after each Install: Play is refused until each
+/// is there, Ludeum's own and the pinned build.
 @Observable @MainActor final class EmulatorVersionChecks {
     /// By bundle identifier; an Emulator that isn't installed, or isn't checked yet, has none.
     private(set) var results: [String: VersionCheck] = [:]
@@ -66,6 +66,10 @@ import SwiftUI
             // Nothing beside the app says it's Ludeum's: its home folder is given at each Play.
             let settings = AmiberrySettings(ludeum: folder)
             (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, true)
+        } else if emulator == .ymir {
+            // Nothing beside the app says it's Ludeum's: its profile is given at each Play.
+            let settings = YmirSettings(ludeum: folder)
+            (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, true)
         } else {
             let settings = DuckStationSettings(ludeum: folder)
             (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, settings.isPortable)
@@ -87,7 +91,7 @@ import SwiftUI
     /// Whether an Emulator Ludeum installs is being installed now.
     func isInstalling(_ emulator: Emulator, tasks: BackgroundTasks) -> Bool { tasks.isActive(.emulator(emulator)) }
 
-    /// Installs the pinned DuckStation, MesenCE, ares, PCSX2 or Amiberry as a Background task, then checks it again.
+    /// Installs the pinned DuckStation, MesenCE, ares, PCSX2, Amiberry or Ymir as a Background task, then checks it again.
     /// Installing replaces it, so a task that gets its turn while it's open fails rather than pull the app from under it.
     func install(_ emulator: Emulator, tasks: BackgroundTasks) {
         let folder = folder
@@ -101,6 +105,8 @@ import SwiftUI
                 try await PCSX2Installer(ludeum: folder).install(progress: progress)
             } else if emulator == .amiberry {
                 try await AmiberryInstaller(ludeum: folder).install(progress: progress)
+            } else if emulator == .ymir {
+                try await YmirInstaller(ludeum: folder).install(progress: progress)
             } else {
                 try await DuckStationInstaller(ludeum: folder).install(progress: progress)
             }
@@ -120,7 +126,7 @@ import SwiftUI
             return "\(emulator.name) \(found) is older than \(expected), which Ludeum needs. Update \(emulator.name) to Play."
         case .wrongBuild where emulator == .mesenCE:
             return "MesenCE isn't the \(expected) release Ludeum installs. Install it again from Ludeum ▸ Emulators… to Play."
-        case .wrongBuild(let found) where emulator == .ares || emulator == .pcsx2 || emulator == .amiberry:
+        case .wrongBuild(let found) where emulator == .ares || emulator == .pcsx2 || emulator == .amiberry || emulator == .ymir:
             return "\(emulator.name) is v\(found), and Ludeum installs v\(expected). Install it again from Ludeum ▸ Emulators… to Play."
         case .wrongBuild(let found):
             return
@@ -177,8 +183,9 @@ struct SystemToolsOnLaunch: ViewModifier {
 }
 
 /// Every Emulator Ludeum plays Games in, with what the launch check found: whether it's installed,
-/// the version Ludeum needs against the one installed, and the Platforms it plays. DuckStation, MesenCE, ares, PCSX2 and
-/// Amiberry are installed from here. No Emulator is opened from here: its own settings are reached during a Play (ADR 0027).
+/// the version Ludeum needs against the one installed, and the Platforms it plays. DuckStation, MesenCE, ares, PCSX2,
+/// Amiberry and Ymir are installed from here. No Emulator is opened from here: its own settings are reached during a Play
+/// (ADR 0027).
 struct EmulatorsSheet: View {
     let services: Services
     @Environment(\.dismiss) private var dismiss
@@ -217,12 +224,12 @@ struct EmulatorsSheet: View {
             Text(
                 "Checked when Ludeum opens. An Emulator older than it needs can't Play; "
                     + "a newer major version, or one whose version can't be read, gets a warning the first time it Plays. "
-                    + "DuckStation, MesenCE, ares, PCSX2 and Amiberry are Ludeum's own copies, installed here at the release Ludeum "
-                    + "needs and kept in the Ludeum folder: their save states and game saves live in the Data folder, MesenCE's apart "
-                    + "for each Platform and ares's for each of its systems. PCSX2 needs a PlayStation 2 BIOS in the Data folder's "
-                    + "Emulators/PCSX2/BIOS before it can Play, and ares a Sega CD BIOS in Emulators/ares/BIOS, named Mega CD US.bin, "
-                    + "Mega CD Japan.bin or Mega CD Europe.bin, before a Sega CD Game can. Amiberry plays on its own AROS until there's a Kickstart in "
-                    + "Emulators/Amiberry/ROMs. "
+                    + "DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir are Ludeum's own copies, installed here at the release "
+                    + "Ludeum needs and kept in the Ludeum folder: their save states and game saves live in the Data folder, MesenCE's "
+                    + "apart for each Platform and ares's for each of its systems. PCSX2 needs a PlayStation 2 BIOS in the Data folder's "
+                    + "Emulators/PCSX2/BIOS before it can Play, Ymir a Saturn BIOS in Emulators/Ymir/BIOS, and ares a Sega CD BIOS in "
+                    + "Emulators/ares/BIOS, named Mega CD US.bin, Mega CD Japan.bin or Mega CD Europe.bin, before a Sega CD Game can. "
+                    + "Amiberry plays on its own AROS until there's a Kickstart in Emulators/Amiberry/ROMs. "
                     + "An Emulator's own settings are changed in it during a Play."
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -270,8 +277,8 @@ struct EmulatorsSheet: View {
         }
     }
 
-    /// Installs the pinned DuckStation, MesenCE, ares, PCSX2 or Amiberry into the Ludeum folder, or installs it again over
-    /// the copy there.
+    /// Installs the pinned DuckStation, MesenCE, ares, PCSX2, Amiberry or Ymir into the Ludeum folder, or installs it again
+    /// over the copy there.
     private func installButton(_ emulator: Emulator) -> some View {
         let installed = !checks.notInstalled.contains(emulator.bundleIdentifier)
         let release =
@@ -280,6 +287,7 @@ struct EmulatorsSheet: View {
             case .ares: "v\(AresRelease.pinned.version)"
             case .pcsx2: "v\(PCSX2Release.pinned.version)"
             case .amiberry: "v\(AmiberryRelease.pinned.version)"
+            case .ymir: "v\(YmirRelease.pinned.version)"
             default: "build \(DuckStationRelease.pinned.build)"
             }
         return Button(installed ? "Reinstall" : "Install") {
@@ -306,7 +314,7 @@ struct EmulatorsSheet: View {
 }
 
 extension Emulator {
-    /// Any copy of it is open, Ludeum's or another. DuckStation, ares, PCSX2 and Amiberry rewrite their settings files
+    /// Any copy of it is open, Ludeum's or another. DuckStation, ares, PCSX2, Amiberry and Ymir rewrite their settings files
     /// whole from memory, and MesenCE reads its own once, so Ludeum doesn't write them, or replace the app, meanwhile.
     @MainActor var isRunning: Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).isEmpty }
 }

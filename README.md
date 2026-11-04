@@ -60,7 +60,7 @@ Each platform's ROMs go in `Data/ROMs/<Platform>/`, for example `Data/ROMs/SNES/
 
 Ludeum doesn't include any games, BIOS files or emulators. Supply your own legally obtained ROMs and BIOS files, and set up BIOS, controllers and video in each emulator. Ludeum keeps those settings, and sets each game's own settings for that Play only.
 
-Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found. DuckStation, MesenCE, ares, PCSX2 and Amiberry are the exception: Ludeum installs its own copy of each from there, at exactly the version below, into its own folder, so nothing it keeps is shared with any other copy on your Mac. Their settings are still yours to make in each, during a Play, apart from where they keep things and a few Ludeum fixes for every game. MesenCE 2.2.1 needs SDL2 (`brew install sdl2`). PCSX2's release is built for Intel, so it needs Rosetta 2, and a PlayStation 2 BIOS in the Data folder's `Emulators/PCSX2/BIOS` before it can play. Amiberry plays on its bundled AROS until there's a Kickstart in the Data folder's `Emulators/Amiberry/ROMs`, which some games need. An Amiga game saves to its disk, so an Amiga ROM is kept in a `.7z` that's never written to, with what the game saves in `Emulators/Amiberry/Saved Disks`.
+Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found. DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir are the exception: Ludeum installs its own copy of each from there, at exactly the version below, into its own folder, so nothing it keeps is shared with any other copy on your Mac. Their settings are still yours to make in each, during a Play, apart from where they keep things and a few Ludeum fixes for every game. MesenCE 2.2.1 needs SDL2 (`brew install sdl2`). PCSX2's release is built for Intel, so it needs Rosetta 2, and a PlayStation 2 BIOS in the Data folder's `Emulators/PCSX2/BIOS` before it can play. Amiberry plays on its bundled AROS until there's a Kickstart in the Data folder's `Emulators/Amiberry/ROMs`, which some games need. An Amiga game saves to its disk, so an Amiga ROM is kept in a `.7z` that's never written to, with what the game saves in `Emulators/Amiberry/Saved Disks`. Ymir needs a Saturn BIOS in the Data folder's `Emulators/Ymir/BIOS` before it can play, and can't be started from a save state, so its states load with its own keys once a game is running. A disc that lists the Virtua Gun is played with the mouse: left click to shoot, right click to reload.
 
 | Platform | Emulator | Version |
 | --- | --- | --- |
@@ -71,7 +71,7 @@ Install the emulator for each platform you want to play. Ludeum checks each emul
 | Nintendo 64, Mega Drive / Genesis, Sega CD | [ares](https://ares-emu.net), installed by Ludeum | v148 |
 | GameCube, Wii | [Dolphin](https://dolphin-emu.org) | 2609 |
 | Nintendo DS | [melonDS](https://melonds.kuribo64.net) | 1.1 |
-| Saturn | [Ymir](https://github.com/StrikerX3/Ymir) | 0.3.3 |
+| Saturn | [Ymir](https://github.com/ymir-emu/Ymir), installed by Ludeum | 0.4.1 |
 | Xbox | [xemu](https://xemu.app) | 0.8.136 |
 | Amiga | [Amiberry](https://amiberry.com), installed by Ludeum | 8.5.0 |
 
@@ -85,7 +85,7 @@ Ludeum also uses these command-line tools, and warns at launch if one is missing
 
 Cartridge ROMs (and DS) can be kept in a `.7z`, or a `.zip` for N64 and Mega Drive, since their emulators open those directly; the Review queue lists loose ones and compacts them for you. A ROM packed in a format its emulator can't open (for example a `.7z` disc image) shows as archived. Unarchive it in Game detail (PS1, PS2, PSP, Vita, GameCube, Wii, Xbox, Sega CD, Saturn and PC Engine CD) or extract it in its ROM folder to make it playable.
 
-On the disc platforms (PS1, Sega CD, Saturn and PC Engine CD), each ROM is a subfolder named after it. A multi-disc game's subfolder holds its discs and an `.m3u` playlist that loads them. Add ROM writes the playlist; a folder put in by hand without one, then Added from the Review queue, can't be played until it has one.
+On the disc platforms (PS1, Sega CD, Saturn and PC Engine CD), each ROM is a subfolder named after it. A multi-disc game's subfolder holds its discs and an `.m3u` playlist that loads them. Add ROM writes the playlist; a folder put in by hand without one, then Added from the Review queue, can't be played until it has one. Saturn is the exception: Ymir reads no playlist, so a multi-disc game opens at Disc 1, and its disc is changed in Ymir.
 
 ## License
 
