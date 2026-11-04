@@ -14,6 +14,9 @@ extension LudeumFolder {
 
     /// Where ares keeps screenshots, in a folder for each kind of machine it plays, as its saves.
     public var aresScreenshots: URL { data.appending(path: "Emulators/ares/Screenshots", directoryHint: .isDirectory) }
+
+    /// Where the Sega CD's BIOS files go, a file named for each region (ADR 0037).
+    public var aresBIOS: URL { data.appending(path: "Emulators/ares/BIOS", directoryHint: .isDirectory) }
 }
 
 /// The ares Ludeum installs and keeps (ADR 0028): `Emulators/ares/ares.app` in the Ludeum folder, made portable by a
@@ -24,6 +27,9 @@ extension LudeumFolder {
 /// seconds of play. ares rewrites the whole file when it starts and quits, so they're only written while it isn't
 /// running. Everything else in the file is ares's own, and what's changed in it during a Play lasts. Run-ahead, the
 /// Game's own, is a `--setting` for that launch, which ares puts back when it quits.
+///
+/// The Sega CD's BIOS files are Standing settings too (ADR 0037): each file in the BIOS folder named for a region is that
+/// region's. ares reads whatever path it's given, and only its Scan knows its digests, which the US BIOS here doesn't match.
 public struct AresSettings: Sendable {
     /// The ares.app Ludeum installs.
     public let app: URL
@@ -49,11 +55,23 @@ public struct AresSettings: Sendable {
     /// Its `settings.bml` is beside it, so its settings are its own.
     public var isPortable: Bool { FileManager.default.fileExists(atPath: settingsFile.path(percentEncoded: false)) }
 
+    /// The Sega CD's BIOS files by what ares calls each region: which it needs goes by the disc.
+    static let segaCDBIOS: KeyValuePairs<String, String> = [
+        "US": "Mega CD US.bin", "Japan": "Mega CD Japan.bin", "Europe": "Mega CD Europe.bin",
+    ]
+
+    /// A Sega CD BIOS to boot with. A disc of a region with none gets ares's own message, which names the region.
+    public var hasSegaCDBIOS: Bool {
+        Self.segaCDBIOS.contains {
+            FileManager.default.fileExists(atPath: ludeum.aresBIOS.appending(path: $0.value).path(percentEncoded: false))
+        }
+    }
+
     /// The system ares plays a Platform's Games as, which `--system` names.
     static func system(_ platformId: Int64) -> String {
         switch platformId {
         case 4: "Nintendo 64"
-        case 78: "Mega CD"  // Sega CD
+        case ROMPlatform.segaCD: "Mega CD"
         default: "Mega Drive"
         }
     }
@@ -73,7 +91,7 @@ public struct AresSettings: Sendable {
     /// controls aren't written over. The file is left alone when it already says so.
     public func writeStanding() throws {
         try ludeum.checkData()
-        for folder in [ludeum.aresSaves, ludeum.aresScreenshots] {
+        for folder in [ludeum.aresSaves, ludeum.aresScreenshots, ludeum.aresBIOS] {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         }
         let original = isPortable ? try String(contentsOf: settingsFile, encoding: .utf8) : nil
@@ -91,6 +109,11 @@ public struct AresSettings: Sendable {
         }
         var bml = BML.setting("Paths/Saves", to: path(ludeum.aresSaves), in: bml)
         bml = BML.setting("Paths/Screenshots", to: path(ludeum.aresScreenshots), in: bml)
+        bml = BML.setting("Paths/Firmware", to: path(ludeum.aresBIOS), in: bml)
+        for (region, name) in segaCDBIOS {
+            let file = ludeum.aresBIOS.appending(path: name).path(percentEncoded: false)
+            if FileManager.default.fileExists(atPath: file) { bml = BML.setting("MegaCD/Firmware/BIOS.\(region)", to: file, in: bml) }
+        }
         return BML.setting("General/AutoSaveMemory", to: "true", in: bml)
     }
 }

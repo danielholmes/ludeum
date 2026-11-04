@@ -153,6 +153,8 @@ public struct ROMSource: Sendable, Equatable {
         if platforms.count == 1 { return platforms[0] }
         guard urls.count == 1, !isFolder, archive == nil else { return nil }
         let ext = urls[0].pathExtension.lowercased()
+        // The Sega CD's Emulator prefers a `.chd`, but every disc Platform reads one, so it says nothing of which it's for.
+        guard ext != "chd" else { return nil }
         let preferring = platforms.filter { ROMPlatform.all[$0]?.readyExtensions.first == ext }
         return preferring.count == 1 ? preferring[0] : nil
     }

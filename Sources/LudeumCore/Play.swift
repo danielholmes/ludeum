@@ -38,6 +38,8 @@ public struct Play: Sendable {
         case needs(Emulator, HomebrewLibrary)
         /// PCSX2 has no PlayStation 2 BIOS to boot with: none in the Data folder's BIOS folder, at this path (ADR 0032).
         case noBIOS(String)
+        /// ares has no Sega CD BIOS to boot with: none named for a region in this folder (ADR 0037).
+        case noSegaCDBIOS(String)
         /// An Amiga ROM that isn't Compacted: Amiberry would write a game's saves into its loose disk (ADR 0035).
         case needsCompacting
         /// An Amiga ROM's disks couldn't be listed from its archive or their save images made, with why.
@@ -70,6 +72,8 @@ public struct Play: Sendable {
             case .needs(let emulator, let library):
                 "\(emulator.name) needs \(library.name), which isn't installed: install it with `\(library.install)`, then Play."
             case .noBIOS(let folder): "No PlayStation 2 BIOS. Put one in \(folder), then Play."
+            case .noSegaCDBIOS(let folder):
+                "No Sega CD BIOS. Put one in \(folder), named Mega CD US.bin, Mega CD Japan.bin or Mega CD Europe.bin, then Play."
             case .needsCompacting: "Compact it to Play: a game saves to its disk, and a loose disk would be written over."
             case .couldntGetDisksReady(let why): "Couldn't get its disks ready: \(why)"
             }
@@ -261,6 +265,9 @@ public struct Play: Sendable {
         } else if emulator == .ares {
             guard ares.isInstalled else { return .refused(.notInstalled(emulator)) }
             if running(emulator) { return .refused(.running(emulator)) }
+            if platformId == ROMPlatform.segaCD, !ares.hasSegaCDBIOS {
+                return .refused(.noSegaCDBIOS(ares.ludeum.aresBIOS.path(percentEncoded: false)))
+            }
             app = ares.app
         } else if emulator == .pcsx2 {
             guard pcsx2.isInstalled else { return .refused(.notInstalled(emulator)) }

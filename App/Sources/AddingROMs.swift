@@ -397,7 +397,9 @@ struct AddROMConfirmation: View {
             return "Its Discs are Compacted together into a .\(compact) its Emulator opens directly."
         }
         if source.isFolder || source.urls.count > 1 || platform?.archiving == .intoFolder {
-            return "It's kept in a folder of its name, with a playlist for its Discs if they have none."
+            return platform?.readsPlaylists == false
+                ? "It's kept in a folder of its name."
+                : "It's kept in a folder of its name, with a playlist for its Discs if they have none."
         }
         if let compact = platform?.compactExtension {
             if source.archive?.pathExtension.lowercased() == compact { return "It goes in as it is: its Emulator opens it directly." }

@@ -29,7 +29,14 @@ import Testing
 
         #expect(source.isFolder)
         #expect(source.romName == "Okami (USA)")
-        #expect(try await source.platforms(sevenZip: nil) == [7, ROMPlatform.ps2, 32, 78])
+        // Not the Sega CD's: ares opens no `.iso`.
+        #expect(try await source.platforms(sevenZip: nil) == [7, ROMPlatform.ps2, 32])
+    }
+
+    @Test func aChdIsntPresumedToBeTheSegaCDsThoughItsEmulatorPrefersOne() async throws {
+        let chd = ROMSource([try file("Sonic CD (USA).chd")])
+
+        #expect(chd.likeliestPlatform(of: try await chd.platforms(sevenZip: nil)) == nil)
     }
 
     @Test func severalDiscsAreOneROMNamedAfterDisc1WithoutItsDisc() async throws {

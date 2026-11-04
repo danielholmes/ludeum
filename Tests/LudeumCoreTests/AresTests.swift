@@ -11,6 +11,7 @@ import Testing
     var settings: AresSettings { AresSettings(ludeum: ludeum) }
     var saves: String { ludeum.data.appending(path: "Emulators/ares/Saves/").path(percentEncoded: false) }
     var screenshots: String { ludeum.data.appending(path: "Emulators/ares/Screenshots/").path(percentEncoded: false) }
+    var bios: String { ludeum.data.appending(path: "Emulators/ares/BIOS/").path(percentEncoded: false) }
 
     init() throws {
         try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
@@ -27,9 +28,58 @@ import Testing
             arguments == [
                 "--system", "Mega Drive", "--setting", "General/RunAhead=true", "/Games/Mega Drive/Sonic the Hedgehog (USA, Europe).zip",
             ])
-        #expect(try written() == "Paths\n  Saves: \(saves)\n  Screenshots: \(screenshots)\nGeneral\n  AutoSaveMemory: true\n")
+        #expect(
+            try written()
+                == "Paths\n  Saves: \(saves)\n  Screenshots: \(screenshots)\n  Firmware: \(bios)\nGeneral\n  AutoSaveMemory: true\n")
         #expect(FileManager.default.fileExists(atPath: saves))
         #expect(FileManager.default.fileExists(atPath: screenshots))
+        #expect(FileManager.default.fileExists(atPath: bios))
+    }
+
+    @Test func eachSegaCDBIOSThereIsNamedForItsRegionAndNoOtherMachinesIsTouched() throws {
+        try FileManager.default.createDirectory(at: settings.settingsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let mine = """
+            MegaCD
+              Firmware
+                BIOS.US
+                BIOS.Japan: /Users/me/Japan.bin
+                BIOS.Europe
+            MegaCD32X
+              Firmware
+                BIOS.US
+
+            """
+        try mine.write(to: settings.settingsFile, atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: ludeum.aresBIOS, withIntermediateDirectories: true)
+        try Data().write(to: ludeum.aresBIOS.appending(path: "Mega CD US.bin"))
+        try Data().write(to: ludeum.aresBIOS.appending(path: "Mega CD Europe.bin"))
+
+        try settings.writeStanding()
+
+        // Japan has no file here, so what ares had stays.
+        #expect(
+            try written().hasPrefix(
+                """
+                MegaCD
+                  Firmware
+                    BIOS.US: \(bios)Mega CD US.bin
+                    BIOS.Japan: /Users/me/Japan.bin
+                    BIOS.Europe: \(bios)Mega CD Europe.bin
+                MegaCD32X
+                  Firmware
+                    BIOS.US
+
+                """))
+        #expect(settings.hasSegaCDBIOS)
+    }
+
+    @Test func aFileThatIsntNamedForARegionIsntABIOS() throws {
+        try FileManager.default.createDirectory(at: ludeum.aresBIOS, withIntermediateDirectories: true)
+        #expect(!settings.hasSegaCDBIOS)
+
+        try Data().write(to: ludeum.aresBIOS.appending(path: "bios_CD_U.bin"))
+
+        #expect(!settings.hasSegaCDBIOS)
     }
 
     @Test func runAheadIsOnOrOffForThisLaunchOnly() throws {
@@ -100,7 +150,7 @@ import Testing
                   AutoSaveMemory: true
                 Paths
                   Home
-                  Firmware
+                  Firmware: \(bios)
                   Saves: \(saves)
                   Screenshots: \(screenshots)
                   Debugging
@@ -465,5 +515,98 @@ import Testing
         #expect(outcome == .refused(.running(.ares)))
         #expect(outcome.refusal?.message.hasPrefix("ares is open. Quit it, then Play") == true)
         #expect(!ares.isPortable)
+    }
+
+    func pressSegaCD() throws -> (Play.Outcome, URL) {
+        let segaCD = try FakeROMFolder(in: directory, platform: ROMPlatform.segaCD)
+        let cue = try segaCD.add("Sonic CD (USA)/Sonic CD (USA).cue")
+        let rom = LudeumROM(
+            id: 1, folderName: "Sonic CD (USA)", platformId: ROMPlatform.segaCD, fileName: "Sonic CD (USA).cue", name: "Sonic CD (USA)",
+            version: "", disc: nil, missing: false, archived: false)
+        let outcome = Play(platformId: ROMPlatform.segaCD, platformName: "Sega CD", roms: [rom], settings: .init())
+            .prepare(locator: ROMLocator(romFolders: [segaCD.folder]), version: .ok, app: { _ in nil }, ares: ares)
+        return (outcome, cue)
+    }
+
+    @Test func aSegaCDGameIsRefusedUntilThereIsABIOSSayingWhereItGoes() throws {
+        let (outcome, _) = try pressSegaCD()
+
+        let folder = ludeum.aresBIOS.path(percentEncoded: false)
+        #expect(outcome == .refused(.noSegaCDBIOS(folder)))
+        #expect(
+            outcome.refusal?.message
+                == "No Sega CD BIOS. Put one in \(folder), named Mega CD US.bin, Mega CD Japan.bin or Mega CD Europe.bin, then Play.")
+    }
+
+    @Test func aSegaCDGamePlaysItsCueSheetOnceThereIsABIOSAndItsPathIsWritten() throws {
+        try FileManager.default.createDirectory(at: ludeum.aresBIOS, withIntermediateDirectories: true)
+        let us = ludeum.aresBIOS.appending(path: "Mega CD US.bin")
+        try Data().write(to: us)
+
+        let (outcome, cue) = try pressSegaCD()
+
+        #expect(
+            outcome.arguments == ["--system", "Mega CD", "--setting", "General/RunAhead=false", cue.path(percentEncoded: false)])
+        #expect(try String(contentsOf: ares.settingsFile, encoding: .utf8).contains("BIOS.US: \(us.path(percentEncoded: false))\n"))
+    }
+
+    @Test func otherPlatformsNeedNoSegaCDBIOS() throws {
+        let (outcome, _) = try press()
+
+        #expect(outcome.refusal == nil)
+    }
+}
+
+/// The Sega CD's ROM folder reads only what ares opens (#92): a cue sheet with its tracks, or a `.chd`.
+@Suite struct SegaCDROMFolderTests {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "sega cd \(UUID().uuidString)", directoryHint: .isDirectory)
+
+    @Test func anImageAresCantOpenIsntAROM() throws {
+        let folder = try FakeROMFolder(in: directory, platform: ROMPlatform.segaCD)
+        try folder.add("Loose.iso")
+        try folder.add("Loose.bin")
+        try folder.add("Loose.m3u")
+        try folder.add("Only An Image/Only An Image.iso")
+
+        #expect(try folder.folder.scan().isEmpty)
+    }
+
+    @Test func aCueSheetAndItsTracksAreOneROMAsIsAChdAndAnArchive() throws {
+        let folder = try FakeROMFolder(in: directory, platform: ROMPlatform.segaCD)
+        try folder.add("Sonic CD (USA)/Sonic CD (USA).cue")
+        try folder.add("Sonic CD (USA)/Sonic CD (USA) (Track 01).bin")
+        try folder.add("Sonic CD (USA)/Sonic CD (USA) (Track 02).bin")
+        try folder.add("Snatcher (USA).chd")
+        try folder.add("Final Fight CD (USA).7z")
+
+        let found = try folder.folder.scan()
+
+        #expect(found.map(\.name) == ["Final Fight CD (USA)", "Snatcher (USA)", "Sonic CD (USA)"])
+        #expect(found[1].ready?.lastPathComponent == "Snatcher (USA).chd")
+        #expect(found[2].ready?.lastPathComponent == "Sonic CD (USA).cue")
+    }
+
+    @Test func anArchivedCueSheetAndItsTracksUnarchiveIntoAFolder() throws {
+        let folder = try FakeROMFolder(in: directory, platform: ROMPlatform.segaCD).folder
+        let listing = ["NHL (Europe).cue", "NHL (Europe) (Track 01).bin", "NHL (Europe) (Track 02).bin"].map {
+            SevenZip.Entry(path: $0, size: 1)
+        }
+
+        let plan = try ROMArchiver.unarchivePlan(
+            listing: listing, archive: folder.url.appending(path: "NHL (Europe).7z"), romName: "NHL (Europe)", folder: folder)
+
+        #expect(plan.destination.lastPathComponent == "NHL (Europe)")
+        #expect(plan.entries.count == 3)
+    }
+
+    @Test func discsOfASegaCDROMOpenAtDisc1WithNoPlaylistToAskFor() throws {
+        let folder = try FakeROMFolder(in: directory, platform: ROMPlatform.segaCD)
+        try folder.add("Night Trap (USA)/Night Trap (USA) (Disc 1).cue")
+        try folder.add("Night Trap (USA)/Night Trap (USA) (Disc 2).cue")
+
+        let found = try #require(try folder.folder.scan().first)
+
+        #expect(found.ready?.lastPathComponent == "Night Trap (USA) (Disc 1).cue")
+        #expect(found.discsWithoutPlaylist.isEmpty)
     }
 }

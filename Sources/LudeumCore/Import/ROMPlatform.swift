@@ -68,6 +68,7 @@ public struct ROMPlatform: Sendable, Equatable {
     public static let vita: Int64 = 46
     public static let xbox: Int64 = 11
     public static let amiga: Int64 = 16
+    public static let segaCD: Int64 = 78
 
     /// Every Platform with a ROM folder, by IGDB platform id. One folder per Platform: Game Boy and
     /// Game Boy Color, NES and Famicom, SNES and Super Famicom each have their own.
@@ -129,8 +130,9 @@ public struct ROMPlatform: Sendable, Equatable {
         35: .init(
             name: "Sega Game Gear", folderName: "Game Gear", readyExtensions: ["gg"],
             compactExtension: "7z"),
+        // What ares opens, so no playlist: a multi-disc Version opens at Disc 1, and ares's menu changes Disc (ADR 0037).
         78: .init(
-            name: "Sega CD", folderName: "Sega CD", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"],
+            name: "Sega CD", folderName: "Sega CD", readyExtensions: ["chd", "cue"],
             archiving: .intoFolder, naming: .redump),
         32: .init(
             name: "Sega Saturn", folderName: "Saturn", readyExtensions: ["m3u", "chd", "cue", "iso", "bin"],

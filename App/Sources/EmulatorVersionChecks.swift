@@ -220,7 +220,8 @@ struct EmulatorsSheet: View {
                     + "DuckStation, MesenCE, ares, PCSX2 and Amiberry are Ludeum's own copies, installed here at the release Ludeum "
                     + "needs and kept in the Ludeum folder: their save states and game saves live in the Data folder, MesenCE's apart "
                     + "for each Platform and ares's for each of its systems. PCSX2 needs a PlayStation 2 BIOS in the Data folder's "
-                    + "Emulators/PCSX2/BIOS before it can Play. Amiberry plays on its own AROS until there's a Kickstart in "
+                    + "Emulators/PCSX2/BIOS before it can Play, and ares a Sega CD BIOS in Emulators/ares/BIOS, named Mega CD US.bin, "
+                    + "Mega CD Japan.bin or Mega CD Europe.bin, before a Sega CD Game can. Amiberry plays on its own AROS until there's a Kickstart in "
                     + "Emulators/Amiberry/ROMs. "
                     + "An Emulator's own settings are changed in it during a Play."
             )
