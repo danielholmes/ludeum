@@ -48,7 +48,8 @@ extension AddROMError: LocalizedError {
 }
 
 /// Files picked from elsewhere to Add as a ROM: one file (a cue sheet brings its tracks, a playlist its Discs), a
-/// `.7z` or `.zip` of the game, a folder holding it, or each Disc of a multi-disc Version.
+/// `.7z` or `.zip` of the game, a folder holding it, or each Disc of a multi-disc Version, each perhaps in its own archive
+/// where the Platform packs its Discs together (a floppy set as TOSEC keeps one).
 public struct ROMSource: Sendable, Equatable {
     public let urls: [URL]
 
@@ -58,16 +59,25 @@ public struct ROMSource: Sendable, Equatable {
 
     /// Files picked at once as several ROMs, in name order: each folder and each archive is one, and so is each other
     /// file, less any that another brings along (a cue sheet's tracks, a playlist's Discs). The Discs of one Version are
-    /// one ROM together, unless no Platform reads them that way (none keeps its Discs together but the disc Platforms and
-    /// GameCube).
+    /// one ROM together, unless no Platform reads them that way (none keeps its Discs together but the disc Platforms,
+    /// GameCube and Amiga), and so are the archives of one Version's Discs where a Platform packs its Discs together.
     public static func split(_ urls: [URL]) async -> [ROMSource] {
         func key(_ url: URL) -> String { url.standardizedFileURL.path(percentEncoded: false) }
+        func version(_ url: URL) -> String { ROMName(url.deletingPathExtension().lastPathComponent).withoutDisc }
         let loose = urls.filter { ROMSource([$0]).isFolder == false && ROMSource([$0]).archive == nil }
         let brought = Set(loose.flatMap { ROMFiles.files(of: $0).dropFirst() }.map(key))
-        var sources = urls.filter { url in !loose.contains(url) }.map { ROMSource([$0]) }
-        let versions = Dictionary(grouping: loose.filter { !brought.contains(key($0)) }) {
-            ROMName($0.deletingPathExtension().lastPathComponent).withoutDisc
+        var sources = urls.filter { url in !loose.contains(url) && ROMSource([url]).archive == nil }.map { ROMSource([$0]) }
+        for files in Dictionary(grouping: urls.filter { ROMSource([$0]).archive != nil }, by: version).values {
+            let discs = ROMSource(files)
+            if files.count > 1, !ROMFolder.discs(files).isEmpty, let platforms = try? await discs.platforms(sevenZip: SevenZip.find()),
+                !platforms.isEmpty
+            {
+                sources.append(discs)
+            } else {
+                sources += files.map { ROMSource([$0]) }
+            }
         }
+        let versions = Dictionary(grouping: loose.filter { !brought.contains(key($0)) }, by: version)
         for files in versions.values {
             let discs = ROMSource(files)
             if files.count > 1, !ROMFolder.discs(files).isEmpty, let platforms = try? await discs.platforms(sevenZip: nil),
@@ -100,9 +110,14 @@ public struct ROMSource: Sendable, Equatable {
         urls.count == 1 && !isFolder && ["7z", "zip"].contains(urls[0].pathExtension.lowercased()) ? urls[0] : nil
     }
 
-    /// The Platforms whose ROM folders read it, by IGDB platform id: a folder only where ROMs are kept in subfolders, and
-    /// several Discs only where they're kept together in one (on GameCube too). An archive is read by what's inside it,
-    /// so needs 7-Zip.
+    /// Several `.7z`s or `.zip`s, each one Disc's: none otherwise.
+    public var discArchives: [URL] {
+        urls.count > 1 && urls.allSatisfy { ["7z", "zip"].contains($0.pathExtension.lowercased()) } ? urls : []
+    }
+
+    /// The Platforms whose ROM folders read it, by IGDB platform id: a folder only where ROMs are kept in subfolders, several
+    /// Discs only where they're kept together in one (on GameCube too) or one archive, and several archives only where
+    /// they're packed into one. An archive is read by what's inside it, so needs 7-Zip.
     public func platforms(sevenZip: SevenZip?) async throws -> [Int64] {
         guard !urls.isEmpty else { throw AddROMError.notOneGame }
         if urls.count > 1 && ROMFolder.discs(urls).isEmpty { throw AddROMError.notOneGame }
@@ -112,6 +127,11 @@ public struct ROMSource: Sendable, Equatable {
         } else if let archive {
             guard let sevenZip else { throw ArchiveError.noSevenZip }
             inside = try await sevenZip.list(archive).map(\.path)
+        } else if !discArchives.isEmpty {
+            guard let sevenZip else { throw ArchiveError.noSevenZip }
+            var paths: [String] = []
+            for archive in discArchives { paths += try await sevenZip.list(archive).map(\.path) }
+            inside = paths
         } else {
             inside = urls.map(\.path)
         }
@@ -119,6 +139,7 @@ public struct ROMSource: Sendable, Equatable {
         let platforms = ROMPlatform.all.filter { _, platform in
             if isFolder && platform.archiving != .intoFolder { return false }
             if urls.count > 1 && !platform.keepsDiscsTogether { return false }
+            if !discArchives.isEmpty && !platform.packsDiscsTogether { return false }
             // A Compacted archive is read as it is.
             if let archive, archive.pathExtension.lowercased() == platform.compactExtension { return true }
             return !extensions.isDisjoint(with: platform.readyExtensions)
@@ -174,8 +195,9 @@ public enum AddROMNaming: Sendable, Equatable {
 }
 
 /// Add ROM: puts a game picked from elsewhere into its Platform's ROM folder in the form the Platform keeps, then records
-/// it and Matches it by hand. A Compactable Platform's ROM is Compacted; a Platform whose ROMs are kept in subfolders
-/// gets one named after the ROM, with a playlist for its Discs; anything else is one Playable file named after the ROM.
+/// it and Matches it by hand. A Compactable Platform's ROM is Compacted, Amiga's Discs together in one archive; a Platform
+/// whose ROMs are kept in subfolders gets one named after the ROM, with a playlist for its Discs; anything else is one
+/// Playable file named after the ROM.
 /// An archive is unpacked first unless it's already the one its Emulator opens, with no Clutter in it; Clutter is left
 /// out of what goes in. Everything is made in a hidden work
 /// folder inside the ROM folder and moves into place only once it's all there; with `keepingOriginals` false, the
@@ -202,6 +224,9 @@ public struct AddROM: Sendable {
     /// sheet to show before it starts.
     public static func fileName(of source: ROMSource, named name: String? = nil, in folder: ROMFolder) -> String {
         let name = name ?? source.romName
+        if ROMPlatform.all[folder.platformId]?.packsDiscsTogether == true, let compact = folder.compactExtension {
+            return "\(name).\(compact)"
+        }
         if source.isFolder || source.urls.count > 1 || folder.archiving == .intoFolder { return "\(name)/" }
         if let compact = folder.compactExtension { return "\(name).\(compact)" }
         let ext = source.archive == nil ? source.urls.first?.pathExtension.lowercased() ?? "" : "…"
@@ -417,6 +442,12 @@ public struct AddROM: Sendable {
             guard let sevenZip else { throw ArchiveError.noSevenZip }
             let packs = folder.compactExtension != nil
             try await sevenZip.extract(archive, paths: [], to: staged) { progress(packs ? $0 / 2 : $0) }
+        } else if !source.discArchives.isEmpty {
+            guard let sevenZip else { throw ArchiveError.noSevenZip }
+            for (i, archive) in source.discArchives.enumerated() {
+                let count = Double(source.discArchives.count)
+                try await sevenZip.extract(archive, paths: [], to: staged) { progress((Double(i) + $0) / count / 2) }
+            }
         } else {
             try FileManager.default.createDirectory(at: staged, withIntermediateDirectories: true)
             for file in source.urls.flatMap(ROMFiles.files(of:))
@@ -442,6 +473,12 @@ public struct AddROM: Sendable {
         let readable = ROMPlatform.all[folder.platformId]?.readyExtensions ?? []
         let images = files.filter { readable.contains($0.pathExtension.lowercased()) }
         guard let image = images.first else { throw AddROMError.noImage }
+        if images.count > 1, ROMPlatform.all[folder.platformId]?.packsDiscsTogether == true, !ROMFolder.discs(images).isEmpty,
+            let format = folder.compactExtension
+        {
+            return try await pack(
+                discs: images, in: staged, as: work.appending(path: "\(name).\(format)"), format: format, progress: progress)
+        }
         guard images.count == 1 else { throw AddROMError.ambiguous(images.map(\.lastPathComponent).sorted()) }
         let named = work.appending(path: "\(name).\(image.pathExtension.lowercased())")
         try FileManager.default.moveItem(at: image, to: named)
@@ -455,6 +492,22 @@ public struct AddROM: Sendable {
         try await sevenZip.test(packed)
         let size = Int64(try named.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
         guard try await sevenZip.list(packed).map(\.size) == [size] else { throw ArchiveError.checkFailed(packed.lastPathComponent) }
+        return packed
+    }
+
+    /// Compacts a Version's Discs together, each under its own name, and checks the archive holds them all.
+    private func pack(
+        discs: [URL], in staged: URL, as packed: URL, format: String, progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL {
+        guard let sevenZip else { throw ArchiveError.noSevenZip }
+        let base = staged.standardizedFileURL.pathComponents.count
+        let paths = discs.map { $0.standardizedFileURL.pathComponents.dropFirst(base).joined(separator: "/") }
+        try await sevenZip.create(packed, format: format, files: paths, in: staged) { progress(0.5 + $0 / 2) }
+        try await sevenZip.test(packed)
+        let sizes = try discs.map { Int64(try $0.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) }
+        guard try await sevenZip.list(packed).map(\.size).sorted() == sizes.sorted() else {
+            throw ArchiveError.checkFailed(packed.lastPathComponent)
+        }
         return packed
     }
 

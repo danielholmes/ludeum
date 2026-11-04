@@ -38,6 +38,10 @@ public struct Play: Sendable {
         case needs(Emulator, HomebrewLibrary)
         /// PCSX2 has no PlayStation 2 BIOS to boot with: none in the Data folder's BIOS folder, at this path (ADR 0032).
         case noBIOS(String)
+        /// An Amiga ROM that isn't Compacted: Amiberry would write a game's saves into its loose disk (ADR 0035).
+        case needsCompacting
+        /// An Amiga ROM's disks couldn't be listed from its archive or their save images made, with why.
+        case couldntGetDisksReady(String)
 
         public var message: String {
             switch self {
@@ -58,12 +62,16 @@ public struct Play: Sendable {
             case .running(.mesenCE):
                 "MesenCE is open. Quit it, then Play: Ludeum says where to keep this Platform's saves before each Play, "
                     + "which an open MesenCE wouldn't read."
+            case .running(.amiberry):
+                "Amiberry is open. Quit it, then Play: it keeps its settings in memory and writes them over when it quits."
             case .running(let emulator):
                 "\(emulator.name) is open. Quit it, then Play: Ludeum writes its settings before each Play, which an open \(emulator.name) would write over."
             case .installing(let emulator): "\(emulator.name) is being installed."
             case .needs(let emulator, let library):
                 "\(emulator.name) needs \(library.name), which isn't installed: install it with `\(library.install)`, then Play."
             case .noBIOS(let folder): "No PlayStation 2 BIOS. Put one in \(folder), then Play."
+            case .needsCompacting: "Compact it to Play: a game saves to its disk, and a loose disk would be written over."
+            case .couldntGetDisksReady(let why): "Couldn't get its disks ready: \(why)"
             }
         }
     }
@@ -99,6 +107,7 @@ public struct Play: Sendable {
         }
         if roms.contains(where: { busyROMs.contains($0.id) }) { return .refused(.busy) }
         if rom?.needsPlaylist == true { return .refused(.needsPlaylist) }
+        if emulator == .amiberry, rom?.fileName.lowercased().hasSuffix(".7z") == false { return .refused(.needsCompacting) }
         return .ready(emulator)
     }
 
@@ -112,8 +121,8 @@ public struct Play: Sendable {
 
     public enum Outcome: Sendable, Equatable {
         /// Open `app` with `arguments`, showing `warning` first when there is one. `startsOn` is the Disc a multi-disc ROM
-        /// starts on, for the journal to remember.
-        case open(app: URL, arguments: [String], warning: String?, startsOn: DiscStart? = nil)
+        /// starts on, for the journal to remember. `environment` is what it needs set for this launch (Amiberry's home).
+        case open(app: URL, arguments: [String], warning: String?, startsOn: DiscStart? = nil, environment: [String: String] = [:])
         case refused(Refusal)
 
         public var refusal: Refusal? {
@@ -121,15 +130,15 @@ public struct Play: Sendable {
         }
 
         public var arguments: [String]? {
-            if case .open(_, let arguments, _, _) = self { arguments } else { nil }
+            if case .open(_, let arguments, _, _, _) = self { arguments } else { nil }
         }
 
         public var warning: String? {
-            if case .open(_, _, let warning, _) = self { warning } else { nil }
+            if case .open(_, _, let warning, _, _) = self { warning } else { nil }
         }
 
         public var startsOn: DiscStart? {
-            if case .open(_, _, _, let startsOn) = self { startsOn } else { nil }
+            if case .open(_, _, _, let startsOn, _) = self { startsOn } else { nil }
         }
     }
 
@@ -224,14 +233,14 @@ public struct Play: Sendable {
     }
 
     /// What a press of Play does. It writes the settings files of an Emulator that takes them only
-    /// that way. `app` finds an installed app by its bundle identifier; DuckStation, MesenCE, ares and PCSX2 are the ones
-    /// Ludeum installs (`duckStation.app`, `mesen.app`, `ares.app`, `pcsx2.app`), refused while any copy is `running`, and
-    /// PCSX2 until it has a BIOS. `saveState` starts the Play from that state, DuckStation's on its own Disc; else a
-    /// multi-disc ROM starts on `disc`, or the one it last started on.
+    /// that way. `app` finds an installed app by its bundle identifier; DuckStation, MesenCE, ares, PCSX2 and Amiberry are
+    /// the ones Ludeum installs (`duckStation.app`, `mesen.app`, `ares.app`, `pcsx2.app`, `amiberry.app`), refused while any
+    /// copy is `running`, and PCSX2 until it has a BIOS. `saveState` starts the Play from that state, DuckStation's on its
+    /// own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on.
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
-        pcsx2: PCSX2Settings = .init(), running: (Emulator) -> Bool = { _ in false }
+        pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), running: (Emulator) -> Bool = { _ in false }
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -258,6 +267,10 @@ public struct Play: Sendable {
             if running(emulator) { return .refused(.running(emulator)) }
             guard pcsx2.hasBIOS else { return .refused(.noBIOS(pcsx2.ludeum.pcsx2BIOS.path(percentEncoded: false))) }
             app = pcsx2.app
+        } else if emulator == .amiberry {
+            guard amiberry.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if running(emulator) { return .refused(.running(emulator)) }
+            app = amiberry.app
         } else {
             guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
             app = found
@@ -296,10 +309,14 @@ public struct Play: Sendable {
         do {
             let arguments = try emulator.arguments(
                 rom: opened, platformId: platformId, settings: settings, saveState: saveState,
-                duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2)
-            return .open(app: app, arguments: arguments, warning: warning, startsOn: startsOn)
+                duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2, amiberry: amiberry)
+            return .open(
+                app: app, arguments: arguments, warning: warning, startsOn: startsOn,
+                environment: emulator == .amiberry ? amiberry.environment : [:])
         } catch {
-            return .refused(.couldntWriteSettings(emulator, error.localizedDescription))
+            return .refused(
+                emulator == .amiberry
+                    ? .couldntGetDisksReady(error.localizedDescription) : .couldntWriteSettings(emulator, error.localizedDescription))
         }
     }
 }

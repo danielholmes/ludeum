@@ -72,6 +72,8 @@ extension Emulator {
         // unpacked copy (as Install's check is), a fifth of a second after that.
         case .pcsx2:
             EmulatorVersionSpec(expected: PCSX2Release.pinned.version, source: .commandLine("-version"), exact: true, timeout: 60)
+        // Its app's version needs no process.
+        case .amiberry: EmulatorVersionSpec(expected: AmiberryRelease.pinned.version, source: .appVersion, exact: true)
         // Its `-version` prints QEMU's version, not xemu's.
         case .xemu: EmulatorVersionSpec(expected: "0.8.136", source: .appVersion)
         default: nil

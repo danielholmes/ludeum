@@ -735,10 +735,20 @@ struct GameDetailView: View {
     }
 
     /// Renames the ROM in its ROM folder and the journal; a MesenCE ROM's file inside its `.7z`, and its saves, too
-    /// (ADR 0027), and an ares ROM's saves (ADR 0028).
+    /// (ADR 0027), and an ares ROM's saves (ADR 0028), and an Amiberry ROM's saved disks (ADR 0035).
     private func rename(_ rom: LudeumROM, to name: String) {
         // A Background task may have started on it while the confirmation was up.
         guard let folder = locator.folder(of: rom), !services.tasks.isActive(.rom(rom.id)) else { return }
+        if Emulator.of(platformId: rom.platformId) == .amiberry {
+            // An open Amiberry would go on saving to the old folder.
+            if Emulator.amiberry.isRunning {
+                error = "Quit Amiberry first: it would go on saving the ROM's disks under its old name."
+                return
+            }
+            let ludeum = services.settings.folder
+            save { try $0.renameAmiberryROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
+            return
+        }
         if Emulator.of(platformId: rom.platformId) == .ares {
             // An open ares would go on saving under the old name.
             if Emulator.ares.isRunning {

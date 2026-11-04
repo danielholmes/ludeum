@@ -15,12 +15,13 @@ public struct Emulator: Sendable, Hashable {
     public static let ppsspp = Emulator(name: "PPSSPP", bundleIdentifier: "org.ppsspp.ppsspp")
     public static let pcsx2 = Emulator(name: "PCSX2", bundleIdentifier: "net.pcsx2.pcsx2")
     public static let xemu = Emulator(name: "xemu", bundleIdentifier: "xemu.app.0")
+    public static let amiberry = Emulator(name: "Amiberry", bundleIdentifier: "com.blitterstudio.Amiberry")
 
-    public static let all: [Emulator] = [.mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu]
+    public static let all: [Emulator] = [.mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu, .amiberry]
 
     /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024), MesenCE (ADR 0027),
-    /// ares (ADR 0028) and PCSX2 (ADR 0032).
-    public var isLudeums: Bool { self == .duckStation || self == .mesenCE || self == .ares || self == .pcsx2 }
+    /// ares (ADR 0028), PCSX2 (ADR 0032) and Amiberry (ADR 0035).
+    public var isLudeums: Bool { self == .duckStation || self == .mesenCE || self == .ares || self == .pcsx2 || self == .amiberry }
 
     /// The Emulator a Platform's Games are played in, if it has one.
     public static func of(platformId: Int64) -> Emulator? {
@@ -37,6 +38,7 @@ public struct Emulator: Sendable, Hashable {
         case 38: .ppsspp  // PlayStation Portable
         case 8: .pcsx2  // PlayStation 2
         case 11: .xemu  // Xbox
+        case 16: .amiberry  // Amiga
         default: nil
         }
     }
@@ -46,13 +48,16 @@ public struct Emulator: Sendable, Hashable {
     /// first (`DuckStationSettings`, `PCSX2Settings`, `PPSSPPSettings`); DuckStation's and PCSX2's are only their Standing
     /// settings, as a Game's own are set in the Emulator (ADRs 0029, 0032). MesenCE's and ares's Standing settings go into
     /// their own settings files (`MesenSettings`, `AresSettings`), the Game's own on their command lines. DuckStation,
-    /// MesenCE, ares and PCSX2 start from a `saveState`.
+    /// MesenCE, ares and PCSX2 start from a `saveState`. Amiberry's are all for the one launch, with its disks' save images
+    /// made first (`AmiberrySettings`).
     public func arguments(
         rom: URL, platformId: Int64, settings: EmulatorSettings, saveState: URL? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
-        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2Settings = .init()
+        ppsspp: PPSSPPSettings = .init(), pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init()
     ) throws -> [String] {
         switch self {
+        case .amiberry:
+            try amiberry.arguments(rom: rom, romName: rom.deletingPathExtension().lastPathComponent)
         case .duckStation:
             try duckStation.arguments(rom: rom, saveState: saveState)
         case .mesenCE:

@@ -50,7 +50,7 @@ public enum ROMRename {
             }
             if matches(t, Tag.languages) {
                 languages = [t.contains("+") ? t : Tag.inNoIntrosOrder(t)]
-            } else if matches(t, #"^Dis[ck] [0-9A-Z]+$"#) {
+            } else if matches(t, #"^Dis[ck] [0-9A-Z]+( of \d+)?$"#) {
                 disc.append(tag.written)
                 afterDisc = true
             } else if let prg = t.wholeMatch(of: /PRG(\d+)/) {

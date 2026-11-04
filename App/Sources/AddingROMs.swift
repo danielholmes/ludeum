@@ -393,6 +393,9 @@ struct AddROMConfirmation: View {
 
     private var what: String {
         let unpacked = source.archive.map { "\($0.lastPathComponent) is unpacked, then " } ?? ""
+        if platform?.packsDiscsTogether == true, source.urls.count > 1, let compact = platform?.compactExtension {
+            return "Its Discs are Compacted together into a .\(compact) its Emulator opens directly."
+        }
         if source.isFolder || source.urls.count > 1 || platform?.archiving == .intoFolder {
             return "It's kept in a folder of its name, with a playlist for its Discs if they have none."
         }

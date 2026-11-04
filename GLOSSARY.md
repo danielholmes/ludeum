@@ -35,7 +35,7 @@ A game file in a ROM folder that the journal has recorded, and a Copy of the Gam
 _Avoid_: File, image
 
 **ROM folder**:
-The folder of one Platform's ROMs. The journal says which ROMs there are, and the folder says how their files are now (present or missing, Archived, Compacted). Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder, and so does a GameCube ROM of several Discs. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state, and so is Compacting `Tetris (World).gb` into `Tetris (World).7z`. A ROM is never kept in both forms at once (a Compacted `.7z` alone is one form): when it is, it waits in the Review queue.
+The folder of one Platform's ROMs. The journal says which ROMs there are, and the folder says how their files are now (present or missing, Archived, Compacted). Every Platform with ROMs has exactly one, named for the Platform, in the Data folder's `ROMs/`, and the folder alone gives a ROM its Platform. A ROM is known by its name within its Platform's folder: a file's without the extension, or a subfolder's when the subfolder holds the game (one image, a cue sheet with its tracks, or a playlist with its Discs, alongside anything else). Disc Platforms' ROMs (PS1, Sega CD, Saturn, PC Engine CD) each have a subfolder, and so does a GameCube ROM of several Discs; an Amiga ROM is one `.7z`, however many Discs it has. So Unarchiving `Okami (USA).7z` into `Okami (USA)/`, or Archiving it again, is the same ROM changing state, and so is Compacting `Tetris (World).gb` into `Tetris (World).7z`. A ROM is never kept in both forms at once (a Compacted `.7z` alone is one form): when it is, it waits in the Review queue.
 _Avoid_: Library folder, watch folder
 
 **Archived ROM**:
@@ -51,7 +51,7 @@ Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder name
 _Avoid_: Extract, compress, decompress
 
 **Compact**:
-Packing a ROM into the archive its Platform's Emulator opens directly, so it takes less room and still Plays: a `.7z`, or a `.zip` on N64 and Mega Drive, whose Emulator (ares) can't open a `.7z`. An Archived `.7z` there is repacked as a `.zip`. Clutter is left out, and only one copy is kept, as with Archive. Only Platforms whose Emulator opens an archive can be Compacted: the cartridge ones (NES, SNES, the Game Boys, Master System, Game Gear, N64, Mega Drive) and DS. A present ROM there that isn't Compacted waits in the Review queue.
+Packing a ROM into the archive its Platform's Emulator opens directly, so it takes less room and still Plays: a `.7z`, or a `.zip` on N64 and Mega Drive, whose Emulator (ares) can't open a `.7z`. An Archived `.7z` there is repacked as a `.zip`. Clutter is left out, and only one copy is kept, as with Archive. Only Platforms whose Emulator opens an archive can be Compacted: the cartridge ones (NES, SNES, the Game Boys, Master System, Game Gear, N64, Mega Drive), DS and Amiga. A present ROM there that isn't Compacted waits in the Review queue, and on Amiga can't be Played until it is, as a game would write over its loose disk (ADR 0035).
 _Avoid_: Compress, zip, Archive (that leaves it unplayable)
 
 **Clutter**:
@@ -67,7 +67,7 @@ Renaming a ROM to its Standard name in every form it's kept in: its subfolder, i
 _Avoid_: Move, retitle
 
 **Disc**:
-One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" are Discs too. On a disc Platform, and on GameCube, they're one ROM, and so one Copy: a subfolder holding the Discs and a playlist that loads them. Elsewhere each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version. Any Disc can be the one a Play starts on, and the others can still be swapped in.
+One of several disc images that together make up a single Version of a multi-disc game, e.g. "Resident Evil 2 (Disc 1) (Leon)" and "(Disc 2) (Claire)". A floppy set's "(Disk 1)", "(Disk 2)" or "(Disk 1 of 3)" are Discs too. On a disc Platform, and on GameCube, they're one ROM, and so one Copy: a subfolder holding the Discs and a playlist that loads them. On Amiga too they're one ROM: one Compacted `.7z` holding them. Elsewhere each Disc is a ROM of its own, and a playlist ROM that loads them belongs to the same Version. Any Disc can be the one a Play starts on, and the others can still be swapped in.
 _Avoid_: Part, volume, CD
 
 **Disc label**:
@@ -203,11 +203,11 @@ _Avoid_: Disagreement (that's about one Game, and needs more evidence)
 ### Playing
 
 **Emulator**:
-The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation, MesenCE, ares and PCSX2 itself, in the Ludeum folder at the release it chooses, and none can be Played with until that's done; the others I install. An Emulator's own settings are changed in it, during a Play.
+The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation, MesenCE, ares, PCSX2 and Amiberry itself, in the Ludeum folder at the release it chooses, and none can be Played with until that's done; the others I install. An Emulator's own settings are changed in it, during a Play.
 _Avoid_: Core, player
 
 **Standing settings**:
-The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. DuckStation's are only where it keeps things, its game list's folder and no self-updating; how it plays, fast boot and frame pacing included, is set in DuckStation and stays (ADR 0033). Not Emulator settings, which are one Game's own. Only DuckStation, MesenCE, ares and PCSX2 have them so far; MesenCE's say the Play's Platform's folders, as it names what it keeps by the ROM's file name alone, and ares makes its own folders, one for the Mega Drive and Sega CD and one for the N64.
+The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. DuckStation's are only where it keeps things, its game list's folder and no self-updating; how it plays, fast boot and frame pacing included, is set in DuckStation and stays (ADR 0033). Not Emulator settings, which are one Game's own. Only DuckStation, MesenCE, ares, PCSX2 and Amiberry have them so far; MesenCE's say the Play's Platform's folders, as it names what it keeps by the ROM's file name alone, ares makes its own folders, one for the Mega Drive and Sega CD and one for the N64, and Amiberry's are all for the one launch, its home folder in the environment and the ROM's own folder of save images on the command line.
 _Avoid_: Global settings, defaults, config
 
 **Emulator settings**:
@@ -223,7 +223,7 @@ A snapshot of a game mid-play that DuckStation, MesenCE, ares or PCSX2 saves and
 _Avoid_: Snapshot, save (alone), quick save
 
 **Game save**:
-The file or folder where an Emulator keeps what one Game has saved itself, as the real hardware would on a memory card or in the cartridge's battery-backed memory, e.g. a PlayStation Game's memory card, the `.srm` MesenCE keeps for a Game Boy cartridge, or the `.ram` ares keeps for a Mega Drive one. A container every game saves into, such as a PS2 memory card kept as one file or the Sega CD's backup RAM, is no one Game's Game save; a PlayStation 2 Game's Game saves are its Card saves on PCSX2's folder memory cards, each a folder of its own. Not a Save state.
+The file or folder where an Emulator keeps what one Game has saved itself, as the real hardware would on a memory card or in the cartridge's battery-backed memory, e.g. a PlayStation Game's memory card, the `.srm` MesenCE keeps for a Game Boy cartridge, or the `.ram` ares keeps for a Mega Drive one. A container every game saves into, such as a PS2 memory card kept as one file or the Sega CD's backup RAM, is no one Game's Game save; a PlayStation 2 Game's Game saves are its Card saves on PCSX2's folder memory cards, each a folder of its own. An Amiga game saves to its disk, so an Amiga ROM's Game saves are its disks' save images, each `<disk>_save.adf`, what's been written over that disk, in a folder of the ROM's name. Not a Save state.
 _Avoid_: Save (alone), battery save, save file, SRAM
 
 **Card save**:
@@ -245,7 +245,7 @@ The one place on this Mac where Ludeum keeps everything it owns: the live journa
 _Avoid_: App folder, library
 
 **Data folder**:
-The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the Game saves and Save states of PlayStation Games, of PlayStation 2 Games, of MesenCE's Platforms' (each of those Platforms' apart) and of ares's, DuckStation's and PCSX2's BIOS files, per-game settings, input profiles and screenshots (PCSX2's cheats, patches and textures too), and the Game saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
+The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the Game saves and Save states of PlayStation Games, of PlayStation 2 Games, of MesenCE's Platforms' (each of those Platforms' apart) and of ares's, DuckStation's and PCSX2's BIOS files, per-game settings, input profiles and screenshots (PCSX2's cheats, patches and textures too), everything Amiberry keeps (its Kickstarts, saved disks and Save states among it), and the Game saves archived from OpenEmu. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
 _Avoid_: Kept folder, backup-worthy, Library folder
 
 **Backup**:
@@ -263,7 +263,7 @@ A game file in a ROM folder that isn't a ROM in the journal, such as one put the
 _Avoid_: Orphan, unknown file, new ROM
 
 **Add ROM**:
-Putting a game from elsewhere (its file, an archive of it, its folder, or its Discs) into its Platform's ROM folder in the form that Platform keeps, then Matching it by hand: to an IGDB game I choose, to a Game whose ROMs are all missing, or to a new Game I make by hand with no IGDB link, for a game IGDB doesn't have. A Compactable Platform's ROM goes in Compacted, a disc Platform's in a subfolder with a playlist for its Discs, and anything else as one Playable file; on a Platform whose ROMs can be Archived, I can have it Archived once it's in. Once it's Matched it can be given its Standard name (on unless I turn it off), and a missing ROM of that Game with either name, the picked one or that one, comes back, named from its own Regions. Its Clutter is left out, even from an archive that could otherwise go in as it is. I choose whether the picked files are copied or moved (moved ones go to the Trash once the ROM is in). Several ROMs picked at once are Added one at a time, each Matched by hand the same way; one can instead go in without a Match, for the Import that follows to add as a ROM and Match automatically or through the Review queue.
+Putting a game from elsewhere (its file, an archive of it, its folder, or its Discs) into its Platform's ROM folder in the form that Platform keeps, then Matching it by hand: to an IGDB game I choose, to a Game whose ROMs are all missing, or to a new Game I make by hand with no IGDB link, for a game IGDB doesn't have. A Compactable Platform's ROM goes in Compacted (on Amiga its Discs together, picked loose, in one archive or in an archive each), a disc Platform's in a subfolder with a playlist for its Discs, and anything else as one Playable file; on a Platform whose ROMs can be Archived, I can have it Archived once it's in. Once it's Matched it can be given its Standard name (on unless I turn it off), and a missing ROM of that Game with either name, the picked one or that one, comes back, named from its own Regions. Its Clutter is left out, even from an archive that could otherwise go in as it is. I choose whether the picked files are copied or moved (moved ones go to the Trash once the ROM is in). Several ROMs picked at once are Added one at a time, each Matched by hand the same way; one can instead go in without a Match, for the Import that follows to add as a ROM and Match automatically or through the Review queue.
 _Avoid_: Import (that only reads the ROM folders), upload
 
 **Review queue**:

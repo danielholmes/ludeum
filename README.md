@@ -60,7 +60,7 @@ Each platform's ROMs go in `Data/ROMs/<Platform>/`, for example `Data/ROMs/SNES/
 
 Ludeum doesn't include any games, BIOS files or emulators. Supply your own legally obtained ROMs and BIOS files, and set up BIOS, controllers and video in each emulator. Ludeum keeps those settings, and sets each game's own settings for that Play only.
 
-Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found. DuckStation, MesenCE, ares and PCSX2 are the exception: Ludeum installs its own copy of each from there, at exactly the version below, into its own folder and made portable, so nothing of it is shared with any other copy on your Mac. Their settings are still yours to make in each, during a Play, apart from where they keep things and a few Ludeum fixes for every game. MesenCE 2.2.1 needs SDL2 (`brew install sdl2`). PCSX2's release is built for Intel, so it needs Rosetta 2, and a PlayStation 2 BIOS in the Data folder's `Emulators/PCSX2/BIOS` before it can play.
+Install the emulator for each platform you want to play. Ludeum checks each emulator's version at launch and won't play in one older than the version below. Ludeum ▸ Emulators… shows what it found. DuckStation, MesenCE, ares, PCSX2 and Amiberry are the exception: Ludeum installs its own copy of each from there, at exactly the version below, into its own folder, so nothing it keeps is shared with any other copy on your Mac. Their settings are still yours to make in each, during a Play, apart from where they keep things and a few Ludeum fixes for every game. MesenCE 2.2.1 needs SDL2 (`brew install sdl2`). PCSX2's release is built for Intel, so it needs Rosetta 2, and a PlayStation 2 BIOS in the Data folder's `Emulators/PCSX2/BIOS` before it can play. Amiberry plays on its bundled AROS until there's a Kickstart in the Data folder's `Emulators/Amiberry/ROMs`, which some games need. An Amiga game saves to its disk, so an Amiga ROM is kept in a `.7z` that's never written to, with what the game saves in `Emulators/Amiberry/Saved Disks`.
 
 | Platform | Emulator | Version |
 | --- | --- | --- |
@@ -73,12 +73,13 @@ Install the emulator for each platform you want to play. Ludeum checks each emul
 | Nintendo DS | [melonDS](https://melonds.kuribo64.net) | 1.1 |
 | Saturn | [Ymir](https://github.com/StrikerX3/Ymir) | 0.3.3 |
 | Xbox | [xemu](https://xemu.app) | 0.8.136 |
+| Amiga | [Amiberry](https://amiberry.com), installed by Ludeum | 8.5.0 |
 
 PS Vita and MSX2 have ROM folders, but no emulator plays them yet. You can journal games on any other platform (PC, Xbox 360, and so on), but Ludeum can't launch them.
 
 Ludeum also uses these command-line tools, and warns at launch if one is missing:
 
-- [7-Zip](https://www.7-zip.org) (`brew install sevenzip`) to Archive, Unarchive and Compact ROMs, and to list what's inside an archived one.
+- [7-Zip](https://www.7-zip.org) (`brew install sevenzip`) to Archive, Unarchive and Compact ROMs, to list what's inside an archived one, and to Play an Amiga game.
 - [Zstandard](https://facebook.github.io/zstd/) (`brew install zstd`) to show the screenshots of DuckStation save states.
 - [xdvdfs](https://github.com/antangelo/xdvdfs) (`cargo install xdvdfs-cli`), only if you have xemu. xemu boots only an XISO, so Play refuses a full Redump Xbox image; make an XISO from it with `xdvdfs pack`.
 

@@ -17,6 +17,9 @@ public struct ROMPlatform: Sendable, Equatable {
     public let archiving: Archiving?
     /// Whose names its ROMs are given by Rename: Redump's for the disc Platforms it catalogues, No-Intro's for the rest.
     let naming: Naming
+    /// Whether a multi-disc Version is one Compacted archive holding all its Discs, each under its own name (Amiga: ADR
+    /// 0035). A ROM there is always the one archive, with no subfolder or playlist.
+    public let packsDiscsTogether: Bool
 
     /// How an Archived ROM unpacks.
     public enum Archiving: Sendable, Equatable {
@@ -35,7 +38,7 @@ public struct ROMPlatform: Sendable, Equatable {
 
     init(
         name: String, folderName: String, readyExtensions: [String], compactExtension: String? = nil,
-        archiving: Archiving? = nil, naming: Naming = .noIntro
+        archiving: Archiving? = nil, naming: Naming = .noIntro, packsDiscsTogether: Bool = false
     ) {
         self.name = name
         self.folderName = folderName
@@ -43,15 +46,16 @@ public struct ROMPlatform: Sendable, Equatable {
         self.compactExtension = compactExtension
         self.archiving = archiving
         self.naming = naming
+        self.packsDiscsTogether = packsDiscsTogether
     }
 
     /// Whether its Emulator opens an `.m3u` playlist of a multi-disc Version's Discs, so its ROM folder keeps those Discs
     /// together as one ROM, in a subfolder with the playlist (the disc Platforms, and GameCube: ADR 0031).
     public var readsPlaylists: Bool { readyExtensions.contains("m3u") }
 
-    /// Whether a ROM's Discs are kept together, in its subfolder: where every ROM is kept in one, or the Emulator reads
-    /// a playlist of them.
-    var keepsDiscsTogether: Bool { archiving == .intoFolder || readsPlaylists }
+    /// Whether a ROM's Discs are kept together: in its subfolder, where every ROM is kept in one or the Emulator reads a
+    /// playlist of them, or in its one archive.
+    var keepsDiscsTogether: Bool { archiving == .intoFolder || readsPlaylists || packsDiscsTogether }
 
     /// Whether a ROM whose file is `fileName` can still be Compacted: its Emulator opens an archive the file isn't yet.
     func canCompact(fileName: String) -> Bool {
@@ -63,6 +67,7 @@ public struct ROMPlatform: Sendable, Equatable {
     public static let psp: Int64 = 38
     public static let vita: Int64 = 46
     public static let xbox: Int64 = 11
+    public static let amiga: Int64 = 16
 
     /// Every Platform with a ROM folder, by IGDB platform id. One folder per Platform: Game Boy and
     /// Game Boy Color, NES and Famicom, SNES and Super Famicom each have their own.
@@ -138,6 +143,11 @@ public struct ROMPlatform: Sendable, Equatable {
         11: .init(
             name: "Xbox", folderName: "Xbox", readyExtensions: ["iso"],
             archiving: .singleFile, naming: .redump),
+        // Floppy images, always Compacted: a game saves to its disk, and Amiberry writes a loose image in place but keeps
+        // what's written to one in an archive apart (ADR 0035).
+        16: .init(
+            name: "Amiga", folderName: "Amiga", readyExtensions: ["adf", "adz", "dms", "ipf"], compactExtension: "7z",
+            packsDiscsTogether: true),
         // No Emulator yet, so nothing to Compact into.
         53: .init(
             name: "MSX2", folderName: "MSX2", readyExtensions: ["rom", "mx2", "mx1", "dsk", "cas"]),

@@ -48,9 +48,27 @@ public struct SevenZip: Sendable {
 
     /// The archive's files (not its folders).
     func list(_ archive: URL) async throws -> [Entry] {
-        let output = try await run(["l", "-slt", "-ba", archive.path(percentEncoded: false)])
-        // One block of "Key = Value" lines per entry, separated by blank lines.
-        return output.components(separatedBy: "\n\n").compactMap { block in
+        Self.entries(inListing: try await run(["l", "-slt", "-ba", archive.path(percentEncoded: false)]))
+    }
+
+    /// The archive's files, as `list`, waiting for 7-Zip here: for a Play, which reads an index of a few entries.
+    func listNow(_ archive: URL) throws -> [Entry] {
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["l", "-slt", "-ba", archive.path(percentEncoded: false)]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        let output = out.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw ArchiveError.sevenZipFailed("couldn't read \(archive.lastPathComponent)") }
+        return Self.entries(inListing: String(decoding: output, as: UTF8.self))
+    }
+
+    /// `7zz l -slt`'s output: one block of "Key = Value" lines per entry, separated by blank lines.
+    private static func entries(inListing output: String) -> [Entry] {
+        output.components(separatedBy: "\n\n").compactMap { block in
             var fields: [String: String] = [:]
             for line in block.split(separator: "\n") {
                 let parts = line.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }

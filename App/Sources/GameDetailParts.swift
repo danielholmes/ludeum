@@ -479,16 +479,18 @@ enum FactStyle {
         locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState,
         disc: disc, duckStation: DuckStationSettings(ludeum: services.settings.folder),
         mesen: MesenSettings(ludeum: services.settings.folder), ares: AresSettings(ludeum: services.settings.folder),
-        pcsx2: PCSX2Settings(ludeum: services.settings.folder), running: \.isRunning)
+        pcsx2: PCSX2Settings(ludeum: services.settings.folder), amiberry: AmiberrySettings(ludeum: services.settings.folder),
+        running: \.isRunning)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)
     case .refused(let refusal):
         refused(refusal.message)
-    case .open(let app, let arguments, let warning, let startsOn):
+    case .open(let app, let arguments, let warning, let startsOn, let environment):
         if let warning { alert("Check \(emulator.name)'s version", warning) }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.arguments = arguments
+        configuration.environment = environment
         let journal = services.journal
         let changes = services.changes
         // An Emulator already open opens another window, or for MesenCE another copy (ADR 0027), which Play refuses
