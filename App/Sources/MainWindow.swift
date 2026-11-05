@@ -24,6 +24,7 @@ struct MainWindow: View {
     @State private var reviewQueueCount = 0
     @State private var platformCounts: [PlatformCount] = []
     @State private var pins: [Pin] = []
+    @State private var lists: [GameList] = []
     /// Picked in Add ROM, until its game is chosen.
     @State private var addingROM: PickedROM?
     /// Several picked in Add ROM at once, until each has its Platform.
@@ -70,7 +71,7 @@ struct MainWindow: View {
     var body: some View {
         NavigationSplitView {
             Sidebar(
-                services: services, selection: $selection, platforms: platformCounts, pins: pins,
+                services: services, selection: $selection, platforms: platformCounts, pins: pins, lists: lists,
                 reviewQueueCount: reviewQueueCount
             )
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -96,6 +97,9 @@ struct MainWindow: View {
                         .id(selection)
                 case .pinned(let pin):
                     LibraryScreen(services: services, selection: $selectedGame, scope: pin.filter, title: pin.name)
+                        .id(selection)
+                case .list(let id, let name):
+                    LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(listId: id), title: name)
                         .id(selection)
                 case .whatToPlayNext:
                     WhatToPlayNextScreen(services: services, selection: $selectedGame)
@@ -129,7 +133,10 @@ struct MainWindow: View {
                         .id(igdbResult.id)
                 } else if let selectedGame {
                     // A delete finishes off the main thread, and by then another Game may be the one selected.
-                    GameDetailView(services: services, id: selectedGame, browse: showInLibrary, open: openGame) {
+                    GameDetailView(
+                        services: services, id: selectedGame, browse: showInLibrary, open: openGame,
+                        openList: { selection = .list(id: $0.id, name: $0.name) }
+                    ) {
                         if self.selectedGame == selectedGame { self.selectedGame = nil }
                     }
                     .id(selectedGame)
@@ -187,7 +194,9 @@ struct MainWindow: View {
             reviewQueueCount = (try? services.journal?.reviewQueue().count) ?? 0
             platformCounts = (try? services.journal?.platformCounts()) ?? []
             pins = (try? services.journal?.pins()) ?? []
+            lists = (try? services.journal?.lists()) ?? []
             if case .pinned(let pin) = selection, !pins.contains(pin) { selection = .library }
+            if case .list(let id, _) = selection, !lists.contains(where: { $0.id == id }) { selection = .library }
             if case .platform(let id, _) = selection, !platformCounts.contains(where: { $0.id == id }) { selection = .library }
             if let game = selectedGame, (try? services.journal?.game(game)) == nil { selectedGame = nil }
         }
@@ -213,9 +222,12 @@ struct Sidebar: View {
     @Binding var selection: Screen?
     let platforms: [PlatformCount]
     let pins: [Pin]
+    let lists: [GameList]
     let reviewQueueCount: Int
 
-    @State private var error: String?
+    @State private var problem: (title: String, message: String)?
+    @State private var creatingList = false
+    @State private var deletingList: GameList?
 
     var body: some View {
         List(selection: $selection) {
@@ -223,6 +235,23 @@ struct Sidebar: View {
                 ForEach(Screen.journal, id: \.self) { row($0) }
                 // Its Check again runs an Import, so it shows while one runs.
                 row(.reviewQueue, badge: reviewQueueCount, running: services.work.importing)
+            }
+            // Always there, even with no Lists: its + is where the first one comes from. An empty List says so with its 0.
+            Section {
+                ForEach(lists) { list in
+                    row(.list(id: list.id, name: list.name), badge: list.games, showsZero: true)
+                        .contextMenu {
+                            Button("Delete List…") { deletingList = list }.disabled(services.work.journalLocked)
+                        }
+                }
+            } header: {
+                HStack {
+                    Text("Lists")
+                    Spacer()
+                    Button("New List", systemImage: "plus") { creatingList = true }
+                        .labelStyle(.iconOnly).buttonStyle(.plain).help("New List")
+                        .disabled(services.work.journalLocked || services.journal == nil)
+                }
             }
             if !platforms.isEmpty {
                 Section("Platforms") {
@@ -236,16 +265,27 @@ struct Sidebar: View {
                     ForEach(pins, id: \.self) { pin in
                         row(.pinned(pin))
                             .help(pin.kind.rawValue.capitalized)
-                            .contextMenu { Button("Unpin") { save { try $0.unpin(pin) } } }
+                            .contextMenu { Button("Unpin") { unpin(pin) } }
                     }
                 }
             }
         }
-        .errorAlert("Couldn't unpin", message: $error)
+        .errorAlert($problem)
+        .sheet(isPresented: $creatingList) {
+            NewListSheet(services: services) { selection = .list(id: $0.id, name: $0.name) }
+        }
+        .confirmationDialog(
+            deletingList.map { "Delete \($0.name)?" } ?? "",
+            isPresented: Binding(get: { deletingList != nil }, set: { if !$0 { deletingList = nil } }), presenting: deletingList
+        ) { list in
+            Button("Delete List", role: .destructive) { delete(list) }
+        } message: { _ in
+            Text("Its Games stay in the Library. There's no undo; a backup is taken first.")
+        }
     }
 
-    /// `running` swaps the icon while an Import runs.
-    private func row(_ screen: Screen, badge: Int = 0, running: Bool = false) -> some View {
+    /// `running` swaps the icon while an Import runs. A badge of 0 shows nothing, unless `showsZero`.
+    private func row(_ screen: Screen, badge: Int = 0, showsZero: Bool = false, running: Bool = false) -> some View {
         // The badge goes inside the tag: a badge outside it hides the tag, and the row can't be selected.
         Label {
             Text(screen.title)
@@ -257,11 +297,24 @@ struct Sidebar: View {
             }
         }
         .help(running ? "Import running" : "")
-        .badge(badge).tag(screen)
+        .badge(badge != 0 || showsZero ? Text(badge, format: .number) : nil).tag(screen)
     }
 
-    private func save(_ change: (LudeumStore) throws -> Void) {
-        error = apply(change)
+    private func unpin(_ pin: Pin) {
+        problem = apply { try $0.unpin(pin) }.map { (title: "Couldn't unpin", message: $0) }
+    }
+
+    /// Off the main thread, as a backup of the whole journal is taken first. The window leaves the List once it's gone.
+    private func delete(_ list: GameList) {
+        guard let journal = services.journal else { return }
+        Task {
+            do {
+                try await offMain { try journal.deleteList(list.id) }
+                services.changes.changed()
+            } catch {
+                problem = (title: "Couldn't delete \(list.name)", message: journalErrorText(error))
+            }
+        }
     }
 
     /// Runs a journal change and reloads the screens, or returns what went wrong.

@@ -23,6 +23,8 @@ public struct LibraryFilter: Sendable, Equatable {
     public var series: String?
     /// A company involved in any role.
     public var company: String?
+    /// The Games in a List.
+    public var listId: Int64?
     /// Games with names (override, IGDB's or their own) containing each of its words, ignoring ASCII case. Empty is no filter.
     public var name = ""
 
@@ -31,9 +33,10 @@ public struct LibraryFilter: Sendable, Equatable {
         player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
         roms: ROMFilter? = nil, copies: CopiesFilter? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
-        name: String = ""
+        listId: Int64? = nil, name: String = ""
     ) {
         self.company = company
+        self.listId = listId
         self.name = name
         self.genre = genre
         self.theme = theme
@@ -74,6 +77,7 @@ extension LibraryFilter {
         if let v = scope.franchise { f.franchise = v }
         if let v = scope.series { f.series = v }
         if let v = scope.company { f.company = v }
+        if let v = scope.listId { f.listId = v }
         if !scope.name.isEmpty { f.name = scope.name }
         return f
     }
@@ -255,6 +259,10 @@ extension LudeumStore {
             let ids = ROMPlatform.all.filter { $0.value.archiving != nil }.keys.sorted()
             conditions.append("g.platformId IN (\(ids.map { _ in "?" }.joined(separator: ",")))")
             arguments += ids
+        }
+        if let listId = filter.listId {
+            conditions.append("EXISTS (SELECT 1 FROM listGame WHERE listId = ? AND gameId = g.id)")
+            arguments.append(listId)
         }
         switch filter.rating {
         case .unrated: conditions.append("r.rating IS NULL")

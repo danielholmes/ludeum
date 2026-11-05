@@ -746,6 +746,21 @@ enum LudeumSchema {
             }
             try keepTimestamps(db, on: "game")
         }
+        // Lists are back (ADR 0039), for groups of Games that nothing about the Games says, which pins can't give. They start
+        // empty: the ones `v34 no lists` dropped stay in Lists.md in the Data folder.
+        migrator.registerMigration("v44 lists") { db in
+            try db.create(table: "list") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("name", .text).notNull().unique().collate(.nocase)
+            }
+            try db.create(table: "listGame") { t in
+                t.column("listId", .integer).notNull().references("list", onDelete: .cascade)
+                t.column("gameId", .integer).notNull().indexed().references("game", onDelete: .cascade)
+                t.primaryKey(["listId", "gameId"])
+            }
+            try keepTimestamps(db, on: "list")
+            try keepTimestamps(db, on: "listGame")
+        }
         return migrator
     }
 

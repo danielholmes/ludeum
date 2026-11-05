@@ -1,7 +1,7 @@
 import LudeumCore
 import SwiftUI
 
-/// The Library, or a scoped view of it (a Platform, a Pinned item, Finished, Childhood): every
+/// The Library, or a scoped view of it (a Platform, a List, a Pinned item, Finished, Childhood): every
 /// Game, as a table or as covers, filtered and sorted.
 struct LibraryScreen: View {
     let services: Services
@@ -59,8 +59,13 @@ struct LibraryScreen: View {
                 // At the top, where the Games would be, not centred.
                 VStack {
                     EmptyResults(
-                        title: filter == LibraryFilter() ? "No Games yet" : "No Games match", systemImage: "books.vertical",
-                        description: filter == LibraryFilter() ? "Add one with +." : "Try fewer filters or another search.",
+                        title: filter != LibraryFilter()
+                            ? "No Games match"
+                            : scope.listId != nil ? "No Games in this List" : "No Games yet",
+                        systemImage: "books.vertical",
+                        description: filter != LibraryFilter()
+                            ? "Try fewer filters or another search."
+                            : scope.listId != nil ? "Add a Game from the Game's page, under Lists." : "Add one with +.",
                         clearFilters: filter == LibraryFilter()
                             ? nil
                             : { filter = LibraryFilter() }

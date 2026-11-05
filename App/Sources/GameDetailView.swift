@@ -10,6 +10,8 @@ struct GameDetailView: View {
     let browse: (LibraryFilter) -> Void
     /// Opens another Game, e.g. an Expansion's Base game.
     let open: (GameID) -> Void
+    /// Shows a List it's in.
+    let openList: (GameList) -> Void
     /// Called after the Game is deleted.
     let deleted: () -> Void
 
@@ -176,6 +178,8 @@ struct GameDetailView: View {
                         .buttonStyle(.hover)
                 }
 
+                // A List holds Games, and a Bundle isn't one.
+                GameListsSection(services: services, game: id, open: openList)
             }
 
             // About: what IGDB says about it, and RetroAchievements' time to beat.
@@ -985,6 +989,7 @@ private func deletionMessage(_ s: DeletionSummary, isBundle: Bool) -> String {
     if s.ratingEntries > 0 { parts.append("its Rating history (\(s.ratingEntries))") }
     if s.playthroughs > 0 { parts.append("\(s.playthroughs) Playthrough\(s.playthroughs == 1 ? "" : "s")") }
     if s.attachments > 0 { parts.append("\(s.attachments) Attachment\(s.attachments == 1 ? "" : "s"), whose files go to the Trash") }
+    if s.lists > 0 { parts.append("its place in \(s.lists) List\(s.lists == 1 ? "" : "s")") }
     parts.append(
         isBundle ? "its IGDB link and any uploaded Cover. Its Games stay" : "its Intent, Childhood, IGDB link and any uploaded Cover")
     return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
@@ -1034,6 +1039,8 @@ func journalErrorText(_ error: Error) -> String {
     case .runAheadOutOfRange: "Run-ahead is 0 to 10 frames."
     case .copyPlayedOn: "A Playthrough was played on this Copy. Change that Playthrough's Copy first."
     case .copyNotOfGame: "That Copy isn't one of this Game's."
+    case .listNameTaken: "There's already a List with that name."
+    case .cantBeInList: "A Bundle can't be in a List: its Games can."
     case nil: error.localizedDescription
     }
 }

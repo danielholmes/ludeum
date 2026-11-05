@@ -27,6 +27,10 @@ public enum LudeumError: Error, Equatable {
     case copyPlayedOn
     /// A Playthrough's Copy is one of its own Game's.
     case copyNotOfGame
+    /// No two Lists share a name, ignoring case.
+    case listNameTaken
+    /// A List holds Games, and a Bundle isn't one.
+    case cantBeInList
 }
 
 /// A Game as the journal shows it.

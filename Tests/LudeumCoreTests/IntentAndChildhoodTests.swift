@@ -151,9 +151,7 @@ import Testing
         let journal = try LudeumStore(directory: directory)
 
         #expect(try journal.game(1).name == "Super Metroid")
-        let tables = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false)).read { db in
-            [try db.tableExists("list"), try db.tableExists("listGame")]
-        }
-        #expect(tables == [false, false])
+        // `v44 lists` makes new tables, and the ones `v34 no lists` dropped don't come back with it (ADR 0039).
+        #expect(try journal.lists().isEmpty)
     }
 }

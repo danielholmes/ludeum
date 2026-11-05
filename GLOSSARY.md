@@ -115,6 +115,10 @@ _Avoid_: Person, companion, friend
 **Solo**:
 A Playthrough with no Players.
 
+**List**:
+A named group of Games I put together by hand, for a reason of my own that nothing about the Games says, e.g. games to play with my daughter. Any Game can be in any number of them, on any Platform, Owned or not, Expansions included; a Bundle can't, not being a Game, though its Games can. A List isn't ordered, and no two share a name. It shows as the Library scoped to it, with its count in the sidebar. Deleting a List leaves its Games. Different from a Pin, which follows what IGDB says about Games (ADR 0039).
+_Avoid_: Collection, playlist (that's a multi-disc ROM's)
+
 **Partial date**:
 A date known only to the day, month or year, e.g. "2024-03-17", "2024-03" or "1996". Best guesses are recorded the same way. A less precise date sorts before the more precise dates within it: "2024" before "2024-01" before "2024-01-05".
 _Avoid_: Approximate date, fuzzy date

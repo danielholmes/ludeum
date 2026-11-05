@@ -186,6 +186,15 @@ import Testing
         #expect(try names(copy).count == 1)
     }
 
+    @Test func deletingAListBacksUpFirst() throws {
+        let journal = try LudeumStore(directory: h.directory, clock: h.clock, timeZone: h.timeZone, backups: backups())
+        let list = try journal.createList(named: "First")
+
+        try journal.deleteList(list.id)
+
+        #expect(try backups().all().first?.operation == .beforeDelete)
+    }
+
     @Test func aRefusedDeletionLeavesNoBackup() throws {
         let journal = try LudeumStore(directory: h.directory, clock: h.clock, timeZone: h.timeZone, backups: backups())
         try journal.addPlatform(id: 19, name: "SNES")

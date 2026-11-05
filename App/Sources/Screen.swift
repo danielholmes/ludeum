@@ -16,6 +16,8 @@ enum Screen: Hashable, Codable {
     case platform(id: Int64, name: String)
     /// A pinned franchise or series: the Library filtered to it.
     case pinned(Pin)
+    /// A List: the Library filtered to its Games.
+    case list(id: Int64, name: String)
     case reviewQueue
 
     var title: String {
@@ -31,6 +33,7 @@ enum Screen: Hashable, Codable {
         case .igdb: "IGDB"
         case .platform(_, let name): name
         case .pinned(let pin): pin.name
+        case .list(_, let name): name
         case .reviewQueue: "Review queue"
         }
     }
@@ -54,6 +57,7 @@ enum Screen: Hashable, Codable {
             case .theme: "theatermasks"
             case .company: "building.2"
             }
+        case .list: "list.bullet.rectangle"
         case .reviewQueue: "tray"
         }
     }
