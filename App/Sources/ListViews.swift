@@ -1,14 +1,23 @@
 import LudeumCore
 import SwiftUI
 
-/// Naming a new List.
-struct NewListSheet: View {
+/// Naming a new List, or renaming one.
+struct ListNameSheet: View {
     let services: Services
-    /// Called with the List once it's made.
+    /// The List to rename; nil makes a new one.
+    let renaming: GameList?
+    /// Called with a new List once it's made.
     let created: (GameList) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
+    @State private var name: String
     @State private var error: String?
+
+    init(services: Services, renaming: GameList? = nil, created: @escaping (GameList) -> Void = { _ in }) {
+        self.services = services
+        self.renaming = renaming
+        self.created = created
+        _name = State(initialValue: renaming?.name ?? "")
+    }
 
     var body: some View {
         Form {
@@ -17,19 +26,25 @@ struct NewListSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
-                Button("Create List", action: create).keyboardShortcut(.defaultAction).disabled(name.trimmed.isEmpty)
+                Button(renaming == nil ? "Create List" : "Rename List", action: save)
+                    .keyboardShortcut(.defaultAction).disabled(name.trimmed.isEmpty)
             }
         }
         .formStyle(.grouped)
         .frame(width: 360)
     }
 
-    private func create() {
+    private func save() {
         guard let journal = services.journal else { return }
         do {
-            let list = try journal.createList(named: name)
-            services.changes.changed()
-            created(list)
+            if let renaming {
+                try journal.renameList(renaming.id, to: name)
+                services.changes.changed()
+            } else {
+                let list = try journal.createList(named: name)
+                services.changes.changed()
+                created(list)
+            }
             dismiss()
         } catch {
             self.error = journalErrorText(error)
@@ -72,7 +87,7 @@ struct GameListsSection: View {
             }
             .menuStyle(.borderlessButton).fixedSize()
             .sheet(isPresented: $creating) {
-                NewListSheet(services: services) { list in save { try $0.addGame(game, toList: list.id) } }
+                ListNameSheet(services: services) { list in save { try $0.addGame(game, toList: list.id) } }
             }
             if let error { ErrorText(error) }
         }

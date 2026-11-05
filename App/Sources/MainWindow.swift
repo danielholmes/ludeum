@@ -99,8 +99,9 @@ struct MainWindow: View {
                     LibraryScreen(services: services, selection: $selectedGame, scope: pin.filter, title: pin.name)
                         .id(selection)
                 case .list(let id, let name):
+                    // By its id, not the selection: renaming it keeps the filters I've added.
                     LibraryScreen(services: services, selection: $selectedGame, scope: LibraryFilter(listId: id), title: name)
-                        .id(selection)
+                        .id(id)
                 case .whatToPlayNext:
                     WhatToPlayNextScreen(services: services, selection: $selectedGame)
                 case .topRated:
@@ -196,7 +197,11 @@ struct MainWindow: View {
             pins = (try? services.journal?.pins()) ?? []
             lists = (try? services.journal?.lists()) ?? []
             if case .pinned(let pin) = selection, !pins.contains(pin) { selection = .library }
-            if case .list(let id, _) = selection, !lists.contains(where: { $0.id == id }) { selection = .library }
+            // A selected List may have gone, or have a new name.
+            if case .list(let id, let name) = selection {
+                let list = lists.first { $0.id == id }
+                if list?.name != name { selection = list.map { .list(id: $0.id, name: $0.name) } ?? .library }
+            }
             if case .platform(let id, _) = selection, !platformCounts.contains(where: { $0.id == id }) { selection = .library }
             if let game = selectedGame, (try? services.journal?.game(game)) == nil { selectedGame = nil }
         }
@@ -227,6 +232,7 @@ struct Sidebar: View {
 
     @State private var problem: (title: String, message: String)?
     @State private var creatingList = false
+    @State private var renamingList: GameList?
     @State private var deletingList: GameList?
 
     var body: some View {
@@ -241,7 +247,11 @@ struct Sidebar: View {
                 ForEach(lists) { list in
                     row(.list(id: list.id, name: list.name), badge: list.games, showsZero: true)
                         .contextMenu {
-                            Button("Delete List…") { deletingList = list }.disabled(services.work.journalLocked)
+                            Group {
+                                Button("Rename List…") { renamingList = list }
+                                Button("Delete List…") { deletingList = list }
+                            }
+                            .disabled(services.work.journalLocked)
                         }
                 }
             } header: {
@@ -272,8 +282,9 @@ struct Sidebar: View {
         }
         .errorAlert($problem)
         .sheet(isPresented: $creatingList) {
-            NewListSheet(services: services) { selection = .list(id: $0.id, name: $0.name) }
+            ListNameSheet(services: services) { selection = .list(id: $0.id, name: $0.name) }
         }
+        .sheet(item: $renamingList) { ListNameSheet(services: services, renaming: $0) }
         .confirmationDialog(
             deletingList.map { "Delete \($0.name)?" } ?? "",
             isPresented: Binding(get: { deletingList != nil }, set: { if !$0 { deletingList = nil } }), presenting: deletingList

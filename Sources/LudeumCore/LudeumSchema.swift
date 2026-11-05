@@ -659,7 +659,7 @@ enum LudeumSchema {
             try db.drop(table: "heldOpenEmuData")
         }
         // Lists went: pinned themes, franchises, series and companies took their place. The ones in my journal were exported
-        // to Lists.md in the Data folder before this came in.
+        // to a file before this came in, since deleted.
         migrator.registerMigration("v34 no lists") { db in
             try db.drop(table: "listGame")
             try db.drop(table: "list")
@@ -747,7 +747,7 @@ enum LudeumSchema {
             try keepTimestamps(db, on: "game")
         }
         // Lists are back (ADR 0039), for groups of Games that nothing about the Games says, which pins can't give. They start
-        // empty: the ones `v34 no lists` dropped stay in Lists.md in the Data folder.
+        // empty: the ones `v34 no lists` dropped stay gone.
         migrator.registerMigration("v44 lists") { db in
             try db.create(table: "list") { t in
                 t.autoIncrementedPrimaryKey("id")

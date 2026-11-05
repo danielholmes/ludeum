@@ -4,10 +4,10 @@ Reverses `v34 no lists`, which had no ADR of its own. That migration dropped Lis
 
 So:
 
-- **A List is a named group of Games I put together by hand.** I create and delete Lists, and put a Game in or take it out from its page. A List has no order of its own and can't be renamed yet.
+- **A List is a named group of Games I put together by hand.** I create, rename and delete Lists, and put a Game in or take it out from its page. A List has no order of its own.
 - **A List shows as the Library scoped to it, as a Platform does.** Selecting one in the sidebar opens the Library with a fixed `LibraryFilter.listId`, so its filters, sorts and views all work. The sidebar counts its Games, showing an empty List's 0.
 - **Any Game can be in one, on any Platform, Owned or not, Expansions included. A Bundle can't.** A Bundle isn't a Game and is never a Library row (ADR 0016), so a List could never show it. Its Games can each go in.
-- **`v44 lists` makes new, empty tables.** It doesn't bring back the 48 Lists exported to `Lists.md` in the Data folder: they were first filled from OpenEmu's collections, and picking any of them up again is a choice to make by hand.
+- **`v44 lists` makes new, empty tables.** It doesn't bring back the 48 Lists `v34` dropped, which were first filled from OpenEmu's collections. I didn't want them, so their export, `Lists.md` in the Data folder, was deleted on 2026-11-05.
 
 ## Considered Options
 

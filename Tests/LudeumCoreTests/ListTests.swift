@@ -39,6 +39,31 @@ import Testing
         #expect(throws: LudeumError.listNameTaken) { try j.journal.createList(named: "COUCH CO-OP") }
     }
 
+    @Test func renamingAListKeepsItsGamesAndMovesItToItsNewPlaceByName() throws {
+        let game = try j.journal.addGame(platformId: snes, name: "Super Metroid")
+        let list = try j.journal.createList(named: "Zebra")
+        _ = try j.journal.createList(named: "Middle")
+        try j.journal.addGame(game, toList: list.id)
+
+        try j.journal.renameList(list.id, to: "  Apple  ")
+
+        #expect(try j.journal.lists().map(\.name) == ["Apple", "Middle"])
+        #expect(try j.journal.lists(containing: game) == [GameList(id: list.id, name: "Apple", games: 1)])
+    }
+
+    @Test func aRenamedListsNameIsRequiredAndUniqueIgnoringCaseButCanChangeItsOwnCase() throws {
+        let list = try j.journal.createList(named: "Couch co-op")
+        _ = try j.journal.createList(named: "Cosy")
+
+        #expect(throws: LudeumError.nameRequired) { try j.journal.renameList(list.id, to: "   ") }
+        #expect(throws: LudeumError.listNameTaken) { try j.journal.renameList(list.id, to: "COSY") }
+        #expect(try j.journal.lists().map(\.name) == ["Cosy", "Couch co-op"])
+
+        try j.journal.renameList(list.id, to: "Couch Co-op")
+
+        #expect(try j.journal.lists().map(\.name) == ["Cosy", "Couch Co-op"])
+    }
+
     @Test func aGameOfAnyKindCanBeInAnyNumberOfListsOnceEach() throws {
         let owned = try j.journal.addGame(platformId: snes, name: "Super Metroid")
         let unowned = try j.journal.addGame(platformId: xbox, name: "Rayman Legends")

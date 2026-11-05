@@ -43,12 +43,25 @@ extension LudeumStore {
     /// A new, empty List. Its name is trimmed, and no two Lists share one, ignoring case.
     @discardableResult
     public func createList(named name: String) throws -> GameList {
-        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw LudeumError.nameRequired }
+        let name = try Self.validListName(name)
         return try write(uniqueViolation: .listNameTaken) { db in
             try db.execute(sql: "INSERT INTO list (name) VALUES (?)", arguments: [name])
             return GameList(id: db.lastInsertedRowID, name: name, games: 0)
         }
+    }
+
+    /// Gives a List a new name, under the same rules as a new List's.
+    public func renameList(_ id: Int64, to name: String) throws {
+        let name = try Self.validListName(name)
+        try write(uniqueViolation: .listNameTaken) { db in
+            try db.execute(sql: "UPDATE list SET name = ? WHERE id = ?", arguments: [name, id])
+        }
+    }
+
+    private static func validListName(_ name: String) throws -> String {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw LudeumError.nameRequired }
+        return name
     }
 
     /// Deletes a List. Its Games stay.
