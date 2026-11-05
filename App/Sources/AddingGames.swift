@@ -37,8 +37,6 @@ import SwiftUI
     let tasks = BackgroundTasks()
     /// Each installed Emulator's version, checked at launch, and DuckStation's install.
     let versions: EmulatorVersionChecks
-    /// The Plays going on in Wine, which last until their games end (ADR 0040).
-    let winePlays = WinePlays()
     /// The app menu's sheets.
     let sheets = AppSheets()
     /// Opened once; nil if it couldn't be.

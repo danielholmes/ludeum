@@ -46,11 +46,6 @@ public struct Play: Sendable {
         case needsCompacting
         /// An Amiga ROM's disks couldn't be listed from its archive or their save images made, with why.
         case couldntGetDisksReady(String)
-        /// A Windows ROM's game is still running in Wine, or closed less than a few seconds ago: its clone can't be
-        /// replaced under it (ADR 0040).
-        case stillRunning
-        /// A Windows ROM's launch file can't be Played as it is, with what's wrong with it.
-        case badLaunchFile(String)
 
         public var message: String {
             switch self {
@@ -83,8 +78,6 @@ public struct Play: Sendable {
                 "No Sega CD BIOS. Put one in \(folder), named Mega CD US.bin, Mega CD Japan.bin or Mega CD Europe.bin, then Play."
             case .needsCompacting: "Compact it to Play: a game saves to its disk, and a loose disk would be written over."
             case .couldntGetDisksReady(let why): "Couldn't get its disks ready: \(why)"
-            case .stillRunning: "It's still running in Wine. Quit it, give Wine a few seconds to finish, then Play."
-            case .badLaunchFile(let why): why
             }
         }
     }
@@ -136,9 +129,6 @@ public struct Play: Sendable {
         /// Open `app` with `arguments`, showing `warning` first when there is one. `startsOn` is the Disc a multi-disc ROM
         /// starts on, for the journal to remember. `environment` is what it needs set for this launch (Amiberry's home).
         case open(app: URL, arguments: [String], warning: String?, startsOn: DiscStart? = nil, environment: [String: String] = [:])
-        /// Run this Play in Wine, showing `warning` first when there is one: there's no app to open, and it isn't over
-        /// until the game has ended and its Game save is kept (ADR 0040).
-        case wine(WinePlay, warning: String?)
         case refused(Refusal)
 
         public var refusal: Refusal? {
@@ -150,10 +140,7 @@ public struct Play: Sendable {
         }
 
         public var warning: String? {
-            switch self {
-            case .open(_, _, let warning, _, _), .wine(_, let warning): warning
-            case .refused: nil
-            }
+            if case .open(_, _, let warning, _, _) = self { warning } else { nil }
         }
 
         public var startsOn: DiscStart? {
@@ -255,14 +242,12 @@ public struct Play: Sendable {
     /// that way. `app` finds an installed app by its bundle identifier; DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir
     /// are the ones Ludeum installs (`duckStation.app`, `mesen.app`, `ares.app`, `pcsx2.app`, `amiberry.app`, `ymir.app`),
     /// refused while any copy is `running`, and PCSX2 and Ymir until they have a BIOS. `saveState` starts the Play from that
-    /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on. A
-    /// Windows ROM's is a Play in the `wine` Ludeum installs, refused until it's there, while the ROM's game is still
-    /// running, and when its launch file can't be Played as it is (ADR 0040).
+    /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on.
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
         pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), ymir: YmirSettings = .init(),
-        wine: WineSettings = .init(), running: (Emulator) -> Bool = { _ in false }
+        running: (Emulator) -> Bool = { _ in false }
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -305,10 +290,6 @@ public struct Play: Sendable {
             guard amiberry.isInstalled else { return .refused(.notInstalled(emulator)) }
             if running(emulator) { return .refused(.running(emulator)) }
             app = amiberry.app
-        } else if emulator == .wine {
-            // Other ROMs' games can be running: each has a prefix of its own.
-            guard wine.isInstalled else { return .refused(.notInstalled(emulator)) }
-            app = wine.folder
         } else {
             guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
             app = found
@@ -325,16 +306,6 @@ public struct Play: Sendable {
         }
         // xemu would only reach its dashboard. An image that's neither kind goes ahead, as xemu may know better.
         if emulator == .xemu, XboxDisc.kind(of: file) == .redump { return .refused(.needsXISO) }
-        if emulator == .wine {
-            let play: WinePlay
-            do {
-                play = try WinePlay(launchFile: file, romName: rom.folderName, wine: wine)
-            } catch {
-                return .refused(.badLaunchFile(error.localizedDescription))
-            }
-            if play.isRunning { return .refused(.stillRunning) }
-            return .wine(play, warning: { if case .warn(let warning) = version { warning } else { nil } }())
-        }
         var opened = file
         var startsOn: DiscStart?
         let discs = emulator == .duckStation ? Self.discs(ofPlaylist: file) : []

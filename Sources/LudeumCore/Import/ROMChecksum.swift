@@ -38,8 +38,6 @@ public enum ROMChecksum: Sendable, Equatable {
         _ rom: FolderROMFile, platformId: Int64, sevenZip: SevenZip?, isOnDisk: (URL) -> Bool = SevenZip.isOnDisk
     ) async -> Reading {
         guard let file = rom.ready ?? rom.archive else { return .unreadable }
-        // A prepared game is a folder made by hand, which no DAT has (Windows: ADR 0040).
-        if ROMPlatform.all[platformId]?.launchFile != nil { return .noDump }
         guard isOnDisk(file) else { return .onlineOnly }
         if ["7z", "zip"].contains(file.pathExtension.lowercased()) {
             guard let sevenZip, let entries = try? await sevenZip.contents(of: file) else { return .unreadable }

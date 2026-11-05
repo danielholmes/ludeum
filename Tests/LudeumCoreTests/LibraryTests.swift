@@ -13,10 +13,10 @@ import Testing
     init() throws {
         h = try LudeumHarness()
         try h.journal.addPlatform(id: 19, name: "SNES")
-        try h.journal.addPlatform(id: 13, name: "PC")
+        try h.journal.addPlatform(id: 6, name: "PC")
         metroid = try h.journal.addGame(platformId: 19, name: "Super Metroid")
         zelda = try h.journal.addGame(platformId: 19, name: "A Link to the Past")
-        doom = try h.journal.addGame(platformId: 13, name: "Doom")
+        doom = try h.journal.addGame(platformId: 6, name: "Doom")
         try h.journal.setRating(metroid, Rating(tenths: 95))
         try h.journal.setRating(zelda, Rating(tenths: 80))
         try h.journal.setIntent(doom, .backlog)

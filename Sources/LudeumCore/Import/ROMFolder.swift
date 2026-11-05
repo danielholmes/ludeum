@@ -34,9 +34,6 @@ public struct ROMFolder: Sendable, Equatable {
     /// Whether its Emulator opens a playlist of a multi-disc Version's Discs, kept with them in the ROM's subfolder.
     var readsPlaylists: Bool { readyExtensions.contains("m3u") }
 
-    /// The launch file's name, where a ROM is a prepared game: a subfolder with this file at its top (Windows: ADR 0040).
-    var launchFile: String? { ROMPlatform.all[platformId]?.launchFile }
-
     /// Whether a file with this name, at the top of the folder, is a ROM to it: ready, or a `.7z`.
     func reads(fileName: String) -> Bool {
         let ext = (fileName as NSString).pathExtension.lowercased()
@@ -103,33 +100,18 @@ public struct ROMFolder: Sendable, Equatable {
             }
     }
 
-    /// The game in a subfolder, as `game(among:in:)` finds it.
+    /// The game in a subfolder, as `game(among:)` finds it.
     private func game(in folder: URL) -> (file: URL, discsWithoutPlaylist: [URL])? {
-        if let launchFile {
-            // Only its top is looked at: a prepared game is hundreds of files, none of them the ROM's but this one.
-            let file = folder.appending(path: launchFile, directoryHint: .notDirectory)
-            return (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true ? (file, []) : nil
-        }
         let files = ((try? FileManager.default.subpathsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? [])
             .map { folder.appending(path: $0, directoryHint: .notDirectory) }
             .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
-        return game(among: files, in: folder)
+        return game(among: files)
     }
 
-    /// The game among the files of `subfolder`: its one playlist, else its one cue sheet, else its one image. Several cue
+    /// The game among a subfolder's files: its one playlist, else its one cue sheet, else its one image. Several cue
     /// sheets (or, with none, several images) that are each a different Disc are a game too, opening at Disc 1 until it
     /// has a playlist, where the Platform reads playlists at all. Nil when there's nothing, or several that aren't Discs.
-    /// Where a ROM is a prepared game, it's the launch file at the subfolder's top, and nothing else.
-    func game(among files: [URL], in subfolder: URL) -> (file: URL, discsWithoutPlaylist: [URL])? {
-        if let launchFile {
-            let top = subfolder.standardizedFileURL.pathComponents
-            return files.first {
-                let components = $0.standardizedFileURL.pathComponents
-                return components.count == top.count + 1 && components.starts(with: top)
-                    && components.last?.caseInsensitiveCompare(launchFile) == .orderedSame
-            }
-            .map { ($0, []) }
-        }
+    func game(among files: [URL]) -> (file: URL, discsWithoutPlaylist: [URL])? {
         let images = files.filter { readyExtensions.contains($0.pathExtension.lowercased()) }
         let playlists = images.filter { $0.pathExtension.lowercased() == "m3u" }
         if playlists.count == 1 { return (playlists[0], []) }
@@ -151,11 +133,9 @@ public struct ROMFolder: Sendable, Equatable {
 
     /// Whether a path, in a subfolder or an archive, is Clutter: a hidden file the Emulator can't open (Finder's
     /// `.DS_Store` and `._` companions), or one of `clutterExtensions` the Emulator doesn't open (a Mega Drive game is a
-    /// `.md`). A game's own name can start with a dot (`.hack--Link (Japan).iso`). In a prepared game only Finder's own
-    /// files are: its pictures, texts and fonts are the game's.
+    /// `.md`). A game's own name can start with a dot (`.hack--Link (Japan).iso`).
     func isClutter(_ path: String) -> Bool {
         let name = (path as NSString).lastPathComponent
-        if launchFile != nil { return name == ".DS_Store" || name.hasPrefix("._") }
         let ext = (name as NSString).pathExtension.lowercased()
         if (path as NSString).pathComponents.contains(where: { $0.hasPrefix(".") }) {
             return name.hasPrefix("._") || !readyExtensions.contains(ext)

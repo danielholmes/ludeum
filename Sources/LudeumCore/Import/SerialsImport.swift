@@ -66,8 +66,7 @@ enum ROMSerials {
         {
             files = .archive(archive, sevenZip, sizes: Dictionary(entries.map { ($0.path, Int($0.size)) }, uniquingKeysWith: { a, _ in a }))
             let root = URL(filePath: "/", directoryHint: .isDirectory)
-            guard let game = folder.game(among: entries.map { root.appending(path: $0.path, directoryHint: .notDirectory) }, in: root)
-            else {
+            guard let game = folder.game(among: entries.map { root.appending(path: $0.path, directoryHint: .notDirectory) }) else {
                 return nil
             }
             func inArchive(_ url: URL) -> String { String(url.path(percentEncoded: false).dropFirst()) }

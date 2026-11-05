@@ -44,8 +44,6 @@ struct EmulatorVersionSpec: Sendable {
     var exact = false
     /// How long its command line is given to print the version before it's stopped and the version counted unreadable.
     var timeout: TimeInterval = 10
-    /// What an install record's second line has to be for it to be the pinned build: the digest of what was installed.
-    var recorded: String? = nil
 }
 
 extension Emulator {
@@ -57,14 +55,7 @@ extension Emulator {
         switch self {
         case .mesenCE:
             EmulatorVersionSpec(
-                expected: MesenRelease.pinned.version, source: .installRecord, format: .installRecord, exact: true,
-                recorded: MesenRelease.pinned.sha256)
-        // Its engine can't say which of Sikarugir's revisions it is without being run, so Install records what it
-        // installed, and that's what's checked (ADR 0040).
-        case .wine:
-            EmulatorVersionSpec(
-                expected: WineRelease.pinned.version, source: .installRecord, format: .installRecord, exact: true,
-                recorded: WineRelease.pinned.digests)
+                expected: MesenRelease.pinned.version, source: .installRecord, format: .installRecord, exact: true)
         case .duckStation:
             EmulatorVersionSpec(
                 expected: String(DuckStationRelease.pinned.build), source: .commandLine("-version"), format: .buildNumber,
@@ -117,7 +108,7 @@ public enum EmulatorVersions {
         let shown = version.map(String.init).joined(separator: ".")
         if spec.format == .installRecord {
             let digest = text.split(separator: "\n").dropFirst().first.map(String.init)
-            return digest?.lowercased() == spec.recorded?.lowercased() ? .ok : .wrongBuild(found: shown)
+            return digest?.lowercased() == MesenRelease.pinned.sha256.lowercased() ? .ok : .wrongBuild(found: shown)
         }
         if spec.exact { return compare(version, expected) == 0 ? .ok : .wrongBuild(found: shown) }
         if compare(version, expected) < 0 { return .tooOld(found: shown) }
@@ -134,8 +125,6 @@ public enum EmulatorVersions {
         case .appVersion:
             return info?["CFBundleShortVersionString"] as? String
         case .installRecord:
-            // Wine's `app` is its engine's folder, as it isn't an app.
-            if emulator == .wine { return WineRelease.Installed(folder: app).map { "\($0.version)\n\($0.digests)" } }
             return MesenRelease.Installed(app: app).map { "\($0.version)\n\($0.sha256)" }
         case .commandLine(let flag):
             guard let executable = info?["CFBundleExecutable"] as? String else { return nil }

@@ -1,5 +1,7 @@
 # Windows Games are Played in Wine, from a clone of the ROM's prepared game
 
+Reversed on 2026-11-05, and its build taken out: real Windows in a PC emulator ran Age of Empires and Z from their own installers, and Tiberian Sun copied in as a folder, with none of the per-game hand work below, so Wine isn't worth keeping. Nothing has replaced it yet, and Windows has no ROM handling again. What follows is the decision as it was made.
+
 Adds a seventh Emulator Ludeum installs to [0038](0038-emulators-are-whole-apps-ludeum-installs-not-cores.md)'s model, and meets [0035](0035-an-amiga-rom-is-one-archive-and-its-saves-are-amiberrys-save-images.md)'s problem again: a game that writes to the thing it was loaded from.
 
 I want to play Windows 9x games, Z and Age of Empires to begin with, and Windows had no ROM handling. Both were got working by hand on 2026-11-05, each as an app of its own; the research, with what was run, is [wine-as-windows-emulator.md](../research/wine-as-windows-emulator.md). My first thought was to keep such an app as the ROM and have Play open it. Three findings turned that into this.
@@ -49,17 +51,8 @@ So:
 - DOS (#53) asks for the same shape, a folder and a file saying what to run, and can take this one. A Mac game that still runs has no Emulator at all; neither is decided here.
 - The glossary changes when this is built: Emulator and Data folder gain Wine, ROM folder a Windows ROM's subfolder, Game save a Windows Game's, and Archive the Windows ROM.
 
-## What building it settled, and what it didn't
+## Still to settle before this is built
 
-Built on 2026-11-05 (#97), and tried against the pinned Wine in a scratch Ludeum folder:
-
-- **A Game save laid over a fresh clone, in a prefix made anew, gives a program back what it wrote**: its files, and its registry keys under both `HKEY_CURRENT_USER` and `HKEY_LOCAL_MACHINE`. Tried with a stand-in program, not yet with a game saved in either game.
-- **Both games start from their prepared ROMs**: Z to its intro cutscene, Age of Empires to its intro video, which its codec, laid in from the ROM, plays. Each prefix was made in about twenty seconds.
-- **The launch file also says where on the C: drive the game is installed**, as both games' registry values hold that path.
-- **The registry goes in and out with Wine's `reg`, not `regedit`**, which stops to show a window when a key isn't there yet.
-
-Still open:
-
-- **Saving and loading in Z** hasn't been tried: it takes a real mouse.
+- **Saving and loading in Z** hasn't been tried, nor has either game been Played from a Game save laid over a fresh clone.
 - **Cloning a ROM that Dropbox keeps online only** hasn't been tried.
 - **The source of Sikarugir's changes to Wine 10.0** wasn't found, and `10.0_6` is no longer in its list of current engines, though the download is still there.

@@ -111,12 +111,12 @@ import Testing
     }
 
     @Test func aPlatformWithNoROMFolderIsNamedAsIGDBNamesIt() throws {
-        try j.journal.addPlatform(id: 14, name: "Mac")
-        let game = try j.journal.addGame(platformId: 14, name: "Half-Life 2: Episode One")
+        try j.journal.addPlatform(id: 6, name: "PC (Microsoft Windows)")
+        let game = try j.journal.addGame(platformId: 6, name: "Half-Life 2: Episode One")
 
         try attachments.add([try pick("manual.pdf")], to: game)
 
-        #expect(files("Mac") == ["Half-Life 2 - Episode One"])
+        #expect(files("PC (Microsoft Windows)") == ["Half-Life 2 - Episode One"])
     }
 
     @Test func twoGamesWithOneNameOnOnePlatformGetFoldersOfTheirOwn() throws {

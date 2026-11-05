@@ -11,7 +11,3 @@ Uses the five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `
 ### Domain docs
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
-
-### Windows ROMs
-
-Getting a Windows game to run under Wine is done by hand, outside Ludeum, and handed over as a prepared folder with a `launch.json`. See `docs/agents/windows-roms.md`.

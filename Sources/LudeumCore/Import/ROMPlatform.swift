@@ -20,9 +20,6 @@ public struct ROMPlatform: Sendable, Equatable {
     /// Whether a multi-disc Version is one Compacted archive holding all its Discs, each under its own name (Amiga: ADR
     /// 0035). A ROM there is always the one archive, with no subfolder or playlist.
     public let packsDiscsTogether: Bool
-    /// The launch file's name, where a ROM is a prepared game (Windows: ADR 0040): a subfolder with this file at its top,
-    /// the file a Play opens, saying how the game in the subfolder is started. Nil for the rest.
-    public let launchFile: String?
 
     /// How an Archived ROM unpacks.
     public enum Archiving: Sendable, Equatable {
@@ -41,7 +38,7 @@ public struct ROMPlatform: Sendable, Equatable {
 
     init(
         name: String, folderName: String, readyExtensions: [String], compactExtension: String? = nil,
-        archiving: Archiving? = nil, naming: Naming = .noIntro, packsDiscsTogether: Bool = false, launchFile: String? = nil
+        archiving: Archiving? = nil, naming: Naming = .noIntro, packsDiscsTogether: Bool = false
     ) {
         self.name = name
         self.folderName = folderName
@@ -50,7 +47,6 @@ public struct ROMPlatform: Sendable, Equatable {
         self.archiving = archiving
         self.naming = naming
         self.packsDiscsTogether = packsDiscsTogether
-        self.launchFile = launchFile
     }
 
     /// Whether its Emulator opens an `.m3u` playlist of a multi-disc Version's Discs, so its ROM folder keeps those Discs
@@ -74,7 +70,6 @@ public struct ROMPlatform: Sendable, Equatable {
     public static let xbox: Int64 = 11
     public static let amiga: Int64 = 16
     public static let segaCD: Int64 = 78
-    public static let windows: Int64 = 6
 
     /// Every Platform with a ROM folder, by IGDB platform id. One folder per Platform: Game Boy and
     /// Game Boy Color, NES and Famicom, SNES and Super Famicom each have their own.
@@ -158,11 +153,6 @@ public struct ROMPlatform: Sendable, Equatable {
         16: .init(
             name: "Amiga", folderName: "Amiga", readyExtensions: ["adf", "adz", "dms", "ipf"], compactExtension: "7z",
             packsDiscsTogether: true),
-        // A prepared game, not a disc (ADR 0040): a subfolder with its launch file, which is all a Play opens, so no
-        // loose file is a ROM here. Archived whole, as a PS2 ROM is.
-        6: .init(
-            name: "PC (Microsoft Windows)", folderName: "Windows", readyExtensions: [], archiving: .intoFolder,
-            launchFile: "launch.json"),
         // No Emulator yet, so nothing to Compact into.
         53: .init(
             name: "MSX2", folderName: "MSX2", readyExtensions: ["rom", "mx2", "mx1", "dsk", "cas"]),

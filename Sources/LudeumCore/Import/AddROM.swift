@@ -135,17 +135,6 @@ public struct ROMSource: Sendable, Equatable {
         } else {
             inside = urls.map(\.path)
         }
-        // A prepared game, a folder or an archive of one with a launch file at its top, is that Platform's and no
-        // other's, whatever disc images it holds (Windows: ADR 0040).
-        if isFolder || archive != nil {
-            let names =
-                isFolder
-                ? (try? FileManager.default.contentsOfDirectory(atPath: urls[0].path(percentEncoded: false))) ?? []
-                : inside.filter { !$0.contains("/") }
-            let atTop = Set(names.map { $0.lowercased() })
-            let prepared = ROMPlatform.all.filter { _, platform in platform.launchFile.map { atTop.contains($0.lowercased()) } ?? false }
-            if !prepared.isEmpty { return prepared.keys.sorted() }
-        }
         let extensions = Set(inside.filter { !Self.isHidden($0) }.map { ($0 as NSString).pathExtension.lowercased() })
         let platforms = ROMPlatform.all.filter { _, platform in
             if isFolder && platform.archiving != .intoFolder { return false }
@@ -475,11 +464,9 @@ public struct AddROM: Sendable {
         // Discs, ADR 0031), as everything does on a Platform whose ROMs are always in one.
         let ready = files.filter { folder.readyExtensions.contains($0.pathExtension.lowercased()) }
         if folder.archiving == .intoFolder || (folder.readsPlaylists && ready.count > 1) {
-            guard let game = folder.game(among: files, in: staged) else {
+            guard let game = folder.game(among: files) else {
                 throw ready.isEmpty ? AddROMError.noImage : AddROMError.ambiguous(ready.map(\.lastPathComponent))
             }
-            // A prepared game that couldn't be Played as it is isn't taken: its launch file says what's wrong with it.
-            if folder.launchFile != nil { _ = try WineLaunchFile.read(game.file) }
             if !game.discsWithoutPlaylist.isEmpty { try writePlaylist(named: name, for: game.discsWithoutPlaylist, in: staged) }
             return staged
         }
