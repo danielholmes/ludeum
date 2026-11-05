@@ -52,7 +52,8 @@ struct ListNameSheet: View {
     }
 }
 
-/// Game detail's Lists: the ones it's in, each opening the List and with a button to take it out, and adding it to another.
+/// Game detail's Lists: a pill for each one it's in, which opens the List and has an × to take it out, then adding it to
+/// another, all in one wrapping line.
 struct GameListsSection: View {
     let services: Services
     let game: GameID
@@ -66,26 +67,26 @@ struct GameListsSection: View {
 
     var body: some View {
         Section("Lists") {
-            ForEach(memberOf) { list in
-                HStack {
-                    Button(list.name) { open(list) }
-                        .buttonStyle(.link).help("Show this List")
-                    Spacer()
-                    Button("Remove from \(list.name)", systemImage: "xmark") {
+            FlowLayout(spacing: 4) {
+                ForEach(memberOf) { list in
+                    ListPill(name: list.name) {
+                        open(list)
+                    } remove: {
                         save { try $0.removeGame(game, fromList: list.id) }
                     }
-                    .labelStyle(.iconOnly).buttonStyle(.hover).help("Take it out of this List")
                 }
-            }
-            Menu("Add to List", systemImage: "plus") {
-                let others = lists.filter { !memberOf.contains($0) }
-                ForEach(others) { list in
-                    Button(list.name) { save { try $0.addGame(game, toList: list.id) } }
+                Menu("Add to List", systemImage: "plus") {
+                    let others = lists.filter { !memberOf.contains($0) }
+                    ForEach(others) { list in
+                        Button(list.name) { save { try $0.addGame(game, toList: list.id) } }
+                    }
+                    if !others.isEmpty { Divider() }
+                    Button("New List…") { creating = true }
                 }
-                if !others.isEmpty { Divider() }
-                Button("New List…") { creating = true }
+                .menuStyle(.borderlessButton).fixedSize()
+                // A row's views line up along their tops, and a pill is this much taller.
+                .padding(.vertical, 2)
             }
-            .menuStyle(.borderlessButton).fixedSize()
             .sheet(isPresented: $creating) {
                 ListNameSheet(services: services) { list in save { try $0.addGame(game, toList: list.id) } }
             }
@@ -106,5 +107,23 @@ struct GameListsSection: View {
         } catch {
             self.error = journalErrorText(error)
         }
+    }
+}
+
+/// A List a Game is in: its name opens it, and the × takes the Game out.
+private struct ListPill: View {
+    let name: String
+    let open: () -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(name, action: open).buttonStyle(.plain).help("Show this List")
+            Button("Remove from \(name)", systemImage: "xmark", action: remove)
+                .labelStyle(.iconOnly).buttonStyle(.hover).imageScale(.small).help("Take it out of this List")
+        }
+        .font(FactStyle.value)
+        .padding(.leading, 8).padding(.vertical, 2)
+        .background(.quaternary, in: .capsule)
     }
 }
