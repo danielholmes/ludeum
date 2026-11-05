@@ -480,12 +480,18 @@ enum FactStyle {
         disc: disc, duckStation: DuckStationSettings(ludeum: services.settings.folder),
         mesen: MesenSettings(ludeum: services.settings.folder), ares: AresSettings(ludeum: services.settings.folder),
         pcsx2: PCSX2Settings(ludeum: services.settings.folder), amiberry: AmiberrySettings(ludeum: services.settings.folder),
-        ymir: YmirSettings(ludeum: services.settings.folder), running: \.isRunning)
+        ymir: YmirSettings(ludeum: services.settings.folder), wine: WineSettings(ludeum: services.settings.folder), running: \.isRunning)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)
     case .refused(let refusal):
         refused(refusal.message)
+    case .wine(let wine, let warning):
+        // No app to open: Ludeum runs Wine itself, and the Play lasts until the game has ended and its Game save is
+        // kept (ADR 0040).
+        if let warning { alert("Check \(emulator.name)'s version", warning) }
+        guard let rom = play.rom?.id else { return }
+        services.winePlays.start(wine, rom: rom, changes: services.changes, failed: refused)
     case .open(let app, let arguments, let warning, let startsOn, let environment):
         if let warning { alert("Check \(emulator.name)'s version", warning) }
         let configuration = NSWorkspace.OpenConfiguration()

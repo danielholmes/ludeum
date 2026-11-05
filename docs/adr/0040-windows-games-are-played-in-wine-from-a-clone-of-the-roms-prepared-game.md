@@ -49,8 +49,17 @@ So:
 - DOS (#53) asks for the same shape, a folder and a file saying what to run, and can take this one. A Mac game that still runs has no Emulator at all; neither is decided here.
 - The glossary changes when this is built: Emulator and Data folder gain Wine, ROM folder a Windows ROM's subfolder, Game save a Windows Game's, and Archive the Windows ROM.
 
-## Still to settle before this is built
+## What building it settled, and what it didn't
 
-- **Saving and loading in Z** hasn't been tried, nor has either game been Played from a Game save laid over a fresh clone.
+Built on 2026-11-05 (#97), and tried against the pinned Wine in a scratch Ludeum folder:
+
+- **A Game save laid over a fresh clone, in a prefix made anew, gives a program back what it wrote**: its files, and its registry keys under both `HKEY_CURRENT_USER` and `HKEY_LOCAL_MACHINE`. Tried with a stand-in program, not yet with a game saved in either game.
+- **Both games start from their prepared ROMs**: Z to its intro cutscene, Age of Empires to its intro video, which its codec, laid in from the ROM, plays. Each prefix was made in about twenty seconds.
+- **The launch file also says where on the C: drive the game is installed**, as both games' registry values hold that path.
+- **The registry goes in and out with Wine's `reg`, not `regedit`**, which stops to show a window when a key isn't there yet.
+
+Still open:
+
+- **Saving and loading in Z** hasn't been tried: it takes a real mouse.
 - **Cloning a ROM that Dropbox keeps online only** hasn't been tried.
 - **The source of Sikarugir's changes to Wine 10.0** wasn't found, and `10.0_6` is no longer in its list of current engines, though the download is still there.

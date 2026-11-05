@@ -16,13 +16,18 @@ public struct Emulator: Sendable, Hashable {
     public static let pcsx2 = Emulator(name: "PCSX2", bundleIdentifier: "net.pcsx2.pcsx2")
     public static let xemu = Emulator(name: "xemu", bundleIdentifier: "xemu.app.0")
     public static let amiberry = Emulator(name: "Amiberry", bundleIdentifier: "com.blitterstudio.Amiberry")
+    /// Not an app: Ludeum runs its `wine` directly (ADR 0040), so its identifier only tells it from the others.
+    public static let wine = Emulator(name: "Wine", bundleIdentifier: "org.winehq.wine")
 
-    public static let all: [Emulator] = [.mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu, .amiberry]
+    public static let all: [Emulator] = [
+        .mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu, .amiberry, .wine,
+    ]
 
     /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024), MesenCE (ADR 0027),
-    /// ares (ADR 0028), PCSX2 (ADR 0032), Amiberry (ADR 0035) and Ymir (ADR 0036).
+    /// ares (ADR 0028), PCSX2 (ADR 0032), Amiberry (ADR 0035), Ymir (ADR 0036) and Wine (ADR 0040).
     public var isLudeums: Bool {
         self == .duckStation || self == .mesenCE || self == .ares || self == .pcsx2 || self == .amiberry || self == .ymir
+            || self == .wine
     }
 
     /// The Emulator a Platform's Games are played in, if it has one.
@@ -41,6 +46,7 @@ public struct Emulator: Sendable, Hashable {
         case 8: .pcsx2  // PlayStation 2
         case 11: .xemu  // Xbox
         case 16: .amiberry  // Amiga
+        case 6: .wine  // PC (Microsoft Windows)
         default: nil
         }
     }
@@ -52,7 +58,7 @@ public struct Emulator: Sendable, Hashable {
     /// their own settings files (`MesenSettings`, `AresSettings`), the Game's own on their command lines. DuckStation,
     /// MesenCE, ares and PCSX2 start from a `saveState`. Amiberry's are all for the one launch, with its disks' save images
     /// made first (`AmiberrySettings`). Ymir's go into its own settings file, with what's in its first port for this Disc
-    /// (`YmirSettings`).
+    /// (`YmirSettings`). Wine has no command line here: its Play is a `WinePlay`, which starts it itself.
     public func arguments(
         rom: URL, platformId: Int64, settings: EmulatorSettings, saveState: URL? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),

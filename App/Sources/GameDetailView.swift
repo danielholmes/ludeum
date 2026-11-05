@@ -109,7 +109,10 @@ struct GameDetailView: View {
                         OpenManualButton(services: services, game: id)
                         if !game.isBundle, !playROMs.isEmpty, !playROMs.allSatisfy(\.missing) {
                             playControls
-                            if let message = playError ?? emulator.flatMap(services.versions.refusalMessage) {
+                            // A Play in Wine can stop long after it starts, when this view may have been away.
+                            if let message = playError ?? services.winePlays.failure(of: playing.rom?.id)
+                                ?? emulator.flatMap(services.versions.refusalMessage)
+                            {
                                 ErrorText(message)
                             }
                         }
@@ -243,6 +246,11 @@ struct GameDetailView: View {
                 ) { state in play(in: .ares, from: state.file) }
             }
 
+            // Game save: what a Windows game wrote, kept in the Data folder once it has ended.
+            if !game.isBundle, emulator == .wine, playROMs.contains(where: { !$0.missing }) {
+                WineGameSaveSection(services: services, roms: playROMs.filter { !$0.missing })
+            }
+
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)
             ForEach(bundles.filter { !$0.attachments.isEmpty }) { BundleAttachmentsSection(share: $0, open: open) }
@@ -348,8 +356,16 @@ struct GameDetailView: View {
             Button("Delete ROM", role: .destructive) {
                 if let rom = deletingROM {
                     let folders = services.settings.romFolders
+                    let ludeum = services.settings.folder
                     // Its Box art goes with it, and the last one's leaves its Game finding Box art by name.
-                    delete({ try $0.deleteROM(rom.id, romFolders: folders) }, then: { services.changes.coverChanged() })
+                    delete(
+                        {
+                            try $0.deleteROM(rom.id, romFolders: folders)
+                            // A Windows ROM's prefix goes with it, as Wine makes one again; its Game save stays (ADR 0040).
+                            if Emulator.of(platformId: rom.platformId) == .wine {
+                                WineSettings(ludeum: ludeum).removePrefix(ofROM: rom.folderName)
+                            }
+                        }, then: { services.changes.coverChanged() })
                 }
             }
         } message: {
@@ -471,6 +487,9 @@ struct GameDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let rom = playROMs.first(where: { !$0.missing && $0.archived }) { archiveButton(rom) }
             }
+        } else if let phase = services.winePlays.phase(of: playing.rom?.id) {
+            // Its Play in Wine is going on, until the game has ended and its Game save is kept (ADR 0040).
+            WinePlayProgress(phase: phase)
         } else if let emulator, let platformId = game?.platformId {
             let start = playing.start(discs: discs, resume: resume)
             let starts = playing.starts(discs: discs, resume: resume)
@@ -755,6 +774,18 @@ struct GameDetailView: View {
             }
             let ludeum = services.settings.folder
             save { try $0.renameAmiberryROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
+            return
+        }
+        if Emulator.of(platformId: rom.platformId) == .wine {
+            // Its game would go on writing into the prefix under its old name, and its Game save be kept there.
+            let ludeum = services.settings.folder
+            if services.winePlays.phase(of: rom.id) != nil
+                || WineSettings(ludeum: ludeum).isRunning(prefix: ludeum.winePrefix(ofROM: rom.folderName))
+            {
+                error = "Quit the game first: its Game save is kept under the ROM's name once it has ended."
+                return
+            }
+            save { try $0.renameWineROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
             return
         }
         if Emulator.of(platformId: rom.platformId) == .ares {
