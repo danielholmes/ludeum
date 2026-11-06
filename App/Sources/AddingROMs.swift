@@ -110,6 +110,8 @@ struct AddROMFlow<Buttons: View>: View {
     @State private var chosen: AddROMChoice?
     @State private var makingByHand = false
     @State private var error: String?
+    /// A game chosen that the Windows base may not play well, and why, until it's Added anyway or cancelled.
+    @State private var warned: WarnedAddROMChoice?
 
     init(
         services: Services, picked: PickedROM, refused: @escaping (IGDBPlatform) -> String? = { _ in nil },
@@ -166,10 +168,15 @@ struct AddROMFlow<Buttons: View>: View {
                             error = refusal
                         } else {
                             error = nil
-                            chosen = AddROMChoice(
+                            let choice = AddROMChoice(
                                 match: .igdb(gameId: result.igdbGameId, name: result.name, platform: platform), gameName: result.name,
                                 platform: platform,
                                 existing: try? services.journal?.gameID(igdbGameId: result.igdbGameId, platformId: platform.id))
+                            if let warning = WindowsBase.warning(platformId: platform.id, releaseYear: result.year) {
+                                warned = WarnedAddROMChoice(choice: choice, warning: warning)
+                            } else {
+                                chosen = choice
+                            }
                         }
                     }
                 } else {
@@ -186,7 +193,23 @@ struct AddROMFlow<Buttons: View>: View {
             }
         }
         .frame(height: chosen == nil && !makingByHand ? 540 : nil)
+        .confirmationDialog(
+            "\(warned?.choice.gameName ?? "This game") may not play well",
+            isPresented: Binding(get: { warned != nil }, set: { if !$0 { warned = nil } }),
+            presenting: warned
+        ) { warned in
+            Button("Add it anyway") { chosen = warned.choice }
+            Button("Cancel", role: .cancel) {}
+        } message: { warned in
+            Text(warned.warning)
+        }
     }
+}
+
+/// A choice in Add ROM held back by a warning.
+private struct WarnedAddROMChoice {
+    let choice: AddROMChoice
+    let warning: String
 }
 
 /// Add ROM's Make by hand: a new Game with no IGDB link, its name and the Platform it goes on, with a warning (never a

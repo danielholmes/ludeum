@@ -112,6 +112,18 @@ public enum WindowsBaseError: LocalizedError, Equatable {
 /// The Windows every game stands on (ADR 0041): prepared by hand once, outside Ludeum, as it can't be shipped and its Setup
 /// needs a person (`docs/agents/windows-base.md`), then chosen and kept read-only beside the game disks in the Data folder.
 public struct WindowsBase: Sendable {
+    /// The last year whose games are expected to play well. A guess from the few tried: Age of Empires (1997) and Red Alert 2
+    /// (2000) played well, and Renegade (2002), in 3D, lagged with the emulated CPU flat out.
+    static let lastYearExpectedToPlayWell = 2000
+
+    /// What to warn of before Adding a ROM of a game released in `releaseYear` on the Platform: nil for any other Platform,
+    /// an old enough game, or a game whose year isn't known.
+    public static func warning(platformId: Int64, releaseYear: Int?) -> String? {
+        guard platformId == ROMPlatform.windows, let releaseYear, releaseYear > lastYearExpectedToPlayWell else { return nil }
+        return
+            "Windows Games play on Windows 98 SE on an emulated Pentium II, which suits games from about 1995 to \(lastYearExpectedToPlayWell). One from \(releaseYear) may run slowly or not at all, 3D games most of all."
+    }
+
     /// What a base is called, inside its archive and in the Data folder.
     public static let fileName = "ludeum-win98se-base.vhd"
     /// The machine's board's name, which 86Box names its BIOS settings for.

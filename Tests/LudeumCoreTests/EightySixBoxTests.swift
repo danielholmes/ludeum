@@ -32,6 +32,15 @@ private func put(_ data: Data, at file: URL) throws {
         #expect(Emulator.of(platformId: 13) == nil)
     }
 
+    @Test func onlyAWindowsGameFromAfter2000IsWarnedOf() throws {
+        #expect(WindowsBase.warning(platformId: ROMPlatform.windows, releaseYear: 2000) == nil)
+        #expect(WindowsBase.warning(platformId: ROMPlatform.windows, releaseYear: nil) == nil)
+        #expect(WindowsBase.warning(platformId: 13, releaseYear: 2005) == nil)
+
+        let warning = try #require(WindowsBase.warning(platformId: ROMPlatform.windows, releaseYear: 2001))
+        #expect(warning.contains("One from 2001"))
+    }
+
     @Test func aDiscInItsSubfolderIsAROM() throws {
         let windows = try FakeROMFolder(in: directory, platform: ROMPlatform.windows)
         let image = try windows.add("Red Alert 2 (USA)/Red Alert 2.iso")
