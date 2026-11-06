@@ -1,6 +1,6 @@
 # Windows Games are Played in Wine, from a clone of the ROM's prepared game
 
-Reversed on 2026-11-05, and its build taken out: real Windows in a PC emulator ran Age of Empires and Z from their own installers, and Tiberian Sun copied in as a folder, with none of the per-game hand work below, so Wine isn't worth keeping. Nothing has replaced it yet, and Windows has no ROM handling again. What follows is the decision as it was made.
+Reversed on 2026-11-05, and its build taken out: real Windows in a PC emulator ran Age of Empires and Z from their own installers, and Tiberian Sun copied in as a folder, with none of the per-game hand work below, so Wine isn't worth keeping. Superseded by [0041](0041-windows-games-are-played-in-86box-from-a-game-disk-over-one-windows-base.md). What follows is the decision as it was made.
 
 Adds a seventh Emulator Ludeum installs to [0038](0038-emulators-are-whole-apps-ludeum-installs-not-cores.md)'s model, and meets [0035](0035-an-amiga-rom-is-one-archive-and-its-saves-are-amiberrys-save-images.md)'s problem again: a game that writes to the thing it was loaded from.
 

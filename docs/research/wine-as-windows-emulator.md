@@ -1,6 +1,6 @@
 # Wine as Ludeum's Windows Emulator
 
-Wine was dropped later the same day; see [ADR 0040](../adr/0040-windows-games-are-played-in-wine-from-a-clone-of-the-roms-prepared-game.md). This is kept for what it found.
+Wine was dropped later the same day; see [ADR 0040](../adr/0040-windows-games-are-played-in-wine-from-a-clone-of-the-roms-prepared-game.md) and [ADR 0041](../adr/0041-windows-games-are-played-in-86box-from-a-game-disk-over-one-windows-base.md). This is kept for what it found.
 
 Researched 2026-11-05. The question: Windows Games are to be Played through Wine as a managed Emulator in [ADR 0038](../adr/0038-emulators-are-whole-apps-ludeum-installs-not-cores.md)'s sense, a pinned release Ludeum fetches, checks and keeps in the Ludeum folder and starts with settings it writes, with a Windows ROM a subfolder holding a prepared game folder and a small launch file (which exe, DLL overrides, locale, registry values). Which Wine build can be managed that way on an Apple Silicon Mac, how long will it last, what does a Wine prefix need, and how does the ROM stay untouched when the game writes into its own folder? This note gives the facts; the decision is an ADR still to be written. DOS Games in DOSBox ([#53](https://github.com/danielholmes/ludeum/issues/53)) ask the same "a folder plus a file saying what to run" question and are out of scope here.
 
