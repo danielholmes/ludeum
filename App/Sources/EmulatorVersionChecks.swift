@@ -234,18 +234,11 @@ struct EmulatorsSheet: View {
                     }
                 }
             }
+            // Only what nothing else says: the Status column tells of a version, the Windows base row of 86Box's need, and Play's
+            // refusal of a missing BIOS, where it goes and what it's named.
             Text(
-                "Checked when Ludeum opens. An Emulator older than it needs can't Play; "
-                    + "a newer major version, or one whose version can't be read, gets a warning the first time it Plays. "
-                    + "DuckStation, MesenCE, ares, PCSX2, Amiberry, Ymir and 86Box are Ludeum's own copies, installed here at the release "
-                    + "Ludeum needs and kept in the Ludeum folder: their save states and game saves live in the Data folder, MesenCE's "
-                    + "apart for each Platform and ares's for each of its systems. PCSX2 needs a PlayStation 2 BIOS in the Data folder's "
-                    + "Emulators/PCSX2/BIOS before it can Play, Ymir a Saturn BIOS in Emulators/Ymir/BIOS, and ares a Sega CD BIOS in "
-                    + "Emulators/ares/BIOS, named Mega CD US.bin, Mega CD Japan.bin or Mega CD Europe.bin, before a Sega CD Game can. "
-                    + "Amiberry plays on its own AROS until there's a Kickstart in Emulators/Amiberry/ROMs. "
-                    + "86Box needs a Windows base you've prepared; a Windows Game's disc is never written to, and its install and Game saves are "
-                    + "its game disk in Emulators/86Box/Game Disks. "
-                    + "An Emulator's own settings are changed in it during a Play."
+                "An Emulator's own settings are changed in it during a Play. "
+                    + "Amiberry plays on its own AROS until there's a Kickstart in the Data folder's Emulators/Amiberry/ROMs."
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let installError { ErrorText(installError, font: .callout) }
