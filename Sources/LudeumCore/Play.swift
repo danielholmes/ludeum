@@ -46,6 +46,8 @@ public struct Play: Sendable {
         case needsCompacting
         /// An Amiga ROM's disks couldn't be listed from its archive or their save images made, with why.
         case couldntGetDisksReady(String)
+        /// 86Box has no Windows base for a game disk to stand on (ADR 0041).
+        case noWindowsBase
 
         public var message: String {
             switch self {
@@ -68,6 +70,8 @@ public struct Play: Sendable {
                     + "which an open MesenCE wouldn't read."
             case .running(.amiberry):
                 "Amiberry is open. Quit it, then Play: it keeps its settings in memory and writes them over when it quits."
+            case .running(.eightySixBox):
+                "86Box is open. Shut Windows down and quit it, then Play: a game disk can be in use by only one machine."
             case .running(let emulator):
                 "\(emulator.name) is open. Quit it, then Play: Ludeum writes its settings before each Play, which an open \(emulator.name) would write over."
             case .installing(let emulator): "\(emulator.name) is being installed."
@@ -78,6 +82,7 @@ public struct Play: Sendable {
                 "No Sega CD BIOS. Put one in \(folder), named Mega CD US.bin, Mega CD Japan.bin or Mega CD Europe.bin, then Play."
             case .needsCompacting: "Compact it to Play: a game saves to its disk, and a loose disk would be written over."
             case .couldntGetDisksReady(let why): "Couldn't get its disks ready: \(why)"
+            case .noWindowsBase: "No Windows base. Choose one in Ludeum ▸ Emulators…, then Play."
             }
         }
     }
@@ -242,12 +247,13 @@ public struct Play: Sendable {
     /// that way. `app` finds an installed app by its bundle identifier; DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir
     /// are the ones Ludeum installs (`duckStation.app`, `mesen.app`, `ares.app`, `pcsx2.app`, `amiberry.app`, `ymir.app`),
     /// refused while any copy is `running`, and PCSX2 and Ymir until they have a BIOS. `saveState` starts the Play from that
-    /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on.
+    /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on. 86Box is
+    /// refused the same way until there's a Windows base (ADR 0041).
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
         pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), ymir: YmirSettings = .init(),
-        running: (Emulator) -> Bool = { _ in false }
+        eightySixBox: EightySixBoxSettings = .init(), running: (Emulator) -> Bool = { _ in false }
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -290,6 +296,11 @@ public struct Play: Sendable {
             guard amiberry.isInstalled else { return .refused(.notInstalled(emulator)) }
             if running(emulator) { return .refused(.running(emulator)) }
             app = amiberry.app
+        } else if emulator == .eightySixBox {
+            guard eightySixBox.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if running(emulator) { return .refused(.running(emulator)) }
+            guard eightySixBox.hasBase else { return .refused(.noWindowsBase) }
+            app = eightySixBox.app
         } else {
             guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
             app = found
@@ -326,9 +337,12 @@ public struct Play: Sendable {
         }
         let warning: String? = if case .warn(let warning) = version { warning } else { nil }
         do {
-            let arguments = try emulator.arguments(
-                rom: opened, platformId: platformId, settings: settings, saveState: saveState,
-                duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2, amiberry: amiberry, ymir: ymir)
+            let arguments =
+                emulator == .eightySixBox
+                ? try eightySixBox.arguments(rom: opened, romName: rom.folderName, settings: settings)
+                : try emulator.arguments(
+                    rom: opened, platformId: platformId, settings: settings, saveState: saveState,
+                    duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2, amiberry: amiberry, ymir: ymir)
             return .open(
                 app: app, arguments: arguments, warning: warning, startsOn: startsOn,
                 environment: emulator == .amiberry ? amiberry.environment : [:])

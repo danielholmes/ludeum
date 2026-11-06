@@ -47,7 +47,7 @@ A present ROM that isn't Archived. Every present ROM is either Playable or Archi
 _Avoid_: Active, unarchived, ordinary ROM
 
 **Archive / Unarchive**:
-Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played (a PSP, Vita, GameCube, Wii or Xbox ROM, one file, unpacks to that file, named after the ROM; a GameCube ROM of several Discs unpacks into its folder). Either way its Clutter is left out, and only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2, PSP, Vita, GameCube, Wii, Xbox and the Disc Platforms' (PS1, Sega CD, Saturn, PC Engine CD) ROMs can be Archived or Unarchived so far.
+Packing a ROM folder ROM into a `.7z`, or unpacking all of it into a folder named after the ROM so it can be Played (a PSP, Vita, GameCube, Wii or Xbox ROM, one file, unpacks to that file, named after the ROM; a GameCube ROM of several Discs unpacks into its folder). Either way its Clutter is left out, and only one copy is kept: the file it replaces goes to the Trash once the new one checks out. Only PS2, PSP, Vita, GameCube, Wii, Xbox, Windows and the Disc Platforms' (PS1, Sega CD, Saturn, PC Engine CD) ROMs can be Archived or Unarchived so far.
 _Avoid_: Extract, compress, decompress
 
 **Compact**:
@@ -207,15 +207,15 @@ _Avoid_: Disagreement (that's about one Game, and needs more evidence)
 ### Playing
 
 **Emulator**:
-The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir itself, in the Ludeum folder at the release it chooses, and none can be Played with until that's done; the others I install. Always a whole app, its author's release, never a core run inside Ludeum (ADR 0038). An Emulator's own settings are changed in it, during a Play.
+The app a Platform's Games are played in, e.g. MesenCE for NES and SNES. Each Platform has at most one. Ludeum installs and keeps DuckStation, MesenCE, ares, PCSX2, Amiberry, Ymir and 86Box itself, in the Ludeum folder at the release it chooses, and none can be Played with until that's done; the others I install. Always a whole app, its author's release, never a core run inside Ludeum (ADR 0038). An Emulator's own settings are changed in it, during a Play.
 _Avoid_: Core, player
 
 **Standing settings**:
-The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. DuckStation's are only where it keeps things, its game list's folder and no self-updating; how it plays, fast boot and frame pacing included, is set in DuckStation and stays (ADR 0033). Not Emulator settings, which are one Game's own. Only DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir have them so far; MesenCE's say the Play's Platform's folders, as it names what it keeps by the ROM's file name alone, ares makes its own folders, one for the Mega Drive and Sega CD and one for the N64, and Amiberry's are all for the one launch, its home folder in the environment and the ROM's own folder of save images on the command line.
+The settings of an Emulator that Ludeum fixes the same for every Game, e.g. where DuckStation keeps its Save states and Game saves, and that it doesn't update itself. Ludeum sets them before each Play, so a change made in the Emulator itself lasts only until then. DuckStation's are only where it keeps things, its game list's folder and no self-updating; how it plays, fast boot and frame pacing included, is set in DuckStation and stays (ADR 0033). Not Emulator settings, which are one Game's own. Only DuckStation, MesenCE, ares, PCSX2, Amiberry, Ymir and 86Box have them so far; MesenCE's say the Play's Platform's folders, as it names what it keeps by the ROM's file name alone, ares makes its own folders, one for the Mega Drive and Sega CD and one for the N64, Amiberry's are all for the one launch, its home folder in the environment and the ROM's own folder of save images on the command line, and 86Box's are its one machine, written before each Play.
 _Avoid_: Global settings, defaults, config
 
 **Emulator settings**:
-The few settings of a Game's Emulator that the journal chooses on each Play, e.g. run-ahead frames. A Game without its own value gets the Emulator's default. Every Play sets all of them, so one Game's settings never carry into the next. Only MesenCE's and ares's Games have them; a PlayStation Game's own settings are DuckStation's, set in its Game Properties.
+The few settings of a Game's Emulator that the journal chooses on each Play, e.g. run-ahead frames. A Game without its own value gets the Emulator's default. Every Play sets all of them, so one Game's settings never carry into the next. Only MesenCE's, ares's and 86Box's Games have them; a PlayStation Game's own settings are DuckStation's, set in its Game Properties.
 _Avoid_: Config, overrides
 
 **Game Boy Model**:
@@ -227,8 +227,16 @@ A snapshot of a game mid-play that DuckStation, MesenCE, ares, PCSX2 or Ymir sav
 _Avoid_: Snapshot, save (alone), quick save
 
 **Game save**:
-The file or folder where an Emulator keeps what one Game has saved itself, as the real hardware would on a memory card or in the cartridge's battery-backed memory, e.g. a PlayStation Game's memory card, the `.srm` MesenCE keeps for a Game Boy cartridge, or the `.ram` ares keeps for a Mega Drive one. A container every game saves into, such as a PS2 memory card kept as one file or the Sega CD's backup RAM, is no one Game's Game save; a PlayStation 2 Game's Game saves are its Card saves on PCSX2's folder memory cards, each a folder of its own. An Amiga game saves to its disk, so an Amiga ROM's Game saves are its disks' save images, each `<disk>_save.adf`, what's been written over that disk, in a folder of the ROM's name. A Saturn Game has backup RAM of its own, which Ymir keeps by its Serial, so its Game saves are the saves in it. Not a Save state.
+The file or folder where an Emulator keeps what one Game has saved itself, as the real hardware would on a memory card or in the cartridge's battery-backed memory, e.g. a PlayStation Game's memory card, the `.srm` MesenCE keeps for a Game Boy cartridge, or the `.ram` ares keeps for a Mega Drive one. A container every game saves into, such as a PS2 memory card kept as one file or the Sega CD's backup RAM, is no one Game's Game save; a PlayStation 2 Game's Game saves are its Card saves on PCSX2's folder memory cards, each a folder of its own. An Amiga game saves to its disk, so an Amiga ROM's Game saves are its disks' save images, each `<disk>_save.adf`, what's been written over that disk, in a folder of the ROM's name. A Saturn Game has backup RAM of its own, which Ymir keeps by its Serial, so its Game saves are the saves in it. A Windows Game's is its game disk. Not a Save state.
 _Avoid_: Save (alone), battery save, save file, SRAM
+
+**Windows base**:
+The one read-only Windows 98 SE every Windows Game stands on, on 86Box's one machine, prepared by hand once outside Ludeum and chosen in the Emulators sheet. It can't be changed or replaced once a game disk stands on it. Ludeum keeps it in the Data folder, beside the game disks.
+_Avoid_: Box, image, VM
+
+**Game disk**:
+A Windows ROM's own file of differences over the Windows base: the installed game and everything it has written, so also its Game save. 86Box makes it at the ROM's first Play. It stays in the one folder with the base, and deleting it loses the install and the Game saves together. A Windows ROM itself is only its disc, never written to.
+_Avoid_: Hard disk image, VHD, save disk
 
 **Card save**:
 One save inside a memory card, made by a game: its title as the game wrote it, its icon and the blocks it takes. A card can hold another game's Card saves too. On a PCSX2 folder memory card each is a folder, named as the game named it with the disc's Serial in the name, and PCSX2 shows a running game only its own.
@@ -249,7 +257,7 @@ The one place on this Mac where Ludeum keeps everything it owns: the live journa
 _Avoid_: App folder, library
 
 **Data folder**:
-The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the Game saves and Save states of PlayStation Games, of PlayStation 2 Games, of MesenCE's Platforms' (each of those Platforms' apart), of ares's and of Ymir's, DuckStation's, PCSX2's and Ymir's BIOS files, per-game settings, input profiles and screenshots (PCSX2's cheats, patches and textures too), ares's Sega CD BIOS files, and everything Amiberry keeps (its Kickstarts, saved disks and Save states among it). Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
+The part of the Ludeum folder that must survive losing this Mac: the ROM folders, the Attachments' files, the Backups, the Game saves and Save states of PlayStation Games, of PlayStation 2 Games, of MesenCE's Platforms' (each of those Platforms' apart), of ares's and of Ymir's, DuckStation's, PCSX2's and Ymir's BIOS files, per-game settings, input profiles and screenshots (PCSX2's cheats, patches and textures too), ares's Sega CD BIOS files, everything Amiberry keeps (its Kickstarts, saved disks and Save states among it), and 86Box's Windows base and game disks. Ludeum doesn't keep it safe; I do, by linking it into Dropbox. The live journal stays outside it and is kept through its Backups. Nothing works until the Data folder can be found.
 _Avoid_: Kept folder, backup-worthy, Library folder
 
 **Backup**:

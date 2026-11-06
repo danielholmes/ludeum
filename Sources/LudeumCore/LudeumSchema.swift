@@ -761,6 +761,13 @@ enum LudeumSchema {
             try keepTimestamps(db, on: "list")
             try keepTimestamps(db, on: "listGame")
         }
+        // A Windows Game's own CPU speed in 86Box (ADR 0041). The `updatedAt` trigger is made to watch every column, so it
+        // comes back watching this one too; no row's timestamps change.
+        migrator.registerMigration("v45 cpu speed") { db in
+            try db.execute(sql: "DROP TRIGGER game_updatedAt")
+            try db.alter(table: "game") { t in t.add(column: "cpuMegahertz", .integer) }
+            try keepTimestamps(db, on: "game")
+        }
         return migrator
     }
 

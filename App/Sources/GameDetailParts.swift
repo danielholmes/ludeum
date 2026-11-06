@@ -480,7 +480,8 @@ enum FactStyle {
         disc: disc, duckStation: DuckStationSettings(ludeum: services.settings.folder),
         mesen: MesenSettings(ludeum: services.settings.folder), ares: AresSettings(ludeum: services.settings.folder),
         pcsx2: PCSX2Settings(ludeum: services.settings.folder), amiberry: AmiberrySettings(ludeum: services.settings.folder),
-        ymir: YmirSettings(ludeum: services.settings.folder), running: \.isRunning)
+        ymir: YmirSettings(ludeum: services.settings.folder), eightySixBox: EightySixBoxSettings(ludeum: services.settings.folder),
+        running: \.isRunning)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)

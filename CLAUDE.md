@@ -11,3 +11,7 @@ Uses the five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `
 ### Domain docs
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Windows base
+
+The Windows base that Windows Games stand on in 86Box is prepared by hand, outside Ludeum, and chosen in the Emulators sheet. See `docs/agents/windows-base.md`.

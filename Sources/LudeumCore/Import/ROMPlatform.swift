@@ -70,6 +70,7 @@ public struct ROMPlatform: Sendable, Equatable {
     public static let xbox: Int64 = 11
     public static let amiga: Int64 = 16
     public static let segaCD: Int64 = 78
+    public static let windows: Int64 = 6
 
     /// Every Platform with a ROM folder, by IGDB platform id. One folder per Platform: Game Boy and
     /// Game Boy Color, NES and Famicom, SNES and Super Famicom each have their own.
@@ -153,6 +154,12 @@ public struct ROMPlatform: Sendable, Equatable {
         16: .init(
             name: "Amiga", folderName: "Amiga", readyExtensions: ["adf", "adz", "dms", "ipf"], compactExtension: "7z",
             packsDiscsTogether: true),
+        // Its disc, in a subfolder, and never written to: what a game writes goes in its game disk (ADR 0041). No playlist,
+        // as 86Box reads none: a ROM of several Discs opens at Disc 1, and the others are changed from its Media menu. An
+        // `.iso` first: a lone `.cue` is far likelier some other disc Platform's, and shouldn't be presumed Windows's.
+        6: .init(
+            name: "PC (Microsoft Windows)", folderName: "Windows", readyExtensions: ["iso", "cue"], archiving: .intoFolder,
+            naming: .redump),
         // No Emulator yet, so nothing to Compact into.
         53: .init(
             name: "MSX2", folderName: "MSX2", readyExtensions: ["rom", "mx2", "mx1", "dsk", "cas"]),

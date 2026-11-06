@@ -6,6 +6,8 @@ public enum TaskSubject: Hashable, Sendable {
     case rom(Int64)
     /// An Emulator being installed.
     case emulator(Emulator)
+    /// 86Box's Windows base being brought in (ADR 0041).
+    case windowsBase
 }
 
 /// Background tasks: long work that runs while I carry on, one at a time in the order asked for,

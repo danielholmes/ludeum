@@ -17,11 +17,11 @@ Tried 2026-11-05 and 2026-11-06 on an M3 Max running macOS 26 (Darwin 25.5), wit
 | File | SHA-256 |
 |---|---|
 | `86Box-macOS-x86_64+arm64-b9001.zip` (release v6.0) | `fc66fc97225012af20145ae04193911bbf689fc75f89590774a904483140a5a9` |
-| 86Box/roms tag v6.0, GitHub's tarball | `3686f4f0d315390b2e15268d44e7b4f6eb02fa27a4132c8d40ef604b031e4060` |
+| 86Box/roms `archive/refs/tags/v6.0.tar.gz` | `38fccaf4a7b48e581ccdfee2dc3cc0545e7d3a778bc25611e902a117eec571e6` |
 | `dosbox-x-macosx-arm64-2026.10.01.zip` | `8514ab856e8ac2611fbdac7adf334c34085c1e00d700a88711f842adec50240f` |
 | `voodoo3-10700.zip` | `781eb6cbc7eedcf45de5b6433666368db42044ee2dfbfe30e6328e5ae635ec0b` |
 
-A GitHub tarball isn't promised to stay byte-identical, so check that pin holds before relying on it.
+A GitHub tarball isn't promised to stay byte-identical, so if Install's checksum of the ROM set fails, it may be GitHub's packing that changed rather than the ROMs. Install, Choose Base and Play's exact command line were rehearsed together against these downloads and the real base, in a scratch Ludeum folder whose paths had spaces, parentheses and `&`: 86Box made a differencing game disk, Windows wrote 31 MB to it in 90 seconds, and the base's checksum held.
 
 ## Results
 

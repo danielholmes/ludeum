@@ -243,6 +243,11 @@ struct GameDetailView: View {
                 ) { state in play(in: .ares, from: state.file) }
             }
 
+            // Game disk: the installed Windows game and what it has written, in the Data folder (ADR 0041).
+            if !game.isBundle, emulator == .eightySixBox, playROMs.contains(where: { !$0.missing }) {
+                GameDiskSection(services: services, roms: playROMs.filter { !$0.missing })
+            }
+
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)
             ForEach(bundles.filter { !$0.attachments.isEmpty }) { BundleAttachmentsSection(share: $0, open: open) }
@@ -743,10 +748,21 @@ struct GameDetailView: View {
     }
 
     /// Renames the ROM in its ROM folder and the journal; a MesenCE ROM's file inside its `.7z`, and its saves, too
-    /// (ADR 0027), and an ares ROM's saves (ADR 0028), and an Amiberry ROM's saved disks (ADR 0035).
+    /// (ADR 0027), and an ares ROM's saves (ADR 0028), and an Amiberry ROM's saved disks (ADR 0035), and a Windows ROM's game
+    /// disk (ADR 0041).
     private func rename(_ rom: LudeumROM, to name: String) {
         // A Background task may have started on it while the confirmation was up.
         guard let folder = locator.folder(of: rom), !services.tasks.isActive(.rom(rom.id)) else { return }
+        if Emulator.of(platformId: rom.platformId) == .eightySixBox {
+            // An open 86Box would go on writing to the game disk under its old name.
+            if Emulator.eightySixBox.isRunning {
+                error = "Shut Windows down and quit 86Box first: it may be using the ROM's game disk."
+                return
+            }
+            let ludeum = services.settings.folder
+            save { try $0.renameEightySixBoxROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
+            return
+        }
         if Emulator.of(platformId: rom.platformId) == .amiberry {
             // An open Amiberry would go on saving to the old folder.
             if Emulator.amiberry.isRunning {
@@ -1037,6 +1053,7 @@ func journalErrorText(_ error: Error) -> String {
     case .nameRequired: "A name is required."
     case .gameNotFound: "That Game no longer exists."
     case .runAheadOutOfRange: "Run-ahead is 0 to 10 frames."
+    case .cpuSpeedNotOffered: "86Box doesn't offer that CPU speed."
     case .copyPlayedOn: "A Playthrough was played on this Copy. Change that Playthrough's Copy first."
     case .copyNotOfGame: "That Copy isn't one of this Game's."
     case .listNameTaken: "There's already a List with that name."

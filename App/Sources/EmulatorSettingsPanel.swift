@@ -40,6 +40,17 @@ struct EmulatorSettingRow: Identifiable {
                     choices: [("Off", 0), ("On (1 frame)", 1)],
                     defaultLabel: "off", summary: { $0 > 0 ? "Run-ahead on" : "Run-ahead off" })
             ]
+        case .eightySixBox:
+            [
+                EmulatorSettingRow(
+                    title: "CPU speed",
+                    explanation: "The speed of the emulated Pentium II. Lower it if the speed 86Box shows stays under 100% or the sound "
+                        + "breaks up: a slower CPU that keeps up plays better than a faster one that can't. Old games can also run "
+                        + "too fast at the top speed.",
+                    value: \.cpuMegahertz,
+                    choices: EightySixBoxCPU.offered.dropFirst().map { ("\($0.megahertz) MHz", $0.megahertz) },
+                    defaultLabel: "\(EightySixBoxCPU.offered[0].megahertz) MHz", summary: { "\($0) MHz" })
+            ]
         default: []
         }
     }

@@ -30,7 +30,7 @@ import Testing
         #expect(source.isFolder)
         #expect(source.romName == "Okami (USA)")
         // Not the Sega CD's: ares opens no `.iso`.
-        #expect(try await source.platforms(sevenZip: nil) == [7, ROMPlatform.ps2, 32])
+        #expect(try await source.platforms(sevenZip: nil) == [ROMPlatform.windows, 7, ROMPlatform.ps2, 32])
     }
 
     @Test func aChdIsntPresumedToBeTheSegaCDsThoughItsEmulatorPrefersOne() async throws {

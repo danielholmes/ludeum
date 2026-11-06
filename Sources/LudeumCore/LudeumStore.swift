@@ -23,6 +23,7 @@ public enum LudeumError: Error, Equatable {
     case gameHasROMs
     /// MesenCE takes 0–10 frames of run-ahead.
     case runAheadOutOfRange
+    case cpuSpeedNotOffered
     /// A Copy a Playthrough was played on can't be deleted, or leave its Game, until the Playthrough says otherwise.
     case copyPlayedOn
     /// A Playthrough's Copy is one of its own Game's.
