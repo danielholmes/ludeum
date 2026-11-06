@@ -219,6 +219,18 @@ import Testing
         try Backups.copy(from: safety.url, into: copy)
         #expect(Set(try names(copy)) == ["Super Metroid", "Earthbound"])
     }
+
+    /// Dropbox may have to download it, or not manage to: nothing has happened to the journal by then.
+    @Test func aBackupThatCantBeReadLeavesTheJournalAsItWas() throws {
+        _ = try h.addGame("Super Metroid")
+        let backup = try backups().backUp(h.journal, operation: .manual)
+        try FileManager.default.removeItem(at: backup.url)
+
+        #expect(throws: (any Error).self) { try backups().restore(backup, into: h.journal) }
+
+        #expect(try names(h.journal) == ["Super Metroid"])
+        #expect(try backups().all().isEmpty)
+    }
 }
 
 /// Opening a journal whose schema is behind this build's.

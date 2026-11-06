@@ -163,10 +163,14 @@ public struct Backups: Sendable {
     }
 
     /// Backs up the current journal, then replaces its contents with the backup's. The app
-    /// relaunches afterwards so nothing holds on to the old state.
+    /// relaunches afterwards so nothing holds on to the old state. Slow when Dropbox has to download the backup first, so
+    /// it's for off the main thread; that's done before the journal is touched, and a backup that can't be read leaves it
+    /// as it was.
     public func restore(_ backup: Backup, into journal: LudeumStore) throws {
-        try backUp(journal, operation: .beforeRestore)
-        try Self.copy(from: backup.url, into: journal)
+        try LocalCopy.with(of: backup.url, onVolumeOf: folder) { local in
+            try backUp(journal, operation: .beforeRestore)
+            try Self.copy(from: local, into: journal)
+        }
     }
 
     /// Replaces a journal's contents with a backup file's, through SQLite's backup API.

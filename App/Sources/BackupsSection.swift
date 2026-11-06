@@ -54,6 +54,7 @@ struct RestoreSheet: View {
     @State private var list: [Backup] = []
     @State private var selection: URL?
     @State private var error: String?
+    @State private var working = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -70,23 +71,34 @@ struct RestoreSheet: View {
             .frame(minHeight: 240)
             if let error { ErrorText(error) }
             HStack {
+                if working {
+                    ProgressView().controlSize(.small)
+                    Text("Restoring…").font(.callout).foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                Button("Restore", action: restore).keyboardShortcut(.defaultAction).disabled(selection == nil)
+                Button("Cancel", role: .cancel) { dismiss() }.disabled(working)
+                Button("Restore", action: restore).keyboardShortcut(.defaultAction).disabled(selection == nil || working)
             }
         }
         .padding()
         .frame(width: 420)
+        .interactiveDismissDisabled(working)
         .onAppear { list = (try? backups.all()) ?? [] }
     }
 
+    /// Off the main thread, as Dropbox may have to download the backup first.
     private func restore() {
-        guard let backup = list.first(where: { $0.url == selection }) else { return }
-        do {
-            try backups.restore(backup, into: journal)
-            relaunch()
-        } catch {
-            self.error = "Restore failed: \(error)"
+        guard let backup = list.first(where: { $0.url == selection }), !working else { return }
+        working = true
+        error = nil
+        Task {
+            do {
+                try await offMain { [backups, journal] in try backups.restore(backup, into: journal) }
+                relaunch()
+            } catch {
+                working = false
+                self.error = "Restore failed: \(error)"
+            }
         }
     }
 

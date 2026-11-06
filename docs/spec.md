@@ -279,7 +279,7 @@ A nice-to-have: built after the rest of v1 works.
 - **Where:** `Backups/` in the Data folder, so into Dropbox through its link; not a setting. There's no extra local copy and no local fallback: it would sit at the same missing path, so without the Data folder a backup fails, and the step it guards with it (the app is blocked by then anyway).
 - **Names:** dated, plus the operation that triggered them, e.g. `2026-10-02T1430-before-import.sqlite`.
 - **How many are kept:** every backup from the last 7 days, then one a day for 30 days, then one a month forever. The database is a few MB, so this costs little and still covers a mistake noticed weeks later. The `before-migration` and `before-recovery` backups, with their move logs, are never pruned.
-- **Restore:** "Restore from backup…" in Settings lists the backups. It backs up the current state first, copies the backup into the journal with the backup API (rather than swapping files under an open WAL database) and relaunches. Only the journal changes.
+- **Restore:** "Restore from backup…" in Settings lists the backups. Off the main thread, it reads the backup, which Dropbox may have to download, then backs up the current state, copies the backup into the journal with the backup API (rather than swapping files under an open WAL database) and relaunches. A backup that can't be read leaves everything as it was. Only the journal changes.
 
 ### Storage stats
 - **Storage Stats…** (app menu, under Emulators…) opens a sheet of how much room everything takes, measured from the files each time it opens and again on Refresh; nothing is stored. Sizes are logical, so a file Dropbox keeps online-only counts in full. Hidden files are left out.
