@@ -1,7 +1,16 @@
 import Foundation
+import GRDB
+import Synchronization
 import Testing
 
 @testable import LudeumCore
+
+extension LudeumStore {
+    /// A read that waits behind any write.
+    fileprivate func attachmentCount() throws -> Int {
+        try db.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM attachment") ?? 0 }
+    }
+}
 
 /// Attachments: files about a Game kept in its folder under `Attachments/` in the Data folder (ADR 0014).
 @Suite struct AttachmentTests {
@@ -41,7 +50,180 @@ import Testing
 
     func trashed() throws -> [String] { try FileManager.default.contentsOfDirectory(atPath: trash.path(percentEncoded: false)).sorted() }
 
+    /// `attachments`, doing `during` as each picked file is copied, or failing instead with `failing`.
+    func attachments(during: @escaping @Sendable () throws -> Void, failing: (any Error & Sendable)? = nil) -> Attachments {
+        let trash = trash
+        return Attachments(
+            journal: j.journal, root: root,
+            moveToTrash: { file in try FileManager.default.moveItem(at: file, to: trash.appending(path: file.lastPathComponent)) },
+            copy: { from, to in
+                try during()
+                if let failing { throw failing }
+                try FileManager.default.copyItem(at: from, to: to)
+            })
+    }
+
+    /// Whether the journal can be read from another thread right now, as the main thread would, rather than waiting. On a
+    /// thread of its own, and with time to spare, as the other suites running alongside can starve it: only a journal that
+    /// really is held waits this long.
+    static func journalIsFree(_ journal: LudeumStore) -> Bool {
+        let read = DispatchSemaphore(value: 0)
+        Thread.detachNewThread {
+            _ = try? journal.attachmentCount()
+            read.signal()
+        }
+        return read.wait(timeout: .now() + 30) == .success
+    }
+
     // MARK: Adding
+
+    /// Dropbox can take minutes over a file it keeps online only, and the main thread reads the journal all the time.
+    @Test func theJournalIsFreeWhileAFileIsCopiedIn() throws {
+        let game = try j.addGame()
+        let journal = j.journal
+        let free = Mutex<Bool?>(nil)
+        let slow = attachments(during: { free.withLock { $0 = Self.journalIsFree(journal) } })
+
+        try slow.add([try pick("manual.pdf")], to: game)
+
+        #expect(free.withLock { $0 } == true)
+        #expect(files("SNES/Super Metroid") == ["manual.pdf"])
+    }
+
+    @Test func theJournalIsFreeWhileALocatedFileIsCopiedIn() throws {
+        let game = try j.addGame()
+        let a = try #require(try attachments.add([try pick("scan.pdf")], to: game).first)
+        try FileManager.default.removeItem(at: a.url)
+        try attachments.checkFiles(game)
+        let journal = j.journal
+        let free = Mutex<Bool?>(nil)
+        let slow = attachments(during: { free.withLock { $0 = Self.journalIsFree(journal) } })
+
+        try slow.locate(a.id, file: try pick("found.pdf"), moving: false)
+
+        #expect(free.withLock { $0 } == true)
+        #expect(try attachments.attachments(of: game).map(\.missing) == [false])
+    }
+
+    @Test func aFileThatCantBeCopiedAddsNothingAndStaysWhereItIs() throws {
+        let game = try j.addGame()
+        let file = try pick("manual.pdf")
+        let failing = attachments(during: {}, failing: CocoaError(.fileReadUnknown))
+
+        #expect(throws: CocoaError.self) { try failing.add([file], to: game, moving: true) }
+
+        #expect(try attachments.attachments(of: game).isEmpty)
+        #expect(files("SNES/Super Metroid").isEmpty)
+        #expect(FileManager.default.fileExists(atPath: file.path(percentEncoded: false)))
+    }
+
+    @Test func aLocatedFileThatCantBeCopiedLeavesItMissingWithNothingInItsPlace() throws {
+        let game = try j.addGame()
+        let a = try #require(try attachments.add([try pick("scan.pdf")], to: game).first)
+        try FileManager.default.removeItem(at: a.url)
+        try attachments.checkFiles(game)
+        let file = try pick("found.pdf")
+        // A copy that dies part of the way through.
+        let dying = Attachments(
+            journal: j.journal, root: root, moveToTrash: { _ in },
+            copy: { _, to in
+                try Data("par".utf8).write(to: to)
+                throw CocoaError(.fileReadUnknown)
+            })
+
+        #expect(throws: CocoaError.self) { try dying.locate(a.id, file: file, moving: true) }
+
+        #expect(!FileManager.default.fileExists(atPath: a.url.path(percentEncoded: false)))
+        #expect(try attachments.attachments(of: game).map(\.missing) == [true])
+        #expect(FileManager.default.fileExists(atPath: file.path(percentEncoded: false)))
+    }
+
+    /// The copy can outlast a rename: its file goes where the Game's folder is by then.
+    @Test func aFileGoesToWhereItsGamesFolderIsOnceItsCopied() throws {
+        let game = try j.addGame()
+        try attachments.add([try pick("manual.pdf")], to: game)
+        let journal = j.journal
+        let plain = attachments
+        let slow = attachments(during: {
+            try journal.setNameOverride(game, "Metroid 3")
+            try plain.follow(game)
+        })
+
+        try slow.add([try pick("map.png")], to: game)
+
+        #expect(files("SNES/Metroid 3") == ["manual.pdf", "map.png"])
+    }
+
+    @Test func aFileGoesBackToWhereItsGamesFolderIsOnceItsCopied() throws {
+        let game = try j.addGame()
+        let a = try #require(try attachments.add([try pick("scan.pdf")], to: game).first)
+        try FileManager.default.removeItem(at: a.url)
+        try attachments.checkFiles(game)
+        let journal = j.journal
+        let plain = attachments
+        let slow = attachments(during: {
+            try journal.setNameOverride(game, "Metroid 3")
+            try plain.follow(game)
+        })
+
+        try slow.locate(a.id, file: try pick("found.pdf"), moving: false)
+
+        #expect(files("SNES/Metroid 3") == ["scan.pdf"])
+    }
+
+    @Test func aFileThatCameBackWhileTheOtherWasCopiedLeavesThePickedOneAlone() throws {
+        let game = try j.addGame()
+        let a = try #require(try attachments.add([try pick("scan.pdf", "its own")], to: game).first)
+        let hidden = picked.appending(path: "hidden.pdf")
+        try FileManager.default.moveItem(at: a.url, to: hidden)
+        try attachments.checkFiles(game)
+        let file = try pick("found.pdf", "another")
+        let slow = attachments(during: { try FileManager.default.moveItem(at: hidden, to: a.url) })
+
+        try slow.locate(a.id, file: file, moving: true)
+
+        #expect(try String(contentsOf: a.url, encoding: .utf8) == "its own")
+        #expect(FileManager.default.fileExists(atPath: file.path(percentEncoded: false)))
+        #expect(try attachments.attachments(of: game).map(\.missing) == [false])
+    }
+
+    /// Stopped as it's copied, what has gone in stays and the rest doesn't.
+    @Test func aCancelledAddStopsOnceTheFileBeingCopiedIsDone() async throws {
+        let game = try j.addGame()
+        let (first, second) = (try pick("a.pdf"), try pick("b.pdf"))
+        let copies = Mutex(0)
+        let cancelling = attachments(during: {
+            let copy = copies.withLock {
+                $0 += 1
+                return $0
+            }
+            if copy == 2 { withUnsafeCurrentTask { $0?.cancel() } }
+        })
+
+        let result = await Task.detached { try cancelling.add([first, second], to: game, moving: true) }.result
+
+        #expect(throws: CancellationError.self) { try result.get() }
+        #expect(files("SNES/Super Metroid") == ["a.pdf"])
+        #expect(try trashed() == ["a.pdf"])
+        #expect(FileManager.default.fileExists(atPath: second.path(percentEncoded: false)))
+    }
+
+    @Test func eachFileAddedMovesItsProgressOn() throws {
+        let game = try j.addGame()
+        let fractions = Mutex<[Double]>([])
+
+        try attachments.add([try pick("a.pdf"), try pick("b.pdf")], to: game) { fraction in fractions.withLock { $0.append(fraction) } }
+
+        #expect(fractions.withLock { $0 } == [0.5, 1])
+    }
+
+    @Test func checkRefusesWhatCantBeAnAttachmentBeforeAnythingStarts() throws {
+        let scans = picked.appending(path: "Scans", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: scans, withIntermediateDirectories: true)
+
+        #expect(throws: AttachmentError.notAFile("Scans")) { try attachments.check([try pick("manual.pdf"), scans]) }
+        #expect(throws: Never.self) { try attachments.check([try pick("manual.pdf")]) }
+    }
 
     @Test func anAddedFileIsCopiedIntoItsGamesFolderUnderItsOwnName() throws {
         let game = try j.addGame("Super Metroid")

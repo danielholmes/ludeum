@@ -1101,10 +1101,14 @@ private struct MissingAttachmentDetail: View {
                 Button("Show Game", action: showGame)
             }
             .disabled(working)
+            if let task = services.tasks.active(.attachments(item.game.id)) {
+                LabeledContent(task.title) { BackgroundTaskProgress(task: task, tasks: services.tasks) }
+            }
         }
         .formStyle(.grouped)
         .locateAttachment($locating) { located, moving in
-            run { try $0.locate(located.attachment, file: located.file, moving: moving) }
+            failed(nil)
+            startLocating(located, moving: moving, of: item.game.id, services: services)
         }
         .confirmationDialog("Delete \(item.fileName)?", isPresented: $deleting) {
             Button("Delete Attachment", role: .destructive) { run { [id = item.id] in try $0.delete(id) } }
@@ -1113,7 +1117,7 @@ private struct MissingAttachmentDetail: View {
         }
     }
 
-    /// Off the main thread, as a located file is copied; then every screen reloads.
+    /// Off the main thread, as its file may go to the Trash; then every screen reloads.
     private func run(_ change: @escaping @Sendable (Attachments) throws -> Void) {
         guard let attachments = services.attachments, !working else { return }
         working = true

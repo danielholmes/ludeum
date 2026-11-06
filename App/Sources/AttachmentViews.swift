@@ -27,6 +27,9 @@ struct AttachmentsSection: View {
                 Button("Add Attachment…", systemImage: "paperclip") { pick(manual: false) }
                     .buttonStyle(.hover).help("Any file about this Game, such as a map or a guide. Or drop files here.")
             }
+            if let task = services.tasks.active(.attachments(game)) {
+                LabeledContent(task.title) { BackgroundTaskProgress(task: task, tasks: services.tasks) }
+            }
             if let error { ErrorText(error) }
         }
         .disabled(working)
@@ -40,7 +43,7 @@ struct AttachmentsSection: View {
         .sheet(item: $adding) { pending in
             AddAttachmentsSheet(pending: pending) { manual, moving in
                 adding = nil
-                run { try $0.add(pending.files, to: game, manual: manual, moving: moving) }
+                add(pending.files, manual: manual, moving: moving)
             }
         }
         .alert(
@@ -63,7 +66,7 @@ struct AttachmentsSection: View {
             Text(attachment.missing ? "Its file is gone already; it leaves the journal." : "Its file goes to the Trash.")
         }
         .locateAttachment($locating) { located, moving in
-            run { try $0.locate(located.attachment, file: located.file, moving: moving) }
+            startLocating(located, moving: moving, of: game, services: services)
         }
     }
 
@@ -130,7 +133,23 @@ struct AttachmentsSection: View {
         adding = PendingAttachments(files: panel.urls, manual: manual)
     }
 
-    /// Off the main thread, as files are copied; then every screen reloads.
+    /// Refused here when one can't be an Attachment; else a Background task.
+    private func add(_ files: [URL], manual: Bool, moving: Bool) {
+        guard let store = services.attachments else { return }
+        do {
+            try store.check(files)
+            error = nil
+        } catch {
+            self.error = attachmentErrorText(error)
+            return
+        }
+        let title = files.count == 1 ? "Adding \(files[0].lastPathComponent)" : "Adding \(files.count) Attachments"
+        startAttachmentTask(title, of: game, services: services) { [game] attachments, progress in
+            try attachments.add(files, to: game, manual: manual, moving: moving, progress: progress)
+        }
+    }
+
+    /// Off the main thread, as files are renamed or sent to the Trash; then every screen reloads.
     private func run(_ change: @escaping @Sendable (Attachments) throws -> Void) {
         guard let store = services.attachments, !working else { return }
         working = true
@@ -265,6 +284,38 @@ extension View {
             Text("Moving sends the original to the Trash once it's in.")
         }
     }
+}
+
+/// Files going into a Game's Attachments, as a Background task: Dropbox has to download one it keeps online only first,
+/// however long that takes. Once it has run, every screen reloads.
+@MainActor func startAttachmentTask(
+    _ title: String, of game: GameID, services: Services,
+    work: @escaping @Sendable (Attachments, @escaping @Sendable (Double) -> Void) throws -> Void
+) {
+    guard let store = services.attachments else { return }
+    services.tasks.enqueue(title, subject: .attachments(game)) { progress in
+        do {
+            try work(store, progress)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw AttachmentTaskError(errorDescription: attachmentErrorText(error))
+        }
+    } ended: { [changes = services.changes] in
+        changes.changed()
+    }
+}
+
+/// Puts a located file back, as a Background task.
+@MainActor func startLocating(_ located: LocatedFile, moving: Bool, of game: GameID, services: Services) {
+    startAttachmentTask("Putting back \(located.file.lastPathComponent)", of: game, services: services) { attachments, _ in
+        try attachments.locate(located.attachment, file: located.file, moving: moving)
+    }
+}
+
+/// Why a Background task on Attachments failed, as Background tasks shows it.
+private struct AttachmentTaskError: LocalizedError {
+    let errorDescription: String?
 }
 
 func attachmentErrorText(_ error: Error) -> String {

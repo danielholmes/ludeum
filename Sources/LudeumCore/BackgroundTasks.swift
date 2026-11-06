@@ -6,6 +6,8 @@ public enum TaskSubject: Hashable, Sendable {
     case rom(Int64)
     /// An Emulator being installed.
     case emulator(Emulator)
+    /// Files going into this Game's Attachments.
+    case attachments(GameID)
     /// 86Box's Windows base being brought in (ADR 0041).
     case windowsBase
 }

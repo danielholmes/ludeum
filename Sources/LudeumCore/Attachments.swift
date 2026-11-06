@@ -44,14 +44,18 @@ public struct Attachments: Sendable {
     /// `Attachments/` in the Data folder.
     public let root: URL
     let moveToTrash: @Sendable (URL) throws -> Void
+    /// Copies a picked file, which waits for Dropbox to download one it keeps online only.
+    let copy: @Sendable (URL, URL) throws -> Void
 
     public init(
         journal: LudeumStore, root: URL,
-        moveToTrash: @escaping @Sendable (URL) throws -> Void = Trash.move
+        moveToTrash: @escaping @Sendable (URL) throws -> Void = Trash.move,
+        copy: @escaping @Sendable (URL, URL) throws -> Void = { try FileManager.default.copyItem(at: $0, to: $1) }
     ) {
         self.journal = journal
         self.root = root
         self.moveToTrash = moveToTrash
+        self.copy = copy
     }
 
     private var files: FileManager { .default }
@@ -103,24 +107,39 @@ public struct Attachments: Sendable {
 
     /// Copies each file into the Game's folder under its own name (a name already there gets ` (2)`), as an Attachment, a
     /// Manual if `manual`. A moved file's original goes to the Trash once it's in. Refused, adding nothing, when one isn't
-    /// a file, or is already in `Attachments/`.
+    /// a file, or is already in `Attachments/`. Slow when Dropbox has to download a file first, so it's for a Background
+    /// task: the journal is free to read and write meanwhile, and a cancelled one stops once the file being copied is done,
+    /// without adding it. `progress` is told as each file goes in.
     @discardableResult
-    public func add(_ sources: [URL], to game: GameID, manual: Bool = false, moving: Bool = false) throws -> [Attachment] {
-        for source in sources { try checkPickable(source) }
-        let folder = try folder(of: game)
+    public func add(
+        _ sources: [URL], to game: GameID, manual: Bool = false, moving: Bool = false, progress: (Double) -> Void = { _ in }
+    ) throws -> [Attachment] {
+        try check(sources)
+        try files.createDirectory(at: root, withIntermediateDirectories: true)
         var added: [Int64] = []
-        for source in sources {
-            // Copied inside the write, so a failed copy records nothing and a refused insert copies nothing.
-            try journal.db.write { db in
-                let fileName = try freeName(db, for: source.lastPathComponent, in: folder, of: game)
-                try db.execute(
-                    sql: "INSERT INTO attachment (gameId, fileName, manual) VALUES (?, ?, ?)", arguments: [game, fileName, manual])
-                added.append(db.lastInsertedRowID)
-                try files.copyItem(at: source, to: url(folder).appending(path: fileName, directoryHint: .notDirectory))
+        for (i, source) in sources.enumerated() {
+            try Task.checkCancellation()
+            try LocalCopy.with(of: source, onVolumeOf: root, copy: copy) { local in
+                // Found only now, as the Game's folder may have moved during the copy, or gone with its last Attachment.
+                let folder = try folder(of: game)
+                // Moved inside the write, so a failed move records nothing and a refused insert moves nothing.
+                try journal.db.write { db in
+                    let fileName = try freeName(db, for: source.lastPathComponent, in: folder, of: game)
+                    try db.execute(
+                        sql: "INSERT INTO attachment (gameId, fileName, manual) VALUES (?, ?, ?)", arguments: [game, fileName, manual])
+                    added.append(db.lastInsertedRowID)
+                    try files.moveItem(at: local, to: url(folder).appending(path: fileName, directoryHint: .notDirectory))
+                }
             }
             if moving { try moveToTrash(source) }
+            progress(Double(i + 1) / Double(sources.count))
         }
         return try attachments(of: game).filter { added.contains($0.id) }
+    }
+
+    /// Throws when one can't be an Attachment. Nothing is read, so it's quick however the files are kept.
+    public func check(_ sources: [URL]) throws {
+        for source in sources { try checkPickable(source) }
     }
 
     /// A file can be picked when it's a single file outside `Attachments/`.
@@ -336,14 +355,20 @@ public struct Attachments: Sendable {
 
     /// Puts a missing Attachment's file back from wherever it is now, under the Attachment's own name. A moved file's
     /// original goes to the Trash once it's in. A file already back where it belongs is just found again, and the picked
-    /// one is left alone.
+    /// one is left alone. Slow when Dropbox has to download the picked file first, so it's for a Background task, as `add` is.
     public func locate(_ id: Int64, file: URL, moving: Bool) throws {
-        let attachment = try self.attachment(id)
-        if !exists(attachment.url) {
+        if !exists(try attachment(id).url) {
             try checkPickable(file)
-            _ = try folder(of: attachment.game)
-            try files.copyItem(at: file, to: attachment.url)
-            if moving { try moveToTrash(file) }
+            try files.createDirectory(at: root, withIntermediateDirectories: true)
+            let put: Bool = try LocalCopy.with(of: file, onVolumeOf: root, copy: copy) { local in
+                // Found only now, as its Game's folder may have moved, or its file come back, during the copy.
+                let attachment = try attachment(id)
+                guard !exists(attachment.url) else { return false }
+                _ = try folder(of: attachment.game)
+                try files.moveItem(at: local, to: attachment.url)
+                return true
+            }
+            if put, moving { try moveToTrash(file) }
         }
         try journal.db.write { db in try db.execute(sql: "UPDATE attachment SET missing = 0 WHERE id = ?", arguments: [id]) }
     }

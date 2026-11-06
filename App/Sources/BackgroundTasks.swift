@@ -93,7 +93,8 @@ struct BackgroundTasksPanel: View {
             }
             switch item.state {
             case .queued: Text("Waiting").font(.caption2).foregroundStyle(.secondary)
-            case .running: ProgressView(value: item.progress ?? 0).controlSize(.small)
+            // Moving with no fraction, until the work reports one: a file Dropbox is downloading says nothing for a while.
+            case .running: ProgressView(value: item.progress).progressViewStyle(.linear).controlSize(.small)
             case .failed(let message): ErrorText(message, font: .caption2)
             }
         }
@@ -133,7 +134,7 @@ struct BackgroundTaskProgress: View {
     var body: some View {
         if task.state == .running {
             HStack(spacing: 6) {
-                ProgressView(value: task.progress ?? 0).controlSize(.small).frame(width: 80)
+                ProgressView(value: task.progress).progressViewStyle(.linear).controlSize(.small).frame(width: 80)
                 Text(task.progress.map { "\(Int(($0 * 100).rounded()))%" } ?? "").font(.caption).monospacedDigit()
                     .foregroundStyle(.secondary)
             }
