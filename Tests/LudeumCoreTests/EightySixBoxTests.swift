@@ -304,6 +304,29 @@ private func put(_ data: Data, at file: URL) throws {
     }
 }
 
+/// What the Windows base and game disks take up (ADR 0041).
+@Suite struct EightySixBoxStorageTests {
+    let root = FileManager.default.temporaryDirectory.appending(path: "86box storage \(UUID().uuidString)", directoryHint: .isDirectory)
+    var ludeum: LudeumFolder { LudeumFolder(url: root.appending(path: "Ludeum", directoryHint: .isDirectory)) }
+
+    @Test func theyCountInTheDataFolder() throws {
+        try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
+        try put(Data(count: 1000), at: ludeum.windowsBase)
+        try put(Data(count: 234), at: ludeum.gameDisk(ofROM: "Z (Europe)"))
+
+        let stats = StorageStats.measure(ludeum, journal: nil, cache: root.appending(path: "no cache"))
+
+        #expect(stats.gameDisks == 1234)
+        #expect(stats.dataFolder == 1234)
+    }
+
+    @Test func noneIsNothing() throws {
+        try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
+
+        #expect(StorageStats.measure(ludeum, journal: nil, cache: root.appending(path: "no cache")).gameDisks == 0)
+    }
+}
+
 /// Choosing the Windows base and bringing it under Ludeum's control (ADR 0041).
 @Suite(.enabled(if: SevenZip.find() != nil, "needs 7-Zip's 7zz"))
 struct WindowsBaseTests {

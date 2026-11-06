@@ -75,6 +75,7 @@ struct StorageStatsSheet: View {
                     }
                 }
                 totalRow(Text("Attachments"), stats.attachments)
+                if stats.gameDisks > 0 { totalRow(Text("Windows base and game disks"), stats.gameDisks) }
                 totalRow(Text("Backups"), stats.backups)
                 Divider()
                 totalRow(Text("Data folder \(Text("in Dropbox").foregroundStyle(.secondary))"), stats.dataFolder).font(.headline)
