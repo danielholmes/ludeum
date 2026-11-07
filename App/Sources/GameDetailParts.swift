@@ -481,7 +481,8 @@ enum FactStyle {
         mesen: MesenSettings(ludeum: services.settings.folder), ares: AresSettings(ludeum: services.settings.folder),
         pcsx2: PCSX2Settings(ludeum: services.settings.folder), amiberry: AmiberrySettings(ludeum: services.settings.folder),
         ymir: YmirSettings(ludeum: services.settings.folder), eightySixBox: EightySixBoxSettings(ludeum: services.settings.folder),
-        running: \.isRunning)
+        running: \.isRunning,
+        eightySixBoxesOpen: emulator == .eightySixBox ? .now(ludeum: services.settings.folder) : .none)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)
@@ -495,7 +496,8 @@ enum FactStyle {
         let journal = services.journal
         let changes = services.changes
         // An Emulator already open opens another window, or for MesenCE another copy (ADR 0027), which Play refuses
-        // for DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir.
+        // for DuckStation, MesenCE, ares, PCSX2, Amiberry and Ymir. 86Box opens another copy for another ROM's machine,
+        // so Windows Games Play side by side (ADR 0041).
         configuration.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, error in
             Task { @MainActor in

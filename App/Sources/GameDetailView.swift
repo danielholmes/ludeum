@@ -754,12 +754,13 @@ struct GameDetailView: View {
         // A Background task may have started on it while the confirmation was up.
         guard let folder = locator.folder(of: rom), !services.tasks.isActive(.rom(rom.id)) else { return }
         if Emulator.of(platformId: rom.platformId) == .eightySixBox {
-            // An open 86Box would go on writing to the game disk under its old name.
-            if Emulator.eightySixBox.isRunning {
-                error = "Shut Windows down and quit 86Box first: it may be using the ROM's game disk."
+            // An 86Box playing it would go on writing to the game disk under its old name. One playing another ROM doesn't
+            // touch this one's game disk or machine.
+            let ludeum = services.settings.folder
+            if EightySixBoxesOpen.now(ludeum: ludeum).isPlaying(rom.folderName) {
+                error = "Shut its Windows down and quit the 86Box playing it first: it's using the ROM's game disk."
                 return
             }
-            let ludeum = services.settings.folder
             save { try $0.renameEightySixBoxROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
             return
         }

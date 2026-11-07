@@ -31,7 +31,7 @@ public struct Play: Sendable {
         case needsXISO
         /// DuckStation, MesenCE, ares, PCSX2 or Ymir is open: Ludeum writes its settings before each Play, which an open
         /// DuckStation, ares, PCSX2 or Ymir would write over (ADRs 0024, 0028, 0032, 0036) and an open MesenCE wouldn't read
-        /// (ADR 0027).
+        /// (ADR 0027). Or an 86Box is playing the ROM already, as a game disk can be in use by only one machine (ADR 0041).
         case running(Emulator)
         /// DuckStation, MesenCE, ares, PCSX2 or Ymir is being installed, so there's nothing to open yet.
         case installing(Emulator)
@@ -71,7 +71,7 @@ public struct Play: Sendable {
             case .running(.amiberry):
                 "Amiberry is open. Quit it, then Play: it keeps its settings in memory and writes them over when it quits."
             case .running(.eightySixBox):
-                "86Box is open. Shut Windows down and quit it, then Play: a game disk can be in use by only one machine."
+                "It's open in 86Box already. Shut its Windows down and quit that 86Box to Play it again: a game disk can be in use by only one machine."
             case .running(let emulator):
                 "\(emulator.name) is open. Quit it, then Play: Ludeum writes its settings before each Play, which an open \(emulator.name) would write over."
             case .installing(let emulator): "\(emulator.name) is being installed."
@@ -248,12 +248,14 @@ public struct Play: Sendable {
     /// are the ones Ludeum installs (`duckStation.app`, `mesen.app`, `ares.app`, `pcsx2.app`, `amiberry.app`, `ymir.app`),
     /// refused while any copy is `running`, and PCSX2 and Ymir until they have a BIOS. `saveState` starts the Play from that
     /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on. 86Box is
-    /// refused the same way until there's a Windows base (ADR 0041).
+    /// refused until there's a Windows base, and only while one of `eightySixBoxesOpen` is playing the ROM, as Windows Games
+    /// Play side by side (ADR 0041).
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
         pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), ymir: YmirSettings = .init(),
-        eightySixBox: EightySixBoxSettings = .init(), running: (Emulator) -> Bool = { _ in false }
+        eightySixBox: EightySixBoxSettings = .init(), running: (Emulator) -> Bool = { _ in false },
+        eightySixBoxesOpen: EightySixBoxesOpen = .none
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -298,7 +300,7 @@ public struct Play: Sendable {
             app = amiberry.app
         } else if emulator == .eightySixBox {
             guard eightySixBox.isInstalled else { return .refused(.notInstalled(emulator)) }
-            if running(emulator) { return .refused(.running(emulator)) }
+            if let rom, eightySixBoxesOpen.isPlaying(rom.folderName) { return .refused(.running(emulator)) }
             guard eightySixBox.hasBase else { return .refused(.noWindowsBase) }
             app = eightySixBox.app
         } else {

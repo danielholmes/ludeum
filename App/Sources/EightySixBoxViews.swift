@@ -3,6 +3,17 @@ import LudeumCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+extension EightySixBoxesOpen {
+    /// The 86Boxes open now, Ludeum's or another's, and the ROMs they're playing. Windows Games Play side by side, one
+    /// machine to a ROM (ADR 0041).
+    @MainActor static func now(ludeum: LudeumFolder) -> EightySixBoxesOpen {
+        // One that has just quit can be listed still, and has no command line left to read.
+        let open = NSRunningApplication.runningApplications(withBundleIdentifier: Emulator.eightySixBox.bundleIdentifier)
+            .filter { !$0.isTerminated }
+        return EightySixBoxesOpen(commandLines: open.map { ProcessArguments.of($0.processIdentifier) }, ludeum: ludeum)
+    }
+}
+
 /// Asks for a prepared Windows base's archive. Nil when cancelled.
 @MainActor private func pickWindowsBase() -> URL? {
     let panel = NSOpenPanel()
@@ -137,8 +148,8 @@ struct GameDiskSection: View {
 
     private func delete(_ disk: Disk) {
         error = nil
-        if Emulator.eightySixBox.isRunning {
-            error = "Quit 86Box first: it may be using this game disk."
+        if EightySixBoxesOpen.now(ludeum: services.settings.folder).isPlaying(disk.rom) {
+            error = "Shut its Windows down and quit the 86Box playing it first: it's using this game disk."
             return
         }
         do {

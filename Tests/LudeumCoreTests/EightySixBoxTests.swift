@@ -178,7 +178,7 @@ private func put(_ data: Data, at file: URL) throws {
 
     func press(
         _ windows: FakeROMFolder, fileName: String = "Age of Empires (USA)/AOE.iso", settings: EmulatorSettings = .init(),
-        running: Bool = false
+        open: EightySixBoxesOpen = .none
     )
         -> Play.Outcome
     {
@@ -186,10 +186,19 @@ private func put(_ data: Data, at file: URL) throws {
             id: 1, folderName: name, platformId: ROMPlatform.windows, fileName: fileName, name: name, version: "", disc: nil,
             missing: false,
             archived: false)
+        // Any 86Box being open (`running`) isn't what stops a Play: only one playing this ROM is.
         return Play(platformId: ROMPlatform.windows, platformName: "PC", roms: [rom], settings: settings)
             .prepare(
                 locator: ROMLocator(romFolders: [windows.folder]), version: .ok, app: { _ in URL(filePath: "/Applications/Wrong.app") },
-                eightySixBox: box, running: { _ in running })
+                eightySixBox: box, running: { _ in true }, eightySixBoxesOpen: open)
+    }
+
+    /// An open 86Box playing the ROM `name`, as Ludeum opens it.
+    func playing(_ name: String) -> [String] {
+        [
+            "/Ludeum/Emulators/86Box.app/Contents/MacOS/86Box", "-P",
+            String(ludeum.eightySixBoxMachine(ofROM: name).path(percentEncoded: false).dropLast()), "-N",
+        ]
     }
 
     func windows() throws -> FakeROMFolder {
@@ -215,11 +224,33 @@ private func put(_ data: Data, at file: URL) throws {
         #expect(outcome.refusal?.message.contains("Emulators…") == true)
     }
 
-    @Test func itsRefusedWhile86BoxIsOpen() throws {
+    @Test func itsRefusedWhileAn86BoxIsPlayingTheROM() throws {
         try install()
         try chooseBase()
 
-        #expect(press(try windows(), running: true).refusal == .running(.eightySixBox))
+        let outcome = press(try windows(), open: EightySixBoxesOpen(commandLines: [playing(name)], ludeum: ludeum))
+
+        #expect(outcome.refusal == .running(.eightySixBox))
+        #expect(outcome.refusal?.message.contains("only one machine") == true)
+    }
+
+    @Test func itPlaysBesideAnother86BoxPlayingAnotherROM() throws {
+        try install()
+        try chooseBase()
+
+        let outcome = press(try windows(), open: EightySixBoxesOpen(commandLines: [playing("Z (Europe)")], ludeum: ludeum))
+
+        guard case .open = outcome else {
+            Issue.record("\(outcome)")
+            return
+        }
+    }
+
+    @Test func itsRefusedWhileAn86BoxsCommandLineCantBeRead() throws {
+        try install()
+        try chooseBase()
+
+        #expect(press(try windows(), open: EightySixBoxesOpen(commandLines: [nil], ludeum: ludeum)).refusal == .running(.eightySixBox))
     }
 
     @Test func theFirstPlayGivesTheBaseAsParentAndLeavesTheDiskFor86BoxToMake() throws {
