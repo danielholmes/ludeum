@@ -383,6 +383,14 @@ struct CoverTile: View {
                         .help("Rating")
                 }
             }
+            .overlay(alignment: .topLeading) {
+                if row.outcomes.contains(.finished) {
+                    RoundBadge(symbol: "checkmark", color: .green, side: height, weight: .bold)
+                        .padding(margin)
+                        .help("Finished")
+                        .accessibilityLabel("Finished")
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if let status = CoverStatus(row) {
                     status.badge(height: height)
@@ -449,15 +457,14 @@ private enum ROMBadge {
     }
 }
 
-/// A Cover's status badge: Playing, else Finished, else its Intent (Up next, Backlog or Want to buy); none otherwise.
+/// A Cover's status badge: Playing, else its Intent (Up next, Backlog or Want to buy); none otherwise. Finished has its
+/// own badge, at the top leading corner.
 private enum CoverStatus {
-    case playing, finished, upNext, backlog, wantToBuy
+    case playing, upNext, backlog, wantToBuy
 
     init?(_ row: LibraryRow) {
         if row.isPlaying {
             self = .playing
-        } else if row.outcomes.contains(.finished) {
-            self = .finished
         } else if row.intent == .upNext {
             self = .upNext
         } else if row.intent == .backlog {
@@ -480,8 +487,6 @@ private enum CoverStatus {
             PostIt(color: Color(red: 0.62, green: 0.9, blue: 0.5), side: height)
         case .backlog:
             PostIt(color: Color(red: 1, green: 0.9, blue: 0.4), side: height)
-        case .finished:
-            RoundBadge(symbol: "checkmark", color: .green, side: height, weight: .bold)
         case .wantToBuy:
             RoundBadge(symbol: "cart.fill", color: .blue, side: height)
         }
@@ -490,7 +495,6 @@ private enum CoverStatus {
     var help: String {
         switch self {
         case .playing: "Playing"
-        case .finished: "Finished"
         case .upNext: "Up next"
         case .backlog: "Backlog"
         case .wantToBuy: "Want to buy"
