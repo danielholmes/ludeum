@@ -31,7 +31,8 @@ public struct Play: Sendable {
         case needsXISO
         /// DuckStation, MesenCE, ares, PCSX2 or Ymir is open: Ludeum writes its settings before each Play, which an open
         /// DuckStation, ares, PCSX2 or Ymir would write over (ADRs 0024, 0028, 0032, 0036) and an open MesenCE wouldn't read
-        /// (ADR 0027). Or an 86Box is playing the ROM already, as a game disk can be in use by only one machine (ADR 0041).
+        /// (ADR 0027). Or an 86Box is playing the ROM already, as a game disk can be in use by only one machine (ADR 0041), or
+        /// a DOSBox Staging is, as only one should write its Game save (ADR 0042).
         case running(Emulator)
         /// DuckStation, MesenCE, ares, PCSX2 or Ymir is being installed, so there's nothing to open yet.
         case installing(Emulator)
@@ -72,6 +73,8 @@ public struct Play: Sendable {
                 "Amiberry is open. Quit it, then Play: it keeps its settings in memory and writes them over when it quits."
             case .running(.eightySixBox):
                 "It's open in 86Box already. Shut its Windows down and quit that 86Box to Play it again: a game disk can be in use by only one machine."
+            case .running(.dosBoxStaging):
+                "It's open in DOSBox Staging already. Quit that DOSBox Staging to Play it again: only one should write its Game save."
             case .running(let emulator):
                 "\(emulator.name) is open. Quit it, then Play: Ludeum writes its settings before each Play, which an open \(emulator.name) would write over."
             case .installing(let emulator): "\(emulator.name) is being installed."
@@ -229,9 +232,11 @@ public struct Play: Sendable {
     }
 
     /// Every way its Play can start, for Play's menu: Resume when there's a Resume state, then each Disc of a multi-disc
-    /// ROM, or just its ROM. One way alone is a plain button.
+    /// ROM, or just its ROM, and a DOS prompt for a DOS Game that starts with a program (ADR 0042). One way alone is a plain
+    /// button.
     public func starts(discs: [PlayDisc], resume: SaveState?) -> [PlayStart] {
-        (resume.map { [PlayStart.resume($0)] } ?? []) + (discs.isEmpty ? [.rom] : discs.map(PlayStart.disc))
+        let prompt = Emulator.of(platformId: platformId) == .dosBoxStaging && settings.dosProgram != nil ? [PlayStart.prompt] : []
+        return (resume.map { [PlayStart.resume($0)] } ?? []) + (discs.isEmpty ? [.rom] : discs.map(PlayStart.disc)) + prompt
     }
 
     /// The Disc a Save state was saved on, by its Serial.
@@ -249,13 +254,14 @@ public struct Play: Sendable {
     /// refused while any copy is `running`, and PCSX2 and Ymir until they have a BIOS. `saveState` starts the Play from that
     /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on. 86Box is
     /// refused until there's a Windows base, and only while one of `eightySixBoxesOpen` is playing the ROM, as Windows Games
-    /// Play side by side (ADR 0041).
+    /// Play side by side (ADR 0041). DOSBox Staging likewise only while one of `dosBoxesOpen` is playing the ROM; `prompt`
+    /// starts it at a DOS prompt rather than its program (ADR 0042).
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
-        duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
+        prompt: Bool = false, duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
         pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), ymir: YmirSettings = .init(),
-        eightySixBox: EightySixBoxSettings = .init(), running: (Emulator) -> Bool = { _ in false },
-        eightySixBoxesOpen: EightySixBoxesOpen = .none
+        eightySixBox: EightySixBoxSettings = .init(), dosBox: DOSBoxStagingSettings = .init(), running: (Emulator) -> Bool = { _ in false },
+        eightySixBoxesOpen: EightySixBoxesOpen = .none, dosBoxesOpen: DOSBoxesOpen = .none
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -303,6 +309,10 @@ public struct Play: Sendable {
             if let rom, eightySixBoxesOpen.isPlaying(rom.folderName) { return .refused(.running(emulator)) }
             guard eightySixBox.hasBase else { return .refused(.noWindowsBase) }
             app = eightySixBox.app
+        } else if emulator == .dosBoxStaging {
+            guard dosBox.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if let rom, dosBoxesOpen.isPlaying(rom.folderName) { return .refused(.running(emulator)) }
+            app = dosBox.app
         } else {
             guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
             app = found
@@ -339,15 +349,20 @@ public struct Play: Sendable {
         }
         let warning: String? = if case .warn(let warning) = version { warning } else { nil }
         do {
-            let arguments =
-                emulator == .eightySixBox
-                ? try eightySixBox.arguments(rom: opened, romName: rom.folderName, settings: settings)
-                : try emulator.arguments(
+            let arguments: [String]
+            if emulator == .eightySixBox {
+                arguments = try eightySixBox.arguments(rom: opened, romName: rom.folderName, settings: settings)
+            } else if emulator == .dosBoxStaging, let folder = locator.folder(of: rom) {
+                arguments = try dosBox.arguments(
+                    subfolder: folder.url.appending(path: rom.folderName, directoryHint: .isDirectory), romName: rom.folderName,
+                    settings: settings, prompt: prompt)
+            } else {
+                arguments = try emulator.arguments(
                     rom: opened, platformId: platformId, settings: settings, saveState: saveState,
                     duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2, amiberry: amiberry, ymir: ymir)
-            return .open(
-                app: app, arguments: arguments, warning: warning, startsOn: startsOn,
-                environment: emulator == .amiberry ? amiberry.environment : [:])
+            }
+            let environment = emulator == .amiberry ? amiberry.environment : emulator == .dosBoxStaging ? dosBox.environment : [:]
+            return .open(app: app, arguments: arguments, warning: warning, startsOn: startsOn, environment: environment)
         } catch {
             return .refused(
                 emulator == .amiberry
@@ -375,37 +390,46 @@ public struct PlayDisc: Sendable, Equatable, Identifiable {
 }
 
 /// What a Play starts from (ADR 0034): its Resume state, when its Emulator keeps one; else the Disc a multi-disc ROM
-/// starts on; else just its ROM. Play's button says it and does it, and so does a double-click on the Game's Cover.
+/// starts on; else just its ROM. Play's button says it and does it, and so does a double-click on the Game's Cover. A DOS
+/// Game that starts with a program can start at a DOS prompt instead, from Play's menu (ADR 0042).
 public enum PlayStart: Sendable, Equatable, Identifiable {
     case resume(SaveState)
     case disc(PlayDisc)
     case rom
+    case prompt
 
     public var id: String {
         switch self {
         case .resume: "resume"
         case .disc(let disc): "disc \(disc.number)"
         case .rom: "rom"
+        case .prompt: "prompt"
         }
     }
 
-    /// What the Play button says: "Resume", "Play · Gran Turismo Mode", "Play".
+    /// What the Play button says: "Resume", "Play · Gran Turismo Mode", "Play", "DOS Prompt".
     public var title: String {
         switch self {
         case .resume: "Resume"
         case .disc(let disc): "Play · \(disc.labelOrNumber)"
         case .rom: "Play"
+        case .prompt: "DOS Prompt"
         }
     }
 
-    /// What its entry in the Play button's menu says: "Resume", "Play Disc 2 · Gran Turismo Mode", "Play".
+    /// What its entry in the Play button's menu says: "Resume", "Play Disc 2 · Gran Turismo Mode", "Play", "Play at a DOS
+    /// Prompt".
     public var menuTitle: String {
         switch self {
         case .resume: "Resume"
         case .disc(let disc): "Play \(disc.numberAndLabel)"
         case .rom: "Play"
+        case .prompt: "Play at a DOS Prompt"
         }
     }
+
+    /// Whether it starts at a DOS prompt, as `Play.prepare` takes it.
+    public var prompt: Bool { self == .prompt }
 
     /// The state it Plays from, as `Play.prepare` takes it.
     public var saveState: URL? {

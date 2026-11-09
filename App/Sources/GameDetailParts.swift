@@ -457,9 +457,10 @@ enum FactStyle {
 /// Opens `play`'s ROM in `emulator`, with every Emulator setting on the command line. `refused` gets why it couldn't,
 /// then or once the Emulator fails to open; `alert` gets a version check's title and message. `saveState` starts
 /// DuckStation, MesenCE, ares or PCSX2 from that state (a Resume state included, ADR 0034); else a multi-disc ROM starts
-/// on `disc`, or the one it last started on, which it then remembers.
+/// on `disc`, or the one it last started on, which it then remembers. `prompt` starts a DOS Game at a DOS prompt rather
+/// than its program (ADR 0042).
 @MainActor func startPlay(
-    _ play: Play, in emulator: Emulator, services: Services, saveState: URL? = nil, disc: Int? = nil,
+    _ play: Play, in emulator: Emulator, services: Services, saveState: URL? = nil, disc: Int? = nil, prompt: Bool = false,
     refused: @escaping @MainActor (String) -> Void, alert: (_ title: String, _ message: String) -> Void
 ) {
     let version: Play.VersionStatus =
@@ -477,12 +478,13 @@ enum FactStyle {
     }
     switch play.prepare(
         locator: locator, version: version, app: NSWorkspace.shared.urlForApplication(withBundleIdentifier:), saveState: saveState,
-        disc: disc, duckStation: DuckStationSettings(ludeum: services.settings.folder),
+        disc: disc, prompt: prompt, duckStation: DuckStationSettings(ludeum: services.settings.folder),
         mesen: MesenSettings(ludeum: services.settings.folder), ares: AresSettings(ludeum: services.settings.folder),
         pcsx2: PCSX2Settings(ludeum: services.settings.folder), amiberry: AmiberrySettings(ludeum: services.settings.folder),
         ymir: YmirSettings(ludeum: services.settings.folder), eightySixBox: EightySixBoxSettings(ludeum: services.settings.folder),
-        running: \.isRunning,
-        eightySixBoxesOpen: emulator == .eightySixBox ? .now(ludeum: services.settings.folder) : .none)
+        dosBox: DOSBoxStagingSettings(ludeum: services.settings.folder), running: \.isRunning,
+        eightySixBoxesOpen: emulator == .eightySixBox ? .now(ludeum: services.settings.folder) : .none,
+        dosBoxesOpen: emulator == .dosBoxStaging ? .now(ludeum: services.settings.folder) : .none)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)

@@ -28,8 +28,8 @@ private func put(_ data: Data, at file: URL) throws {
     @Test func windowsIsPlayedIn86Box() {
         #expect(Emulator.of(platformId: ROMPlatform.windows) == .eightySixBox)
         #expect(Emulator.eightySixBox.isLudeums)
-        // DOS is DOSBox's, in time (#53).
-        #expect(Emulator.of(platformId: 13) == nil)
+        // DOS is DOSBox Staging's, apart (ADR 0042).
+        #expect(Emulator.of(platformId: ROMPlatform.dos) == .dosBoxStaging)
     }
 
     @Test func onlyAWindowsGameFromAfter2000IsWarnedOf() throws {

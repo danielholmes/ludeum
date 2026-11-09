@@ -38,8 +38,9 @@ public enum ROMChecksum: Sendable, Equatable {
         _ rom: FolderROMFile, platformId: Int64, sevenZip: SevenZip?, isOnDisk: (URL) -> Bool = SevenZip.isOnDisk
     ) async -> Reading {
         guard let file = rom.ready ?? rom.archive else { return .unreadable }
-        // No DAT covers these, and a compilation's disc can run to gigabytes (ADR 0041).
-        if platformId == ROMPlatform.windows { return .noDump }
+        // No DAT covers these, and a compilation's disc can run to gigabytes (ADR 0041); a DOS ROM is a folder of drives
+        // (ADR 0042).
+        if platformId == ROMPlatform.windows || platformId == ROMPlatform.dos { return .noDump }
         guard isOnDisk(file) else { return .onlineOnly }
         if ["7z", "zip"].contains(file.pathExtension.lowercased()) {
             guard let sevenZip, let entries = try? await sevenZip.contents(of: file) else { return .unreadable }

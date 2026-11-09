@@ -69,7 +69,8 @@ import Testing
         _ = try h.journal.addGame(platformId: ROMPlatform.ps2, name: "Ico")
         _ = try h.journal.addGame(platformId: 7, name: "Vagrant Story")
 
-        #expect(try names(LibraryFilter(archivablePlatforms: true)) == ["Ico", "Vagrant Story"])
+        // Doom is DOS's, whose ROMs are Archived whole (ADR 0042).
+        #expect(try names(LibraryFilter(archivablePlatforms: true)) == ["Doom", "Ico", "Vagrant Story"])
         #expect(try names(LibraryFilter(platformId: 7, archivablePlatforms: true)) == ["Vagrant Story"])
         #expect(try names(LibraryFilter(platformId: 19, archivablePlatforms: true)).isEmpty)
     }
@@ -118,8 +119,12 @@ import Testing
         try h.journal.recordROM(game: metroid, fileName: "Super Metroid (USA).sfc", missing: false)
         // Missing (or Archived), Play is still offered: it says why it can't open.
         try h.journal.recordROM(game: zelda, fileName: "A Link to the Past (USA).sfc", missing: true)
-        // PC has no Emulator.
+        // DOS is DOSBox Staging's (ADR 0042).
         try h.journal.recordROM(game: doom, fileName: "Doom.zip", missing: false)
+        // MSX2 has no Emulator.
+        try h.journal.addPlatform(id: 53, name: "MSX2")
+        let metalGear = try h.journal.addGame(platformId: 53, name: "Metal Gear 2")
+        try h.journal.recordROM(game: metalGear, fileName: "Metal Gear 2 (Japan).rom", missing: false)
         // No ROM.
         try h.journal.addGame(platformId: 19, name: "Chrono Trigger")
 
@@ -127,7 +132,7 @@ import Testing
 
         #expect(
             Dictionary(uniqueKeysWithValues: rows.map { ($0.name, $0.offersPlay) })
-                == ["Super Metroid": true, "A Link to the Past": true, "Doom": false, "Chrono Trigger": false])
+                == ["Super Metroid": true, "A Link to the Past": true, "Doom": true, "Metal Gear 2": false, "Chrono Trigger": false])
     }
 
     @Test func filtersByPlayerOrSolo() throws {

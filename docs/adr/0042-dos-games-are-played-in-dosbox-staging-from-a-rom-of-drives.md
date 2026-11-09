@@ -1,0 +1,44 @@
+# DOS Games are Played in DOSBox Staging, from a ROM of drives with its Game save laid over drive C
+
+Adds to [0038](0038-emulators-are-whole-apps-ludeum-installs-not-cores.md)'s model an eighth Emulator Ludeum installs, for DOS (IGDB platform 13), which [0041](0041-windows-games-are-played-in-86box-from-a-game-disk-over-one-windows-base.md) left apart from Windows. It answers [0035](0035-an-amiga-rom-is-one-archive-and-its-saves-are-amiberrys-save-images.md)'s and 0041's problem a third way: a game that writes to what it was loaded from.
+
+DOS games aren't one file. They're a folder of files, often run from a hard disk they were installed to, sometimes with a CD, and they save into their own folder. The research, with what was run, is [dos-emulator.md](../research/dos-emulator.md). My own DOS games are Boxer gameboxes and folders with a `dosbox.conf`, set up by hand; that's not a model for a launcher, and nothing here reads them.
+
+**DOSBox Staging over DOSBox-X and plain DOSBox.** It's the only one released as a signed, notarized Universal app. It layers settings files in a documented order with nothing of its own read (`--noprimaryconf --nolocalconf`, then each `--conf`). Its defaults are tuned so a game's own settings are a few lines; its manual recommends exactly that. DOSBox-X would let a ROM be one archive, as it mounts a `.zip` or `.7z` with writes kept beside it, and has save states. But its build is ad-hoc signed and unnotarized, it changes monthly, and over an archive a game silently can't delete or rename its own files. Plain DOSBox 0.74-3 has no arm64 build and no overlay.
+
+**The overlay keeps the ROM unwritten.** Both forks carry the overlay drive GOG gave DOSBox: `mount c <folder>`, then `mount c <another> -t overlay`, and every file written, new or changed, goes to the second, a deletion leaving a marker there. Through writes, appends, deletes and renames the ROM's files hashed the same. So the overlay folder is the Game save, as a save image is an Amiga ROM's and a game disk a Windows ROM's.
+
+**Per-game settings are still needed, by a minority.** Staging says its defaults suit most games, and its wiki lists about 140 that need more: mostly CPU cycles, then CPU type, memory and sound. Neither DOSBox can write a game's differences from a standing file during a Play (Staging's `config -wc` writes all 96 KB of it), so changing them in the Emulator and keeping them, as 0038 would have it, doesn't work here.
+
+So:
+
+- **DOSBox Staging is the Emulator for DOS**, installed by Ludeum at one pinned release, `dosbox-staging-macOS-v0.83.0.dmg`, checked against its SHA-256, mounted unseen and its app copied to `Emulators/DOSBox Staging.app` in the Ludeum folder, its version read from its `Info.plist` without running it.
+- **A DOS ROM is a subfolder of drives:** `ROMs/DOS/<name>/` holding `C/`, the game's files as drive C, and `CD/`, its Discs, cue sheets or `.iso`s, in drive D. Either may be missing, not both. Nothing is guessed from what's in it, as a DOS game's own data files are often `.BIN`s and `.IMG`s. It's found by its drives, its `C` once there's a file in it, else Disc 1 of its `CD`; no loose file is a ROM. Only Finder's files are Clutter, as a game's texts and pictures are its own. No checksum is taken, and it's Matched by hand. It's Archived whole, its empty folders with it.
+- **Add ROM lays it out:** a game's folder, or what an archive holds, becomes `C/` as it is; disc images go in `CD/`; a game's folder picked with its disc images is both, one ROM named for the folder; a folder already of drives goes in as it is. A folder of disc images alone is a CD game's Discs.
+- **A ROM is never written to.** A Play mounts `C/` and lays the ROM's Game save over it, `Emulators/DOSBox Staging/Game Saves/<ROM name>/` in the Data folder, so everything the game writes, its saves and settings, goes there. A ROM with no `C/` has its Game save as drive C, which is where a CD game installs. The Discs are all in drive D, Disc 1 first, and DOSBox Staging swaps them itself.
+- **The program a Game starts with is an Emulator setting**, its DOS path on drive C (`KEEN1\KEEN1.EXE`), chosen in Game detail from the `.EXE`, `.COM` and `.BAT` files on drive C, the Game save's included, so an installed CD game's are there too. A Play changes into its folder, runs it (a batch file with `CALL`) and quits DOSBox Staging when it ends. With none, a Play is a DOS prompt on drive C, and Play's menu offers one as well when there is. A program inside a folder whose name isn't DOS's own (8.3) isn't offered, as DOSBox gives it a short name of its own.
+- **A ROM's own settings are a settings file** of only what its game needs differently, `Emulators/DOSBox Staging/Game Settings/<ROM name>.conf` in the Data folder, laid over the Standing settings at every Play. Game detail makes it with a note of what goes in it and opens it in TextEdit. The ROM's, not the Game's, as how a game is set up can differ between its Versions.
+- **Every Standing setting is for the one launch:** a home folder of its own, `Emulators/DOSBox Staging Home` in the Ludeum folder, in the environment, as its own folder, `~/Library/Preferences/DOSBox`, can't otherwise be moved and portable mode breaks the app's signature; its own settings files ignored; and Ludeum's, written before each Play: General MIDI through FluidSynth with the SoundFont Ludeum installs, as Staging's own default sends it to a CoreMIDI port a Mac doesn't have, and the Data folder's `SoundFonts` and `MT-32 ROMs` folders, for a ROM's settings to choose another SoundFont or an MT-32.
+- **The SoundFont is GeneralUser GS v2.0.3**, pinned to a commit of its repository with its SHA-256 and installed with DOSBox Staging, beside it in the Ludeum folder: Install downloads it again, so it isn't kept in the Data folder. Its licence lets any software use it.
+- **DOS Games Play side by side,** as nothing a Play writes is shared between ROMs; Play is refused only while a DOSBox Staging is laying that ROM's Game save over its drive C, told from each open one's command line, as two writing one Game save would undo each other. A Rename moves its Game save and settings file, refused if either is there under the new name. Deleting a ROM leaves them, as with every Emulator's Game saves.
+
+## Considered Options
+
+- **DOSBox-X, with a ROM as one `.zip` or `.7z`**: rejected for now. One file per ROM is tidier for Rename, Archive and Dropbox, and save states are something Staging hasn't got. But an unnotarized build changing monthly is the kind of Emulator 0038 pins away from, and a game failing silently to delete its own files is worse than a folder.
+- **A ROM as one subfolder of the game's files, with discs found by extension**: rejected. A DOS game's `.BIN` and `.IMG` data files would be read as Discs.
+- **A `dosbox.conf` in the ROM, its `[autoexec]` starting the game**: rejected. The ROM would be portable to any DOSBox, but Ludeum would know nothing of what starts it, nothing could offer a DOS prompt instead, and changing a game's settings would be changing its ROM.
+- **Every setting in the journal**, the program, cycles and a box of other settings lines: rejected. A box of settings lines is a settings file by another name, harder to edit than one.
+- **CPU cycles as an Emulator setting of their own**, as 86Box's CPU speed is: not yet. It's the setting most often needed, but a value means different things in real and protected mode, and the settings file holds it already.
+- **Changing settings in DOSBox Staging during a Play and keeping them**: rejected, as above: it writes all of them, not a game's differences.
+- **Sharing `~/Library/Preferences/DOSBox` with any other DOSBox Staging**: rejected, as every other Emulator Ludeum installs keeps apart from other copies.
+- **The SoundFont in the Data folder**: rejected. It's 32 MB that Install can always fetch again; my own SoundFonts go there.
+- **Floppy images**: not yet. Neither overlay works over a disk image, so a floppy would be written in place unless mounted read-only, and few DOS games need one once installed. An `A/` drive folder is where they'd go.
+
+## Consequences
+
+- DOS Games have no Save states: Staging closed them as not planned. A game's own saves are its Game save.
+- A game that renames a folder that's in its ROM aborts DOSBox Staging ("renaming base directory … not yet supported"). None is known yet.
+- What a game writes is named in upper case in its Game save, Staging's overlay keeping DOS's names.
+- The Game save can't tell a game's saves from its settings or a CD game's install: deleting it loses all of them together, and says so.
+- A ROM's settings file is plain DOSBox Staging settings: a bad line is DOSBox Staging's to report, during the Play.
+- What's untried: CD audio from a cue sheet's tracks, a real game's own save through the overlay, the MT-32, and how many games want a setting the defaults don't give.

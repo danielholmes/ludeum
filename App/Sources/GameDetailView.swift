@@ -247,6 +247,10 @@ struct GameDetailView: View {
             if !game.isBundle, emulator == .eightySixBox, playROMs.contains(where: { !$0.missing }) {
                 GameDiskSection(services: services, roms: playROMs.filter { !$0.missing })
             }
+            // Game save: what a DOS game has written over its drive C, in the Data folder (ADR 0042).
+            if !game.isBundle, emulator == .dosBoxStaging, playROMs.contains(where: { !$0.missing }) {
+                DOSGameSaveSection(services: services, roms: playROMs.filter { !$0.missing })
+            }
 
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)
@@ -505,8 +509,13 @@ struct GameDetailView: View {
                 .tint(services.versions.refusalMessage(emulator) == nil ? nil : .red)
                 .disabled(refusal == .busy)
                 .help(refusal?.message ?? playHelp(start, in: emulator))
-                // Dolphin has no per-Game settings, and DuckStation's are its own (ADR 0029).
-                if !EmulatorSettingRow.rows(for: emulator, platformId: platformId).isEmpty {
+                // Dolphin has no per-Game settings, and DuckStation's are its own (ADR 0029). A DOS Game's are the program
+                // it starts with and its ROM's own settings file (ADR 0042).
+                if emulator == .dosBoxStaging {
+                    DOSBoxSettingsButton(services: services, rom: playing.rom, settings: emulatorSettings) { settings in
+                        save { try $0.setEmulatorSettings(id, settings) }
+                    }
+                } else if !EmulatorSettingRow.rows(for: emulator, platformId: platformId).isEmpty {
                     EmulatorSettingsButton(emulator: emulator, platformId: platformId, settings: emulatorSettings) { settings in
                         save { try $0.setEmulatorSettings(id, settings) }
                     }
@@ -749,7 +758,7 @@ struct GameDetailView: View {
 
     /// Renames the ROM in its ROM folder and the journal; a MesenCE ROM's file inside its `.7z`, and its saves, too
     /// (ADR 0027), and an ares ROM's saves (ADR 0028), and an Amiberry ROM's saved disks (ADR 0035), and a Windows ROM's game
-    /// disk (ADR 0041).
+    /// disk (ADR 0041), and a DOS ROM's Game save and own settings (ADR 0042).
     private func rename(_ rom: LudeumROM, to name: String) {
         // A Background task may have started on it while the confirmation was up.
         guard let folder = locator.folder(of: rom), !services.tasks.isActive(.rom(rom.id)) else { return }
@@ -762,6 +771,16 @@ struct GameDetailView: View {
                 return
             }
             save { try $0.renameEightySixBoxROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
+            return
+        }
+        if Emulator.of(platformId: rom.platformId) == .dosBoxStaging {
+            // A DOSBox Staging playing it would go on writing to its Game save under its old name.
+            let ludeum = services.settings.folder
+            if DOSBoxesOpen.now(ludeum: ludeum).isPlaying(rom.folderName) {
+                error = "Quit the DOSBox Staging playing it first: it's writing to the ROM's Game save."
+                return
+            }
+            save { try $0.renameDOSROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
             return
         }
         if Emulator.of(platformId: rom.platformId) == .amiberry {
@@ -836,20 +855,24 @@ struct GameDetailView: View {
 
     /// Plays the Game in its Emulator, with every Emulator setting on the command line, from `saveState` if given, else
     /// on `disc` of a multi-disc ROM if given. A running Emulator gets the ROM in its open window.
-    private func play(in emulator: Emulator, from saveState: URL? = nil, disc: Int? = nil) {
+    private func play(in emulator: Emulator, from saveState: URL? = nil, disc: Int? = nil, prompt: Bool = false) {
         playError = nil
         startPlay(
-            playing, in: emulator, services: services, saveState: saveState, disc: disc, refused: { playError = $0 },
+            playing, in: emulator, services: services, saveState: saveState, disc: disc, prompt: prompt, refused: { playError = $0 },
             alert: { versionAlert = ($0, $1) })
     }
 
-    /// Plays the Game from `start`: its Resume state, a chosen Disc, or just its ROM (ADR 0034).
+    /// Plays the Game from `start`: its Resume state, a chosen Disc, just its ROM (ADR 0034), or a DOS prompt (ADR 0042).
     private func play(in emulator: Emulator, start: PlayStart) {
-        play(in: emulator, from: start.saveState, disc: start.disc)
+        play(in: emulator, from: start.saveState, disc: start.disc, prompt: start.prompt)
     }
 
     /// What Play's button does: resumes from where the Emulator left off, saying when that was and on which Disc, or Plays.
+    /// A DOS Game with no program to start with Plays at a DOS prompt, and says where its program is chosen.
     private func playHelp(_ start: PlayStart, in emulator: Emulator) -> String {
+        if emulator == .dosBoxStaging, emulatorSettings.dosProgram == nil {
+            return "Play in \(emulator.name) at a DOS prompt. Choose the program it starts with in its \(emulator.name) settings."
+        }
         guard case .resume(let state) = start else { return "Play in \(emulator.name)" }
         let disc = discs.first { $0.serial == state.serial }.map { " on \($0.numberAndLabel)" } ?? ""
         return

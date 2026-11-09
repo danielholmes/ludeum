@@ -77,6 +77,8 @@ extension Emulator {
         case .amiberry: EmulatorVersionSpec(expected: AmiberryRelease.pinned.version, source: .appVersion, exact: true)
         // Its app's version needs no process, and starting it opens a machine.
         case .eightySixBox: EmulatorVersionSpec(expected: EightySixBoxRelease.pinned.version, source: .appVersion, exact: true)
+        // Its app's version, `0.83.0-7b400`, needs no process.
+        case .dosBoxStaging: EmulatorVersionSpec(expected: DOSBoxStagingRelease.pinned.version, source: .appVersion, exact: true)
         // Its `-version` prints QEMU's version, not xemu's.
         case .xemu: EmulatorVersionSpec(expected: "0.8.136", source: .appVersion)
         default: nil

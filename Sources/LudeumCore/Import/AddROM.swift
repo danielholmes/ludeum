@@ -18,6 +18,8 @@ public enum AddROMError: Error, Equatable {
     case ambiguous([String])
     /// Nothing picked is a file the Emulator opens.
     case noImage
+    /// Nothing picked makes a DOS game: no file for drive C, and no disc image (ADR 0042).
+    case noDOSGame
     /// Once in place, the ROM folder didn't read it as a Playable ROM, so it was taken out again.
     case notReadAfterward(String)
     /// Of several ROMs Added at once, these couldn't go in (each "name: why"); the rest did.
@@ -38,6 +40,7 @@ extension AddROMError: LocalizedError {
         case .standardNameTaken(let name): "Another ROM has \(name), the name it would be given."
         case .ambiguous(let images): "Which of these is the game isn't clear: \(images.joined(separator: ", "))."
         case .noImage: "Nothing in it is a game image."
+        case .noDOSGame: "Nothing in it makes a DOS game: there are no files for drive C and no disc image."
         case .notReadAfterward(let name): "Its ROM folder didn't read \(name) as a Playable ROM, so it was taken out again."
         case .notAllAdded(let failures, let total):
             "\(failures.count) of \(total) ROMs couldn't be added, and the rest were. " + failures.joined(separator: " ")
@@ -62,6 +65,9 @@ public struct ROMSource: Sendable, Equatable {
     /// one ROM together, unless no Platform reads them that way (none keeps its Discs together but the disc Platforms,
     /// GameCube and Amiga), and so are the archives of one Version's Discs where a Platform packs its Discs together.
     public static func split(_ urls: [URL]) async -> [ROMSource] {
+        // A DOS game's folder picked with its Discs is one game, its drives C and D (ADR 0042).
+        let together = ROMSource(urls)
+        if together.folderWithDiscs != nil { return [together] }
         func key(_ url: URL) -> String { url.standardizedFileURL.path(percentEncoded: false) }
         func version(_ url: URL) -> String { ROMName(url.deletingPathExtension().lastPathComponent).withoutDisc }
         let loose = urls.filter { ROMSource([$0]).isFolder == false && ROMSource([$0]).archive == nil }
@@ -93,6 +99,7 @@ public struct ROMSource: Sendable, Equatable {
 
     /// The ROM's name: its file's without the extension, or its folder's; with several Discs, Disc 1's without its Disc.
     public var romName: String {
+        if let folderWithDiscs { return folderWithDiscs.folder.lastPathComponent }
         if urls.count > 1, let first = ROMFolder.discs(urls).first {
             return ROMName(first.deletingPathExtension().lastPathComponent).withoutDisc
         }
@@ -115,15 +122,46 @@ public struct ROMSource: Sendable, Equatable {
         urls.count > 1 && urls.allSatisfy { ["7z", "zip"].contains($0.pathExtension.lowercased()) } ? urls : []
     }
 
+    /// The kinds of file a DOS game is started by.
+    static let dosPrograms: Set<String> = ["exe", "com", "bat"]
+    /// The kinds of file a disc image is, with the tracks a cue sheet names.
+    static let discImages: Set<String> = ["cue", "iso", "bin", "img"]
+
+    /// A DOS game's folder picked with its Discs, its drives C and D (ADR 0042): one folder with a program in it, and disc
+    /// images, a cue sheet or an `.iso` among them. Nil for anything else.
+    public var folderWithDiscs: (folder: URL, discs: [URL])? {
+        guard urls.count > 1 else { return nil }
+        let folders = urls.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+        guard folders.count == 1 else { return nil }
+        let discs = urls.filter { $0 != folders[0] }
+        let kinds = discs.map { $0.pathExtension.lowercased() }
+        guard kinds.allSatisfy(Self.discImages.contains), kinds.contains(where: { $0 == "cue" || $0 == "iso" }),
+            Self.files(in: folders[0]).contains(where: { Self.dosPrograms.contains($0.pathExtension.lowercased()) })
+        else { return nil }
+        return (folders[0], discs)
+    }
+
+    /// Whether picked paths, inside a folder or an archive, are already a DOS ROM's drives: a `C` or `CD` folder at the top.
+    static func areDrives(_ paths: [String]) -> Bool {
+        paths.contains { path in
+            let components = (path as NSString).pathComponents.filter { $0 != "/" }
+            return components.count > 1
+                && [ROMPlatform.driveC, ROMPlatform.driveCD].contains { components[0].caseInsensitiveCompare($0) == .orderedSame }
+        }
+    }
+
     /// The Platforms whose ROM folders read it, by IGDB platform id: a folder only where ROMs are kept in subfolders, several
     /// Discs only where they're kept together in one (on GameCube too) or one archive, and several archives only where
     /// they're packed into one. An archive is read by what's inside it, so needs 7-Zip.
     public func platforms(sevenZip: SevenZip?) async throws -> [Int64] {
         guard !urls.isEmpty else { throw AddROMError.notOneGame }
+        let drives = ROMPlatform.all.filter { $0.value.drives }.keys.sorted()
+        if folderWithDiscs != nil { return drives }
         if urls.count > 1 && ROMFolder.discs(urls).isEmpty { throw AddROMError.notOneGame }
         let inside: [String]
         if isFolder {
-            inside = Self.files(in: urls[0]).map(\.path)
+            let base = urls[0].standardizedFileURL.pathComponents.count
+            inside = Self.files(in: urls[0]).map { $0.standardizedFileURL.pathComponents.dropFirst(base).joined(separator: "/") }
         } else if let archive {
             guard let sevenZip else { throw ArchiveError.noSevenZip }
             inside = try await sevenZip.list(archive).map(\.path)
@@ -135,13 +173,18 @@ public struct ROMSource: Sendable, Equatable {
         } else {
             inside = urls.map(\.path)
         }
-        let extensions = Set(inside.filter { !Self.isHidden($0) }.map { ($0 as NSString).pathExtension.lowercased() })
+        let visible = inside.filter { !Self.isHidden($0) }
+        // A folder or archive that's already a DOS ROM's drives is DOS's and no other's, whatever images it holds.
+        if isFolder || archive != nil, Self.areDrives(visible) { return drives }
+        let extensions = Set(visible.map { ($0 as NSString).pathExtension.lowercased() })
         let platforms = ROMPlatform.all.filter { _, platform in
             if isFolder && platform.archiving != .intoFolder { return false }
             if urls.count > 1 && !platform.keepsDiscsTogether { return false }
             if !discArchives.isEmpty && !platform.packsDiscsTogether { return false }
             // A Compacted archive is read as it is.
             if let archive, archive.pathExtension.lowercased() == platform.compactExtension { return true }
+            // A DOS game's folder, or an archive of it, is told by a program in it (ADR 0042).
+            if platform.drives, isFolder || archive != nil, !extensions.isDisjoint(with: Self.dosPrograms) { return true }
             return !extensions.isDisjoint(with: platform.readyExtensions)
         }
         return platforms.keys.sorted()
@@ -155,7 +198,8 @@ public struct ROMSource: Sendable, Equatable {
         let ext = urls[0].pathExtension.lowercased()
         // The Sega CD's Emulator prefers a `.chd`, but every disc Platform reads one, so it says nothing of which it's for.
         guard ext != "chd" else { return nil }
-        let preferring = platforms.filter { ROMPlatform.all[$0]?.readyExtensions.first == ext }
+        // A disc image is never presumed DOS's: its Discs are the lesser part of a DOS game, and few have any.
+        let preferring = platforms.filter { ROMPlatform.all[$0]?.readyExtensions.first == ext && ROMPlatform.all[$0]?.drives == false }
         return preferring.count == 1 ? preferring[0] : nil
     }
 
@@ -427,6 +471,7 @@ public struct AddROM: Sendable {
     private func make(
         _ source: ROMSource, named name: String, in folder: ROMFolder, work: URL, progress: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
+        if folder.drives { return try await makeDrives(source, named: name, in: folder, work: work, progress: progress) }
         // Already the archive its Emulator opens, and holding no Clutter: it goes in as it is.
         if let archive = source.archive, let compact = folder.compactExtension, archive.pathExtension.lowercased() == compact {
             guard let sevenZip else { throw ArchiveError.noSevenZip }
@@ -464,7 +509,7 @@ public struct AddROM: Sendable {
         // Discs, ADR 0031), as everything does on a Platform whose ROMs are always in one.
         let ready = files.filter { folder.readyExtensions.contains($0.pathExtension.lowercased()) }
         if folder.archiving == .intoFolder || (folder.readsPlaylists && ready.count > 1) {
-            guard let game = folder.game(among: files) else {
+            guard let game = folder.game(among: files, in: staged) else {
                 throw ready.isEmpty ? AddROMError.noImage : AddROMError.ambiguous(ready.map(\.lastPathComponent))
             }
             if !game.discsWithoutPlaylist.isEmpty { try writePlaylist(named: name, for: game.discsWithoutPlaylist, in: staged) }
@@ -495,6 +540,57 @@ public struct AddROM: Sendable {
         let size = Int64(try named.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
         guard try await sevenZip.list(packed).map(\.size) == [size] else { throw ArchiveError.checkFailed(packed.lastPathComponent) }
         return packed
+    }
+
+    /// Makes a DOS ROM's subfolder of drives in `work` (ADR 0042). What was picked already as drives, a `C` or `CD` folder at
+    /// its top, goes in as it is. Otherwise a game's folder, or what an archive holds, becomes drive C as it is, its files at
+    /// C:'s top; disc images, a cue sheet with its tracks, go at the top of `CD/`; a folder picked with its Discs is both. A
+    /// folder or archive of disc images alone, with no program among them, is a game's Discs.
+    private func makeDrives(
+        _ source: ROMSource, named name: String, in folder: ROMFolder, work: URL, progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL {
+        let files = FileManager.default
+        let staged = work.appending(path: name, directoryHint: .isDirectory)
+        let c = staged.appending(path: ROMPlatform.driveC, directoryHint: .isDirectory)
+        let cd = staged.appending(path: ROMPlatform.driveCD, directoryHint: .isDirectory)
+        var picked: URL?
+        var discs: [URL] = []
+        if let both = source.folderWithDiscs {
+            (picked, discs) = (both.folder, both.discs)
+        } else if source.isFolder {
+            picked = source.urls[0]
+        } else if let archive = source.archive {
+            guard let sevenZip else { throw ArchiveError.noSevenZip }
+            let unpacked = work.appending(path: ".unpacked", directoryHint: .isDirectory)
+            try await sevenZip.extract(archive, paths: [], to: unpacked, progress: progress)
+            picked = unpacked
+        } else {
+            discs = source.urls
+        }
+        if let picked {
+            let base = picked.standardizedFileURL.pathComponents.count
+            let inside = ROMSource.files(in: picked)
+            let paths = inside.map { $0.standardizedFileURL.pathComponents.dropFirst(base).joined(separator: "/") }
+            let kinds = Set(paths.map { ($0 as NSString).pathExtension.lowercased() })
+            if ROMSource.areDrives(paths) {
+                try files.copyItem(at: picked, to: staged)
+            } else if discs.isEmpty, !kinds.isEmpty, kinds.isSubset(of: ROMSource.discImages) {
+                discs = inside
+            } else {
+                try files.createDirectory(at: staged, withIntermediateDirectories: true)
+                try files.copyItem(at: picked, to: c)
+            }
+        }
+        if !discs.isEmpty {
+            try files.createDirectory(at: cd, withIntermediateDirectories: true)
+            for file in discs.flatMap(ROMFiles.files(of:))
+            where !files.fileExists(atPath: cd.appending(path: file.lastPathComponent).path(percentEncoded: false)) {
+                try files.copyItem(at: file, to: cd.appending(path: file.lastPathComponent))
+            }
+        }
+        try folder.removeClutter(in: staged)
+        guard folder.game(among: ROMSource.files(in: staged), in: staged) != nil else { throw AddROMError.noDOSGame }
+        return staged
     }
 
     /// Compacts a Version's Discs together, each under its own name, and checks the archive holds them all.

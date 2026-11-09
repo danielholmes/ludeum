@@ -34,6 +34,9 @@ public struct ROMFolder: Sendable, Equatable {
     /// Whether its Emulator opens a playlist of a multi-disc Version's Discs, kept with them in the ROM's subfolder.
     var readsPlaylists: Bool { readyExtensions.contains("m3u") }
 
+    /// Whether a ROM is a subfolder of drives, `C/` and `CD/` (DOS: ADR 0042).
+    var drives: Bool { ROMPlatform.all[platformId]?.drives ?? false }
+
     /// Whether a file with this name, at the top of the folder, is a ROM to it: ready, or a `.7z`.
     func reads(fileName: String) -> Bool {
         let ext = (fileName as NSString).pathExtension.lowercased()
@@ -76,7 +79,8 @@ public struct ROMFolder: Sendable, Equatable {
             if ext == "7z" { archives[name] = file }
             // Its Compacted copy is a form of its own even when a loose file is Played over it.
             if ext == compactExtension { compacted[name] = file }
-            if let rank = readyExtensions.firstIndex(of: ext) {
+            // A ROM of drives is only ever a subfolder, or its `.7z`.
+            if !drives, let rank = readyExtensions.firstIndex(of: ext) {
                 if let current = ready[name], let currentRank = readyExtensions.firstIndex(of: current.pathExtension.lowercased()),
                     currentRank <= rank
                 {
@@ -100,18 +104,59 @@ public struct ROMFolder: Sendable, Equatable {
             }
     }
 
-    /// The game in a subfolder, as `game(among:)` finds it.
+    /// The game in a subfolder, as `game(among:in:)` finds it.
     private func game(in folder: URL) -> (file: URL, discsWithoutPlaylist: [URL])? {
+        if drives { return drivesGame(in: folder) }
         let files = ((try? FileManager.default.subpathsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? [])
             .map { folder.appending(path: $0, directoryHint: .notDirectory) }
             .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
-        return game(among: files)
+        return game(among: files, in: folder)
     }
 
-    /// The game among a subfolder's files: its one playlist, else its one cue sheet, else its one image. Several cue
+    /// A ROM of drives in a subfolder: its `C/` once there's a file in it, at any depth, else Disc 1 of its `CD/`. A game
+    /// is hundreds of files, so only the first in `C/` is looked for.
+    private func drivesGame(in folder: URL) -> (file: URL, discsWithoutPlaylist: [URL])? {
+        let top = (try? FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? []
+        func drive(_ name: String) -> URL? {
+            top.first { $0.caseInsensitiveCompare(name) == .orderedSame }.map { folder.appending(path: $0, directoryHint: .notDirectory) }
+        }
+        if let c = drive(ROMPlatform.driveC),
+            let files = FileManager.default.enumerator(at: c, includingPropertiesForKeys: [.isRegularFileKey], options: .skipsHiddenFiles)
+        {
+            for case let file as URL in files where (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
+                return (c, [])
+            }
+        }
+        guard let cd = drive(ROMPlatform.driveCD) else { return nil }
+        let discs = ((try? FileManager.default.contentsOfDirectory(atPath: cd.path(percentEncoded: false))) ?? [])
+            .map { cd.appending(path: $0, directoryHint: .notDirectory) }
+            .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+        return discGame(among: discs)
+    }
+
+    /// The game among the files of `subfolder`: its one playlist, else its one cue sheet, else its one image. Several cue
     /// sheets (or, with none, several images) that are each a different Disc are a game too, opening at Disc 1 until it
     /// has a playlist, where the Platform reads playlists at all. Nil when there's nothing, or several that aren't Discs.
-    func game(among files: [URL]) -> (file: URL, discsWithoutPlaylist: [URL])? {
+    /// A ROM of drives is its `C/`, once there's a file in it, else Disc 1 of the images at the top of its `CD/`.
+    func game(among files: [URL], in subfolder: URL) -> (file: URL, discsWithoutPlaylist: [URL])? {
+        guard drives else { return discGame(among: files) }
+        let top = subfolder.standardizedFileURL.pathComponents
+        func inside(_ file: URL) -> [String]? {
+            let components = file.standardizedFileURL.pathComponents
+            return components.count > top.count && components.starts(with: top) ? Array(components.dropFirst(top.count)) : nil
+        }
+        let relative = files.compactMap { file in inside(file).map { (file, $0) } }
+        if let c = relative.first(where: {
+            $0.1.count > 1 && $0.1[0].caseInsensitiveCompare(ROMPlatform.driveC) == .orderedSame && !$0.1.contains { $0.hasPrefix(".") }
+        }) {
+            return (subfolder.appending(path: c.1[0], directoryHint: .notDirectory), [])
+        }
+        let discs = relative.filter { $0.1.count == 2 && $0.1[0].caseInsensitiveCompare(ROMPlatform.driveCD) == .orderedSame }.map(\.0)
+        return discGame(among: discs)
+    }
+
+    /// The game among some files, as `game(among:in:)` finds it on a Platform whose ROMs aren't drives.
+    private func discGame(among files: [URL]) -> (file: URL, discsWithoutPlaylist: [URL])? {
         let images = files.filter { readyExtensions.contains($0.pathExtension.lowercased()) }
         let playlists = images.filter { $0.pathExtension.lowercased() == "m3u" }
         if playlists.count == 1 { return (playlists[0], []) }
@@ -133,9 +178,11 @@ public struct ROMFolder: Sendable, Equatable {
 
     /// Whether a path, in a subfolder or an archive, is Clutter: a hidden file the Emulator can't open (Finder's
     /// `.DS_Store` and `._` companions), or one of `clutterExtensions` the Emulator doesn't open (a Mega Drive game is a
-    /// `.md`). A game's own name can start with a dot (`.hack--Link (Japan).iso`).
+    /// `.md`). A game's own name can start with a dot (`.hack--Link (Japan).iso`). In a ROM of drives only Finder's own
+    /// files are: a DOS game's texts and pictures are its own, and its `README.TXT` may be what it shows.
     func isClutter(_ path: String) -> Bool {
         let name = (path as NSString).lastPathComponent
+        if drives { return name == ".DS_Store" || name.hasPrefix("._") }
         let ext = (name as NSString).pathExtension.lowercased()
         if (path as NSString).pathComponents.contains(where: { $0.hasPrefix(".") }) {
             return name.hasPrefix("._") || !readyExtensions.contains(ext)
@@ -218,7 +265,9 @@ public struct FolderROMFile: Sendable, Equatable {
         let file = ready ?? archive
         let rootPath = root?.standardizedFileURL.path(percentEncoded: false)
         if let file, let rootPath, file.standardizedFileURL.path(percentEncoded: false).hasPrefix(rootPath) {
-            fileName = String(file.standardizedFileURL.path(percentEncoded: false).dropFirst(rootPath.count))
+            // A DOS ROM's drive C is a folder, which a URL may give with a slash at its end.
+            let path = file.standardizedFileURL.path(percentEncoded: false).dropFirst(rootPath.count)
+            fileName = String(path.hasSuffix("/") ? path.dropLast() : path)
         } else {
             fileName = file?.lastPathComponent ?? name
         }

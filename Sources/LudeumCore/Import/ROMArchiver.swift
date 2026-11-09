@@ -7,6 +7,8 @@ public enum ArchiveError: Error, Equatable {
     case ambiguous([String])
     /// Nothing in the archive is a file the Emulator opens.
     case noImage
+    /// An archive of a ROM of drives has neither a `C` folder with a file in it nor a `CD` folder of Discs (DOS: ADR 0042).
+    case noDrives
     /// An archive for a Platform that unpacks to a single file holds more than one.
     case notOneFile([String])
     case notEnoughSpace(needed: Int64)
@@ -25,6 +27,7 @@ extension ArchiveError: LocalizedError {
         case .noSevenZip: "7-Zip isn't installed. Run `brew install sevenzip`, then try again."
         case .ambiguous(let images): "Which of these is the game isn't clear: \(images.joined(separator: ", "))."
         case .noImage: "Nothing in the archive is a game image."
+        case .noDrives: "It has neither a C folder of the game's files nor a CD folder of its Discs at its top."
         case .notOneFile(let files): "It should hold just the game, but holds \(files.joined(separator: ", "))."
         case .notEnoughSpace(let needed):
             "Needs \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)) free."
@@ -102,7 +105,8 @@ public struct ROMArchiver: Sendable {
         }
         // The folder only plays if it holds the game, as a scan of the ROM folder finds it.
         let destination = folder.url.appending(path: romName, directoryHint: .isDirectory)
-        if folder.game(among: files.map { destination.appending(path: $0.path, directoryHint: .notDirectory) }) == nil {
+        if folder.game(among: files.map { destination.appending(path: $0.path, directoryHint: .notDirectory) }, in: destination) == nil {
+            if folder.drives { throw ArchiveError.noDrives }
             let images = files.filter { folder.readyExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
             throw images.isEmpty ? ArchiveError.noImage : ArchiveError.ambiguous(images.map(\.fileName))
         }
@@ -204,24 +208,31 @@ public struct ROMArchiver: Sendable {
         if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
             throw ArchiveError.alreadyThere(destination.lastPathComponent)
         }
-        let packing: (root: URL, items: [String], trash: [URL])
+        // `items` is what 7-Zip is told to pack, and `files` the files that makes, which its listing is checked against.
+        let packing: (root: URL, items: [String], files: [String], trash: [URL])
         if let romFolder = folder.subfolder(of: name, holding: ready) {
             let files = try Self.files(in: romFolder, of: folder)
             if folder.archiving == .singleFile, !(folder.readsPlaylists && ready.pathExtension.lowercased() == "m3u") {
                 // Unarchive gives back one loose file, so only the game goes in: Clutter beside it is left out, and
                 // anything else is refused rather than lost. A playlist with its Discs unpacks into a folder again.
                 guard files.count == 1 else { throw ArchiveError.notOneFile(files.map { ($0 as NSString).lastPathComponent }.sorted()) }
-                packing = (ready.deletingLastPathComponent(), [ready.lastPathComponent], [romFolder])
+                packing = (ready.deletingLastPathComponent(), [ready.lastPathComponent], [ready.lastPathComponent], [romFolder])
+            } else if folder.drives {
+                // A DOS game goes in by its drives, so its empty folders go too, which a game may expect to find, and its
+                // hundreds of files aren't each named on a command line. Only Finder's files are left out.
+                let top = try FileManager.default.contentsOfDirectory(atPath: romFolder.path(percentEncoded: false))
+                    .filter { !folder.isClutter($0) }
+                packing = (romFolder, top + ["-xr!.DS_Store", "-xr!._*"], files, [romFolder])
             } else {
                 // Clutter is left out, and goes to the Trash with the folder.
-                packing = (romFolder, files, [romFolder])
+                packing = (romFolder, files, files, [romFolder])
             }
         } else {
             let tracks = ready.pathExtension.lowercased() == "cue" ? ROMFolder.cueTracks(ready) : []
             let names = [ready.lastPathComponent] + tracks
-            packing = (folder.url, names, names.map { folder.url.appending(path: $0) })
+            packing = (folder.url, names, names, names.map { folder.url.appending(path: $0) })
         }
-        let sizes = try Self.fileSizes(packing.items.map { packing.root.appending(path: $0) })
+        let sizes = try Self.fileSizes(packing.files.map { packing.root.appending(path: $0) })
         try checkSpace(sizes.values.reduce(0, +), in: folder)
         let work = try workFolder(in: folder)
         defer { try? FileManager.default.removeItem(at: work) }

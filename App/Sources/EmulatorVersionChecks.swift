@@ -5,7 +5,7 @@ import SwiftUI
 /// Each installed Emulator's version, checked once per launch in the background: Play is refused
 /// for one older than Ludeum expects, and warns (once per launch) about a newer major version or
 /// one that couldn't be read. DuckStation (ADR 0024), MesenCE (ADR 0027), ares (ADR 0028), PCSX2 (ADR 0032), Amiberry
-/// (ADR 0035), Ymir (ADR 0036) and 86Box (ADR 0041) are copies Ludeum installs, checked again after each Install: Play is
+/// (ADR 0035), Ymir (ADR 0036), 86Box (ADR 0041) and DOSBox Staging (ADR 0042) are copies Ludeum installs, checked again after each Install: Play is
 /// refused until each is there, Ludeum's own and the pinned build.
 @Observable @MainActor final class EmulatorVersionChecks {
     /// By bundle identifier; an Emulator that isn't installed, or isn't checked yet, has none.
@@ -74,6 +74,10 @@ import SwiftUI
             // Nothing beside the app says it's Ludeum's: its machine is given at each Play.
             let settings = EightySixBoxSettings(ludeum: folder)
             (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, true)
+        } else if emulator == .dosBoxStaging {
+            // Nothing beside the app says it's Ludeum's: its home and settings are given at each Play.
+            let settings = DOSBoxStagingSettings(ludeum: folder)
+            (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, true)
         } else {
             let settings = DuckStationSettings(ludeum: folder)
             (app, isInstalled, isLudeums) = (settings.app, settings.isInstalled, settings.isPortable)
@@ -95,7 +99,8 @@ import SwiftUI
     /// Whether an Emulator Ludeum installs is being installed now.
     func isInstalling(_ emulator: Emulator, tasks: BackgroundTasks) -> Bool { tasks.isActive(.emulator(emulator)) }
 
-    /// Installs the pinned DuckStation, MesenCE, ares, PCSX2, Amiberry, Ymir or 86Box as a Background task, then checks it again.
+    /// Installs the pinned DuckStation, MesenCE, ares, PCSX2, Amiberry, Ymir, 86Box or DOSBox Staging as a Background task, then
+    /// checks it again.
     /// Installing replaces it, so a task that gets its turn while it's open fails rather than pull the app from under it.
     func install(_ emulator: Emulator, tasks: BackgroundTasks) {
         let folder = folder
@@ -113,6 +118,8 @@ import SwiftUI
                 try await YmirInstaller(ludeum: folder).install(progress: progress)
             } else if emulator == .eightySixBox {
                 try await EightySixBoxInstaller(ludeum: folder).install(progress: progress)
+            } else if emulator == .dosBoxStaging {
+                try await DOSBoxStagingInstaller(ludeum: folder).install(progress: progress)
             } else {
                 try await DuckStationInstaller(ludeum: folder).install(progress: progress)
             }
@@ -133,7 +140,8 @@ import SwiftUI
         case .wrongBuild where emulator == .mesenCE:
             return "MesenCE isn't the \(expected) release Ludeum installs. Install it again from Ludeum ▸ Emulators… to Play."
         case .wrongBuild(let found)
-        where emulator == .ares || emulator == .pcsx2 || emulator == .amiberry || emulator == .ymir || emulator == .eightySixBox:
+        where emulator == .ares || emulator == .pcsx2 || emulator == .amiberry || emulator == .ymir || emulator == .eightySixBox
+            || emulator == .dosBoxStaging:
             return "\(emulator.name) is v\(found), and Ludeum installs v\(expected). Install it again from Ludeum ▸ Emulators… to Play."
         case .wrongBuild(let found):
             return
@@ -191,7 +199,7 @@ struct SystemToolsOnLaunch: ViewModifier {
 
 /// Every Emulator Ludeum plays Games in, with what the launch check found: whether it's installed,
 /// the version Ludeum needs against the one installed, and the Platforms it plays. DuckStation, MesenCE, ares, PCSX2,
-/// Amiberry, Ymir and 86Box are installed from here, and 86Box's Windows base is chosen. No Emulator is opened from here: its
+/// Amiberry, Ymir, 86Box and DOSBox Staging are installed from here, and 86Box's Windows base is chosen. No Emulator is opened from here: its
 /// own settings are reached during a Play (ADR 0027).
 struct EmulatorsSheet: View {
     let services: Services
@@ -238,7 +246,9 @@ struct EmulatorsSheet: View {
             // refusal of a missing BIOS, where it goes and what it's named.
             Text(
                 "An Emulator's own settings are changed in it during a Play. "
-                    + "Amiberry plays on its own AROS until there's a Kickstart in the Data folder's Emulators/Amiberry/ROMs."
+                    + "Amiberry plays on its own AROS until there's a Kickstart in the Data folder's Emulators/Amiberry/ROMs. "
+                    + "DOSBox Staging plays MIDI music with the SoundFont it's installed with; a DOS Game's own settings can choose "
+                    + "another from the Data folder's Emulators/DOSBox Staging/SoundFonts, or an MT-32 with its ROMs in MT-32 ROMs beside it."
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let installError { ErrorText(installError, font: .callout) }
@@ -288,8 +298,8 @@ struct EmulatorsSheet: View {
         }
     }
 
-    /// Installs the pinned DuckStation, MesenCE, ares, PCSX2, Amiberry, Ymir or 86Box into the Ludeum folder, or installs it again
-    /// over the copy there.
+    /// Installs the pinned DuckStation, MesenCE, ares, PCSX2, Amiberry, Ymir, 86Box or DOSBox Staging into the Ludeum folder, or
+    /// installs it again over the copy there.
     private func installButton(_ emulator: Emulator) -> some View {
         let installed = !checks.notInstalled.contains(emulator.bundleIdentifier)
         let release =
@@ -300,6 +310,7 @@ struct EmulatorsSheet: View {
             case .amiberry: "v\(AmiberryRelease.pinned.version)"
             case .ymir: "v\(YmirRelease.pinned.version)"
             case .eightySixBox: "v\(EightySixBoxRelease.pinned.version)"
+            case .dosBoxStaging: "v\(DOSBoxStagingRelease.pinned.version)"
             default: "build \(DuckStationRelease.pinned.build)"
             }
         return Button(installed ? "Reinstall" : "Install") {

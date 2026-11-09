@@ -768,6 +768,12 @@ enum LudeumSchema {
             try db.alter(table: "game") { t in t.add(column: "cpuMegahertz", .integer) }
             try keepTimestamps(db, on: "game")
         }
+        // The program a DOS Game starts with in DOSBox Staging (ADR 0042). The trigger comes back watching it, as in v45.
+        migrator.registerMigration("v46 dos program") { db in
+            try db.execute(sql: "DROP TRIGGER game_updatedAt")
+            try db.alter(table: "game") { t in t.add(column: "dosProgram", .text) }
+            try keepTimestamps(db, on: "game")
+        }
         return migrator
     }
 

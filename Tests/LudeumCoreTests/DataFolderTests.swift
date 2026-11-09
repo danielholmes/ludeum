@@ -57,13 +57,12 @@ import Testing
         let folders = ludeum.romFolders
         let roms = data.appending(path: "ROMs").path(percentEncoded: false)
 
-        #expect(folders.count == 25)
+        #expect(folders.count == 26)
         #expect(folders.first { $0.platformId == 22 }?.url.path(percentEncoded: false) == "\(roms)/Game Boy Color/")
         #expect(folders.first { $0.platformId == 99 }?.url.path(percentEncoded: false) == "\(roms)/Famicom/")
         #expect(folders.first { $0.platformId == ROMPlatform.ps2 }?.url.path(percentEncoded: false) == "\(roms)/PS2/")
         #expect(folders.first { $0.platformId == ROMPlatform.windows }?.url.path(percentEncoded: false) == "\(roms)/Windows/")
-        // DOS has none yet.
-        #expect(ludeum.romFolder(platform: 13) == nil)
+        #expect(folders.first { $0.platformId == ROMPlatform.dos }?.url.path(percentEncoded: false) == "\(roms)/DOS/")
     }
 
     @Test func aDataFolderGivenForOneRunHoldsItsROMsAndBackups() {

@@ -17,16 +17,17 @@ public struct Emulator: Sendable, Hashable {
     public static let xemu = Emulator(name: "xemu", bundleIdentifier: "xemu.app.0")
     public static let amiberry = Emulator(name: "Amiberry", bundleIdentifier: "com.blitterstudio.Amiberry")
     public static let eightySixBox = Emulator(name: "86Box", bundleIdentifier: "net.86Box.86Box")
+    public static let dosBoxStaging = Emulator(name: "DOSBox Staging", bundleIdentifier: "io.github.dosbox-staging")
 
     public static let all: [Emulator] = [
-        .mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu, .amiberry, .eightySixBox,
+        .mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu, .amiberry, .eightySixBox, .dosBoxStaging,
     ]
 
     /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024), MesenCE (ADR 0027),
-    /// ares (ADR 0028), PCSX2 (ADR 0032), Amiberry (ADR 0035), Ymir (ADR 0036) and 86Box (ADR 0041).
+    /// ares (ADR 0028), PCSX2 (ADR 0032), Amiberry (ADR 0035), Ymir (ADR 0036), 86Box (ADR 0041) and DOSBox Staging (ADR 0042).
     public var isLudeums: Bool {
         self == .duckStation || self == .mesenCE || self == .ares || self == .pcsx2 || self == .amiberry || self == .ymir
-            || self == .eightySixBox
+            || self == .eightySixBox || self == .dosBoxStaging
     }
 
     /// The Emulator a Platform's Games are played in, if it has one.
@@ -46,6 +47,7 @@ public struct Emulator: Sendable, Hashable {
         case 11: .xemu  // Xbox
         case 16: .amiberry  // Amiga
         case 6: .eightySixBox  // PC (Microsoft Windows)
+        case 13: .dosBoxStaging  // DOS
         default: nil
         }
     }
@@ -58,7 +60,7 @@ public struct Emulator: Sendable, Hashable {
     /// MesenCE, ares and PCSX2 start from a `saveState`. Amiberry's are all for the one launch, with its disks' save images
     /// made first (`AmiberrySettings`). Ymir's go into its own settings file, with what's in its first port for this Disc
     /// (`YmirSettings`). 86Box's are named by its ROM rather than its file, so `Play.prepare` gets them from
-    /// `EightySixBoxSettings` itself.
+    /// `EightySixBoxSettings` itself, and DOSBox Staging's by its ROM's subfolder from `DOSBoxStagingSettings`.
     public func arguments(
         rom: URL, platformId: Int64, settings: EmulatorSettings, saveState: URL? = nil,
         duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
@@ -353,13 +355,16 @@ public struct EmulatorSettings: Sendable, Equatable {
     public var gameBoyModel: GameBoyModel?
     /// The speed of 86Box's Pentium II for this Game, in MHz (`EightySixBoxCPU.offered`). Nil is its fastest.
     public var cpuMegahertz: Int?
+    /// The program a DOS Game starts with, its path on drive C as DOS has it (`KEEN1\KEEN1.EXE`). Nil is a DOS prompt.
+    public var dosProgram: String?
 
     public static let runAheadRange = 0...10
 
-    public init(runAheadFrames: Int? = nil, gameBoyModel: GameBoyModel? = nil, cpuMegahertz: Int? = nil) {
+    public init(runAheadFrames: Int? = nil, gameBoyModel: GameBoyModel? = nil, cpuMegahertz: Int? = nil, dosProgram: String? = nil) {
         self.runAheadFrames = runAheadFrames
         self.gameBoyModel = gameBoyModel
         self.cpuMegahertz = cpuMegahertz
+        self.dosProgram = dosProgram
     }
 }
 
@@ -384,11 +389,11 @@ extension LudeumStore {
     public func emulatorSettings(_ game: GameID) throws -> EmulatorSettings {
         try db.read { db in
             let row = try Row.fetchOne(
-                db, sql: "SELECT runAheadFrames, gameBoyModel, cpuMegahertz FROM game WHERE id = ?", arguments: [game])
+                db, sql: "SELECT runAheadFrames, gameBoyModel, cpuMegahertz, dosProgram FROM game WHERE id = ?", arguments: [game])
             return EmulatorSettings(
                 runAheadFrames: row?["runAheadFrames"],
                 gameBoyModel: (row?["gameBoyModel"] as String?).flatMap(GameBoyModel.init(rawValue:)),
-                cpuMegahertz: row?["cpuMegahertz"])
+                cpuMegahertz: row?["cpuMegahertz"], dosProgram: row?["dosProgram"])
         }
     }
 
@@ -401,8 +406,8 @@ extension LudeumStore {
         }
         try db.write { db in
             try db.execute(
-                sql: "UPDATE game SET runAheadFrames = ?, gameBoyModel = ?, cpuMegahertz = ? WHERE id = ?",
-                arguments: [settings.runAheadFrames, settings.gameBoyModel?.rawValue, settings.cpuMegahertz, game])
+                sql: "UPDATE game SET runAheadFrames = ?, gameBoyModel = ?, cpuMegahertz = ?, dosProgram = ? WHERE id = ?",
+                arguments: [settings.runAheadFrames, settings.gameBoyModel?.rawValue, settings.cpuMegahertz, settings.dosProgram, game])
         }
     }
 }
