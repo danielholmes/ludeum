@@ -482,9 +482,9 @@ enum FactStyle {
         mesen: MesenSettings(ludeum: services.settings.folder), ares: AresSettings(ludeum: services.settings.folder),
         pcsx2: PCSX2Settings(ludeum: services.settings.folder), amiberry: AmiberrySettings(ludeum: services.settings.folder),
         ymir: YmirSettings(ludeum: services.settings.folder), eightySixBox: EightySixBoxSettings(ludeum: services.settings.folder),
-        dosBox: DOSBoxStagingSettings(ludeum: services.settings.folder), running: \.isRunning,
+        dosBoxStaging: DOSBoxStagingSettings(ludeum: services.settings.folder), running: \.isRunning,
         eightySixBoxesOpen: emulator == .eightySixBox ? .now(ludeum: services.settings.folder) : .none,
-        dosBoxesOpen: emulator == .dosBoxStaging ? .now(ludeum: services.settings.folder) : .none)
+        dosBoxStagingsOpen: emulator == .dosBoxStaging ? .now(ludeum: services.settings.folder) : .none)
     {
     case .refused(.tooOld(let message)):
         alert("Can't Play in \(emulator.name)", message)

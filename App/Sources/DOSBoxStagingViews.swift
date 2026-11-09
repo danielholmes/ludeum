@@ -2,20 +2,20 @@ import AppKit
 import LudeumCore
 import SwiftUI
 
-extension DOSBoxesOpen {
+extension DOSBoxStagingsOpen {
     /// The DOSBox Stagings open now, Ludeum's or another's, and the ROMs they're playing. DOS Games Play side by side, one
     /// copy to a ROM (ADR 0042).
-    @MainActor static func now(ludeum: LudeumFolder) -> DOSBoxesOpen {
+    @MainActor static func now(ludeum: LudeumFolder) -> DOSBoxStagingsOpen {
         // One that has just quit can be listed still, and has no command line left to read.
         let open = NSRunningApplication.runningApplications(withBundleIdentifier: Emulator.dosBoxStaging.bundleIdentifier)
             .filter { !$0.isTerminated }
-        return DOSBoxesOpen(commandLines: open.map { ProcessArguments.of($0.processIdentifier) }, ludeum: ludeum)
+        return DOSBoxStagingsOpen(commandLines: open.map { ProcessArguments.of($0.processIdentifier) }, ludeum: ludeum)
     }
 }
 
 /// Next to Play for a DOS Game (ADR 0042): "DOSBox Staging · KEEN1.EXE", or "DOS prompt", opening the program it starts with
 /// and its ROM's own DOSBox Staging settings.
-struct DOSBoxSettingsButton: View {
+struct DOSBoxStagingSettingsButton: View {
     let services: Services
     /// The ROM Play opens, whose drive C the programs are on and whose settings file is edited.
     let rom: LudeumROM?
@@ -60,7 +60,7 @@ struct DOSBoxSettingsButton: View {
                 }
                 Divider()
                 VStack(alignment: .leading, spacing: 4) {
-                    Button("Edit DOSBox Settings…") { editSettings() }.disabled(rom == nil)
+                    Button("Edit DOSBox Staging Settings…") { editSettings() }.disabled(rom == nil)
                     Text(
                         "Opens this ROM's own settings file, laid over Ludeum's at every Play. Put in only what this game needs "
                             + "differently, such as its CPU cycles or sound card. It's kept in the Data folder."
@@ -90,9 +90,9 @@ struct DOSBoxSettingsButton: View {
     /// Off the main thread: a game is hundreds of files.
     private func loadPrograms() async {
         guard let rom, let subfolder else { return }
-        let dosBox = DOSBoxStagingSettings(ludeum: services.settings.folder)
+        let dosBoxStaging = DOSBoxStagingSettings(ludeum: services.settings.folder)
         let name = rom.folderName
-        programs = await Task.detached(priority: .userInitiated) { dosBox.programs(ofROMIn: subfolder, romName: name) }.value
+        programs = await Task.detached(priority: .userInitiated) { dosBoxStaging.programs(ofROMIn: subfolder, romName: name) }.value
     }
 
     /// Opens the ROM's settings file in TextEdit, making it first, with a note of what goes in it, when there's none.
@@ -177,7 +177,7 @@ struct DOSGameSaveSection: View {
 
     private func delete(_ saved: Saved) {
         error = nil
-        if DOSBoxesOpen.now(ludeum: services.settings.folder).isPlaying(saved.rom) {
+        if DOSBoxStagingsOpen.now(ludeum: services.settings.folder).isPlaying(saved.rom) {
             error = "Quit the DOSBox Staging playing it first: it's writing to this Game save."
             return
         }

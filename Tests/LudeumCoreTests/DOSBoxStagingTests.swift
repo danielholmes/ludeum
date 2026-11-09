@@ -221,6 +221,37 @@ private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath:
 
         #expect(try tree(dos) == ["Rebel Assault/CD/Rebel Assault.iso"])
     }
+
+    @Test func aFolderOfDiscsWithAReadmeIsStillAGamesDiscs() async throws {
+        try pick("Rebel Assault/Rebel Assault.iso")
+        try pick("Rebel Assault/README.TXT")
+
+        let dos = try await add([picked.appending(path: "Rebel Assault", directoryHint: .isDirectory)], named: "Rebel Assault")
+
+        #expect(try tree(dos) == ["Rebel Assault/CD/README.TXT", "Rebel Assault/CD/Rebel Assault.iso"])
+    }
+}
+
+/// Which files in a DOS ROM's `CD/` are its Discs, the same for finding the ROM as for its Play (ADR 0042).
+@Suite struct DOSDiscTests {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "dos discs \(UUID().uuidString)", directoryHint: .isDirectory)
+
+    @Test func discsThatDontSayWhichTheyAreAreInNameOrder() throws {
+        let dos = try FakeROMFolder(in: directory, platform: ROMPlatform.dos)
+        let a = try dos.add("Game/CD/Install.iso")
+        let b = try dos.add("Game/CD/Play.iso")
+
+        #expect(try dos.folder.scan().first?.ready == a)
+        #expect(ROMFolder.cdDiscs(among: [b, a]) == [a, b])
+    }
+
+    @Test func aCueSheetsOwnImageIsntADiscOfItsOwn() throws {
+        let dos = try FakeROMFolder(in: directory, platform: ROMPlatform.dos)
+        let cue = try dos.add("Game/CD/Game.cue", "FILE \"Game.iso\" BINARY\n")
+        let iso = try dos.add("Game/CD/Game.iso")
+
+        #expect(ROMFolder.cdDiscs(among: [iso, cue]) == [cue])
+    }
 }
 
 /// Archiving and Unarchiving a DOS ROM, whose empty folders go with it (ADR 0042).
@@ -310,7 +341,7 @@ struct DOSArchiveTests {
 @Suite struct DOSBoxStagingPlayTests {
     let directory = FileManager.default.temporaryDirectory.appending(path: "dosbox play \(UUID().uuidString)", directoryHint: .isDirectory)
     var ludeum: LudeumFolder { LudeumFolder(url: directory.appending(path: "Ludeum", directoryHint: .isDirectory)) }
-    var dosBox: DOSBoxStagingSettings { DOSBoxStagingSettings(ludeum: ludeum) }
+    var dosBoxStaging: DOSBoxStagingSettings { DOSBoxStagingSettings(ludeum: ludeum) }
     let name = "Commander Keen (1990)"
 
     init() throws {
@@ -332,7 +363,7 @@ struct DOSArchiveTests {
     }
 
     func press(
-        _ dos: FakeROMFolder, settings: EmulatorSettings = .init(), prompt: Bool = false, open: DOSBoxesOpen = .none
+        _ dos: FakeROMFolder, settings: EmulatorSettings = .init(), prompt: Bool = false, open: DOSBoxStagingsOpen = .none
     ) throws -> Play.Outcome {
         let rom = try #require(try dos.folder.scan().first)
         let journal = LudeumROM(
@@ -342,8 +373,9 @@ struct DOSArchiveTests {
         // Another DOSBox Staging being open (`running`) isn't what stops a Play: only one playing this ROM is.
         return Play(platformId: ROMPlatform.dos, platformName: "DOS", roms: [journal], settings: settings)
             .prepare(
-                locator: ROMLocator(romFolders: [dos.folder]), version: .ok, app: { _ in nil }, prompt: prompt, dosBox: dosBox,
-                running: { _ in true }, dosBoxesOpen: open)
+                locator: ROMLocator(romFolders: [dos.folder]), version: .ok, app: { _ in nil }, prompt: prompt,
+                dosBoxStaging: dosBoxStaging,
+                running: { _ in true }, dosBoxStagingsOpen: open)
     }
 
     /// The `-c` commands of a command line, in order.
@@ -410,7 +442,7 @@ struct DOSArchiveTests {
 
     @Test func itsOwnSettingsAreLaidOverTheStandingOnes() throws {
         try install()
-        let own = try dosBox.gameSettings(ofROM: name)
+        let own = try dosBoxStaging.gameSettings(ofROM: name)
 
         let arguments = try press(try dos()).arguments ?? []
 
@@ -418,11 +450,11 @@ struct DOSArchiveTests {
     }
 
     @Test func itsOwnSettingsStartAsANoteAndArentWrittenOver() throws {
-        let file = try dosBox.gameSettings(ofROM: name)
+        let file = try dosBoxStaging.gameSettings(ofROM: name)
         #expect(try String(contentsOf: file, encoding: .utf8).contains("cpu_cycles"))
         try put("[cpu]\ncpu_cycles = 8000\n", at: file)
 
-        #expect(try dosBox.gameSettings(ofROM: name) == file)
+        #expect(try dosBoxStaging.gameSettings(ofROM: name) == file)
         #expect(try String(contentsOf: file, encoding: .utf8) == "[cpu]\ncpu_cycles = 8000\n")
     }
 
@@ -435,6 +467,15 @@ struct DOSArchiveTests {
         #expect(
             commands(try press(dos)).contains(
                 "mount d \"\(path(cd.appending(path: "Cricket (Disc 1).iso")))\" \"\(path(cd.appending(path: "Cricket (Disc 2).cue")))\""))
+    }
+
+    @Test func aPathWithADoubleQuoteIsRefusedAsItWouldEndItsQuotes() throws {
+        let subfolder = directory.appending(path: "ROMs/DOS/The \"Game\"", directoryHint: .isDirectory)
+        try put("", at: subfolder.appending(path: "C/GAME.EXE"))
+
+        #expect(throws: DOSBoxStagingPlayError.quoteInPath("C")) {
+            try dosBoxStaging.arguments(subfolder: subfolder, romName: "The Game", settings: .init(), prompt: false)
+        }
     }
 
     @Test func aCDGameWithNoDriveCHasItsGameSaveForDriveC() throws {
@@ -453,12 +494,12 @@ struct DOSArchiveTests {
             ["/x/dosbox", "-c", "mount c \"/ROMs/C\"", "-c", "mount c \"\(path(ludeum.dosGameSave(ofROM: name)))\" -t overlay"]
         }
 
-        let refused = try press(dos, open: DOSBoxesOpen(commandLines: [playing(name)], ludeum: ludeum))
+        let refused = try press(dos, open: DOSBoxStagingsOpen(commandLines: [playing(name)], ludeum: ludeum))
         #expect(refused.refusal == .running(.dosBoxStaging))
         #expect(refused.refusal?.message.contains("only one") == true)
 
-        #expect(try press(dos, open: DOSBoxesOpen(commandLines: [playing("Doom (1993)")], ludeum: ludeum)).refusal == nil)
-        #expect(try press(dos, open: DOSBoxesOpen(commandLines: [nil], ludeum: ludeum)).refusal == .running(.dosBoxStaging))
+        #expect(try press(dos, open: DOSBoxStagingsOpen(commandLines: [playing("Doom (1993)")], ludeum: ludeum)).refusal == nil)
+        #expect(try press(dos, open: DOSBoxStagingsOpen(commandLines: [nil], ludeum: ludeum)).refusal == .running(.dosBoxStaging))
     }
 
     @Test func aDOSPromptIsOfferedOnlyOnceThereIsAProgram() {
@@ -511,7 +552,7 @@ struct DOSArchiveTests {
         try put("save", at: ludeum.dosGameSave(ofROM: "Keen").appending(path: "KEEN1/SAVE1.CK1"))
         try put("[cpu]", at: ludeum.dosGameSettings(ofROM: "Keen"))
 
-        try h.journal.renameDOSROM(rom.id, from: "Keen", to: "Keen (1990)", in: dos.folder, ludeum: ludeum)
+        try h.journal.renameDOSBoxStagingROM(rom.id, from: "Keen", to: "Keen (1990)", in: dos.folder, ludeum: ludeum)
 
         #expect(try h.journal.rom(rom.id)?.folderName == "Keen (1990)")
         #expect(exists(ludeum.dosGameSave(ofROM: "Keen (1990)").appending(path: "KEEN1/SAVE1.CK1")))
@@ -525,10 +566,20 @@ struct DOSArchiveTests {
         try put("save", at: ludeum.dosGameSave(ofROM: "Keen").appending(path: "A"))
         try put("save", at: ludeum.dosGameSave(ofROM: "Keen (1990)").appending(path: "B"))
 
-        #expect(throws: DOSBoxRenameError.inTheWay("Keen (1990)")) {
-            try h.journal.renameDOSROM(rom.id, from: "Keen", to: "Keen (1990)", in: dos.folder, ludeum: ludeum)
+        #expect(throws: DOSBoxStagingRenameError.inTheWay("Keen (1990)")) {
+            try h.journal.renameDOSBoxStagingROM(rom.id, from: "Keen", to: "Keen (1990)", in: dos.folder, ludeum: ludeum)
         }
         #expect(try h.journal.rom(rom.id)?.folderName == "Keen")
+    }
+
+    @Test func itsRefusedWithADeletedROMsSettingsUnderTheNewNameThoughItHasNone() throws {
+        let dos = try FakeROMFolder(in: directory, platform: ROMPlatform.dos)
+        let rom = try recorded(in: dos)
+        try put("[cpu]", at: ludeum.dosGameSettings(ofROM: "Keen (1990)"))
+
+        #expect(throws: DOSBoxStagingRenameError.inTheWay("Keen (1990)")) {
+            try h.journal.renameDOSBoxStagingROM(rom.id, from: "Keen", to: "Keen (1990)", in: dos.folder, ludeum: ludeum)
+        }
     }
 
     @Test func aRenameThatFailsLeavesItsGameSaveWhereItWas() throws {
@@ -538,7 +589,7 @@ struct DOSArchiveTests {
         try FileManager.default.removeItem(at: dos.url.appending(path: "Keen"))
 
         #expect(throws: (any Error).self) {
-            try h.journal.renameDOSROM(rom.id, from: "Keen", to: "Keen (1990)", in: dos.folder, ludeum: ludeum)
+            try h.journal.renameDOSBoxStagingROM(rom.id, from: "Keen", to: "Keen (1990)", in: dos.folder, ludeum: ludeum)
         }
         #expect(exists(ludeum.dosGameSave(ofROM: "Keen").appending(path: "A")))
     }

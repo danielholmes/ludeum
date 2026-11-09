@@ -512,7 +512,7 @@ struct GameDetailView: View {
                 // Dolphin has no per-Game settings, and DuckStation's are its own (ADR 0029). A DOS Game's are the program
                 // it starts with and its ROM's own settings file (ADR 0042).
                 if emulator == .dosBoxStaging {
-                    DOSBoxSettingsButton(services: services, rom: playing.rom, settings: emulatorSettings) { settings in
+                    DOSBoxStagingSettingsButton(services: services, rom: playing.rom, settings: emulatorSettings) { settings in
                         save { try $0.setEmulatorSettings(id, settings) }
                     }
                 } else if !EmulatorSettingRow.rows(for: emulator, platformId: platformId).isEmpty {
@@ -776,11 +776,11 @@ struct GameDetailView: View {
         if Emulator.of(platformId: rom.platformId) == .dosBoxStaging {
             // A DOSBox Staging playing it would go on writing to its Game save under its old name.
             let ludeum = services.settings.folder
-            if DOSBoxesOpen.now(ludeum: ludeum).isPlaying(rom.folderName) {
+            if DOSBoxStagingsOpen.now(ludeum: ludeum).isPlaying(rom.folderName) {
                 error = "Quit the DOSBox Staging playing it first: it's writing to the ROM's Game save."
                 return
             }
-            save { try $0.renameDOSROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
+            save { try $0.renameDOSBoxStagingROM(rom.id, from: rom.folderName, to: name, in: folder, ludeum: ludeum) }
             return
         }
         if Emulator.of(platformId: rom.platformId) == .amiberry {

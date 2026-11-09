@@ -116,22 +116,40 @@ public struct ROMFolder: Sendable, Equatable {
     /// A ROM of drives in a subfolder: its `C/` once there's a file in it, at any depth, else Disc 1 of its `CD/`. A game
     /// is hundreds of files, so only the first in `C/` is looked for.
     private func drivesGame(in folder: URL) -> (file: URL, discsWithoutPlaylist: [URL])? {
-        let top = (try? FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? []
-        func drive(_ name: String) -> URL? {
-            top.first { $0.caseInsensitiveCompare(name) == .orderedSame }.map { folder.appending(path: $0, directoryHint: .notDirectory) }
-        }
-        if let c = drive(ROMPlatform.driveC),
+        if let c = Self.drive(ROMPlatform.driveC, in: folder),
             let files = FileManager.default.enumerator(at: c, includingPropertiesForKeys: [.isRegularFileKey], options: .skipsHiddenFiles)
         {
             for case let file as URL in files where (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
                 return (c, [])
             }
         }
-        guard let cd = drive(ROMPlatform.driveCD) else { return nil }
-        let discs = ((try? FileManager.default.contentsOfDirectory(atPath: cd.path(percentEncoded: false))) ?? [])
-            .map { cd.appending(path: $0, directoryHint: .notDirectory) }
+        return Self.drive(ROMPlatform.driveCD, in: folder).flatMap { Self.cdDiscs(among: Self.topFiles(of: $0)).first }.map { ($0, []) }
+    }
+
+    /// A drive of a ROM of drives' subfolder, a folder named `C` or `CD` whatever its case.
+    static func drive(_ name: String, in subfolder: URL) -> URL? {
+        ((try? FileManager.default.contentsOfDirectory(atPath: subfolder.path(percentEncoded: false))) ?? [])
+            .first { $0.caseInsensitiveCompare(name) == .orderedSame }
+            .map { subfolder.appending(path: $0, directoryHint: .isDirectory) }
+            .flatMap { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? $0 : nil }
+    }
+
+    /// The files at the top of a folder, less hidden ones.
+    static func topFiles(of folder: URL) -> [URL] {
+        ((try? FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? [])
+            .filter { !$0.hasPrefix(".") }.map { folder.appending(path: $0, directoryHint: .notDirectory) }
             .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
-        return discGame(among: discs)
+    }
+
+    /// The Discs among the files at the top of a DOS ROM's `CD/`, Disc 1 first, all of them in drive D at once (ADR 0042): its
+    /// cue sheets, and any `.iso` none of them names, in Disc order where each says which it is, else by name.
+    static func cdDiscs(among files: [URL]) -> [URL] {
+        let cues = files.filter { $0.pathExtension.lowercased() == "cue" }
+        let tracks = Set(cues.flatMap(cueTracks).map { $0.lowercased() })
+        let images = cues + files.filter { $0.pathExtension.lowercased() == "iso" && !tracks.contains($0.lastPathComponent.lowercased()) }
+        let numbered = discs(images)
+        return numbered.isEmpty
+            ? images.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending } : numbered
     }
 
     /// The game among the files of `subfolder`: its one playlist, else its one cue sheet, else its one image. Several cue
@@ -152,7 +170,7 @@ public struct ROMFolder: Sendable, Equatable {
             return (subfolder.appending(path: c.1[0], directoryHint: .notDirectory), [])
         }
         let discs = relative.filter { $0.1.count == 2 && $0.1[0].caseInsensitiveCompare(ROMPlatform.driveCD) == .orderedSame }.map(\.0)
-        return discGame(among: discs)
+        return Self.cdDiscs(among: discs).first.map { ($0, []) }
     }
 
     /// The game among some files, as `game(among:in:)` finds it on a Platform whose ROMs aren't drives.

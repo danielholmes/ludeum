@@ -254,14 +254,15 @@ public struct Play: Sendable {
     /// refused while any copy is `running`, and PCSX2 and Ymir until they have a BIOS. `saveState` starts the Play from that
     /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on. 86Box is
     /// refused until there's a Windows base, and only while one of `eightySixBoxesOpen` is playing the ROM, as Windows Games
-    /// Play side by side (ADR 0041). DOSBox Staging likewise only while one of `dosBoxesOpen` is playing the ROM; `prompt`
+    /// Play side by side (ADR 0041). DOSBox Staging likewise only while one of `dosBoxStagingsOpen` is playing the ROM; `prompt`
     /// starts it at a DOS prompt rather than its program (ADR 0042).
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
         prompt: Bool = false, duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
         pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), ymir: YmirSettings = .init(),
-        eightySixBox: EightySixBoxSettings = .init(), dosBox: DOSBoxStagingSettings = .init(), running: (Emulator) -> Bool = { _ in false },
-        eightySixBoxesOpen: EightySixBoxesOpen = .none, dosBoxesOpen: DOSBoxesOpen = .none
+        eightySixBox: EightySixBoxSettings = .init(), dosBoxStaging: DOSBoxStagingSettings = .init(),
+        running: (Emulator) -> Bool = { _ in false },
+        eightySixBoxesOpen: EightySixBoxesOpen = .none, dosBoxStagingsOpen: DOSBoxStagingsOpen = .none
     ) -> Outcome {
         let emulator: Emulator
         switch availability {
@@ -310,9 +311,9 @@ public struct Play: Sendable {
             guard eightySixBox.hasBase else { return .refused(.noWindowsBase) }
             app = eightySixBox.app
         } else if emulator == .dosBoxStaging {
-            guard dosBox.isInstalled else { return .refused(.notInstalled(emulator)) }
-            if let rom, dosBoxesOpen.isPlaying(rom.folderName) { return .refused(.running(emulator)) }
-            app = dosBox.app
+            guard dosBoxStaging.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if let rom, dosBoxStagingsOpen.isPlaying(rom.folderName) { return .refused(.running(emulator)) }
+            app = dosBoxStaging.app
         } else {
             guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
             app = found
@@ -353,7 +354,7 @@ public struct Play: Sendable {
             if emulator == .eightySixBox {
                 arguments = try eightySixBox.arguments(rom: opened, romName: rom.folderName, settings: settings)
             } else if emulator == .dosBoxStaging, let folder = locator.folder(of: rom) {
-                arguments = try dosBox.arguments(
+                arguments = try dosBoxStaging.arguments(
                     subfolder: folder.url.appending(path: rom.folderName, directoryHint: .isDirectory), romName: rom.folderName,
                     settings: settings, prompt: prompt)
             } else {
@@ -361,7 +362,7 @@ public struct Play: Sendable {
                     rom: opened, platformId: platformId, settings: settings, saveState: saveState,
                     duckStation: duckStation, mesen: mesen, ares: ares, pcsx2: pcsx2, amiberry: amiberry, ymir: ymir)
             }
-            let environment = emulator == .amiberry ? amiberry.environment : emulator == .dosBoxStaging ? dosBox.environment : [:]
+            let environment = emulator == .amiberry ? amiberry.environment : emulator == .dosBoxStaging ? dosBoxStaging.environment : [:]
             return .open(app: app, arguments: arguments, warning: warning, startsOn: startsOn, environment: environment)
         } catch {
             return .refused(

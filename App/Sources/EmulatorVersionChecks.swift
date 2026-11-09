@@ -245,7 +245,8 @@ struct EmulatorsSheet: View {
             // Only what nothing else says: the Status column tells of a version, the Windows base row of 86Box's need, and Play's
             // refusal of a missing BIOS, where it goes and what it's named.
             Text(
-                "An Emulator's own settings are changed in it during a Play. "
+                "An Emulator's own settings are changed in it during a Play, but for a DOS Game's, in its own settings file, "
+                    + "opened from its DOSBox Staging settings on Game detail. "
                     + "Amiberry plays on its own AROS until there's a Kickstart in the Data folder's Emulators/Amiberry/ROMs. "
                     + "DOSBox Staging plays MIDI music with the SoundFont it's installed with; a DOS Game's own settings can choose "
                     + "another from the Data folder's Emulators/DOSBox Staging/SoundFonts, or an MT-32 with its ROMs in MT-32 ROMs beside it."

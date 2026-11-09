@@ -98,13 +98,13 @@ public enum DOSPrograms {
 
 /// Which DOS ROMs the open DOSBox Stagings are playing, told by the Game save each was told to lay over drive C. Nothing a
 /// Play writes is shared between ROMs, so DOS Games Play side by side; a Game save can be written by only one at a time.
-public struct DOSBoxesOpen: Sendable, Equatable {
+public struct DOSBoxStagingsOpen: Sendable, Equatable {
     let roms: Set<String>
     /// An open DOSBox Staging's command line couldn't be read, so it could be playing any ROM.
     let anyUnreadable: Bool
 
     /// No DOSBox Staging open.
-    public static let none = DOSBoxesOpen(roms: [], anyUnreadable: false)
+    public static let none = DOSBoxStagingsOpen(roms: [], anyUnreadable: false)
 
     private init(roms: Set<String>, anyUnreadable: Bool) {
         self.roms = roms
@@ -205,36 +205,16 @@ public struct DOSBoxStagingSettings: Sendable {
         return file
     }
 
-    /// The Discs at the top of a ROM's `CD/`, Disc 1 first: its cue sheets, and any `.iso` none of them names, in Disc order
-    /// where each says which it is, else by name.
-    static func discs(in cd: URL) -> [URL] {
-        let files = ((try? FileManager.default.contentsOfDirectory(atPath: cd.path(percentEncoded: false))) ?? [])
-            .filter { !$0.hasPrefix(".") }.map { cd.appending(path: $0, directoryHint: .notDirectory) }
-        let cues = files.filter { $0.pathExtension.lowercased() == "cue" }
-        let tracks = Set(cues.flatMap(ROMFolder.cueTracks).map { $0.lowercased() })
-        let images = cues + files.filter { $0.pathExtension.lowercased() == "iso" && !tracks.contains($0.lastPathComponent.lowercased()) }
-        let numbered = ROMFolder.discs(images)
-        return numbered.isEmpty
-            ? images.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending } : numbered
-    }
-
-    /// A drive of a ROM's subfolder, found whatever its case.
-    static func drive(_ name: String, in subfolder: URL) -> URL? {
-        ((try? FileManager.default.contentsOfDirectory(atPath: subfolder.path(percentEncoded: false))) ?? [])
-            .first { $0.caseInsensitiveCompare(name) == .orderedSame }
-            .map { subfolder.appending(path: $0, directoryHint: .isDirectory) }
-            .flatMap { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? $0 : nil }
-    }
-
     /// The programs a Play of the ROM `romName`, its subfolder `subfolder`, could start with: its drive C's and its Game
     /// save's, as `DOSPrograms.on(c:gameSave:)` lists them.
     public func programs(ofROMIn subfolder: URL, romName: String) -> [String] {
-        DOSPrograms.on(c: Self.drive(ROMPlatform.driveC, in: subfolder), gameSave: ludeum.dosGameSave(ofROM: romName))
+        DOSPrograms.on(c: ROMFolder.drive(ROMPlatform.driveC, in: subfolder), gameSave: ludeum.dosGameSave(ofROM: romName))
     }
 
-    /// A path in double quotes, as a DOS command takes one with spaces.
-    private static func quoted(_ url: URL) -> String {
+    /// A path in double quotes, as a DOS command takes one with spaces. One with a double quote of its own can't be.
+    private static func quoted(_ url: URL) throws -> String {
         let path = url.path(percentEncoded: false)
+        guard !path.contains("\"") else { throw DOSBoxStagingPlayError.quoteInPath(url.lastPathComponent) }
         return "\"\(path.hasSuffix("/") ? String(path.dropLast()) : path)\""
     }
 
@@ -254,21 +234,33 @@ public struct DOSBoxStagingSettings: Sendable {
         let own = ludeum.dosGameSettings(ofROM: romName)
         if files.fileExists(atPath: own.path(percentEncoded: false)) { arguments += ["--conf", own.path(percentEncoded: false)] }
         var commands: [String] = []
-        if let c = Self.drive(ROMPlatform.driveC, in: subfolder) {
-            commands += ["mount c \(Self.quoted(c))", "mount c \(Self.quoted(save)) -t overlay"]
+        if let c = ROMFolder.drive(ROMPlatform.driveC, in: subfolder) {
+            commands += ["mount c \(try Self.quoted(c))", "mount c \(try Self.quoted(save)) -t overlay"]
         } else {
             // Nothing to keep unwritten: the Game save is drive C, where a CD game installs.
-            commands.append("mount c \(Self.quoted(save))")
+            commands.append("mount c \(try Self.quoted(save))")
         }
-        if let cd = Self.drive(ROMPlatform.driveCD, in: subfolder) {
-            let discs = Self.discs(in: cd)
-            if !discs.isEmpty { commands.append("mount d " + discs.map(Self.quoted).joined(separator: " ")) }
+        if let cd = ROMFolder.drive(ROMPlatform.driveCD, in: subfolder) {
+            let discs = ROMFolder.cdDiscs(among: ROMFolder.topFiles(of: cd))
+            if !discs.isEmpty { commands.append("mount d " + (try discs.map(Self.quoted)).joined(separator: " ")) }
         }
         let program = prompt ? nil : settings.dosProgram
         commands += program.map(DOSPrograms.commands(starting:)) ?? ["C:"]
         arguments += commands.flatMap { ["-c", $0] }
         if program != nil { arguments.append("--exit") }
         return arguments
+    }
+}
+
+/// Why a Play in DOSBox Staging couldn't start.
+public enum DOSBoxStagingPlayError: LocalizedError, Equatable {
+    /// A path DOSBox Staging is given in double quotes has one of its own, which would end it early.
+    case quoteInPath(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .quoteInPath(let name): "\(name) has a double quote in its name, which DOSBox Staging can't be given. Rename it without one."
+        }
     }
 }
 
@@ -295,7 +287,7 @@ public struct DOSGameSave: Sendable, Equatable {
 }
 
 /// Why a DOS ROM's Rename was refused, with nothing renamed.
-public enum DOSBoxRenameError: LocalizedError, Equatable {
+public enum DOSBoxStagingRenameError: LocalizedError, Equatable {
     /// There's a Game save, or a file of its own settings, under the new name.
     case inTheWay(String)
 
@@ -308,21 +300,25 @@ public enum DOSBoxRenameError: LocalizedError, Equatable {
 
 extension LudeumStore {
     /// Renames a DOS ROM as `renameROM(_:to:in:)` does, with its Game save and its own settings. Refused, with nothing
-    /// renamed, when either is there under the new name. They move first and come back if the ROM can't be renamed, as a
-    /// ROM whose Game save stayed behind would start again with none.
-    public func renameDOSROM(_ rom: Int64, from oldName: String, to name: String, in folder: ROMFolder, ludeum: LudeumFolder = .standard)
+    /// renamed, when either is there under the new name, its own or not: a deleted ROM's left behind would otherwise become
+    /// this one's. They move first and come back if the ROM can't be renamed, as a ROM whose Game save stayed behind would
+    /// start again with none.
+    public func renameDOSBoxStagingROM(
+        _ rom: Int64, from oldName: String, to name: String, in folder: ROMFolder, ludeum: LudeumFolder = .standard
+    )
         throws
     {
         let files = FileManager.default
         // Differing only in case, they're the same files.
         let same = oldName.caseInsensitiveCompare(name) == .orderedSame
-        let moves = [
+        let both = [
             (ludeum.dosGameSave(ofROM: oldName), ludeum.dosGameSave(ofROM: name)),
             (ludeum.dosGameSettings(ofROM: oldName), ludeum.dosGameSettings(ofROM: name)),
-        ].filter { files.fileExists(atPath: $0.0.path(percentEncoded: false)) }
-        if !same, moves.contains(where: { files.fileExists(atPath: $0.1.path(percentEncoded: false)) }) {
-            throw DOSBoxRenameError.inTheWay(name)
+        ]
+        if !same, both.contains(where: { files.fileExists(atPath: $0.1.path(percentEncoded: false)) }) {
+            throw DOSBoxStagingRenameError.inTheWay(name)
         }
+        let moves = both.filter { files.fileExists(atPath: $0.0.path(percentEncoded: false)) }
         var moved: [(URL, URL)] = []
         do {
             for (from, to) in moves {

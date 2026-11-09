@@ -123,7 +123,7 @@ public struct ROMSource: Sendable, Equatable {
     }
 
     /// The kinds of file a DOS game is started by.
-    static let dosPrograms: Set<String> = ["exe", "com", "bat"]
+    static var dosPrograms: Set<String> { DOSPrograms.extensions }
     /// The kinds of file a disc image is, with the tracks a cue sheet names.
     static let discImages: Set<String> = ["cue", "iso", "bin", "img"]
 
@@ -574,7 +574,8 @@ public struct AddROM: Sendable {
             let kinds = Set(paths.map { ($0 as NSString).pathExtension.lowercased() })
             if ROMSource.areDrives(paths) {
                 try files.copyItem(at: picked, to: staged)
-            } else if discs.isEmpty, !kinds.isEmpty, kinds.isSubset(of: ROMSource.discImages) {
+            } else if discs.isEmpty, kinds.isDisjoint(with: DOSPrograms.extensions), !kinds.isDisjoint(with: ["cue", "iso"]) {
+                // A CD game's Discs, whatever readme came with them: no program, so nothing to be drive C.
                 discs = inside
             } else {
                 try files.createDirectory(at: staged, withIntermediateDirectories: true)
