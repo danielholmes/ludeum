@@ -774,6 +774,15 @@ enum LudeumSchema {
             try db.alter(table: "game") { t in t.add(column: "dosProgram", .text) }
             try keepTimestamps(db, on: "game")
         }
+        // Want to buy leaves the Intents for a flag of its own (ADR 0043): a Game whose Intent was Want to buy has the flag
+        // and no Intent, its date dropped with it. Moved before the trigger comes back, so no row's timestamps change.
+        // `intent`'s CHECK still allows `wantToBuy`, as changing it means rebuilding `game`, which so much references.
+        migrator.registerMigration("v47 want to buy flag") { db in
+            try db.execute(sql: "DROP TRIGGER game_updatedAt")
+            try db.alter(table: "game") { t in t.add(column: "wantToBuy", .boolean).notNull().defaults(to: false) }
+            try db.execute(sql: "UPDATE game SET wantToBuy = 1, intent = NULL, intentSetAt = NULL WHERE intent = 'wantToBuy'")
+            try keepTimestamps(db, on: "game")
+        }
         return migrator
     }
 

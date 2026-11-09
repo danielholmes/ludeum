@@ -26,4 +26,11 @@ extension LudeumStore {
             try db.execute(sql: "UPDATE game SET childhood = ? WHERE id = ?", arguments: [childhood, game])
         }
     }
+
+    /// Sets or clears Want to buy (ADR 0043), whatever the Intent. Copies never change it.
+    public func setWantToBuy(_ game: GameID, _ wantToBuy: Bool) throws {
+        try db.write { db in
+            try db.execute(sql: "UPDATE game SET wantToBuy = ? WHERE id = ?", arguments: [wantToBuy, game])
+        }
+    }
 }

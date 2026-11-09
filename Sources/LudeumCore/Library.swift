@@ -12,6 +12,7 @@ public struct LibraryFilter: Sendable, Equatable {
     public var player: PlayerFilter?
     public var outcome: OutcomeFilter?
     public var childhood: Bool?
+    public var wantToBuy: Bool?
     public var roms: ROMFilter?
     public var copies: CopiesFilter?
     /// An IGDB genre. Not applied by `library(_:sort:ascending:)`: genres live in the cache, so
@@ -30,7 +31,7 @@ public struct LibraryFilter: Sendable, Equatable {
 
     public init(
         platformId: Int64? = nil, archivablePlatforms: Bool = false, rating: RatingFilter? = nil, intent: Intent?? = nil,
-        player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil,
+        player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil, wantToBuy: Bool? = nil,
         roms: ROMFilter? = nil, copies: CopiesFilter? = nil, genre: String? = nil,
         theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
         listId: Int64? = nil, name: String = ""
@@ -49,6 +50,7 @@ public struct LibraryFilter: Sendable, Equatable {
         self.player = player
         self.outcome = outcome
         self.childhood = childhood
+        self.wantToBuy = wantToBuy
         self.roms = roms
         self.copies = copies
     }
@@ -70,6 +72,7 @@ extension LibraryFilter {
         if let v = scope.player { f.player = v }
         if let v = scope.outcome { f.outcome = v }
         if let v = scope.childhood { f.childhood = v }
+        if let v = scope.wantToBuy { f.wantToBuy = v }
         if let v = scope.roms { f.roms = v }
         if let v = scope.copies { f.copies = v }
         if let v = scope.genre { f.genre = v }
@@ -171,6 +174,7 @@ public struct LibraryRow: Sendable, Equatable, Identifiable {
     public let intent: Intent?
     public let intentSetAt: Date?
     public let childhood: Bool
+    public let wantToBuy: Bool
     /// Playing: a Playthrough in progress.
     public let isPlaying: Bool
     /// The latest start among its in-progress Playthroughs.
@@ -302,6 +306,10 @@ extension LudeumStore {
             conditions.append("g.childhood = ?")
             arguments.append(childhood)
         }
+        if let wantToBuy = filter.wantToBuy {
+            conditions.append("g.wantToBuy = ?")
+            arguments.append(wantToBuy)
+        }
         switch filter.roms {
         case .playable: conditions.append(Self.playableSQL)
         case .archived: conditions.append("(\(Self.archivedSQL))")
@@ -335,7 +343,7 @@ extension LudeumStore {
             case .childhood: "g.childhood \(direction), \(name)"
             }
         let sql = """
-            SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood,
+            SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood, g.wantToBuy,
                 COALESCE(g.nameOverride, g.igdbName, g.name) AS displayName,
                 \(PlatformGroups.shownNameSQL(platformId: "g.platformId", name: "pl.name")) AS platformName,
                 r.rating AS currentRating,
@@ -358,7 +366,7 @@ extension LudeumStore {
                     id: row["id"], name: row["displayName"], platformId: row["platformId"], platformName: row["platformName"],
                     igdbGameId: row["igdbGameId"], rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) },
                     intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)), intentSetAt: row["intentSetAt"],
-                    childhood: row["childhood"], isPlaying: row["playing"],
+                    childhood: row["childhood"], wantToBuy: row["wantToBuy"], isPlaying: row["playing"],
                     playingSince: (row["playingSince"] as String?).flatMap(PartialDate.init),
                     outcomes: Set(((row["outcomes"] as String?) ?? "").split(separator: ",").compactMap { Outcome(rawValue: String($0)) }),
                     roms: LibraryROMState(hasROM: row["hasROM"], hasMissingROM: row["hasMissingROM"], archived: row["archived"]),

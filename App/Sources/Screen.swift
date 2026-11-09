@@ -67,7 +67,7 @@ enum Screen: Hashable, Codable {
         switch self {
         case .finished: LibraryFilter(outcome: .finished)
         case .childhood: LibraryFilter(childhood: true)
-        case .wantToBuy: LibraryFilter(intent: .wantToBuy)
+        case .wantToBuy: LibraryFilter(wantToBuy: true)
         default: nil
         }
     }

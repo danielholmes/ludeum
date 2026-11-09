@@ -44,17 +44,20 @@ public struct Game: Sendable, Equatable {
     /// What I want to see first on its page; nil when there's none.
     public let highlightNote: String?
     public let childhood: Bool
+    /// Want to buy (ADR 0043): I don't own it yet and mean to. A flag beside the Intent, not one of its values.
+    public let wantToBuy: Bool
     public let intent: Intent?
     /// When the Intent was set; nil for undated Intent (from the first Import).
     public let intentSetAt: Date?
     /// The current Rating: the latest Rating history entry. Nil when unrated.
     public let rating: Rating?
-    /// A Bundle (ADR 0016): it contains Games, and has no Rating, Intent, Childhood or Playthroughs.
+    /// A Bundle (ADR 0016): it contains Games, and has no Rating, Intent, Want to buy, Childhood or Playthroughs.
     public let isBundle: Bool
 }
 
+/// What I plan to play next. Want to buy was one until v47, and is a flag of its own now (ADR 0043).
 public enum Intent: String, Sendable, CaseIterable {
-    case backlog, upNext, wantToBuy
+    case backlog, upNext
 }
 
 /// A score from 0.0 to 10.0 in steps of 0.1, held as tenths.
@@ -159,7 +162,7 @@ public final class LudeumStore: Sendable {
             return Game(
                 id: row["id"], platformId: row["platformId"], igdbGameId: row["igdbGameId"],
                 name: row["displayName"], highlightNote: row["highlightNote"], childhood: row["childhood"],
-                intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)),
+                wantToBuy: row["wantToBuy"], intent: (row["intent"] as String?).flatMap(Intent.init(rawValue:)),
                 intentSetAt: row["intentSetAt"],
                 rating: (row["currentRating"] as Int?).flatMap { Rating(tenths: $0) },
                 isBundle: (row["bundle"] as Bool?) ?? false)

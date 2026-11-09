@@ -50,12 +50,31 @@ import Testing
         #expect(try h.journal.game(game).intentSetAt == nil)
     }
 
-    @Test func wantToBuyIsAnIntentAndTheLibraryFiltersByIt() throws {
-        try h.journal.setIntent(game, .wantToBuy)
-        try h.journal.setIntent(try h.addGame("Backlogged"), .backlog)
+    @Test func wantToBuyIsAFlagBesideTheIntentAndTheLibraryFiltersByIt() throws {
+        try h.journal.setIntent(game, .upNext)
+        try h.journal.setWantToBuy(game, true)
+        let backlogged = try h.addGame("Backlogged")
+        try h.journal.setIntent(backlogged, .backlog)
 
-        #expect(try h.journal.game(game).intent == .wantToBuy)
-        #expect(try h.journal.library(LibraryFilter(intent: .wantToBuy), sort: .name, ascending: true).map(\.id) == [game])
+        #expect(try h.journal.game(game).wantToBuy)
+        #expect(try h.journal.game(game).intent == .upNext)
+        #expect(try h.journal.library(LibraryFilter(wantToBuy: true), sort: .name, ascending: true).map(\.id) == [game])
+        #expect(try h.journal.library(LibraryFilter(wantToBuy: false), sort: .name, ascending: true).map(\.id) == [backlogged])
+        #expect(try h.journal.library(LibraryFilter(), sort: .name, ascending: true).first { $0.id == game }?.wantToBuy == true)
+
+        try h.journal.setWantToBuy(game, false)
+        #expect(try !h.journal.game(game).wantToBuy)
+        #expect(try h.journal.game(game).intent == .upNext)
+    }
+
+    @Test func startingToPlayClearsTheIntentButNotWantToBuy() throws {
+        try h.journal.setIntent(game, .upNext)
+        try h.journal.setWantToBuy(game, true)
+
+        try h.journal.startPlaying(game)
+
+        #expect(try h.journal.game(game).intent == nil)
+        #expect(try h.journal.game(game).wantToBuy)
     }
 
     @Test func childhoodIsAFlag() throws {
@@ -100,8 +119,6 @@ import Testing
             try Row.fetchOne(db, sql: "SELECT igdbGameId, igdbName, runAheadFrames, gameBoyModel FROM game WHERE id = 1")
         }
         #expect(row == ["igdbGameId": 1234, "igdbName": "Contra III", "runAheadFrames": 2, "gameBoyModel": "sgb"])
-        try journal.setIntent(1, .wantToBuy)
-        #expect(try journal.game(1).intent == .wantToBuy)
         #expect(try journal.addGame(platformId: 19, name: "New") == 3)
     }
 
@@ -125,6 +142,54 @@ import Testing
         let journal = try LudeumStore(directory: directory)
 
         #expect(try journal.addGame(platformId: 19, name: "New") == 6)
+    }
+}
+
+/// The migration that makes Want to buy a flag beside the Intent (ADR 0043).
+@Suite struct WantToBuyFlagMigrationTests {
+    @Test func wantToBuyIntentsBecomeTheFlagAndNothingElseChanges() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let path = directory.appending(path: "journal.sqlite").path(percentEncoded: false)
+        let db = try DatabaseQueue(path: path)
+        try LudeumSchema.migrator.migrate(db, upTo: "v46 dos program")
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform (id, name) VALUES (19, 'SNES');
+                    INSERT INTO game (id, platformId, name, intent, intentSetAt) VALUES
+                        (1, 19, 'Earthbound', 'wantToBuy', '2026-01-01 00:00:00.000'),
+                        (2, 19, 'Chrono Trigger', 'upNext', '2026-01-02 00:00:00.000'),
+                        (3, 19, 'F-Zero', NULL, NULL);
+                    UPDATE game SET updatedAt = '2026-02-0' || id || ' 00:00:00.000';
+                    """)
+        }
+        try db.close()
+
+        let journal = try LudeumStore(directory: directory)
+
+        let earthbound = try journal.game(1)
+        #expect(earthbound.wantToBuy)
+        #expect(earthbound.intent == nil)
+        #expect(earthbound.intentSetAt == nil)
+        let chrono = try journal.game(2)
+        #expect(!chrono.wantToBuy)
+        #expect(chrono.intent == .upNext)
+        #expect(chrono.intentSetAt != nil)
+        #expect(try !journal.game(3).wantToBuy)
+        let updated = try DatabaseQueue(path: path).read { db in
+            try String.fetchAll(db, sql: "SELECT updatedAt FROM game ORDER BY id")
+        }
+        #expect(updated == ["2026-02-01 00:00:00.000", "2026-02-02 00:00:00.000", "2026-02-03 00:00:00.000"])
+
+        // The trigger is back, watching the new column too.
+        try journal.setWantToBuy(3, true)
+        let fZero = try DatabaseQueue(path: path).read { db in
+            try String.fetchOne(db, sql: "SELECT updatedAt FROM game WHERE id = 3")
+        }
+        #expect(fZero != "2026-02-03 00:00:00.000")
     }
 }
 

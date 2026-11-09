@@ -146,6 +146,8 @@ struct GameDetailView: View {
                         }
                         .pickerStyle(.segmented)
                         .help(game.intentSetAt.map { "Set \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
+                        Toggle("Want to buy", isOn: Binding(get: { game.wantToBuy }, set: { new in save { try $0.setWantToBuy(id, new) } }))
+                            .toggleStyle(.checkbox).fixedSize()
                         Toggle("Childhood", isOn: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
                             .toggleStyle(.checkbox).fixedSize()
                     }
@@ -1031,7 +1033,9 @@ private func deletionMessage(_ s: DeletionSummary, isBundle: Bool) -> String {
     if s.attachments > 0 { parts.append("\(s.attachments) Attachment\(s.attachments == 1 ? "" : "s"), whose files go to the Trash") }
     if s.lists > 0 { parts.append("its place in \(s.lists) List\(s.lists == 1 ? "" : "s")") }
     parts.append(
-        isBundle ? "its IGDB link and any uploaded Cover. Its Games stay" : "its Intent, Childhood, IGDB link and any uploaded Cover")
+        isBundle
+            ? "its IGDB link and any uploaded Cover. Its Games stay"
+            : "its Intent, Want to buy, Childhood, IGDB link and any uploaded Cover")
     return "This deletes " + parts.joined(separator: ", ") + ". There's no undo; a backup is taken first."
 }
 

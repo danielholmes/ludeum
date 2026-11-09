@@ -29,10 +29,13 @@ import Testing
         #expect(next == PlayNext(playing: ["Chrono Trigger"], upNext: ["Earthbound"], backlog: ["Secret of Mana"]))
     }
 
-    @Test func wantToBuyIsntPlayNext() throws {
-        try h.journal.setIntent(try h.addGame("Earthbound"), .wantToBuy)
+    @Test func wantToBuyGoesByItsIntent() throws {
+        try h.journal.setWantToBuy(try h.addGame("Earthbound"), true)
+        let upNext = try h.addGame("Mother 3")
+        try h.journal.setWantToBuy(upNext, true)
+        try h.journal.setIntent(upNext, .upNext)
 
-        #expect(try names() == PlayNext(playing: [], upNext: [], backlog: []))
+        #expect(try names() == PlayNext(playing: [], upNext: ["Mother 3"], backlog: []))
     }
 
     @Test func intentSectionsDefaultToNewestSetFirstWithUndatedLastByName() throws {

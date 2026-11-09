@@ -4,7 +4,7 @@ import SwiftUI
 /// The kinds of filter the Add filter menu offers. A screen offers the ones it applies, less the
 /// ones its scope already fixes.
 enum FilterKind: CaseIterable {
-    case platform, rating, intent, player, genre, theme, played, childhood, roms, copies
+    case platform, rating, intent, wantToBuy, player, genre, theme, played, childhood, roms, copies
 
     /// What every Library-shaped screen offers.
     static let library = Set(allCases)
@@ -15,6 +15,7 @@ enum FilterKind: CaseIterable {
         if scope.platformId != nil || scope.archivablePlatforms { k.insert(.platform) }
         if scope.rating != nil { k.insert(.rating) }
         if scope.intent != nil { k.insert(.intent) }
+        if scope.wantToBuy != nil { k.insert(.wantToBuy) }
         if scope.player != nil { k.insert(.player) }
         if scope.genre != nil { k.insert(.genre) }
         if scope.theme != nil { k.insert(.theme) }
@@ -169,6 +170,12 @@ private struct AddFilterMenu: View {
                     Button("Not played") { filter.outcome = .notPlayed }
                 }
             }
+            if kinds.contains(.wantToBuy) {
+                Menu("Want to buy") {
+                    Button("Want to buy") { filter.wantToBuy = true }
+                    Button("Not Want to buy") { filter.wantToBuy = false }
+                }
+            }
             if kinds.contains(.childhood) {
                 Menu("Childhood") {
                     Button("Childhood") { filter.childhood = true }
@@ -275,6 +282,9 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], players: [P
             case .notPlayed: "Not played"
             }
         c.append(Chip(text: text) { $0.outcome = nil })
+    }
+    if let w = filter.wantToBuy {
+        c.append(Chip(text: w ? "Want to buy" : "Not Want to buy") { $0.wantToBuy = nil })
     }
     if let ch = filter.childhood {
         c.append(Chip(text: ch ? "Childhood" : "Not childhood") { $0.childhood = nil })

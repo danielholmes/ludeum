@@ -81,6 +81,9 @@ struct LibraryScreen: View {
                     TableColumn("Name", sortUsing: KeyPathComparator(\LibraryRow.name)) { row in
                         HStack(spacing: 4) {
                             Text(row.name)
+                            if row.wantToBuy {
+                                Image(systemName: wantToBuySymbol).foregroundStyle(.blue).help("Want to buy")
+                            }
                             if let badge = ROMBadge(row) {
                                 Image(systemName: badge.symbol).foregroundStyle(badge.color).help(badge.help)
                             }
@@ -272,7 +275,6 @@ func intentText(_ intent: Intent) -> String {
     switch intent {
     case .backlog: "Backlog"
     case .upNext: "Up next"
-    case .wantToBuy: "Want to buy"
     }
 }
 
@@ -411,8 +413,7 @@ struct CoverTile: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                // The table's Name column shows the same symbol.
-                if let badge = ROMBadge(row), badge != .notOwned {
+                if let badge = OwningBadge(row) {
                     RoundBadge(symbol: badge.symbol, color: badge.color, side: height)
                         .padding(margin)
                         .help(badge.help)
@@ -421,6 +422,28 @@ struct CoverTile: View {
             }
     }
 }
+
+/// A Cover's bottom trailing badge, of owning the Game (ADR 0043): a missing ROM's warning, as it's something to fix, else
+/// Want to buy's cart, else Archived. Not owned has only its dimming. The table's Name column shows the same symbols.
+private struct OwningBadge {
+    let symbol: String
+    let color: Color
+    let help: String
+
+    init?(_ row: LibraryRow) {
+        switch (ROMBadge(row), row.wantToBuy) {
+        case (.missing?, _), (.archived?, false):
+            let rom = ROMBadge(row)!
+            (symbol, color, help) = (rom.symbol, rom.color, rom.help)
+        case (_, true):
+            (symbol, color, help) = (wantToBuySymbol, .blue, "Want to buy")
+        default:
+            return nil
+        }
+    }
+}
+
+private let wantToBuySymbol = "cart.fill"
 
 /// A Library row's ROM badge: Archived, a missing ROM, or Not owned (no ROM and no Copy that isn't Gone: a plain
 /// journal entry); none for a Playable Game, or one with no ROM that I own some other way.
@@ -462,10 +485,10 @@ private enum ROMBadge {
     }
 }
 
-/// A Cover's status badge: Playing, else its Intent (Up next, Backlog or Want to buy); none otherwise. Finished has its
-/// own badge, at the top leading corner.
+/// A Cover's status badge: Playing, else its Intent (Up next or Backlog); none otherwise. Finished has its own badge, at
+/// the top leading corner, and Want to buy at the bottom trailing.
 private enum CoverStatus {
-    case playing, upNext, backlog, wantToBuy
+    case playing, upNext, backlog
 
     init?(_ row: LibraryRow) {
         if row.isPlaying {
@@ -474,8 +497,6 @@ private enum CoverStatus {
             self = .upNext
         } else if row.intent == .backlog {
             self = .backlog
-        } else if row.intent == .wantToBuy {
-            self = .wantToBuy
         } else {
             return nil
         }
@@ -493,8 +514,6 @@ private enum CoverStatus {
             PostIt(color: Color(red: 0.6, green: 0.4, blue: 0.9), side: height, symbol: "arrow.right")
         case .backlog:
             PostIt(color: Color(red: 1, green: 0.62, blue: 0.22), side: height)
-        case .wantToBuy:
-            RoundBadge(symbol: "cart.fill", color: .blue, side: height)
         }
     }
 
@@ -503,7 +522,6 @@ private enum CoverStatus {
         case .playing: "Playing"
         case .upNext: "Up next"
         case .backlog: "Backlog"
-        case .wantToBuy: "Want to buy"
         }
     }
 }

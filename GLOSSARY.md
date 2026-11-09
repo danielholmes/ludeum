@@ -124,8 +124,12 @@ A date known only to the day, month or year, e.g. "2024-03-17", "2024-03" or "19
 _Avoid_: Approximate date, fuzzy date
 
 **Intent**:
-What I plan to do with a Game next: Backlog, Up next or Want to buy (I don't own it yet), or nothing. Intent doesn't depend on Playthroughs, so a finished Game can still be Up next. It remembers when it was set, except Intent brought over from OpenEmu, which is undated.
+What I plan to play next: Backlog, Up next, or nothing. Intent doesn't depend on Playthroughs, so a finished Game can still be Up next, or on owning the Game, so one I Want to buy can be too. It remembers when it was set, except Intent brought over from OpenEmu, which is undated.
 _Avoid_: Status, queue, TODO
+
+**Want to buy**:
+A flag on a Game meaning I don't own it yet and mean to, beside its Intent rather than one of its values (until v47 it was one), so I can want to play a Game soon that I haven't bought. Recording a Copy doesn't clear it.
+_Avoid_: Wishlist
 
 **Playing**:
 A Game with a Playthrough in progress, whatever its Intent.
