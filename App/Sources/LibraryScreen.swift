@@ -381,11 +381,13 @@ struct CoverTile: View {
                         .background(.black.opacity(0.75), in: .capsule)
                         .padding(margin)
                         .help("Rating")
+                        .accessibilityLabel("Rating \(ratingText(rating))")
                 }
             }
             .overlay(alignment: .topLeading) {
                 if row.outcomes.contains(.finished) {
-                    RoundBadge(symbol: "checkmark", color: .green, side: height, weight: .bold)
+                    // Grey, as green is Playing's.
+                    RoundBadge(symbol: "checkmark", color: .secondary, side: height, weight: .bold)
                         .padding(margin)
                         .help("Finished")
                         .accessibilityLabel("Finished")
@@ -400,18 +402,21 @@ struct CoverTile: View {
                 }
             }
             .overlay {
-                // Not owned: dimmed, as only a journal entry, under its badge. One flat translucent layer over it: a lowered
-                // opacity would either let the Cover show through its badges or need them drawn offscreen as one.
+                // Not owned: dimmed, as only a journal entry, with no badge of its own (the table, which can't dim, has
+                // one). One flat translucent layer under the other badges: a lowered opacity would either let the Cover
+                // show through them or need them drawn offscreen as one.
                 if ROMBadge(row) == .notOwned {
-                    RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.4)).allowsHitTesting(false)
+                    RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.45)).allowsHitTesting(false)
+                        .accessibilityLabel(ROMBadge.notOwned.help)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
                 // The table's Name column shows the same symbol.
-                if let badge = ROMBadge(row) {
+                if let badge = ROMBadge(row), badge != .notOwned {
                     RoundBadge(symbol: badge.symbol, color: badge.color, side: height)
                         .padding(margin)
                         .help(badge.help)
+                        .accessibilityLabel(badge.help)
                 }
             }
     }
@@ -483,10 +488,11 @@ private enum CoverStatus {
             Bookmark().fill(Color(red: 0.13, green: 0.6, blue: 0.27))
                 .frame(width: height * 0.6, height: height)
                 .shadow(color: .black.opacity(0.4), radius: 1.5, y: 1)
+        // Green is Playing's alone. Up next has an arrow too, so it isn't told from Backlog by colour alone.
         case .upNext:
-            PostIt(color: Color(red: 0.62, green: 0.9, blue: 0.5), side: height)
+            PostIt(color: Color(red: 0.6, green: 0.4, blue: 0.9), side: height, symbol: "arrow.right")
         case .backlog:
-            PostIt(color: Color(red: 1, green: 0.9, blue: 0.4), side: height)
+            PostIt(color: Color(red: 1, green: 0.62, blue: 0.22), side: height)
         case .wantToBuy:
             RoundBadge(symbol: "cart.fill", color: .blue, side: height)
         }
@@ -516,15 +522,21 @@ private struct RoundBadge: View {
     }
 }
 
-/// A square note with its bottom trailing corner folded over.
+/// A square note with its bottom trailing corner folded over, and a symbol written on it if it has one.
 private struct PostIt: View {
     let color: Color
     let side: Double
+    var symbol: String? = nil
 
     var body: some View {
         ZStack {
             Sheet().fill(color)
             Fold().fill(.black.opacity(0.18))
+            if let symbol {
+                // Up and to the leading side of centre, clear of the fold.
+                Image(systemName: symbol).font(.system(size: side * 0.45, weight: .heavy)).foregroundStyle(.white)
+                    .offset(x: -side * 0.06, y: -side * 0.06)
+            }
         }
         .frame(width: side, height: side)
         .compositingGroup()
