@@ -242,16 +242,10 @@ struct EmulatorsSheet: View {
                     }
                 }
             }
-            // Only what nothing else says: the Status column tells of a version, the Windows base row of 86Box's need, and Play's
-            // refusal of a missing BIOS, where it goes and what it's named.
-            Text(
-                "An Emulator's own settings are changed in it during a Play, but for a DOS Game's, in its own settings file, "
-                    + "opened from its DOSBox Staging settings on Game detail. "
-                    + "Amiberry plays on its own AROS until there's a Kickstart in the Data folder's Emulators/Amiberry/ROMs. "
-                    + "DOSBox Staging plays MIDI music with the SoundFont it's installed with; a DOS Game's own settings can choose "
-                    + "another from the Data folder's Emulators/DOSBox Staging/SoundFonts, or an MT-32 with its ROMs in MT-32 ROMs beside it."
-            )
-            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            // Only what nothing else says, and kept short: the Status column tells of a version, the Windows base row of 86Box's
+            // need, and Play's refusals what's missing and where it goes.
+            Text("An Emulator's own settings are changed in it during a Play.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let installError { ErrorText(installError, font: .callout) }
             ForEach(Emulator.all.filter(\.isLudeums), id: \.bundleIdentifier) { emulator in
                 if let failed = services.tasks.items.first(where: { $0.subject == .emulator(emulator) }),
@@ -269,7 +263,8 @@ struct EmulatorsSheet: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 720)
+        // Wide enough for the grid, which the sheet doesn't grow to fit: a grid wider than this spills into the padding.
+        .frame(minWidth: 780)
         .task { platforms = (try? services.journal?.platformCounts()) ?? [] }
     }
 
