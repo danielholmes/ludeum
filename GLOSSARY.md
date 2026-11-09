@@ -59,7 +59,7 @@ A file that comes with a downloaded game but isn't part of it: a readme or link 
 _Avoid_: Extra (that's an Attachment's), junk
 
 **Standard name**:
-The name No-Intro would give a ROM (Redump, on disc Platforms): its Game's (or Bundle's) name written their way, its Regions as its region tag, and the rest of what its name says about its Version and Disc in their form, without what says nothing about them. So `Super Mario World (U) [!]` with Regions USA has the Standard name `Super Mario World (USA)`, and `The Legend of Zelda: Spirit Tracks`' ROM `Legend of Zelda, The - Spirit Tracks (…)`. A ROM with no Regions has no region tag. A tag it can't place, such as a scene group's or an edition's, is kept unless I choose to drop it.
+The name No-Intro would give a ROM (Redump, on disc Platforms): its Game's (or Bundle's) name written their way, its Regions as its region tag, and the rest of what its name says about its Version and Disc in their form, without what says nothing about them. So `Super Mario World (U) [!]` with Regions USA has the Standard name `Super Mario World (USA)`, and `The Legend of Zelda: Spirit Tracks`' ROM `Legend of Zelda, The - Spirit Tracks (…)`. A ROM with no Regions has no region tag. A tag it can't place, such as a scene group's or an edition's, is kept at a Rename unless I choose to drop it, and dropped at Add ROM unless I choose to keep it.
 _Avoid_: Proposed name, canonical name, No-Intro name
 
 **Rename**:
