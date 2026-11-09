@@ -349,21 +349,39 @@ private func put(_ data: Data, at file: URL) throws {
     let root = FileManager.default.temporaryDirectory.appending(path: "86box storage \(UUID().uuidString)", directoryHint: .isDirectory)
     var ludeum: LudeumFolder { LudeumFolder(url: root.appending(path: "Ludeum", directoryHint: .isDirectory)) }
 
-    @Test func theyCountInTheDataFolder() throws {
+    @Test func theyCountOnWindowssRowInTheDataFolder() throws {
         try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
         try put(Data(count: 1000), at: ludeum.windowsBase)
         try put(Data(count: 234), at: ludeum.gameDisk(ofROM: "Z (Europe)"))
 
         let stats = StorageStats.measure(ludeum, journal: nil, cache: root.appending(path: "no cache"))
 
-        #expect(stats.gameDisks == 1234)
+        #expect(stats.platforms.map(\.name) == ["PC – Windows"])
+        #expect(stats.platforms[0].gameDisks == 1234)
+        #expect(stats.platforms[0].total == 1234)
+        #expect(stats.platforms[0].notAROM == 0)
         #expect(stats.dataFolder == 1234)
+    }
+
+    @Test func windowsAndDOSHaveARowEach() throws {
+        try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
+        try put(Data(count: 1000), at: ludeum.windowsBase)
+        try put(Data(count: 5), at: ludeum.roms.appending(path: "Windows/stray.txt"))
+        try put(Data(count: 7), at: ludeum.roms.appending(path: "DOS/stray.txt"))
+
+        let stats = StorageStats.measure(ludeum, journal: nil, cache: root.appending(path: "no cache"))
+
+        #expect(stats.platforms.map(\.name) == ["PC – Windows", "PC – DOS"])
+        #expect(stats.platforms.map(\.gameDisks) == [1000, 0])
+        #expect(stats.platforms.map(\.total) == [1005, 7])
+        #expect(stats.platforms.map(\.notAROM) == [5, 7])
+        #expect(stats.dataFolder == 1012)
     }
 
     @Test func noneIsNothing() throws {
         try FileManager.default.createDirectory(at: ludeum.data, withIntermediateDirectories: true)
 
-        #expect(StorageStats.measure(ludeum, journal: nil, cache: root.appending(path: "no cache")).gameDisks == 0)
+        #expect(StorageStats.measure(ludeum, journal: nil, cache: root.appending(path: "no cache")).platforms.isEmpty)
     }
 }
 

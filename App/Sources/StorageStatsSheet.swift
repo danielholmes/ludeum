@@ -18,8 +18,8 @@ struct StorageStatsSheet: View {
                 ProgressView("Measuring…").frame(maxWidth: .infinity, minHeight: 200)
             }
             Text(
-                "Sizes are of the files themselves, so one Dropbox keeps online-only counts in full. "
-                    + "Not a ROM is what's in a ROM folder that no ROM is made of."
+                "Sizes are of the files themselves, so one Dropbox keeps online-only counts in full."
+                    + (stats.map(hasNotAROM) == true ? " Not a ROM is what's in a ROM folder that no ROM is made of." : "")
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
@@ -45,7 +45,10 @@ struct StorageStatsSheet: View {
     }
 
     private func table(_ stats: StorageStats) -> some View {
-        ScrollView {
+        // Columns with nothing in them on any row are left out.
+        let showsNotAROM = hasNotAROM(stats)
+        let hasGameDisks = stats.platforms.contains { $0.gameDisks > 0 }
+        return ScrollView {
             Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 8) {
                 GridRow {
                     Text("")
@@ -54,28 +57,32 @@ struct StorageStatsSheet: View {
                     Text("Playable").gridColumnAlignment(.trailing)
                     Text("Archived").gridColumnAlignment(.trailing)
                     Text("Not compacted").gridColumnAlignment(.trailing)
-                    Text("Not a ROM").gridColumnAlignment(.trailing)
+                    if showsNotAROM { Text("Not a ROM").gridColumnAlignment(.trailing) }
+                    if hasGameDisks {
+                        Text("Game disks").gridColumnAlignment(.trailing)
+                            .help("86Box's Windows base and the game disks standing on it, which the Total includes")
+                    }
                 }
                 .font(.callout.bold()).foregroundStyle(.secondary)
                 Divider()
                 ForEach(stats.platforms) { row in
                     GridRow {
                         platformName(row)
-                        if row.unreadable, row.total == 0 {
+                        if row.unreadable, row.romFolder == 0 {
                             Label("Couldn't read", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                                .gridCellColumns(6)
+                                .gridCellColumns(showsNotAROM ? 6 : 5)
                         } else {
                             sizeText(row.total)
                             roms(row)
                             tally(row.playable)
                             tally(row.archived)
                             Text(row.notCompacted == 0 ? "" : "\(row.notCompacted)").monospacedDigit()
-                            sizeText(row.notAROM)
+                            if showsNotAROM { sizeText(row.notAROM) }
                         }
+                        if hasGameDisks { sizeText(row.gameDisks) }
                     }
                 }
                 totalRow(Text("Attachments"), stats.attachments)
-                if stats.gameDisks > 0 { totalRow(Text("Windows base and game disks"), stats.gameDisks) }
                 totalRow(Text("Backups"), stats.backups)
                 Divider()
                 totalRow(Text("Data folder \(Text("in Dropbox").foregroundStyle(.secondary))"), stats.dataFolder).font(.headline)
@@ -87,6 +94,9 @@ struct StorageStatsSheet: View {
         }
         .frame(minHeight: 200, maxHeight: 560)
     }
+
+    /// Whether any ROM folder has something in it no ROM is made of.
+    private func hasNotAROM(_ stats: StorageStats) -> Bool { stats.platforms.contains { $0.notAROM > 0 } }
 
     private func platformName(_ row: PlatformStorage) -> some View {
         HStack(spacing: 4) {

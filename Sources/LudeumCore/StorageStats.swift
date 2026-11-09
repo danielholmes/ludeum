@@ -4,20 +4,19 @@ import GRDB
 /// How much room everything Ludeum keeps takes up, measured from the files themselves each time: their logical sizes,
 /// so a file Dropbox keeps online-only counts in full. Hidden files are left out, as an Import leaves them out.
 public struct StorageStats: Sendable, Equatable {
-    /// One row per Platform group with a ROM folder that has anything in it, largest first.
+    /// One row per Platform group with a ROM folder that has anything in it, largest first, but PC's Platforms have one
+    /// each. Windows's has the Windows base and game disks too (ADR 0041), so it's there with only those.
     public var platforms: [PlatformStorage] = []
     public var backups: Int64 = 0
     /// Attachments' files.
     public var attachments: Int64 = 0
-    /// The Windows base and the game disks standing on it (ADR 0041).
-    public var gameDisks: Int64 = 0
     /// The live journal, outside the Data folder.
     public var journal: Int64 = 0
     /// What can always be fetched again, outside the Ludeum folder.
     public var cache: Int64 = 0
 
     /// What I keep in Dropbox.
-    public var dataFolder: Int64 { platforms.reduce(0) { $0 + $1.total } + attachments + gameDisks + backups }
+    public var dataFolder: Int64 { platforms.reduce(0) { $0 + $1.total } + attachments + backups }
     public var total: Int64 { dataFolder + journal + cache }
 
     /// Measures it all. Slow for a big library: run it off the main thread.
@@ -30,9 +29,13 @@ public struct StorageStats: Sendable, Equatable {
             measured.missing = missing[romFolder.platformId] ?? 0
             rows[measured.id] = rows[measured.id].map { $0.adding(measured) } ?? measured
         }
+        let gameDisks = Sizes.total(in: folder.eightySixBoxGameDisks)
+        if gameDisks > 0 {
+            let windows = PlatformStorage.rowID(ROMPlatform.windows)
+            rows[windows, default: PlatformStorage(id: windows)].gameDisks = gameDisks
+        }
         stats.platforms = rows.values.sorted { $0.total > $1.total }
         stats.attachments = Sizes.total(in: folder.attachments)
-        stats.gameDisks = Sizes.total(in: folder.eightySixBoxGameDisks)
         stats.backups = Sizes.total(in: folder.backups)
         stats.journal = ["journal.sqlite", "journal.sqlite-wal", "journal.sqlite-shm"]
             .reduce(0) { $0 + Sizes.size(of: folder.url.appending(path: $1)) }
@@ -58,14 +61,31 @@ public struct ROMTally: Sendable, Equatable {
 public struct PlatformStorage: Sendable, Equatable, Identifiable {
     /// The IGDB platform it shows under.
     public let id: Int64
-    /// The Platform's name, or its group's.
-    public var name: String { PlatformGroups.groupName(id) ?? ROMPlatform.all[id]?.name ?? "Platform \(id)" }
+    /// The Platform's name, or its group's, with its ROM folder's after it when it has a row of its own in a group.
+    public var name: String {
+        if Self.ownRows.contains(id), let group = PlatformGroups.groupName(id), let platform = ROMPlatform.all[id] {
+            return "\(group) – \(platform.folderName)"
+        }
+        return PlatformGroups.groupName(id) ?? ROMPlatform.all[id]?.name ?? "Platform \(id)"
+    }
+
+    /// Platforms with a row each though they're in a group: PC's, whose ROMs and Emulators have nothing in common.
+    static let ownRows: Set<Int64> = [ROMPlatform.windows, ROMPlatform.dos]
+
+    /// The id of the row a Platform's ROM folder is measured under.
+    static func rowID(_ platformId: Int64) -> Int64 {
+        ownRows.contains(platformId) ? platformId : PlatformGroups.shownID(platformId)
+    }
+    /// Everything in its ROM folder, and its game disks.
+    public var total: Int64 { romFolder + gameDisks }
     /// Everything in its ROM folder.
-    public var total: Int64 = 0
+    public var romFolder: Int64 = 0
+    /// The Windows base and the game disks standing on it (ADR 0041), on PC's row.
+    public var gameDisks: Int64 = 0
     public var playable = ROMTally()
     public var archived = ROMTally()
     /// What's in its ROM folder that no ROM is made of.
-    public var notAROM: Int64 { total - playable.bytes - archived.bytes }
+    public var notAROM: Int64 { romFolder - playable.bytes - archived.bytes }
     /// Its present ROMs.
     public var roms: Int { playable.count + archived.count }
     /// ROMs the journal has marked missing, which take no room.
@@ -80,7 +100,8 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
     /// Both rows together, under this one's Platform.
     func adding(_ other: Self) -> Self {
         var sum = self
-        sum.total += other.total
+        sum.romFolder += other.romFolder
+        sum.gameDisks += other.gameDisks
         sum.playable = playable + other.playable
         sum.archived = archived + other.archived
         sum.missing += other.missing
@@ -93,13 +114,13 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
     /// Nil when the folder isn't there or has nothing in it.
     static func measure(_ folder: ROMFolder) -> PlatformStorage? {
         guard FileManager.default.fileExists(atPath: folder.url.path(percentEncoded: false)) else { return nil }
-        var row = PlatformStorage(id: PlatformGroups.shownID(folder.platformId))
+        var row = PlatformStorage(id: rowID(folder.platformId))
         guard let roms = try? folder.scan(), let sizes = try? Sizes.files(in: folder.url) else {
             row.unreadable = true
             return row
         }
         guard !sizes.isEmpty else { return nil }
-        row.total = sizes.values.reduce(0, +)
+        row.romFolder = sizes.values.reduce(0, +)
         // A file two ROMs are made of (a loose playlist's Discs, each a ROM too) counts under the first.
         var claimed: Set<String> = []
         for rom in roms {
