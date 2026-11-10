@@ -82,7 +82,11 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
     public var romFolder: Int64 = 0
     /// The Windows base and the game disks standing on it (ADR 0041), on PC's row.
     public var gameDisks: Int64 = 0
-    public var playable = ROMTally()
+    /// Playable ROMs in the archive their Emulator opens directly.
+    public var compacted = ROMTally()
+    /// Playable ROMs whose files aren't in an archive, whether or not their Platform can Compact them.
+    public var unpacked = ROMTally()
+    public var playable: ROMTally { compacted + unpacked }
     public var archived = ROMTally()
     /// What's in its ROM folder that no ROM is made of.
     public var notAROM: Int64 { romFolder - playable.bytes - archived.bytes }
@@ -90,8 +94,6 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
     public var roms: Int { playable.count + archived.count }
     /// ROMs the journal has marked missing, which take no room.
     public var missing = 0
-    /// Present ROMs on a Platform whose Emulator opens an archive, not yet Compacted into it.
-    public var notCompacted = 0
     /// ROMs kept in more than one form at once, e.g. a Playable copy beside its Archived `.7z`, wasting room.
     public var inBothForms = 0
     /// Its ROM folder, or one of its group's, is there but couldn't be read, so the figures leave it out.
@@ -102,10 +104,10 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
         var sum = self
         sum.romFolder += other.romFolder
         sum.gameDisks += other.gameDisks
-        sum.playable = playable + other.playable
+        sum.compacted = compacted + other.compacted
+        sum.unpacked = unpacked + other.unpacked
         sum.archived = archived + other.archived
         sum.missing += other.missing
-        sum.notCompacted += other.notCompacted
         sum.inBothForms += other.inBothForms
         sum.unreadable = unreadable || other.unreadable
         return sum
@@ -135,13 +137,12 @@ public struct PlatformStorage: Sendable, Equatable, Identifiable {
             if rom.archived {
                 row.archived.count += 1
                 row.archived.bytes += bytes
+            } else if let compact = folder.compactExtension, rom.ready?.pathExtension.lowercased() == compact {
+                row.compacted.count += 1
+                row.compacted.bytes += bytes
             } else {
-                row.playable.count += 1
-                row.playable.bytes += bytes
-            }
-            if let file = rom.ready ?? rom.archive, ROMPlatform.all[folder.platformId]?.canCompact(fileName: file.lastPathComponent) == true
-            {
-                row.notCompacted += 1
+                row.unpacked.count += 1
+                row.unpacked.bytes += bytes
             }
             if rom.inBothForms { row.inBothForms += 1 }
         }

@@ -18,7 +18,7 @@ struct StorageStatsSheet: View {
                 ProgressView("Measuring…").frame(maxWidth: .infinity, minHeight: 200)
             }
             Text(
-                "Sizes are of the files themselves, so one Dropbox keeps online-only counts in full."
+                "Each file counts at its full size, even if Dropbox keeps it online-only and it takes no room on this Mac."
                     + (stats.map(hasNotAROM) == true ? " Not a ROM is what's in a ROM folder that no ROM is made of." : "")
             )
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -52,11 +52,20 @@ struct StorageStatsSheet: View {
             Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 8) {
                 GridRow {
                     Text("")
+                    Text("")
+                    Text("")
+                    Text("Playable").gridCellColumns(2).gridCellAnchor(.center)
+                }
+                .font(.callout.bold()).foregroundStyle(.secondary)
+                GridRow {
+                    Text("")
                     Text("Total").gridColumnAlignment(.trailing)
                     Text("ROMs").gridColumnAlignment(.trailing)
-                    Text("Playable").gridColumnAlignment(.trailing)
+                    Text("Compacted").gridColumnAlignment(.trailing)
+                        .help("In the archive its Emulator opens directly")
+                    Text("Unpacked").gridColumnAlignment(.trailing)
+                        .help("Not in an archive; on a Platform that can Compact them, they wait in the Review queue")
                     Text("Archived").gridColumnAlignment(.trailing)
-                    Text("Not compacted").gridColumnAlignment(.trailing)
                     if showsNotAROM { Text("Not a ROM").gridColumnAlignment(.trailing) }
                     if hasGameDisks {
                         Text("Game disks").gridColumnAlignment(.trailing)
@@ -74,9 +83,9 @@ struct StorageStatsSheet: View {
                         } else {
                             sizeText(row.total)
                             roms(row)
-                            tally(row.playable)
+                            tally(row.compacted)
+                            tally(row.unpacked)
                             tally(row.archived)
-                            Text(row.notCompacted == 0 ? "" : "\(row.notCompacted)").monospacedDigit()
                             if showsNotAROM { sizeText(row.notAROM) }
                         }
                         if hasGameDisks { sizeText(row.gameDisks) }

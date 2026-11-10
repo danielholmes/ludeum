@@ -39,6 +39,8 @@ import Testing
         #expect(row.id == ROMPlatform.ps2)
         #expect(row.total == 15)
         #expect(row.playable == .init(count: 1, bytes: 10))
+        #expect(row.unpacked == .init(count: 1, bytes: 10))
+        #expect(row.compacted.count == 0)
         #expect(row.archived == .init(count: 1, bytes: 5))
         #expect(row.roms == 2)
     }
@@ -83,7 +85,7 @@ import Testing
         #expect(row.total == 10)
     }
 
-    @Test func presentROMsNotYetCompactedAreCounted() throws {
+    @Test func anArchiveIsPlayableWhereItsEmulatorOpensIt() throws {
         let snes = try romFolder(19)
         try add("Super Metroid (USA).7z", bytes: 3, to: snes)
         try add("Zelda (USA).sfc", bytes: 10, to: snes)
@@ -96,17 +98,11 @@ import Testing
         let rows = measure().platforms
         let snesRow = try #require(rows.first { $0.id == 19 })
         let n64Row = try #require(rows.first { $0.id == 4 })
-        #expect(snesRow.playable.count == 2)
-        #expect(snesRow.notCompacted == 1)
+        #expect(snesRow.compacted == .init(count: 1, bytes: 3))
+        #expect(snesRow.unpacked == .init(count: 1, bytes: 10))
         #expect(n64Row.archived.count == 2)
-        #expect(n64Row.notCompacted == 3)
-    }
-
-    @Test func aPlatformThatCantBeCompactedHasNoneNotCompacted() throws {
-        let ps2 = try romFolder(ROMPlatform.ps2)
-        try add("Okami (USA).iso", bytes: 10, to: ps2)
-
-        #expect(try #require(measure().platforms.first).notCompacted == 0)
+        #expect(n64Row.compacted == .init(count: 1, bytes: 5))
+        #expect(n64Row.unpacked == .init(count: 1, bytes: 20))
     }
 
     @Test func aPlayableCopyBesideItsArchiveIsInBothFormsAndBothTakeRoom() throws {
@@ -153,7 +149,6 @@ import Testing
         #expect(rows.map(\.name) == ["Super Nintendo Entertainment System", "Game Boy"])
         #expect(rows[0].total == 23)
         #expect(rows[0].playable == .init(count: 3, bytes: 23))
-        #expect(rows[0].notCompacted == 1)
         #expect(rows[0].missing == 1)
     }
 
