@@ -113,6 +113,8 @@ public struct GameSearch: Sendable {
     /// IGDB games matching `query` and `filters`, optionally on one platform, best match first (most
     /// rated first with no query). DLC, Expansions, Seasons, Packs and Updates are left out; Mods are
     /// shown and labelled. With `expansions` it finds only Expansions, Standalone Expansions and DLC instead.
+    /// On one platform it also finds, after IGDB's, the IGDB games my Games there are linked to whose names contain the
+    /// text: IGDB may not list that platform for them (they were added with "Different platform…"), or any at all.
     public func search(
         _ query: String, platform: Int64? = nil, filters: GameSearchFilters = .init(), expansions: Bool = false
     ) async throws -> [GameSearchResult] {
@@ -121,7 +123,13 @@ public struct GameSearch: Sendable {
         let search = IGDBSearch(
             name: query, platformID: platform.map(Int.init), genreIDs: filters.genres.map(\.id),
             themeIDs: filters.themes.map(\.id), companyID: filters.company?.id, expansions: expansions)
-        let ids = try await igdb.search([search])[search] ?? []
+        var ids = try await igdb.search([search])[search] ?? []
+        if let platform, filters.isEmpty {
+            for linked in try journal.igdbGameIds(onPlatform: platform, namesContaining: query).map(Int.init)
+            where !ids.contains(linked) {
+                ids.append(linked)
+            }
+        }
         let games = try await igdb.games(ids: ids)
         return try ids.compactMap { games[$0] }.filter { expansions ? $0.isExpansion : !isAddOn($0) }.map(result)
     }
@@ -205,10 +213,16 @@ public struct GameSearch: Sendable {
     /// The result's chips as the Library is now: IGDB's platforms, then Platforms a Game holds this
     /// IGDB link on that IGDB doesn't list (added with "Different platform…").
     public func currentChips(for result: GameSearchResult) throws -> [PlatformChip] {
-        let listed = try result.chips.map { chip in
-            PlatformChip(platform: chip.platform, game: try journal.gameID(igdbGameId: result.igdbGameId, platformId: chip.platform.id))
+        try chips(igdbGameId: result.igdbGameId, listed: result.chips.map(\.platform))
+    }
+
+    /// IGDB's platforms for the game, each with the Game it is there, then Platforms a Game holds this IGDB link on that
+    /// IGDB doesn't list.
+    private func chips(igdbGameId: Int64, listed platforms: [IGDBPlatform]) throws -> [PlatformChip] {
+        let listed = try platforms.map { platform in
+            PlatformChip(platform: platform, game: try journal.gameID(igdbGameId: igdbGameId, platformId: platform.id))
         }
-        let others = try journal.games(igdbGameId: result.igdbGameId).filter { game in
+        let others = try journal.games(igdbGameId: igdbGameId).filter { game in
             !listed.contains { $0.platform.id == game.platformId }
         }
         return try listed
@@ -225,9 +239,7 @@ public struct GameSearch: Sendable {
             guard let id = p["id"]?.int, let name = p["name"]?.string else { return nil }
             return IGDBPlatform(id: Int64(id), name: name, abbreviation: p["abbreviation"]?.string)
         }
-        let chips = try platforms.map {
-            PlatformChip(platform: $0, game: try journal.gameID(igdbGameId: Int64(game.id), platformId: $0.id))
-        }
+        let chips = try chips(igdbGameId: Int64(game.id), listed: platforms)
         let released = game.record["first_release_date"]?.number.map { Date(timeIntervalSince1970: $0) }
         let year = released.map { Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: $0).year! }
         let type = game.record["game_type"]?.int ?? 0

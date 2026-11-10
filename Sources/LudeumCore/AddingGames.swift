@@ -56,6 +56,28 @@ extension LudeumStore {
         return try ids.map(game)
     }
 
+    /// The IGDB games that Games on `platformId` are linked to, whose display, own or IGDB name contains `text` (as names
+    /// are compared, so "hare brained" finds "Hare-Brained"), by Game id.
+    public func igdbGameIds(onPlatform platformId: Int64, namesContaining text: String) throws -> [Int64] {
+        let key = nameKey(cleanName(text))
+        guard !key.isEmpty else { return [] }
+        return try db.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT igdbGameId, name, igdbName, nameOverride FROM game
+                    WHERE platformId = ? AND igdbGameId IS NOT NULL ORDER BY id
+                    """,
+                arguments: [platformId]
+            )
+            .filter { row in
+                [row["nameOverride"], row["igdbName"], row["name"]].compactMap { (n: String?) in n }
+                    .contains { nameKey(cleanName($0)).contains(key) }
+            }
+            .map { $0["igdbGameId"] as Int64 }
+        }
+    }
+
     /// Gives a hand-made Game its IGDB link. Its name then follows IGDB unless overridden.
     /// Links a Game to IGDB. `replacing` changes an existing link, to fix a mistaken one; otherwise a
     /// linked Game is refused. `platform` moves the Game to another Platform too, only while it has no

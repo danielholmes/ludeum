@@ -825,7 +825,7 @@ private struct MissingROMsDetail: View {
     @State private var picked: PickedROM?
 
     /// Its Platform keeps each ROM in a subfolder, so a folder is picked.
-    private var picksFolder: Bool { ROMPlatform.all[item.game.platformId]?.archiving == .intoFolder }
+    private var picksFolder: Bool { picksROMFolder(platformId: item.game.platformId) }
 
     var body: some View {
         Form {
@@ -871,14 +871,9 @@ private struct MissingROMsDetail: View {
     }
 
     private func addROM() {
-        guard let urls = pickROM(folders: picksFolder) else { return }
-        let platform = item.game.platformId
         Task {
             do {
-                let read = try await readPicked(urls)
-                guard read.platforms.contains(platform) else {
-                    throw AddROMError.platformWontReadIt(ROMPlatform.all[platform]?.name ?? "Its Platform")
-                }
+                guard let read = try await pickROM(for: item.game) else { return }
                 failed(nil)
                 picked = read
             } catch {

@@ -439,8 +439,22 @@ struct AddROMConfirmation: View {
     }
 }
 
-/// A Missing ROMs item's Add ROM: pick a file (or a folder, where the Platform keeps its ROMs in subfolders), then Add it
-/// to the Game.
+/// Whether a ROM for a Game on this Platform is picked as a folder, the Platform keeping its ROMs in subfolders, rather
+/// than as a file.
+func picksROMFolder(platformId: Int64) -> Bool { ROMPlatform.all[platformId]?.archiving == .intoFolder }
+
+/// Asks for a ROM for the Game and reads it. Nil when cancelled; refused when its Platform's ROM folder won't read it.
+@MainActor func pickROM(for game: Game) async throws -> PickedROM? {
+    guard let urls = pickROM(folders: picksROMFolder(platformId: game.platformId)) else { return nil }
+    let read = try await readPicked(urls)
+    guard read.platforms.contains(game.platformId) else {
+        throw AddROMError.platformWontReadIt(ROMPlatform.all[game.platformId]?.name ?? "Its Platform")
+    }
+    return read
+}
+
+/// Add ROM for a Game already in the journal, from its page or a Missing ROMs item: pick a file (or a folder, where the
+/// Platform keeps its ROMs in subfolders), then Add it to the Game, with no search.
 struct AddROMToGameSheet: View {
     let services: Services
     let game: Game

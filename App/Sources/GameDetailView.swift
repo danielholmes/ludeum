@@ -33,6 +33,8 @@ struct GameDetailView: View {
     @State private var editingCopy: CopyEdit?
     @State private var deletingCopy: Copy?
     @State private var deletingROM: LudeumROM?
+    /// A ROM picked to Add to this Game, until it's Added or cancelled.
+    @State private var pickedROM: PickedROM?
     @State private var emulatorSettings = EmulatorSettings()
     @State private var showingHistory = false
     /// Each present ROM file's created and modified dates, by ROM id, read from disk.
@@ -208,6 +210,13 @@ struct GameDetailView: View {
                 BundleCopyRows(shares: bundles, open: open)
                 Button("Add Copy…", systemImage: "plus") { editingCopy = .new }
                     .buttonStyle(.hover).help("A physical or digital Copy I own, or once owned")
+                if ROMPlatform.all[game.platformId] != nil {
+                    Button(
+                        picksROMFolder(platformId: game.platformId) ? "Add ROM folder…" : "Add ROM file…",
+                        systemImage: "plus"
+                    ) { addROM(to: game) }
+                    .buttonStyle(.hover).help("Choose a ROM for this Game: it goes into its ROM folder, with no search")
+                }
             }
 
             // Save states: DuckStation's, backed up into the Data folder.
@@ -333,6 +342,9 @@ struct GameDetailView: View {
                 services.changes.changed()
             }
         }
+        .sheet(item: $pickedROM) { picked in
+            AddROMToGameSheet(services: services, game: game, picked: picked, missingROMs: roms.filter(\.missing).count)
+        }
         .sheet(item: $editingCopy) { edit in
             CopySheet(services: services, game: id, edit: edit) {
                 editingCopy = nil
@@ -439,6 +451,19 @@ struct GameDetailView: View {
         guard let journal = services.journal, let game else { return }
         baseGame = try? journal.baseGame(of: game, facts: facts)
         expansions = (try? journal.expansions(of: game, facts: facts)) ?? []
+    }
+
+    /// Asks for a ROM to Add to this Game, then confirms where it goes.
+    private func addROM(to game: Game) {
+        Task {
+            do {
+                guard let picked = try await pickROM(for: game) else { return }
+                error = nil
+                pickedROM = picked
+            } catch {
+                self.error = journalErrorText(error)
+            }
+        }
     }
 
     /// Runs a journal change, then reloads every screen showing the journal.

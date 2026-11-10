@@ -117,6 +117,29 @@ import Testing
         #expect(try await search.search("super metroid", platform: 5).isEmpty)
     }
 
+    @Test func aPlatformSearchFindsAGameThereWhoseIGDBGameIGDBDoesntListThere() async throws {
+        // IGDB lists no platforms for it, so it was added on DOS with "Different platform…".
+        h.internet.addGame(70009, "The Bugs Bunny Hare-Brained Adventure", fields: [:])
+        h.internet.addGame(1, "Bugs Bunny: Lost in Time", fields: ["platforms": [["id": 13, "name": "DOS"]]])
+        h.internet.addSearch("bugs bunny hare-brained", platform: 13, results: [])
+        h.internet.addSearch("bugs bunny", platform: 13, results: [1])
+        try j.journal.addPlatform(id: 13, name: "DOS")
+        let dos = try j.journal.addGame(
+            platformId: 13, name: "The Bugs Bunny Hare-Brained Adventure", igdbGameId: 70009,
+            igdbName: "The Bugs Bunny Hare-Brained Adventure")
+        try j.journal.addPlatform(id: 6, name: "PC")
+        try j.journal.addGame(platformId: 6, name: "Hare-Brained Elsewhere", igdbGameId: 5, igdbName: "Hare-Brained Elsewhere")
+
+        let named = try await search.search("Bugs Bunny Hare-Brained", platform: 13)
+        let partly = try await search.search("bugs bunny", platform: 13)
+
+        #expect(named.map(\.igdbGameId) == [70009])
+        #expect(named[0].chips.map(\.platform.id) == [13])
+        #expect(named[0].chips[0].game == dos)
+        #expect(partly.map(\.igdbGameId) == [1, 70009])
+        #expect(try await search.search("bugs bunny hare-brained", platform: 6).isEmpty)
+    }
+
     @Test func addingFromAChipTakesIGDBsNameAndLink() async throws {
         h.internet.addGame(1103, "Super Metroid", fields: ["platforms": [snes]])
         h.internet.addSearch("metroid", platform: nil, results: [1103])
@@ -182,7 +205,8 @@ import Testing
         let id = try search.add(result, on: IGDBPlatform(id: 130, name: "Nintendo Switch"))
 
         #expect(try j.journal.game(id).platformId == 130)
-        #expect(try await search.search("metroid").first?.chips.map(\.game) == [nil])
+        // Its chips list IGDB's platform, then mine, In Library.
+        #expect(try await search.search("metroid").first?.chips.map(\.game) == [nil, id])
     }
 }
 
