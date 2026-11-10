@@ -430,6 +430,16 @@ struct DOSArchiveTests {
         #expect(exists(ludeum.dosSoundFonts) && exists(ludeum.dosMT32ROMs))
     }
 
+    @Test func theStandingSettingsHaveNoJoystick() throws {
+        try install()
+
+        _ = try press(try dos())
+
+        let standing = try String(contentsOf: ludeum.dosBoxStagingStanding, encoding: .utf8).components(separatedBy: "\n")
+        #expect(standing.contains("[joystick]"))
+        #expect(standing.contains("joysticktype = none"))
+    }
+
     @Test func withNoProgramOrAtAPromptItStaysAtDriveC() throws {
         try install()
         let dos = try dos()

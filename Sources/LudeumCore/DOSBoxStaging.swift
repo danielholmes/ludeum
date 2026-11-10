@@ -178,6 +178,10 @@ public struct DOSBoxStagingSettings: Sendable {
             "[mt32]",
             "romdir = \(ludeum.dosMT32ROMs.path(percentEncoded: false))",
             "",
+            "# No joystick: there isn't one, and a game that finds Staging's emulated one stops to have it centred.",
+            "[joystick]",
+            "joysticktype = none",
+            "",
         ].joined(separator: "\n")
     }
 
