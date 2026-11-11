@@ -151,6 +151,8 @@ struct LibraryScreen: View {
                 case .platform: [KeyPathComparator(\LibraryRow.platformName, order: order)]
                 case .rating: [KeyPathComparator(\LibraryRow.ratingSortKey, order: order)]
                 case .intentSet: [KeyPathComparator(\LibraryRow.intentSetSortKey, order: order)]
+                // No column of their own: the sort menu shows them.
+                case .lastFinished, .firstFinished: []
                 }
             },
             set: { new in
@@ -266,6 +268,8 @@ func sortText(_ sort: LibrarySort) -> String {
     case .launchBoxPlayers: "LaunchBox players' score"
     case .played: "Played"
     case .childhood: "Childhood"
+    case .lastFinished: "Last finished"
+    case .firstFinished: "First finished"
     }
 }
 

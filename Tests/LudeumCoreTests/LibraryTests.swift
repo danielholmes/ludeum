@@ -53,6 +53,29 @@ import Testing
         #expect(!LibrarySort.childhood.defaultAscending)
     }
 
+    @Test func sortsByLastAndFirstFinished() throws {
+        // Super Metroid's one Finished Playthrough has no end date, so it sorts with the never Finished.
+        let castlevania = try h.journal.addGame(platformId: 19, name: "Castlevania IV")
+        let earthbound = try h.journal.addGame(platformId: 19, name: "EarthBound")
+        try h.journal.addPlaythrough(
+            castlevania, PlaythroughDraft(start: PartialDate("2010")!, end: PartialDate("2010-05")!, outcome: .finished))
+        try h.journal.addPlaythrough(
+            castlevania, PlaythroughDraft(start: PartialDate("2025")!, end: PartialDate("2025-02-01")!, outcome: .finished))
+        try h.journal.addPlaythrough(
+            earthbound, PlaythroughDraft(start: PartialDate("2018")!, end: PartialDate("2018-08")!, outcome: .finished))
+        // A Dropped Playthrough's end isn't a finish.
+        try h.journal.addPlaythrough(
+            earthbound, PlaythroughDraft(start: PartialDate("2026")!, end: PartialDate("2026-01")!, outcome: .dropped))
+        let rest = ["A Link to the Past", "Doom", "Super Metroid"]
+
+        #expect(try names(sort: .lastFinished, ascending: false) == ["Castlevania IV", "EarthBound"] + rest)
+        #expect(try names(sort: .lastFinished, ascending: true) == ["EarthBound", "Castlevania IV"] + rest)
+        #expect(try names(sort: .firstFinished, ascending: true) == ["Castlevania IV", "EarthBound"] + rest)
+        #expect(try names(sort: .firstFinished, ascending: false) == ["EarthBound", "Castlevania IV"] + rest)
+        #expect(!LibrarySort.lastFinished.defaultAscending)
+        #expect(LibrarySort.firstFinished.defaultAscending)
+    }
+
     @Test func filtersCombine() throws {
         #expect(try names(LibraryFilter(platformId: 19)) == ["A Link to the Past", "Super Metroid"])
         #expect(try names(LibraryFilter(rating: .unrated)) == ["Doom"])

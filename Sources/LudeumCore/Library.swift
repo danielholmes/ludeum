@@ -145,12 +145,18 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     /// Playing, then Finished, Dropped and never played.
     case played
     case childhood
+    /// When it was last Finished: the latest end date among its Finished Playthroughs.
+    case lastFinished
+    /// When it was first Finished: the earliest end date among its Finished Playthroughs. A Game Finished once sorts
+    /// the same by either; one Finished again sorts by its first finish here and its latest by `lastFinished`.
+    case firstFinished
 
-    /// The order choosing this sort starts in: A–Z for names and Platforms, oldest first for years, best and newest first otherwise.
+    /// The order choosing this sort starts in: A–Z for names and Platforms, oldest first for years and first finishes,
+    /// best and newest first otherwise.
     public var defaultAscending: Bool {
         switch self {
-        case .name, .platform, .year: true
-        case .rating, .intentSet, .igdbPlayers, .launchBoxPlayers, .played, .childhood: false
+        case .name, .platform, .year, .firstFinished: true
+        case .rating, .intentSet, .igdbPlayers, .launchBoxPlayers, .played, .childhood, .lastFinished: false
         }
     }
 
@@ -158,7 +164,7 @@ public enum LibrarySort: String, Sendable, CaseIterable {
     public var comesFromCache: Bool {
         switch self {
         case .year, .igdbPlayers, .launchBoxPlayers: true
-        case .name, .platform, .rating, .intentSet, .played, .childhood: false
+        case .name, .platform, .rating, .intentSet, .played, .childhood, .lastFinished, .firstFinished: false
         }
     }
 }
@@ -248,8 +254,8 @@ extension LudeumStore {
         }
     }
 
-    /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent)
-    /// sort last either way; ties go by name.
+    /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent, never Finished or
+    /// Finished only with no end date) sort last either way; ties go by name.
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool) throws -> [LibraryRow] {
         // A Bundle is never a Library row: its Games are (ADR 0016).
         var conditions = ["NOT g.bundle"]
@@ -341,6 +347,9 @@ extension LudeumStore {
             case .played:
                 "CASE WHEN playing THEN 3 WHEN outcomes LIKE '%finished%' THEN 2 WHEN outcomes LIKE '%dropped%' THEN 1 ELSE 0 END \(direction), \(name)"
             case .childhood: "g.childhood \(direction), \(name)"
+            // Partial dates sort as their text: a year-only end comes before that year's months.
+            case .lastFinished: "lastFinished IS NULL, lastFinished \(direction), \(name)"
+            case .firstFinished: "firstFinished IS NULL, firstFinished \(direction), \(name)"
             }
         let sql = """
             SELECT g.id, g.platformId, g.igdbGameId, g.intent, g.intentSetAt, g.childhood, g.wantToBuy,
@@ -350,6 +359,8 @@ extension LudeumStore {
                 EXISTS (SELECT 1 FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playing,
                 (SELECT MAX(start) FROM playthrough p WHERE p.gameId = g.id AND p.outcome IS NULL) AS playingSince,
                 (SELECT group_concat(DISTINCT outcome) FROM playthrough p WHERE p.gameId = g.id) AS outcomes,
+                (SELECT MAX("end") FROM playthrough p WHERE p.gameId = g.id AND p.outcome = 'finished') AS lastFinished,
+                (SELECT MIN("end") FROM playthrough p WHERE p.gameId = g.id AND p.outcome = 'finished') AS firstFinished,
                 \(Self.hasROMSQL) AS hasROM,
                 EXISTS (SELECT 1 FROM rom WHERE \(Self.ofGameSQL) AND missing) AS hasMissingROM,
                 \(Self.archivedSQL) AS archived,
