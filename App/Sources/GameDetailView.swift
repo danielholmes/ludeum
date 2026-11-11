@@ -211,11 +211,8 @@ struct GameDetailView: View {
                 Button("Add Copy…", systemImage: "plus") { editingCopy = .new }
                     .buttonStyle(.hover).help("A physical or digital Copy I own, or once owned")
                 if ROMPlatform.all[game.platformId] != nil {
-                    Button(
-                        picksROMFolder(platformId: game.platformId) ? "Add ROM folder…" : "Add ROM file…",
-                        systemImage: "plus"
-                    ) { addROM(to: game) }
-                    .buttonStyle(.hover).help("Choose a ROM for this Game: it goes into its ROM folder, with no search")
+                    Button("Add ROM…", systemImage: "plus") { addROM(to: game) }
+                        .buttonStyle(.hover).help("Choose a ROM for this Game: it goes into its ROM folder, with no search")
                 }
             }
 

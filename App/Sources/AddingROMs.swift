@@ -10,21 +10,19 @@ struct PickedROM: Identifiable {
     var id: [URL] { source.urls }
 }
 
-/// Asks for a ROM to Add: its file, an archive of it, its folder, or each of its Discs. `folders` picks only folders
-/// (a Platform whose ROMs are kept in subfolders), false only one file, nil anything. Nil when cancelled.
-@MainActor func pickROM(folders: Bool?) -> [URL]? {
+/// Asks for a ROM to Add: its file, an archive of it, its folder, or each of its Discs, whatever its Platform. `several`
+/// lets several ROMs be picked at once, to add one after another; otherwise what's picked is one game's. Nil when
+/// cancelled.
+@MainActor func pickROM(several: Bool) -> [URL]? {
     let panel = NSOpenPanel()
-    panel.canChooseFiles = folders != true
-    panel.canChooseDirectories = folders != false
-    panel.allowsMultipleSelection = folders == nil
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = true
     panel.prompt = "Choose"
     panel.message =
-        switch folders {
-        case true?: "Choose the ROM's folder."
-        case false?: "Choose the ROM's file, or an archive of it."
-        case nil:
-            "Choose a ROM: its file, an archive of it, its folder, or each of its Discs. Choose several ROMs to add them one after another."
-        }
+        several
+        ? "Choose a ROM: its file, an archive of it, its folder, or each of its Discs. Choose several ROMs to add them one after another."
+        : "Choose the ROM: its file, an archive of it, its folder, or each of its Discs."
     return panel.runModal() == .OK && !panel.urls.isEmpty ? panel.urls : nil
 }
 
@@ -439,13 +437,10 @@ struct AddROMConfirmation: View {
     }
 }
 
-/// Whether a ROM for a Game on this Platform is picked as a folder, the Platform keeping its ROMs in subfolders, rather
-/// than as a file.
-func picksROMFolder(platformId: Int64) -> Bool { ROMPlatform.all[platformId]?.archiving == .intoFolder }
-
-/// Asks for a ROM for the Game and reads it. Nil when cancelled; refused when its Platform's ROM folder won't read it.
+/// Asks for a ROM for the Game, in any form Add ROM from the toolbar takes, and reads it. Nil when cancelled; refused when
+/// its Platform's ROM folder won't read it.
 @MainActor func pickROM(for game: Game) async throws -> PickedROM? {
-    guard let urls = pickROM(folders: picksROMFolder(platformId: game.platformId)) else { return nil }
+    guard let urls = pickROM(several: false) else { return nil }
     let read = try await readPicked(urls)
     guard read.platforms.contains(game.platformId) else {
         throw AddROMError.platformWontReadIt(ROMPlatform.all[game.platformId]?.name ?? "Its Platform")
@@ -453,8 +448,8 @@ func picksROMFolder(platformId: Int64) -> Bool { ROMPlatform.all[platformId]?.ar
     return read
 }
 
-/// Add ROM for a Game already in the journal, from its page or a Missing ROMs item: pick a file (or a folder, where the
-/// Platform keeps its ROMs in subfolders), then Add it to the Game, with no search.
+/// Add ROM for a Game already in the journal, from its page or a Missing ROMs item: pick its file, an archive of it, its
+/// folder or its Discs, then Add it to the Game, with no search.
 struct AddROMToGameSheet: View {
     let services: Services
     let game: Game

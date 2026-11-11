@@ -824,9 +824,6 @@ private struct MissingROMsDetail: View {
     let failed: (String?) -> Void
     @State private var picked: PickedROM?
 
-    /// Its Platform keeps each ROM in a subfolder, so a folder is picked.
-    private var picksFolder: Bool { picksROMFolder(platformId: item.game.platformId) }
-
     var body: some View {
         Form {
             Section {
@@ -847,7 +844,7 @@ private struct MissingROMsDetail: View {
             }
             Section("Missing ROMs") { ForEach(item.roms) { ROMRow(rom: $0) } }
             FlowLayout(spacing: 8) {
-                Button(picksFolder ? "Add ROM folder…" : "Add ROM file…", action: addROM)
+                Button("Add ROM…", action: addROM)
                     .help("Choose a ROM for this Game: it goes into its ROM folder, ready to Play")
                 Button(item.roms.count == 1 ? "Delete its missing ROM" : "Delete its \(item.roms.count) missing ROMs") {
                     guard let journal = services.journal else { return }

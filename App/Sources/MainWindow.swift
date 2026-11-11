@@ -46,7 +46,7 @@ struct MainWindow: View {
 
     /// Add ROM: asks for the ROM, then which game it is. Several ROMs picked at once go in for an Import to Match.
     private func addROM() {
-        guard let urls = pickROM(folders: nil) else { return }
+        guard let urls = pickROM(several: true) else { return }
         Task {
             do {
                 let sources = await ROMSource.split(urls)
