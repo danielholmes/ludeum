@@ -46,6 +46,80 @@ import Testing
     }
 }
 
+/// The migration that rebuilds `playthrough` with its CHECK that an ended Playthrough has an end date.
+@Suite struct PlaythroughEndMigrationTests {
+    @Test func keepsEveryRowWithItsTimestampsPlayersAndCopy() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: "v47 want to buy flag")
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform (id, name) VALUES (19, 'SNES');
+                    INSERT INTO game (id, platformId, name) VALUES (1, 19, 'Super Metroid');
+                    INSERT INTO copy (id, gameId, kind) VALUES (5, 1, 'physical');
+                    INSERT INTO player (id, firstName, lastName, colour) VALUES (3, 'Sam', 'Aran', 'blue');
+                    INSERT INTO playthrough (id, gameId, start, "end", outcome, notes, copyId) VALUES
+                        (7, 1, '2024-03', '2024-04', 'finished', '100%', 5),
+                        (8, 1, '2026', NULL, NULL, NULL, NULL);
+                    INSERT INTO playthroughPlayer (playthroughId, playerId) VALUES (7, 3);
+                    UPDATE playthrough SET createdAt = '2026-01-01 00:00:00.000', updatedAt = '2026-02-01 00:00:00.000';
+                    """)
+        }
+        let before = try db.read { db in try Row.fetchAll(db, sql: "SELECT * FROM playthrough ORDER BY id") }
+
+        try LudeumSchema.migrator.migrate(db)
+
+        let (after, players, foreignKeyProblems, attached) = try db.read { db in
+            (
+                try Row.fetchAll(db, sql: "SELECT * FROM playthrough ORDER BY id"),
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM playthroughPlayer"),
+                try Row.fetchAll(db, sql: "PRAGMA foreign_key_check"),
+                Set(try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE tbl_name = 'playthrough' AND type != 'table'"))
+            )
+        }
+        #expect(after == before)
+        #expect(players == 1)
+        #expect(foreignKeyProblems.isEmpty)
+        #expect(
+            attached == [
+                "playthrough_on_gameId", "playthrough_on_romId", "playthrough_on_copyId", "playthrough_createdAt",
+                "playthrough_updatedAt",
+            ])
+        // The timestamps' triggers still work.
+        try db.write { db in try db.execute(sql: "UPDATE playthrough SET notes = 'Again' WHERE id = 8") }
+        let updatedAt = try db.read { db in try String.fetchOne(db, sql: "SELECT updatedAt FROM playthrough WHERE id = 8") }
+        #expect(updatedAt != "2026-02-01 00:00:00.000")
+    }
+
+    @Test func failsChangingNothingWhileAnEndedPlaythroughHasNoEnd() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "migration \(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let db = try DatabaseQueue(path: directory.appending(path: "journal.sqlite").path(percentEncoded: false))
+        try LudeumSchema.migrator.migrate(db, upTo: "v47 want to buy flag")
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO platform (id, name) VALUES (19, 'SNES');
+                    INSERT INTO game (id, platformId, name) VALUES (1, 19, 'Super Metroid');
+                    INSERT INTO playthrough (gameId, start, outcome) VALUES (1, '2024', 'finished');
+                    """)
+        }
+
+        #expect(throws: DatabaseError.self) { try LudeumSchema.migrator.migrate(db) }
+        let (applied, count) = try db.read { db in
+            (try LudeumSchema.migrator.appliedMigrations(db).last, try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM playthrough"))
+        }
+        #expect(applied == "v47 want to buy flag")
+        #expect(count == 1)
+    }
+}
+
 @Suite struct PlaythroughTests {
     let h: LudeumHarness
     let game: GameID
@@ -80,6 +154,27 @@ import Testing
         }
         #expect(throws: LudeumError.endBeforeStart) {
             try h.journal.addPlaythrough(game, PlaythroughDraft(start: date("2024-03-10"), end: date("2024-03-09"), outcome: .finished))
+        }
+    }
+
+    @Test func refusesAFinishedOrDroppedPlaythroughWithNoEnd() throws {
+        for outcome in [Outcome.finished, .dropped] {
+            #expect(throws: LudeumError.endRequired) {
+                try h.journal.addPlaythrough(game, PlaythroughDraft(start: date("2024"), outcome: outcome))
+            }
+        }
+        let id = try h.journal.addPlaythrough(game, PlaythroughDraft(start: date("2024")))
+        #expect(throws: LudeumError.endRequired) {
+            try h.journal.updatePlaythrough(id, PlaythroughDraft(start: date("2024"), outcome: .finished))
+        }
+        #expect(try h.journal.playthroughs(game).map(\.draft) == [PlaythroughDraft(start: date("2024"))])
+    }
+
+    @Test func theJournalItselfRefusesAnEndedPlaythroughWithNoEnd() throws {
+        #expect(throws: DatabaseError.self) {
+            try h.journal.db.write { db in
+                try db.execute(sql: "INSERT INTO playthrough (gameId, start, outcome) VALUES (?, '2024', 'dropped')", arguments: [game])
+            }
         }
     }
 

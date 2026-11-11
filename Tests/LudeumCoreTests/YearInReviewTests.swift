@@ -89,16 +89,6 @@ import Testing
         #expect(r.summary.started == 1)
     }
 
-    @Test func anEndedPlaythroughWithNoEndDateCountsInItsStartYearMarked() throws {
-        let game = try h.addGame()
-        try play(game, start: "2022-03", .finished)
-
-        let r = try review(2022)
-        #expect(r.finished.map(\.endDateUnknown) == [true])
-        #expect(try review(2023).finished.isEmpty)
-        #expect(try h.journal.yearsInReview(LibraryFilter()) == [2022])
-    }
-
     @Test func libraryFiltersApply() throws {
         let a = try h.addGame("A")
         let b = try h.addGame("B")

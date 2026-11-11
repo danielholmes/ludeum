@@ -23,7 +23,7 @@ import Testing
         h.clock.advance(days: 1)
         try h.journal.setIntent(zelda, .upNext)
         try h.journal.setChildhood(zelda, true)
-        try h.journal.addPlaythrough(metroid, PlaythroughDraft(start: PartialDate("2024")!, outcome: .finished))
+        try h.journal.addPlaythrough(metroid, PlaythroughDraft(start: PartialDate("2024")!, end: PartialDate("2024")!, outcome: .finished))
         try h.journal.addPlaythrough(doom, PlaythroughDraft(start: PartialDate("2026-09")!))
     }
 
@@ -54,7 +54,7 @@ import Testing
     }
 
     @Test func sortsByLastAndFirstFinished() throws {
-        // Super Metroid's one Finished Playthrough has no end date, so it sorts with the never Finished.
+        // Super Metroid Finished in 2024; the never Finished sort last.
         let castlevania = try h.journal.addGame(platformId: 19, name: "Castlevania IV")
         let earthbound = try h.journal.addGame(platformId: 19, name: "EarthBound")
         try h.journal.addPlaythrough(
@@ -66,12 +66,12 @@ import Testing
         // A Dropped Playthrough's end isn't a finish.
         try h.journal.addPlaythrough(
             earthbound, PlaythroughDraft(start: PartialDate("2026")!, end: PartialDate("2026-01")!, outcome: .dropped))
-        let rest = ["A Link to the Past", "Doom", "Super Metroid"]
+        let rest = ["A Link to the Past", "Doom"]
 
-        #expect(try names(sort: .lastFinished, ascending: false) == ["Castlevania IV", "EarthBound"] + rest)
-        #expect(try names(sort: .lastFinished, ascending: true) == ["EarthBound", "Castlevania IV"] + rest)
-        #expect(try names(sort: .firstFinished, ascending: true) == ["Castlevania IV", "EarthBound"] + rest)
-        #expect(try names(sort: .firstFinished, ascending: false) == ["EarthBound", "Castlevania IV"] + rest)
+        #expect(try names(sort: .lastFinished, ascending: false) == ["Castlevania IV", "Super Metroid", "EarthBound"] + rest)
+        #expect(try names(sort: .lastFinished, ascending: true) == ["EarthBound", "Super Metroid", "Castlevania IV"] + rest)
+        #expect(try names(sort: .firstFinished, ascending: true) == ["Castlevania IV", "EarthBound", "Super Metroid"] + rest)
+        #expect(try names(sort: .firstFinished, ascending: false) == ["Super Metroid", "EarthBound", "Castlevania IV"] + rest)
         #expect(!LibrarySort.lastFinished.defaultAscending)
         #expect(LibrarySort.firstFinished.defaultAscending)
     }
@@ -207,7 +207,7 @@ import Testing
     @Test func aDeletionSaysWhatGoesWithIt() throws {
         try rom("Resident Evil 2 (Japan).chd", missing: true)
         try h.journal.setRating(game, Rating(tenths: 90))
-        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
+        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, end: PartialDate("2020")!, outcome: .finished))
 
         let summary = try h.journal.deletionSummary(game)
 

@@ -32,7 +32,7 @@ import Testing
 
     @Test func takesItsJournalDataWithIt() throws {
         try h.journal.setRating(game, Rating(tenths: 95))
-        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
+        try h.journal.addPlaythrough(game, PlaythroughDraft(start: PartialDate("2020")!, end: PartialDate("2020")!, outcome: .finished))
 
         try h.journal.deleteGame(game)
 

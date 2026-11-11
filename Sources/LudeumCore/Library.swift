@@ -254,8 +254,8 @@ extension LudeumStore {
         }
     }
 
-    /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent, never Finished or
-    /// Finished only with no end date) sort last either way; ties go by name.
+    /// The Library: Games matching `filter`, in `sort` order. Unset values (unrated, no Intent, never Finished) sort
+    /// last either way; ties go by name.
     public func library(_ filter: LibraryFilter, sort: LibrarySort, ascending: Bool) throws -> [LibraryRow] {
         // A Bundle is never a Library row: its Games are (ADR 0016).
         var conditions = ["NOT g.bundle"]

@@ -5,8 +5,6 @@ import GRDB
 public struct YearPlaythrough: Sendable, Equatable, Identifiable {
     public let game: LibraryRow
     public let playthrough: Playthrough
-    /// Ended, with a start date but no end date: counted in its start year.
-    public let endDateUnknown: Bool
     public var id: Int64 { playthrough.id }
 }
 
@@ -89,11 +87,9 @@ extension LudeumStore {
     fileprivate static func year(_ date: PartialDate) -> Int { Int(date.text.prefix(4))! }
 
     /// The years a Playthrough counts for: start year to end year (to `current` while in progress).
-    /// Ended with no end date: its start year.
     static func years(of d: PlaythroughDraft, current: Int) -> ClosedRange<Int> {
         let start = year(d.start)
-        if let end = d.end { return start...max(start, year(end)) }
-        return d.outcome == nil ? start...max(start, current) : start...start
+        return start...max(start, d.end.map(year) ?? current)
     }
 }
 
@@ -123,7 +119,7 @@ private struct ReviewSource {
             if LudeumStore.year(d.start) == year { started += 1 }
             let span = LudeumStore.years(of: d, current: current)
             guard span.contains(year) else { continue }
-            let entry = YearPlaythrough(game: row, playthrough: p, endDateUnknown: d.outcome != nil && d.end == nil)
+            let entry = YearPlaythrough(game: row, playthrough: p)
             switch year == span.upperBound ? d.outcome : nil {
             case .finished: finished.append(entry)
             case .dropped: dropped.append(entry)

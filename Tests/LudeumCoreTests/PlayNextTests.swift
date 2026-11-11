@@ -21,7 +21,7 @@ import Testing
         try h.journal.setIntent(try h.addGame("Earthbound"), .upNext)
         try h.journal.setIntent(try h.addGame("Secret of Mana"), .backlog)
         let finished = try h.addGame("Super Metroid")
-        try h.journal.addPlaythrough(finished, PlaythroughDraft(start: PartialDate("2020")!, outcome: .finished))
+        try h.journal.addPlaythrough(finished, PlaythroughDraft(start: PartialDate("2020")!, end: PartialDate("2020")!, outcome: .finished))
         _ = try h.addGame("F-Zero")
 
         let next = try names()
@@ -57,7 +57,8 @@ import Testing
         try h.journal.addPlaythrough(try h.addGame("Heretic"), PlaythroughDraft(start: PartialDate("2025")!))
         let finishedLater = try h.addGame("Hexen")
         try h.journal.addPlaythrough(finishedLater, PlaythroughDraft(start: PartialDate("2019")!))
-        try h.journal.addPlaythrough(finishedLater, PlaythroughDraft(start: PartialDate("2026-09")!, outcome: .finished))
+        try h.journal.addPlaythrough(
+            finishedLater, PlaythroughDraft(start: PartialDate("2026-09")!, end: PartialDate("2026-09")!, outcome: .finished))
 
         #expect(try names().playing == ["Doom", "Quake", "Heretic", "Hexen"])
         #expect(try h.journal.whatToPlayNext(LibraryFilter(), sort: nil, ascending: true).playing[0].playingSince == PartialDate("2026-03"))

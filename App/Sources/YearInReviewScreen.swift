@@ -159,7 +159,6 @@ struct YearInReviewScreen: View {
                                 CoverTile(services: services, row: entry.game, width: 130)
                                 Text(entry.game.name).lineLimit(2)
                                 Text(entry.game.platformName).font(.caption).foregroundStyle(.secondary)
-                                if entry.endDateUnknown { Text("end date unknown").font(.caption).foregroundStyle(.secondary) }
                             }
                             .frame(width: 130, alignment: .leading)
                         }

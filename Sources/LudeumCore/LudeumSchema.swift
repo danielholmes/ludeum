@@ -783,6 +783,35 @@ enum LudeumSchema {
             try db.execute(sql: "UPDATE game SET wantToBuy = 1, intent = NULL, intentSetAt = NULL WHERE intent = 'wantToBuy'")
             try keepTimestamps(db, on: "game")
         }
+        // A Finished or Dropped Playthrough has an end date (CHECK). SQLite adds a CHECK only by rebuilding the table, as in
+        // v9; every row and its timestamps are kept, and its indexes and triggers come back. Fails, changing nothing, while
+        // any ended Playthrough has no end date: it's given one in the app first.
+        migrator.registerMigration("v48 ended playthrough has an end") { db in
+            try db.create(table: "newPlaythrough") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("gameId", .integer).notNull().references("game", onDelete: .cascade)
+                t.column("start", .text).notNull().check(sql: partialDateCheck("start"))
+                t.column("end", .text).check(sql: partialDateCheck("end"))
+                t.column("outcome", .text).check { ["finished", "dropped"].contains($0) }
+                t.column("notes", .text)
+                t.column("romId", .integer).references("rom", onDelete: .restrict)
+                t.column("copyId", .integer).references("copy", onDelete: .restrict)
+                t.column("createdAt", .datetime).notNull().defaults(sql: "'\(beforeTimestamps)'")
+                t.column("updatedAt", .datetime).notNull().defaults(sql: "'\(beforeTimestamps)'")
+                t.check(sql: "outcome IS NULL OR \"end\" IS NOT NULL")
+            }
+            try db.execute(
+                sql: """
+                    INSERT INTO newPlaythrough (id, gameId, start, "end", outcome, notes, romId, copyId, createdAt, updatedAt)
+                        SELECT id, gameId, start, "end", outcome, notes, romId, copyId, createdAt, updatedAt FROM playthrough;
+                    DROP TABLE playthrough;
+                    ALTER TABLE newPlaythrough RENAME TO playthrough;
+                    CREATE INDEX playthrough_on_gameId ON playthrough(gameId);
+                    CREATE INDEX playthrough_on_romId ON playthrough(romId);
+                    CREATE INDEX playthrough_on_copyId ON playthrough(copyId);
+                    """)
+            try keepTimestamps(db, on: "playthrough")
+        }
         return migrator
     }
 

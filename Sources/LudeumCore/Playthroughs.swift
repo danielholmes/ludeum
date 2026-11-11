@@ -30,9 +30,10 @@ public struct PlaythroughDraft: Sendable, Equatable {
         self.players = players
     }
 
-    /// The end can't come before the start, though a less precise date that contains the
-    /// other is fine (start `2024-03`, end `2024`).
+    /// A Finished or Dropped Playthrough has an end date. The end can't come before the start, though a less precise
+    /// date that contains the other is fine (start `2024-03`, end `2024`).
     func validate() throws {
+        if outcome != nil, end == nil { throw LudeumError.endRequired }
         if let end, end < start, !end.contains(start) { throw LudeumError.endBeforeStart }
     }
 }
