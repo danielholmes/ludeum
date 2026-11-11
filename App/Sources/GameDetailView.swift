@@ -508,28 +508,28 @@ struct GameDetailView: View {
             let start = playing.start(discs: discs, resume: resume)
             let starts = playing.starts(discs: discs, resume: resume)
             SideBySideOrStacked {
-                Group {
+                HStack(spacing: 2) {
+                    // Resume from the Resume state when there is one (ADR 0034), else a multi-disc ROM starts on the
+                    // Disc it last started on (ADR 0026).
+                    Button {
+                        play(in: emulator, start: start)
+                    } label: {
+                        Label(starts.count > 1 ? start.title : "Play", systemImage: start.saveState == nil ? "play.fill" : "memories")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    // The menu has every way it can start. It's a chevron beside Play rather than a split button, as
+                    // macOS draws a split button unfilled, whatever its style, and Play stays blue.
                     if starts.count > 1 {
-                        // Resume from the Resume state when there is one (ADR 0034), else a multi-disc ROM starts on the
-                        // Disc it last started on (ADR 0026); the menu has every way it can start.
                         Menu {
                             ForEach(starts) { choice in Button(choice.menuTitle) { play(in: emulator, start: choice) } }
                         } label: {
-                            Label(start.title, systemImage: start.saveState == nil ? "play.fill" : "memories")
-                        } primaryAction: {
-                            play(in: emulator, start: start)
+                            EmptyView()
                         }
-                        .menuStyle(.button)
+                        .menuStyle(.borderlessButton)
                         .fixedSize()
-                    } else {
-                        Button {
-                            play(in: emulator, start: start)
-                        } label: {
-                            Label("Play", systemImage: "play.fill")
-                        }
+                        .accessibilityLabel("Ways to Play")
                     }
                 }
-                .buttonStyle(.borderedProminent)
                 .tint(services.versions.refusalMessage(emulator) == nil ? nil : .red)
                 .disabled(refusal == .busy)
                 .help(refusal?.message ?? playHelp(start, in: emulator))
