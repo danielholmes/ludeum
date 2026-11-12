@@ -36,13 +36,13 @@ private func jar(at file: URL, manifest: String) throws {
 @Suite struct MobileROMTests {
     let directory = FileManager.default.temporaryDirectory.appending(path: "mobile rom \(UUID().uuidString)", directoryHint: .isDirectory)
 
-    @Test func legacyMobileDeviceIsPlayedInKEmulator() {
+    @Test func legacyMobileDeviceIsPlayedInKEmulator() throws {
         #expect(Emulator.of(platformId: ROMPlatform.legacyMobile) == .kemulator)
         #expect(Emulator.kemulator.isLudeums)
         #expect(Emulator.all.contains(.kemulator))
-        let platform = try? #require(ROMPlatform.all[ROMPlatform.legacyMobile])
-        #expect(platform?.folderName == "Legacy Mobile")
-        #expect(platform?.compactExtension == nil && platform?.archiving == nil)
+        let platform = try #require(ROMPlatform.all[ROMPlatform.legacyMobile])
+        #expect(platform.folderName == "Legacy Mobile")
+        #expect(platform.compactExtension == nil && platform.archiving == nil)
     }
 
     @Test func aJarIsAROM() throws {
