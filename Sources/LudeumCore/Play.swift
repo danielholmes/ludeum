@@ -167,11 +167,16 @@ public struct Play: Sendable {
         }
     }
 
-    /// The Discs its Play can start on: a multi-disc PlayStation ROM's, in its playlist's order, else none. Disc 1 is
-    /// opened through the playlist, so a Disc set DuckStation's database doesn't know still swaps; any other as its own
-    /// cue sheet, as DuckStation can't be told which of a playlist's Discs to boot, and swaps from its game list.
+    /// Whether its Emulator is told which Disc to start on, so Play offers each: DuckStation (ADR 0026), and KEmulator, as a
+    /// Java phone game of several jars is one ROM with a playlist KEmulator can't read (ADR 0044).
+    private var startsOnADisc: Bool { [.duckStation, .kemulator].contains(Emulator.of(platformId: platformId)) }
+
+    /// The Discs its Play can start on: a multi-disc PlayStation ROM's, in its playlist's order, or a Java phone game's
+    /// jars, else none. Disc 1 of a PlayStation ROM is opened through the playlist, so a Disc set DuckStation's database
+    /// doesn't know still swaps; any other as its own cue sheet, as DuckStation can't be told which of a playlist's Discs
+    /// to boot, and swaps from its game list. Every Disc of a Java phone game is opened as its own jar.
     public func discs(locator: ROMLocator) -> [PlayDisc] {
-        guard Emulator.of(platformId: platformId) == .duckStation, let rom, let file = try? locator.file(of: rom, ready: true) else {
+        guard startsOnADisc, let rom, let file = try? locator.file(of: rom, ready: true) else {
             return []
         }
         let serials: [String?] = if case .read(let serials) = rom.serials { serials } else { [] }
@@ -255,13 +260,14 @@ public struct Play: Sendable {
     /// state, DuckStation's on its own Disc; else a multi-disc ROM starts on `disc`, or the one it last started on. 86Box is
     /// refused until there's a Windows base, and only while one of `eightySixBoxesOpen` is playing the ROM, as Windows Games
     /// Play side by side (ADR 0041). DOSBox Staging likewise only while one of `dosBoxStagingsOpen` is playing the ROM; `prompt`
-    /// starts it at a DOS prompt rather than its program (ADR 0042).
+    /// starts it at a DOS prompt rather than its program (ADR 0042). KEmulator, the app Ludeum makes, is refused while it's
+    /// open, and always opens one jar, a Disc's when the ROM is several (ADR 0044).
     public func prepare(
         locator: ROMLocator, version: VersionStatus, app installed: (String) -> URL?, saveState: URL? = nil, disc: Int? = nil,
         prompt: Bool = false, duckStation: DuckStationSettings = .init(), mesen: MesenSettings = .init(), ares: AresSettings = .init(),
         pcsx2: PCSX2Settings = .init(), amiberry: AmiberrySettings = .init(), ymir: YmirSettings = .init(),
         eightySixBox: EightySixBoxSettings = .init(), dosBoxStaging: DOSBoxStagingSettings = .init(),
-        running: (Emulator) -> Bool = { _ in false },
+        kEmulator: KEmulatorSettings = .init(), running: (Emulator) -> Bool = { _ in false },
         eightySixBoxesOpen: EightySixBoxesOpen = .none, dosBoxStagingsOpen: DOSBoxStagingsOpen = .none
     ) -> Outcome {
         let emulator: Emulator
@@ -314,6 +320,10 @@ public struct Play: Sendable {
             guard dosBoxStaging.isInstalled else { return .refused(.notInstalled(emulator)) }
             if let rom, dosBoxStagingsOpen.isPlaying(rom.folderName) { return .refused(.running(emulator)) }
             app = dosBoxStaging.app
+        } else if emulator == .kemulator {
+            guard kEmulator.isInstalled else { return .refused(.notInstalled(emulator)) }
+            if running(emulator) { return .refused(.running(emulator)) }
+            app = kEmulator.app
         } else {
             guard let found = installed(emulator.bundleIdentifier) else { return .refused(.notInstalled(emulator)) }
             app = found
@@ -332,7 +342,7 @@ public struct Play: Sendable {
         if emulator == .xemu, XboxDisc.kind(of: file) == .redump { return .refused(.needsXISO) }
         var opened = file
         var startsOn: DiscStart?
-        let discs = emulator == .duckStation ? Self.discs(ofPlaylist: file) : []
+        let discs = startsOnADisc ? Self.discs(ofPlaylist: file) : []
         // A state DuckStation boots on the disc it was saved with, falling back to the file it's given: its own Disc's. One
         // whose Disc can't be told opens the playlist, and nothing's remembered.
         let start =
@@ -341,7 +351,8 @@ public struct Play: Sendable {
             }
         if let start {
             startsOn = DiscStart(rom: rom.id, disc: start.number)
-            if start.number > 1 {
+            // KEmulator opens no playlist, so Disc 1 too is its own jar.
+            if start.number > 1 || emulator == .kemulator {
                 guard FileManager.default.fileExists(atPath: start.file.path(percentEncoded: false)) else {
                     return .refused(.fileNotFound(start.file.lastPathComponent))
                 }
@@ -357,6 +368,10 @@ public struct Play: Sendable {
                 arguments = try dosBoxStaging.arguments(
                     subfolder: folder.url.appending(path: rom.folderName, directoryHint: .isDirectory), romName: rom.folderName,
                     settings: settings, prompt: prompt)
+            } else if emulator == .kemulator {
+                // A playlist whose Discs couldn't be read has no jar to open.
+                guard opened.pathExtension.lowercased() == "jar" else { return .refused(.fileNotFound(opened.lastPathComponent)) }
+                arguments = try kEmulator.arguments(jar: opened)
             } else {
                 arguments = try emulator.arguments(
                     rom: opened, platformId: platformId, settings: settings, saveState: saveState,

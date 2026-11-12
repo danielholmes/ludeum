@@ -18,16 +18,20 @@ public struct Emulator: Sendable, Hashable {
     public static let amiberry = Emulator(name: "Amiberry", bundleIdentifier: "com.blitterstudio.Amiberry")
     public static let eightySixBox = Emulator(name: "86Box", bundleIdentifier: "net.86Box.86Box")
     public static let dosBoxStaging = Emulator(name: "DOSBox Staging", bundleIdentifier: "io.github.dosbox-staging")
+    /// The app is Ludeum's own, made around KEmulator nnmod and a Java runtime at Install (ADR 0044), so the identifier is too.
+    public static let kemulator = Emulator(name: "KEmulator", bundleIdentifier: "org.danielholmes.Ludeum.KEmulator")
 
     public static let all: [Emulator] = [
         .mesenCE, .duckStation, .dolphin, .ares, .melonDS, .ymir, .ppsspp, .pcsx2, .xemu, .amiberry, .eightySixBox, .dosBoxStaging,
+        .kemulator,
     ]
 
     /// One of the Emulators Ludeum installs and keeps in the Ludeum folder: DuckStation (ADR 0024), MesenCE (ADR 0027),
-    /// ares (ADR 0028), PCSX2 (ADR 0032), Amiberry (ADR 0035), Ymir (ADR 0036), 86Box (ADR 0041) and DOSBox Staging (ADR 0042).
+    /// ares (ADR 0028), PCSX2 (ADR 0032), Amiberry (ADR 0035), Ymir (ADR 0036), 86Box (ADR 0041), DOSBox Staging (ADR 0042)
+    /// and KEmulator (ADR 0044).
     public var isLudeums: Bool {
         self == .duckStation || self == .mesenCE || self == .ares || self == .pcsx2 || self == .amiberry || self == .ymir
-            || self == .eightySixBox || self == .dosBoxStaging
+            || self == .eightySixBox || self == .dosBoxStaging || self == .kemulator
     }
 
     /// The Emulator a Platform's Games are played in, if it has one.
@@ -48,6 +52,7 @@ public struct Emulator: Sendable, Hashable {
         case 16: .amiberry  // Amiga
         case 6: .eightySixBox  // PC (Microsoft Windows)
         case 13: .dosBoxStaging  // DOS
+        case 55: .kemulator  // Legacy Mobile Device: Java phone games
         default: nil
         }
     }

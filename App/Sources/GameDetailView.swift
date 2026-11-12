@@ -259,6 +259,10 @@ struct GameDetailView: View {
             if !game.isBundle, emulator == .dosBoxStaging, playROMs.contains(where: { !$0.missing }) {
                 DOSGameSaveSection(services: services, roms: playROMs.filter { !$0.missing })
             }
+            // Game saves: what a Java phone game's MIDlets have saved, in the Data folder (ADR 0044).
+            if !game.isBundle, emulator == .kemulator, playROMs.contains(where: { !$0.missing }) {
+                MobileGameSavesSection(services: services, roms: playROMs.filter { !$0.missing })
+            }
 
             // Attachments: files about it, Manuals first.
             AttachmentsSection(services: services, game: id)

@@ -82,6 +82,7 @@ public struct ROMPlatform: Sendable, Equatable {
     public static let segaCD: Int64 = 78
     public static let windows: Int64 = 6
     public static let dos: Int64 = 13
+    public static let legacyMobile: Int64 = 55
 
     /// Every Platform with a ROM folder, by IGDB platform id. One folder per Platform: Game Boy and
     /// Game Boy Color, NES and Famicom, SNES and Super Famicom each have their own.
@@ -175,6 +176,11 @@ public struct ROMPlatform: Sendable, Equatable {
         // for. What a game writes goes in its Game save, laid over `C/` (ADR 0042). Archived whole, as a Windows ROM is.
         13: .init(
             name: "DOS", folderName: "DOS", readyExtensions: ["iso", "cue"], archiving: .intoFolder, drives: true),
+        // A Java phone game's `.jar`, which is a zip already, so never Compacted or Archived. A game released as several jars
+        // (episodes) is one ROM of Discs: a subfolder of them with a playlist, which Play reads for its Discs, opening each
+        // Disc's jar, as KEmulator reads no playlist (ADR 0044).
+        55: .init(
+            name: "Legacy Mobile Device", folderName: "Legacy Mobile", readyExtensions: ["jar", "m3u"]),
         // No Emulator yet, so nothing to Compact into.
         53: .init(
             name: "MSX2", folderName: "MSX2", readyExtensions: ["rom", "mx2", "mx1", "dsk", "cas"]),

@@ -24,11 +24,16 @@ public enum BackupOperation: String, Sendable, CaseIterable {
     case beforeChecksums = "before-checksums"
     /// `gamecube-discs`'s: never pruned.
     case beforeGameCubeDiscs = "before-gamecube-discs"
+    /// `mobile-attachments`'s: never pruned.
+    case beforeMobileAttachments = "before-mobile-attachments"
 
     /// A one-off command's, the one way back from it.
     var isKeptForever: Bool {
-        [.beforeMigration, .beforeIntoFolders, .beforeRecovery, .beforeIntoBundles, .beforeChecksums, .beforeGameCubeDiscs]
-            .contains(self)
+        [
+            .beforeMigration, .beforeIntoFolders, .beforeRecovery, .beforeIntoBundles, .beforeChecksums, .beforeGameCubeDiscs,
+            .beforeMobileAttachments,
+        ]
+        .contains(self)
     }
 }
 

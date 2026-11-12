@@ -1,0 +1,36 @@
+# Java phone Games are Played in KEmulator, which Ludeum installs with a Java runtime of its own
+
+Adds to [0038](0038-emulators-are-whole-apps-ludeum-installs-not-cores.md)'s model a ninth Emulator Ludeum installs, for IGDB's Legacy Mobile Device (platform 55), where IGDB puts every Java ME phone game (#100). I had six Resident Evil games there with their `.jar`s kept as Attachments, which the glossary says a game's own image never is. The research, with what was run, is [j2me-emulator.md](../research/j2me-emulator.md).
+
+**KEmulator nnmod over FreeJ2ME-Plus.** It's the live KEmulator, released six times this year, and on this Mac (macOS 26, Apple Silicon, Java 21) it booted Resident Evil: Genesis straight to its menu and Degeneration, the 3D one, at 240×320. It starts straight into a jar (`-jar <file> -s`), sends a game's saves where its `RMSFolder` setting says, and keys them by the MIDlet's vendor and name, not its file, so a Rename keeps them. FreeJ2ME-Plus is simpler to point at the Data folder, but its Mac window has had regressions this autumn and its nightlies can't be pinned. The libretro cores are ruled out by 0038. J2ME Loader and JL-Mod are Android-only, MicroEmulator was archived in 2010.
+
+**It isn't a Mac app, so Ludeum makes one.** The release is a zip of `KEmulator.jar` and native libraries for every OS, with no Java runtime and no `.app`. Play opens apps, finds an open one by its bundle identifier, and passes its arguments, so Install builds `KEmulator.app` around them: a bundle whose executable is a script that `exec`s the bundled `java` with the flags KEmulator's own `kemulator.sh` gives it on a Mac. Opened with `open -n … --args -jar <rom> -s`, it was the running app by that bundle identifier, and Quit from the Dock wrote its settings back whole.
+
+So:
+
+- **KEmulator is the Emulator for Legacy Mobile Device**, installed by Ludeum from two pinned downloads, each checked against its SHA-256: KEmulator nnmod's `kemnnx64.v2.22.zip` and Eclipse Temurin's 21.0.13+9 JRE for Apple Silicon. Install unpacks both into `Emulators/KEmulator.app` in the Ludeum folder with an `Info.plist` (`org.danielholmes.Ludeum.KEmulator`, version 2.22, which the version check reads) and the launcher script. The JRE is Ludeum's, not one on the Mac, so a Java update elsewhere can't break Play. Only the Apple Silicon JRE is installed, as this Mac is one.
+- **A Legacy Mobile Device ROM is a `.jar`**, loose in `ROMs/Legacy Mobile/`. A `.jad` isn't read: every jar I have runs without one. A jar is a zip already, so ROMs there are never Compacted or Archived.
+- **A game released as several jars is one ROM of Discs.** Resident Evil: Confidential Report came out as four episodes, each its own MIDlet with its own saves. They're one Copy, so one ROM: a subfolder holding the jars as `(Disc 1)` to `(Disc 4)` and a playlist naming them, as a disc Platform's or GameCube's multi-disc ROM is. KEmulator can't read a playlist, so a Play opens the Disc's own jar: Play's menu offers each, and Play starts on the one it last started on (ADR 0026).
+- **The Standing settings are three keys in its `property.txt`**, written over before each Play with the rest kept: `RMSFolder`, `file://` then `Emulators/KEmulator/Game Saves` in the Data folder (without `file://` KEmulator puts its own folder in front of a path starting `/`); `AutoUpdate=1`, so it neither asks about nor installs updates of itself; and `ShowAppSettingsOnStart=false`, so a game's first Play doesn't stop on its settings dialog. Everything else, the phone model, screen size and keys, is KEmulator's own, set in it during a Play and lasting.
+- **Its own settings are copied into the Data folder.** KEmulator keeps `property.txt` and its per-game `midlets.ini` beside its jar, inside the app, and replaces them rather than writing through a link. So before each Play Ludeum copies each into `Emulators/KEmulator/` in the Data folder, and copies the Data folder's back when the app's is missing or empty (a new install, a new Mac, or one emptied by a forced quit, as `property.txt` was in the trial). A change made during a Play reaches the Data folder at the next one. An Install carries both across to the new copy.
+- **Game saves are shown in Game detail** for each of the Game's jars, found from its manifest as KEmulator names them, `<base64 of vendor_name>/` in `Game Saves`, with Show in Finder and Delete. A ROM's Rename moves nothing, and two builds of one game with the same vendor and name share theirs.
+- **Play is refused while KEmulator is open**, as it writes `property.txt` back whole when it quits.
+- **The Games I had kept their jars as Attachments.** They become ROMs once, by hand, through `ludeum-import mobile-attachments` with Ludeum closed, which then goes: each jar goes into the ROM folder under its Game's Standard name and is Matched to that Game, a Game whose jars are numbered `(File N)` getting one ROM of them as Discs, and a second jar of a Game becoming `(Alt)`; the Attachments go.
+
+## Considered Options
+
+- **FreeJ2ME-Plus**: the fallback, not the choice. It's pure Java with no native libraries and writes everything under its working folder, but has Mac window regressions (#256, #257), no gamepad on a Mac, a last stable release from December 2025, and saves keyed by the game's display name alone.
+- **Using a Java already on the Mac, or Homebrew's**: rejected. What Play runs would change under it when that Java is updated or removed, as a hand-updated DuckStation once broke Play (build 8843 dropped `-settings`); this Mac's Zulu 17 is there for other work.
+- **Ludeum starting `java` itself, as a process of its own**: rejected. Play opens apps through `NSWorkspace` and tells an open Emulator by its bundle identifier; a bare process would need a second way of doing both, and would show in the Dock as "java".
+- **Confidential Report as four ROMs on one Game**: rejected. It's one thing I have, and a Copy each would say four.
+- **Keeping KEmulator's own settings only in the app**: rejected. Its per-game settings and key map would be lost with this Mac, which is what the Data folder is for.
+- **A `-screen` size per Game, as an Emulator setting**: not yet. KEmulator's own per-game settings keep a game's screen size and phone model by the jar's hash, and what each of my games wants isn't known yet.
+
+## Consequences
+
+- No Save states and no Resume: no Java phone emulator has them.
+- No game controller: KEmulator's JInput library has no Apple Silicon build, so it plays from the keyboard alone. Its default key map puts the keypad on the numeric keypad, which a laptop hasn't got; the arrows, Enter and F1/F2 (the soft keys) are there.
+- KEmulator's settings dialogs have unreadable text on a Mac (its issue #236), so changing the key map or phone model during a Play may be hard until that's fixed.
+- KEmulator has no licence file: it's a decompile of the closed KEmulator with GPLv3 code mixed in. Ludeum fetches the author's own release and never ships a copy.
+- A forced quit (not Quit) can leave `property.txt` empty; the Data folder's copy, and the Standing settings, put it right at the next Play, losing only what changed during that Play.
+- What's untried: a save surviving a relaunch, the key map, a Disc other than the first, and Confidential Report trying the network.
