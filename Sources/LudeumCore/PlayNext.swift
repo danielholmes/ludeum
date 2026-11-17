@@ -22,6 +22,54 @@ public struct PlayNext<Item> {
 extension PlayNext: Equatable where Item: Equatable {}
 extension PlayNext: Sendable where Item: Sendable {}
 
+/// About how long some Games take to beat, main story only.
+public struct BeatEstimate: Sendable, Equatable {
+    public let seconds: Int
+    /// How many of the Games have no time of their own, so were counted at the average.
+    public let averaged: Int
+
+    public init(seconds: Int, averaged: Int) {
+        self.seconds = seconds
+        self.averaged = averaged
+    }
+}
+
+/// About how long each section of What to play next takes to beat, and all of them: the sections' sum.
+public struct PlayNextBeatEstimates: Sendable, Equatable {
+    public let playing: BeatEstimate
+    public let upNext: BeatEstimate
+    public let backlog: BeatEstimate
+    public let total: BeatEstimate
+    /// The average of the Games' known times: what each Game without one is counted at.
+    public let averageSeconds: Int
+}
+
+extension PlayNext {
+    /// How long each section takes to beat, from each Game's own time (`time`, in seconds), else the average of every
+    /// section's known times. Nil when no Game has a time.
+    public func beatEstimates(_ time: (Item) -> Int?) -> PlayNextBeatEstimates? {
+        let times = map(time)
+        let known = (times.playing + times.upNext + times.backlog).compactMap { $0 }
+        guard !known.isEmpty else { return nil }
+        let average = Double(known.reduce(0, +)) / Double(known.count)
+        func estimate(_ times: [Int?]) -> BeatEstimate {
+            let averaged = times.filter { $0 == nil }.count
+            let seconds = Double(times.compactMap { $0 }.reduce(0, +)) + Double(averaged) * average
+            return BeatEstimate(seconds: Int(seconds.rounded()), averaged: averaged)
+        }
+        let sections = [estimate(times.playing), estimate(times.upNext), estimate(times.backlog)]
+        // Summed rather than worked out afresh, so the headings always add up to it.
+        let total = BeatEstimate(seconds: sections.map(\.seconds).reduce(0, +), averaged: sections.map(\.averaged).reduce(0, +))
+        return PlayNextBeatEstimates(
+            playing: sections[0], upNext: sections[1], backlog: sections[2], total: total, averageSeconds: Int(average.rounded()))
+    }
+}
+
+extension TimeToBeat {
+    /// The main story alone: IGDB's rushed time, to the credits without the side quests.
+    public var mainStory: Int? { hastily }
+}
+
 extension LudeumStore {
     /// What to play next, filtered like the Library. With no `sort`, Playing goes by the latest
     /// in-progress start and Up next and Backlog by when the Intent was set, newest first, with

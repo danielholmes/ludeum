@@ -289,11 +289,11 @@ private struct SummaryText: View {
     }
 }
 
-/// "3.5 h" under 10 hours, else whole hours: "12 h". Nil for none.
-private func hours(_ seconds: Int?) -> String? {
+/// "3.5 h" under 10 hours, else whole hours: "12 h", "1,234 h". Nil for none.
+func hours(_ seconds: Int?) -> String? {
     guard let seconds, seconds > 0 else { return nil }
     let h = Double(seconds) / 3600
-    return h < 10 ? String(format: "%.1f h", h) : "\(Int(h.rounded())) h"
+    return h < 10 ? String(format: "%.1f h", h) : "\(Int(h.rounded()).formatted()) h"
 }
 
 /// "Beat 8.4 h · Master 17 h", leaving out what too few players have done.

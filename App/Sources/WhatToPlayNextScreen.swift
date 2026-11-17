@@ -11,6 +11,10 @@ struct WhatToPlayNextScreen: View {
     @State private var sort: LibrarySort?
     @State private var ascending = true
     @State private var next = PlayNext<LibraryRow>(playing: [], upNext: [], backlog: [])
+    /// How long the sections' Games take to beat, main story only: nil when none of them has a time (or none is read yet).
+    @State private var estimates: PlayNextBeatEstimates?
+    /// Every linked Game's IGDB facts, by IGDB game id, as last read: the times to beat come from them.
+    @State private var facts: [Int64: GameFacts] = [:]
     @State private var platforms: [IGDBPlatform] = []
     @State private var players: [Player] = []
     @State private var error: String?
@@ -31,15 +35,14 @@ struct WhatToPlayNextScreen: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         // Each section's covers, a rule between sections.
-                        let sections = [("Playing", next.playing, false), ("Up next", next.upNext, true), ("Backlog", next.backlog, true)]
-                            .filter { !$0.1.isEmpty }
-                        ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
+                        let shown = sections.filter { !$0.rows.isEmpty }
+                        ForEach(Array(shown.enumerated()), id: \.offset) { index, section in
                             if index > 0 { Divider() }
-                            Text("\(section.0) (\(section.1.count))").font(.headline)
+                            Text(section.heading).font(.headline)
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: coverWidth), spacing: 24, alignment: .top)], spacing: 24) {
-                                ForEach(section.1) { row in
+                                ForEach(section.rows) { row in
                                     CoverCell(services: services, row: row, width: coverWidth, selection: $selection)
-                                        .contextMenu { if section.2 { Button("Start playing") { startPlaying(row.id) } } }
+                                        .contextMenu { if section.canStart { Button("Start playing") { startPlaying(row.id) } } }
                                 }
                             }
                         }
@@ -48,26 +51,27 @@ struct WhatToPlayNextScreen: View {
                 }
             } else {
                 List(selection: $selection) {
-                    section("Playing", next.playing, canStart: false)
-                    section("Up next", next.upNext, canStart: true)
-                    section("Backlog", next.backlog, canStart: true)
+                    ForEach(sections, id: \.title) { listSection($0) }
                 }
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            FilterBar(
-                filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms,
-                players: players
-            ) {
-                LibrarySortMenu(
-                    sort: $sort, ascending: $ascending, sorts: LibrarySort.allCases.filter { !$0.comesFromCache },
-                    offersDefault: true)
-                ViewModeControls(showCovers: $showCovers, coverWidth: $coverWidth)
+            VStack(spacing: 0) {
+                FilterBar(
+                    filter: $filter, kinds: FilterKind.library.subtracting([.genre, .theme]), platforms: platforms,
+                    players: players
+                ) {
+                    LibrarySortMenu(
+                        sort: $sort, ascending: $ascending, sorts: LibrarySort.allCases.filter { !$0.comesFromCache },
+                        offersDefault: true)
+                    ViewModeControls(showCovers: $showCovers, coverWidth: $coverWidth)
+                }
+                if let estimates, error == nil { totalLine(estimates) }
             }
         }
         .navigationTitle("What to play next")
         .viewShortcuts(showCovers: $showCovers)
-        .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending)) { load() }
+        .task(id: Reload(revision: services.changes.revision, filter: filter, sort: sort, ascending: ascending)) { await load() }
     }
 
     private struct Reload: Equatable {
@@ -77,24 +81,63 @@ struct WhatToPlayNextScreen: View {
         let ascending: Bool
     }
 
-    @ViewBuilder private func section(_ title: String, _ rows: [LibraryRow], canStart: Bool) -> some View {
-        if !rows.isEmpty {
-            Section("\(title) (\(rows.count))") {
-                ForEach(rows) { row in
+    /// One of Playing, Up next and Backlog, with its Games and how long they take to beat.
+    private struct NextSection {
+        let title: String
+        let rows: [LibraryRow]
+        /// Start playing is offered: its Games aren't Playing already.
+        let canStart: Bool
+        let estimate: BeatEstimate?
+
+        /// "Backlog (42) · 310 h".
+        var heading: String {
+            let counted = "\(title) (\(rows.count))"
+            return estimate.flatMap { hours($0.seconds) }.map { "\(counted) · \($0)" } ?? counted
+        }
+    }
+
+    private var sections: [NextSection] {
+        [
+            NextSection(title: "Playing", rows: next.playing, canStart: false, estimate: estimates?.playing),
+            NextSection(title: "Up next", rows: next.upNext, canStart: true, estimate: estimates?.upNext),
+            NextSection(title: "Backlog", rows: next.backlog, canStart: true, estimate: estimates?.backlog),
+        ]
+    }
+
+    /// "About 1,234 h to beat them all, main story only", and how many Games had no time of their own.
+    private func totalLine(_ estimates: PlayNextBeatEstimates) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("About \(hours(estimates.total.seconds) ?? "0 h") to beat them all, main story only")
+            if estimates.total.averaged > 0 {
+                Text("· \(estimates.total.averaged) without a time counted at \(hours(estimates.averageSeconds) ?? "0 h") each")
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .help("From IGDB's rushed times to beat: to the credits, without the side quests. A Game without one counts at the average.")
+        .padding(.horizontal, 12).padding(.bottom, 6)
+        .background(.bar)
+    }
+
+    @ViewBuilder private func listSection(_ section: NextSection) -> some View {
+        if !section.rows.isEmpty {
+            Section(section.heading) {
+                ForEach(section.rows) { row in
                     HStack {
                         VStack(alignment: .leading) {
                             Text(row.name)
                             Text(detail(row)).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        if canStart {
+                        if section.canStart {
                             Button("Start playing") { startPlaying(row.id) }
                                 .help("Adds a Playthrough starting today and clears the Intent")
                         }
                     }
                     .tag(row.id)
                     .contextMenu {
-                        if canStart { Button("Start playing") { startPlaying(row.id) } }
+                        if section.canStart { Button("Start playing") { startPlaying(row.id) } }
                     }
                 }
             }
@@ -118,7 +161,7 @@ struct WhatToPlayNextScreen: View {
         }
     }
 
-    private func load() {
+    private func load() async {
         guard let journal = services.journal else { return }
         do {
             next = try journal.whatToPlayNext(filter, sort: sort, ascending: ascending)
@@ -126,6 +169,19 @@ struct WhatToPlayNextScreen: View {
             error = nil
         } catch {
             self.error = error.localizedDescription
+            estimates = nil
+            return
         }
+        // The times to beat live in IGDB's cache: from the facts held, so the hours never lag the Games, then again
+        // once any newly linked Game's facts are read.
+        estimates = next.beatEstimates(mainStory)
+        facts = await services.memory.facts(services)
+        guard !Task.isCancelled else { return }
+        estimates = next.beatEstimates(mainStory)
+    }
+
+    /// A Game's main story time to beat, in seconds, when IGDB has one.
+    private func mainStory(_ row: LibraryRow) -> Int? {
+        row.igdbGameId.flatMap { facts[$0] }?.timeToBeat?.mainStory
     }
 }
