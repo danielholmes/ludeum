@@ -136,6 +136,19 @@ import Testing
         #expect(e?.upNext == BeatEstimate(seconds: 8 * 3600, atMedian: 1))
     }
 
+    @Test func aNormalTimeIsUsableUpTo100HoursAndNoShorterThanTheRushedOne() {
+        let h = 3600
+        #expect(TimeToBeat(hastily: 8 * h, normally: 12 * h, completely: 30 * h).usableNormally == 12 * h)
+        #expect(TimeToBeat(hastily: nil, normally: 100 * h, completely: nil).usableNormally == 100 * h)
+        #expect(TimeToBeat(hastily: 12 * h, normally: 12 * h, completely: nil).usableNormally == 12 * h)
+        // Minecraft: players logging their whole playtime.
+        #expect(TimeToBeat(hastily: 1465 * h, normally: 420 * h, completely: 1699 * h).usableNormally == nil)
+        #expect(TimeToBeat(hastily: nil, normally: 100 * h + 1, completely: nil).usableNormally == nil)
+        // The Secret of Monkey Island: Rushed 9 h, Normally 7 h.
+        #expect(TimeToBeat(hastily: 9 * h, normally: 7 * h, completely: 23 * h).usableNormally == nil)
+        #expect(TimeToBeat(hastily: 5 * h, normally: nil, completely: 9 * h).usableNormally == nil)
+    }
+
     @Test func noneWhenNoGameHasATime() {
         #expect(estimates(PlayNext(playing: [nil], upNext: [], backlog: [nil])) == nil)
         #expect(estimates(PlayNext(playing: [], upNext: [], backlog: [])) == nil)

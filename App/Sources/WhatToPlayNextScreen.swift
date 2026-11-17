@@ -104,18 +104,23 @@ struct WhatToPlayNextScreen: View {
         ]
     }
 
-    /// "About 1,234 h to beat them all", and how many Games had no time of their own.
+    /// "About 1,234 h to beat them all", and how many Games had no usable time of their own.
     private func totalLine(_ estimates: PlayNextBeatEstimates) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text("About \(hours(estimates.total.seconds) ?? "0 h") to beat them all")
             if estimates.total.atMedian > 0 {
-                Text("· \(estimates.total.atMedian) without a time counted at the median, \(hours(estimates.medianSeconds) ?? "0 h")")
-                    .foregroundStyle(.secondary)
+                Text(
+                    "· \(estimates.total.atMedian) without a usable time counted at the median, \(hours(estimates.medianSeconds) ?? "0 h")"
+                )
+                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
         }
         .font(.callout)
-        .help("From IGDB's \"Normally\" times to beat, not Rushed or 100%. A Game without one counts at the median of the others.")
+        .help(
+            "From IGDB's \"Normally\" times to beat, not Rushed or 100%. A Game without one, or whose is over 100 h or "
+                + "shorter than its Rushed time, counts at the median of the others."
+        )
         .padding(.horizontal, 12).padding(.bottom, 6)
         .background(.bar)
     }
@@ -180,8 +185,8 @@ struct WhatToPlayNextScreen: View {
         estimates = next.beatEstimates(timeToBeat)
     }
 
-    /// A Game's IGDB time to beat normally, in seconds, when IGDB has one: neither rushed nor 100%.
+    /// A Game's IGDB time to beat normally, in seconds, when IGDB has one that looks right: neither rushed nor 100%.
     private func timeToBeat(_ row: LibraryRow) -> Int? {
-        row.igdbGameId.flatMap { facts[$0] }?.timeToBeat?.normally
+        row.igdbGameId.flatMap { facts[$0] }?.timeToBeat?.usableNormally
     }
 }
