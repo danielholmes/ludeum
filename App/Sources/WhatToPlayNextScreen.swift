@@ -11,7 +11,7 @@ struct WhatToPlayNextScreen: View {
     @State private var sort: LibrarySort?
     @State private var ascending = true
     @State private var next = PlayNext<LibraryRow>(playing: [], upNext: [], backlog: [])
-    /// How long the sections' Games take to beat, main story only: nil when none of them has a time (or none is read yet).
+    /// How long the sections' Games take to beat normally: nil when none of them has a time (or none is read yet).
     @State private var estimates: PlayNextBeatEstimates?
     /// Every linked Game's IGDB facts, by IGDB game id, as last read: the times to beat come from them.
     @State private var facts: [Int64: GameFacts] = [:]
@@ -104,18 +104,18 @@ struct WhatToPlayNextScreen: View {
         ]
     }
 
-    /// "About 1,234 h to beat them all, main story only", and how many Games had no time of their own.
+    /// "About 1,234 h to beat them all", and how many Games had no time of their own.
     private func totalLine(_ estimates: PlayNextBeatEstimates) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text("About \(hours(estimates.total.seconds) ?? "0 h") to beat them all, main story only")
-            if estimates.total.averaged > 0 {
-                Text("· \(estimates.total.averaged) without a time counted at \(hours(estimates.averageSeconds) ?? "0 h") each")
+            Text("About \(hours(estimates.total.seconds) ?? "0 h") to beat them all")
+            if estimates.total.atMedian > 0 {
+                Text("· \(estimates.total.atMedian) without a time counted at the median, \(hours(estimates.medianSeconds) ?? "0 h")")
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
         }
         .font(.callout)
-        .help("From IGDB's rushed times to beat: to the credits, without the side quests. A Game without one counts at the average.")
+        .help("From IGDB's \"Normally\" times to beat, not Rushed or 100%. A Game without one counts at the median of the others.")
         .padding(.horizontal, 12).padding(.bottom, 6)
         .background(.bar)
     }
@@ -174,14 +174,14 @@ struct WhatToPlayNextScreen: View {
         }
         // The times to beat live in IGDB's cache: from the facts held, so the hours never lag the Games, then again
         // once any newly linked Game's facts are read.
-        estimates = next.beatEstimates(mainStory)
+        estimates = next.beatEstimates(timeToBeat)
         facts = await services.memory.facts(services)
         guard !Task.isCancelled else { return }
-        estimates = next.beatEstimates(mainStory)
+        estimates = next.beatEstimates(timeToBeat)
     }
 
-    /// A Game's main story time to beat, in seconds, when IGDB has one.
-    private func mainStory(_ row: LibraryRow) -> Int? {
-        row.igdbGameId.flatMap { facts[$0] }?.timeToBeat?.mainStory
+    /// A Game's IGDB time to beat normally, in seconds, when IGDB has one: neither rushed nor 100%.
+    private func timeToBeat(_ row: LibraryRow) -> Int? {
+        row.igdbGameId.flatMap { facts[$0] }?.timeToBeat?.normally
     }
 }

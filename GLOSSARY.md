@@ -93,7 +93,7 @@ How much other players liked a Game, from 0.0 to 10.0, as one source has it: IGD
 _Avoid_: Community rating, user score (a Rating is mine)
 
 **Time to beat**:
-How long other players take with a Game, from two sources shown side by side, each named: IGDB's (rushed, normally and 100%, what its players say they took; rushed, to the credits without the side quests, is the **main story**, which What to play next adds up) and RetroAchievements' (the median time its players spent in the emulator to beat the set for the Game's Platform, and to master it, each from at least 5 players). RetroAchievements' set is found by the Game's ROMs' checksums at Hasheous, else by its IGDB game at Wikidata, and needs a RetroAchievements key (ADR 0030).
+How long other players take with a Game, from two sources shown side by side, each named: IGDB's (rushed, normally and 100%, what its players say they took; normally is what What to play next adds up) and RetroAchievements' (the median time its players spent in the emulator to beat the set for the Game's Platform, and to master it, each from at least 5 players). RetroAchievements' set is found by the Game's ROMs' checksums at Hasheous, else by its IGDB game at Wikidata, and needs a RetroAchievements key (ADR 0030).
 _Avoid_: Length, playtime, HowLongToBeat (not a source: its terms forbid it)
 
 **Rating history**:

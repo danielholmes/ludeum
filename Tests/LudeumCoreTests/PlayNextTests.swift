@@ -99,45 +99,46 @@ import Testing
     @Test func eachSectionSumsItsGamesTimes() {
         let e = estimates(PlayNext(playing: [10], upNext: [20, 30], backlog: [40]))
 
-        #expect(e?.playing == BeatEstimate(seconds: 10 * 3600, averaged: 0))
-        #expect(e?.upNext == BeatEstimate(seconds: 50 * 3600, averaged: 0))
-        #expect(e?.backlog == BeatEstimate(seconds: 40 * 3600, averaged: 0))
-        #expect(e?.total == BeatEstimate(seconds: 100 * 3600, averaged: 0))
+        #expect(e?.playing == BeatEstimate(seconds: 10 * 3600, atMedian: 0))
+        #expect(e?.upNext == BeatEstimate(seconds: 50 * 3600, atMedian: 0))
+        #expect(e?.backlog == BeatEstimate(seconds: 40 * 3600, atMedian: 0))
+        #expect(e?.total == BeatEstimate(seconds: 100 * 3600, atMedian: 0))
     }
 
-    @Test func aGameWithoutATimeCountsAtTheAverageOfEverySectionsKnownTimes() {
-        // Known: 10, 20 and 60, an average of 30.
-        let e = estimates(PlayNext(playing: [10, nil], upNext: [20], backlog: [nil, 60, nil]))
+    @Test func aGameWithoutATimeCountsAtTheMedianOfEverySectionsKnownTimes() {
+        // Known: 10, 20 and 600, a median of 20: the one endless Game doesn't drag it up.
+        let e = estimates(PlayNext(playing: [10, nil], upNext: [20], backlog: [nil, 600, nil]))
 
-        #expect(e?.averageSeconds == 30 * 3600)
-        #expect(e?.playing == BeatEstimate(seconds: 40 * 3600, averaged: 1))
-        #expect(e?.upNext == BeatEstimate(seconds: 20 * 3600, averaged: 0))
-        #expect(e?.backlog == BeatEstimate(seconds: 120 * 3600, averaged: 2))
-        #expect(e?.total == BeatEstimate(seconds: 180 * 3600, averaged: 3))
+        #expect(e?.medianSeconds == 20 * 3600)
+        #expect(e?.playing == BeatEstimate(seconds: 30 * 3600, atMedian: 1))
+        #expect(e?.upNext == BeatEstimate(seconds: 20 * 3600, atMedian: 0))
+        #expect(e?.backlog == BeatEstimate(seconds: 640 * 3600, atMedian: 2))
+        #expect(e?.total == BeatEstimate(seconds: 690 * 3600, atMedian: 3))
+    }
+
+    @Test func anEvenCountsMedianIsHalfWayBetweenTheMiddleTwo() {
+        let e = estimates(PlayNext(playing: [nil], upNext: [4, 100], backlog: [10, 2]))
+
+        #expect(e?.medianSeconds == 7 * 3600)
     }
 
     @Test func theTotalIsTheSectionsSumWhateverTheRounding() {
-        // An average of 1.5 seconds, each section's rounded up to 2.
+        // A median of 1.5 seconds, each section's rounded up to 2.
         let e = PlayNext<Int?>(playing: [nil], upNext: [nil], backlog: [1, 2]).beatEstimates { $0 }
 
-        #expect(e?.total == BeatEstimate(seconds: 7, averaged: 2))
+        #expect(e?.total == BeatEstimate(seconds: 7, atMedian: 2))
     }
 
     @Test func aSectionWithNoGamesTakesNoTime() {
         let e = estimates(PlayNext(playing: [], upNext: [nil], backlog: [8]))
 
-        #expect(e?.playing == BeatEstimate(seconds: 0, averaged: 0))
-        #expect(e?.upNext == BeatEstimate(seconds: 8 * 3600, averaged: 1))
+        #expect(e?.playing == BeatEstimate(seconds: 0, atMedian: 0))
+        #expect(e?.upNext == BeatEstimate(seconds: 8 * 3600, atMedian: 1))
     }
 
     @Test func noneWhenNoGameHasATime() {
         #expect(estimates(PlayNext(playing: [nil], upNext: [], backlog: [nil])) == nil)
         #expect(estimates(PlayNext(playing: [], upNext: [], backlog: [])) == nil)
-    }
-
-    @Test func theMainStoryIsIGDBsRushedTime() {
-        #expect(TimeToBeat(hastily: 5, normally: 8, completely: 12).mainStory == 5)
-        #expect(TimeToBeat(hastily: nil, normally: 8, completely: 12).mainStory == nil)
     }
 }
 
