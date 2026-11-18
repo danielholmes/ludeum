@@ -118,8 +118,8 @@ struct WhatToPlayNextScreen: View {
         }
         .font(.callout)
         .help(
-            "From IGDB's \"Normally\" times to beat, not Rushed or 100%. A Game without one, or whose is over 100 h or "
-                + "shorter than its Rushed time, counts at the median of the others."
+            "From IGDB's \"Normally\" times to beat, not Rushed or 100%. A Game without one, or whose is over 100 h, "
+                + "counts at the median of the others."
         )
         .padding(.horizontal, 12).padding(.bottom, 6)
         .background(.bar)

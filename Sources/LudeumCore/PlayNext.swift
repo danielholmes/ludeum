@@ -68,10 +68,10 @@ extension PlayNext {
 }
 
 extension TimeToBeat {
-    /// IGDB's time to beat normally, unless it looks wrong: longer than 100 hours (an endless Game, such as Minecraft,
-    /// whose players log their whole playtime) or shorter than its rushed time. What to play next adds it up.
+    /// IGDB's time to beat normally, unless it's longer than 100 hours: an endless Game, such as Minecraft, whose players
+    /// log their whole playtime. What to play next adds it up.
     public var usableNormally: Int? {
-        guard let normally, normally <= 100 * 3600, normally >= hastily ?? 0 else { return nil }
+        guard let normally, normally <= 100 * 3600 else { return nil }
         return normally
     }
 }
