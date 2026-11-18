@@ -141,18 +141,11 @@ struct GameDetailView: View {
                             igdbPlayers: facts.playerScore, launchBoxPlayers: launchBoxScore, critics: facts.criticScore,
                             stacked: true)
                     }
-                    HStack {
-                        Picker("Intent", selection: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } })) {
-                            Text("None").tag(Intent?.none)
-                            ForEach(Intent.allCases, id: \.self) { Text(intentText($0)).tag(Intent?.some($0)) }
-                        }
-                        .pickerStyle(.segmented)
-                        .help(game.intentSetAt.map { "Set \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
-                        Toggle("Want to buy", isOn: Binding(get: { game.wantToBuy }, set: { new in save { try $0.setWantToBuy(id, new) } }))
-                            .toggleStyle(.checkbox).fixedSize()
-                        Toggle("Childhood", isOn: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
-                            .toggleStyle(.checkbox).fixedSize()
-                    }
+                    IntentRow(
+                        intent: Binding(get: { game.intent }, set: { new in save { try $0.setIntent(id, new) } }),
+                        intentSetAt: game.intentSetAt,
+                        wantToBuy: Binding(get: { game.wantToBuy }, set: { new in save { try $0.setWantToBuy(id, new) } }),
+                        childhood: Binding(get: { game.childhood }, set: { new in save { try $0.setChildhood(id, new) } }))
                     ForEach(playthroughs, id: \.id) { p in
                         // Click to edit; delete from the right-click menu or the edit sheet.
                         Button {
@@ -970,6 +963,63 @@ struct GameDetailView: View {
 private struct LaunchBoxScoreKey: Equatable {
     let name: String
     let facts: GameFacts
+}
+
+/// Intent, Want to buy and Childhood on one row while they fit; else the checkboxes go under Intent, and when even
+/// Intent's label and picker don't fit side by side, the label goes above the picker. Laid out by hand rather than
+/// with the Form's own label, which takes all the width it's offered and so never lets the row fit.
+private struct IntentRow: View {
+    @Binding var intent: Intent?
+    let intentSetAt: Date?
+    @Binding var wantToBuy: Bool
+    @Binding var childhood: Bool
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                labelAndPicker
+                checkboxes
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                labelAndPicker
+                checkboxes
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                label
+                picker
+                checkboxes
+            }
+        }
+    }
+
+    private var labelAndPicker: some View {
+        HStack(spacing: 0) {
+            label
+            Spacer(minLength: 12)
+            picker
+        }
+    }
+
+    /// Hidden from VoiceOver, which reads the picker's own (hidden) label instead.
+    private var label: some View {
+        Text("Intent").accessibilityHidden(true)
+    }
+
+    private var picker: some View {
+        Picker("Intent", selection: $intent) {
+            Text("None").tag(Intent?.none)
+            ForEach(Intent.allCases, id: \.self) { Text(intentText($0)).tag(Intent?.some($0)) }
+        }
+        .pickerStyle(.segmented).labelsHidden().fixedSize()
+        .help(intentSetAt.map { "Set \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
+    }
+
+    private var checkboxes: some View {
+        HStack {
+            Toggle("Want to buy", isOn: $wantToBuy).toggleStyle(.checkbox).fixedSize()
+            Toggle("Childhood", isOn: $childhood).toggleStyle(.checkbox).fixedSize()
+        }
+    }
 }
 
 /// Its views in a row while they fit unwrapped, else one above the other, so a narrow panel doesn't squeeze each into
