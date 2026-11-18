@@ -8,6 +8,8 @@ public enum LudeumError: Error, Equatable {
     case endBeforeStart
     /// A Finished or Dropped Playthrough has an end date.
     case endRequired
+    /// A Playthrough in progress (no Outcome) has no end date.
+    case endWhileInProgress
     case playerNameTaken
     /// A Game can't be deleted while it has any Copy: its ROMs and hand-recorded Copies are deleted first.
     case gameHasCopies

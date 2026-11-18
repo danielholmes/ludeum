@@ -170,6 +170,20 @@ import Testing
         #expect(try h.journal.playthroughs(game).map(\.draft) == [PlaythroughDraft(start: date("2024"))])
     }
 
+    @Test func refusesAnInProgressPlaythroughWithAnEnd() throws {
+        #expect(throws: LudeumError.endWhileInProgress) {
+            try h.journal.addPlaythrough(game, PlaythroughDraft(start: date("2024"), end: date("2025")))
+        }
+        let id = try h.journal.addPlaythrough(game, PlaythroughDraft(start: date("2024"), end: date("2025"), outcome: .finished))
+        #expect(throws: LudeumError.endWhileInProgress) {
+            try h.journal.updatePlaythrough(id, PlaythroughDraft(start: date("2024"), end: date("2025")))
+        }
+        #expect(
+            try h.journal.playthroughs(game).map(\.draft) == [
+                PlaythroughDraft(start: date("2024"), end: date("2025"), outcome: .finished)
+            ])
+    }
+
     @Test func theJournalItselfRefusesAnEndedPlaythroughWithNoEnd() throws {
         #expect(throws: DatabaseError.self) {
             try h.journal.db.write { db in

@@ -1097,6 +1097,7 @@ func journalErrorText(_ error: Error) -> String {
     return switch error as? LudeumError {
     case .endBeforeStart: "The end date can't come before the start date."
     case .endRequired: "A Finished or Dropped Playthrough needs an end date."
+    case .endWhileInProgress: "A Playthrough in progress can't have an end date. Choose Finished or Dropped, or clear the end date."
     case .playerNameTaken: "There's already a Player with that name."
     case .gameHasCopies: "This Game has Copies. Delete them first, under Copies."
     case .gameInBundle: "This Game is in a Bundle. Take it out first, on the Bundle's page."
