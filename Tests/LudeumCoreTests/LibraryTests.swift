@@ -279,7 +279,7 @@ import Testing
         #expect(LibraryFilter().scoped(by: LibraryFilter(series: "Metroid", company: "Nintendo")).series == "Metroid")
     }
 
-    @Test func themesAddedOnAThemesScreenStackOnItsTheme() {
+    @Test func genresAndThemesAddedStackOnTheScopes() {
         let horror = LibraryFilter(themes: ["Horror"])
 
         #expect(LibraryFilter(themes: ["Survival"]).scoped(by: horror).themes == ["Horror", "Survival"])

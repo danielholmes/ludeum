@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-/// The Library's filters. Nil means "any"; set filters combine.
+/// The Library's filters. Nil (or empty, for genres and themes) means "any"; set filters combine.
 public struct LibraryFilter: Sendable, Equatable {
     public var platformId: Int64?
     /// Games on a Platform whose ROMs can be Archived (`ROMPlatform.archiving`).
@@ -20,7 +20,7 @@ public struct LibraryFilter: Sendable, Equatable {
     public var genres: Set<String> = []
     /// IGDB themes, stacking like `genres`.
     public var themes: Set<String> = []
-    /// An IGDB franchise or series, applied like `genres`.
+    /// An IGDB franchise or series, one each, applied by `having(_:in:)` like `genres`.
     public var franchise: String?
     public var series: String?
     /// A company involved in any role.

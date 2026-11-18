@@ -73,7 +73,7 @@ struct FilterBar<Trailing: View>: View {
                             .background(Color.accentColor.opacity(0.15), in: .capsule)
                             .help("What this screen shows")
                     }
-                    ForEach(filterChips(filter, platforms: platforms, players: players), id: \.text) { chip in
+                    ForEach(filterChips(filter, platforms: platforms, players: players), id: \.id) { chip in
                         HStack(spacing: 4) {
                             Text(chip.text)
                             Button("Remove filter", systemImage: "xmark") { chip.clear(&filter) }
@@ -259,7 +259,12 @@ struct SortMenuItem: View {
 /// One filter as a pill: what it says, and how to remove it.
 struct FilterChip {
     let text: String
+    /// Its kind and value, where the text alone could match another pill's: a genre and a theme, or the Arcade genre
+    /// and the Arcade Platform, can share a name.
+    var key: String? = nil
     let clear: (inout LibraryFilter) -> Void
+
+    var id: String { key ?? text }
 }
 
 func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], players: [Player]) -> [FilterChip] {
@@ -307,8 +312,8 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], players: [P
     case nil: break
     }
     if let o = filter.copies { c.append(Chip(text: copiesText(o)) { $0.copies = nil }) }
-    for genre in filter.genres.sorted() { c.append(Chip(text: genre) { $0.genres.remove(genre) }) }
-    for theme in filter.themes.sorted() { c.append(Chip(text: theme) { $0.themes.remove(theme) }) }
+    for genre in filter.genres.sorted() { c.append(Chip(text: genre, key: "genre \(genre)") { $0.genres.remove(genre) }) }
+    for theme in filter.themes.sorted() { c.append(Chip(text: theme, key: "theme \(theme)") { $0.themes.remove(theme) }) }
     if let franchise = filter.franchise { c.append(Chip(text: "Franchise: \(franchise)") { $0.franchise = nil }) }
     if let series = filter.series { c.append(Chip(text: "Series: \(series)") { $0.series = nil }) }
     if let company = filter.company { c.append(Chip(text: "Company: \(company)") { $0.company = nil }) }
