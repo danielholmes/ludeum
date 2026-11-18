@@ -15,13 +15,13 @@ public struct LibraryFacts: Sendable {
 }
 
 extension Array where Element == LibraryRow {
-    /// The rows matching the filter's IGDB facts: genre, theme, franchise and series (each ignored
-    /// when nil). Unlinked Games have none.
+    /// The rows matching the filter's IGDB facts: every one of its genres and themes, and its franchise, series and
+    /// company (each ignored when empty or nil). Unlinked Games have none.
     public func having(_ filter: LibraryFilter, in facts: [Int64: GameFacts]) -> [LibraryRow] {
         guard filter.usesIGDBFacts else { return self }
         return self.filter { row in
             guard let f = row.igdbGameId.flatMap({ facts[$0] }) else { return false }
-            return filter.genre.map(f.genres.contains) ?? true && filter.theme.map(f.themes.contains) ?? true
+            return filter.genres.allSatisfy(f.genres.contains) && filter.themes.allSatisfy(f.themes.contains)
                 && filter.franchise.map(f.franchises.contains) ?? true && filter.series.map(f.series.contains) ?? true
                 && filter.company.map(f.companies.contains) ?? true
         }
@@ -45,7 +45,7 @@ extension [LibraryRow] {
 
 extension LibraryFilter {
     /// Whether it filters on facts from the cache, which `having(_:in:)` applies.
-    public var usesIGDBFacts: Bool { genre != nil || theme != nil || franchise != nil || series != nil || company != nil }
+    public var usesIGDBFacts: Bool { !genres.isEmpty || !themes.isEmpty || franchise != nil || series != nil || company != nil }
 }
 
 extension GameFacts {

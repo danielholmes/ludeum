@@ -120,7 +120,9 @@ struct LibraryScreen: View {
             FilterBar(
                 count: rows.count, busy: busy, scope: scope == LibraryFilter() ? nil : title, filter: $filter,
                 kinds: FilterKind.library.subtracting(FilterKind.fixed(by: scope)), platforms: platforms, players: players,
-                genres: Set(facts.values.flatMap(\.genres)).sorted(), themes: Set(facts.values.flatMap(\.themes)).sorted(),
+                // A theme's screen offers the other themes to stack on it, not its own.
+                genres: Set(facts.values.flatMap(\.genres)).subtracting(scope.genres).sorted(),
+                themes: Set(facts.values.flatMap(\.themes)).subtracting(scope.themes).sorted(),
                 text: $filter.name, textFocused: $textFilterFocused
             ) {
                 LibrarySortMenu(sort: Binding($sort), ascending: $ascending)

@@ -20,7 +20,7 @@ public struct Pin: Sendable, Hashable, Codable {
         switch kind {
         case .franchise: LibraryFilter(franchise: name)
         case .series: LibraryFilter(series: name)
-        case .theme: LibraryFilter(theme: name)
+        case .theme: LibraryFilter(themes: [name])
         case .company: LibraryFilter(company: name)
         }
     }

@@ -21,7 +21,7 @@ import Testing
         let horror = Pin(kind: .theme, name: "Horror")
         try j.journal.pin(horror)
         #expect(try j.journal.pins().contains(horror))
-        #expect(horror.filter == LibraryFilter(theme: "Horror"))
+        #expect(horror.filter == LibraryFilter(themes: ["Horror"]))
         let capcom = Pin(kind: .company, name: "Capcom")
         try j.journal.pin(capcom)
         #expect(try j.journal.pins().contains(capcom))

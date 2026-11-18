@@ -9,7 +9,8 @@ enum FilterKind: CaseIterable {
     /// What every Library-shaped screen offers.
     static let library = Set(allCases)
 
-    /// The kinds a scope already sets, so the menu doesn't offer them again.
+    /// The kinds a scope already sets, so the menu doesn't offer them again. Genres and themes stack, so a theme's
+    /// screen still offers more themes.
     static func fixed(by scope: LibraryFilter) -> Set<FilterKind> {
         var k: Set<FilterKind> = []
         if scope.platformId != nil || scope.archivablePlatforms { k.insert(.platform) }
@@ -17,8 +18,6 @@ enum FilterKind: CaseIterable {
         if scope.intent != nil { k.insert(.intent) }
         if scope.wantToBuy != nil { k.insert(.wantToBuy) }
         if scope.player != nil { k.insert(.player) }
-        if scope.genre != nil { k.insert(.genre) }
-        if scope.theme != nil { k.insert(.theme) }
         if scope.outcome != nil { k.insert(.played) }
         if scope.childhood != nil { k.insert(.childhood) }
         if scope.roms != nil { k.insert(.roms) }
@@ -108,7 +107,8 @@ extension FilterBar where Trailing == EmptyView {
     }
 }
 
-/// Adds one filter (replacing any of the same kind) as a pill.
+/// Adds one filter (replacing any of the same kind) as a pill. Genres and themes stack instead: each is ticked
+/// while chosen, and choosing it again removes it.
 private struct AddFilterMenu: View {
     @Binding var filter: LibraryFilter
     let kinds: Set<FilterKind>
@@ -157,10 +157,10 @@ private struct AddFilterMenu: View {
                 }
             }
             if kinds.contains(.genre), !genres.isEmpty {
-                Menu("Genre") { ForEach(genres, id: \.self) { g in Button(g) { filter.genre = g } } }
+                Menu("Genre") { toggles(genres, \.genres) }
             }
             if kinds.contains(.theme), !themes.isEmpty {
-                Menu("Theme") { ForEach(themes, id: \.self) { t in Button(t) { filter.theme = t } } }
+                Menu("Theme") { toggles(themes, \.themes) }
             }
             if kinds.contains(.played) {
                 Menu("Played") {
@@ -196,6 +196,18 @@ private struct AddFilterMenu: View {
         }
         .menuStyle(.borderlessButton).fixedSize()
         .help("Add a filter")
+    }
+
+    private func toggles(_ names: [String], _ chosen: WritableKeyPath<LibraryFilter, Set<String>>) -> some View {
+        ForEach(names, id: \.self) { name in
+            Toggle(
+                name,
+                isOn: Binding(
+                    get: { filter[keyPath: chosen].contains(name) },
+                    set: { on in
+                        if on { filter[keyPath: chosen].insert(name) } else { filter[keyPath: chosen].remove(name) }
+                    }))
+        }
     }
 }
 
@@ -295,8 +307,8 @@ func filterChips(_ filter: LibraryFilter, platforms: [IGDBPlatform], players: [P
     case nil: break
     }
     if let o = filter.copies { c.append(Chip(text: copiesText(o)) { $0.copies = nil }) }
-    if let genre = filter.genre { c.append(Chip(text: genre) { $0.genre = nil }) }
-    if let theme = filter.theme { c.append(Chip(text: theme) { $0.theme = nil }) }
+    for genre in filter.genres.sorted() { c.append(Chip(text: genre) { $0.genres.remove(genre) }) }
+    for theme in filter.themes.sorted() { c.append(Chip(text: theme) { $0.themes.remove(theme) }) }
     if let franchise = filter.franchise { c.append(Chip(text: "Franchise: \(franchise)") { $0.franchise = nil }) }
     if let series = filter.series { c.append(Chip(text: "Series: \(series)") { $0.series = nil }) }
     if let company = filter.company { c.append(Chip(text: "Company: \(company)") { $0.company = nil }) }

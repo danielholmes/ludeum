@@ -72,9 +72,26 @@ import Testing
         let rows = try j.journal.library(LibraryFilter(), sort: .name, ascending: true)
         let facts = try await LibraryFacts(igdb: h.igdb).byGame(rows.compactMap(\.igdbGameId))
 
-        #expect(rows.having(LibraryFilter(genre: "Platform"), in: facts).map(\.name) == ["Super Mario World", "Super Metroid"])
-        #expect(rows.having(LibraryFilter(genre: "Platform", theme: "Science fiction"), in: facts).map(\.name) == ["Super Metroid"])
+        #expect(rows.having(LibraryFilter(genres: ["Platform"]), in: facts).map(\.name) == ["Super Mario World", "Super Metroid"])
+        #expect(
+            rows.having(LibraryFilter(genres: ["Platform"], themes: ["Science fiction"]), in: facts).map(\.name) == ["Super Metroid"])
         #expect(rows.having(LibraryFilter(), in: facts).count == 4)
+    }
+
+    @Test func severalThemesOrGenresStackSoAGameMustHaveEveryOne() async throws {
+        h.internet.addGame(2001, "Resident Evil", fields: ["themes": [["name": "Horror"], ["name": "Survival"]]])
+        h.internet.addGame(2002, "Alone in the Dark", fields: ["themes": [["name": "Horror"]]])
+        h.internet.addGame(2003, "Don't Starve", fields: ["themes": [["name": "Survival"]]])
+        for (id, name) in [(2001, "Resident Evil"), (2002, "Alone in the Dark"), (2003, "Don't Starve"), (1103, "Super Metroid")] {
+            try j.journal.addGame(platformId: 19, name: name, igdbGameId: Int64(id), igdbName: name)
+        }
+        let rows = try j.journal.library(LibraryFilter(), sort: .name, ascending: true)
+        let facts = try await LibraryFacts(igdb: h.igdb).byGame(rows.compactMap(\.igdbGameId))
+
+        #expect(rows.having(LibraryFilter(themes: ["Horror"]), in: facts).map(\.name) == ["Alone in the Dark", "Resident Evil"])
+        #expect(rows.having(LibraryFilter(themes: ["Horror", "Survival"]), in: facts).map(\.name) == ["Resident Evil"])
+        #expect(rows.having(LibraryFilter(genres: ["Platform", "Adventure"]), in: facts).map(\.name) == ["Super Metroid"])
+        #expect(rows.having(LibraryFilter(genres: ["Platform", "Role-playing (RPG)"]), in: facts).isEmpty)
     }
 }
 

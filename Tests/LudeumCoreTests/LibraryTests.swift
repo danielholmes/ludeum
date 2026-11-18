@@ -266,7 +266,7 @@ import Testing
 @Suite struct ScopedFilterTests {
     @Test func aScreensScopeWinsAndAddedFiltersCombineWithIt() {
         let scope = LibraryFilter(platformId: 19, outcome: .finished)
-        let added = LibraryFilter(platformId: 4, rating: .unrated, childhood: true, genre: "Platform", name: "mario")
+        let added = LibraryFilter(platformId: 4, rating: .unrated, childhood: true, genres: ["Platform"], name: "mario")
 
         let combined = added.scoped(by: scope)
 
@@ -274,8 +274,15 @@ import Testing
         #expect(combined.outcome == .finished)
         #expect(combined.rating == .unrated)
         #expect(combined.childhood == true)
-        #expect(combined.genre == "Platform")
+        #expect(combined.genres == ["Platform"])
         #expect(combined.name == "mario")
         #expect(LibraryFilter().scoped(by: LibraryFilter(series: "Metroid", company: "Nintendo")).series == "Metroid")
+    }
+
+    @Test func themesAddedOnAThemesScreenStackOnItsTheme() {
+        let horror = LibraryFilter(themes: ["Horror"])
+
+        #expect(LibraryFilter(themes: ["Survival"]).scoped(by: horror).themes == ["Horror", "Survival"])
+        #expect(LibraryFilter(genres: ["Shooter"]).scoped(by: LibraryFilter(genres: ["Adventure"])).genres == ["Adventure", "Shooter"])
     }
 }

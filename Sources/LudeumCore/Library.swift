@@ -15,11 +15,12 @@ public struct LibraryFilter: Sendable, Equatable {
     public var wantToBuy: Bool?
     public var roms: ROMFilter?
     public var copies: CopiesFilter?
-    /// An IGDB genre. Not applied by `library(_:sort:ascending:)`: genres live in the cache, so
-    /// the caller narrows the rows with `having(genre:in:)`.
-    public var genre: String?
-    /// An IGDB theme, franchise or series, applied like `genre`.
-    public var theme: String?
+    /// IGDB genres, which stack: a Game must have every one. Empty is no filter. Not applied by
+    /// `library(_:sort:ascending:)`: genres live in the cache, so the caller narrows the rows with `having(_:in:)`.
+    public var genres: Set<String> = []
+    /// IGDB themes, stacking like `genres`.
+    public var themes: Set<String> = []
+    /// An IGDB franchise or series, applied like `genres`.
     public var franchise: String?
     public var series: String?
     /// A company involved in any role.
@@ -32,15 +33,15 @@ public struct LibraryFilter: Sendable, Equatable {
     public init(
         platformId: Int64? = nil, archivablePlatforms: Bool = false, rating: RatingFilter? = nil, intent: Intent?? = nil,
         player: PlayerFilter? = nil, outcome: OutcomeFilter? = nil, childhood: Bool? = nil, wantToBuy: Bool? = nil,
-        roms: ROMFilter? = nil, copies: CopiesFilter? = nil, genre: String? = nil,
-        theme: String? = nil, franchise: String? = nil, series: String? = nil, company: String? = nil,
+        roms: ROMFilter? = nil, copies: CopiesFilter? = nil, genres: Set<String> = [],
+        themes: Set<String> = [], franchise: String? = nil, series: String? = nil, company: String? = nil,
         listId: Int64? = nil, name: String = ""
     ) {
         self.company = company
         self.listId = listId
         self.name = name
-        self.genre = genre
-        self.theme = theme
+        self.genres = genres
+        self.themes = themes
         self.franchise = franchise
         self.series = series
         self.platformId = platformId
@@ -62,7 +63,7 @@ extension LibraryFilter {
     public var searchWords: [String] { name.split(whereSeparator: \.isWhitespace).map(String.init) }
 
     /// These filters within a screen's fixed scope (a Platform, a theme, Finished…): whatever the scope
-    /// sets wins, and the rest combine with it.
+    /// sets wins, and the rest combine with it. Genres and themes stack, so the scope's join the ones added.
     public func scoped(by scope: LibraryFilter) -> LibraryFilter {
         var f = self
         if let v = scope.platformId { f.platformId = v }
@@ -75,8 +76,8 @@ extension LibraryFilter {
         if let v = scope.wantToBuy { f.wantToBuy = v }
         if let v = scope.roms { f.roms = v }
         if let v = scope.copies { f.copies = v }
-        if let v = scope.genre { f.genre = v }
-        if let v = scope.theme { f.theme = v }
+        f.genres.formUnion(scope.genres)
+        f.themes.formUnion(scope.themes)
         if let v = scope.franchise { f.franchise = v }
         if let v = scope.series { f.series = v }
         if let v = scope.company { f.company = v }
