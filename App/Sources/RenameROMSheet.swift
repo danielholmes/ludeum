@@ -9,10 +9,12 @@ struct RenameOffer: Identifiable {
 
     var id: Int64 { rom.id }
     var name: String { standard.name() }
+    /// Whether its Standard name, with every tag kept, is a new name rather than the one it has.
+    var renames: Bool { name != rom.folderName }
 }
 
-/// Confirming a Rename: the name it gets, with a choice to drop each tag Rename can't place (a scene group's, or an
-/// edition's), which is otherwise kept.
+/// Confirming a Rename: the name it gets, with a choice to drop its languages and each tag Rename can't place (a scene
+/// group's, or an edition's), which are otherwise kept.
 struct RenameROMSheet: View {
     let offer: RenameOffer
     /// Whether another ROM has the name, as it changes with the tags dropped.
@@ -34,8 +36,8 @@ struct RenameROMSheet: View {
                     "Named as No-Intro (or Redump, on disc Platforms) would name it, with its Regions, in every form it's kept in. "
                         + "What's inside its folder or archive keeps its names.")
             }
-            if !offer.standard.unplacedTags.isEmpty {
-                UnplacedTagsChoice(tags: offer.standard.unplacedTags, dropping: $dropping)
+            if !offer.standard.droppableTags.isEmpty {
+                DroppableTagsChoice(tags: offer.standard.droppableTags, dropping: $dropping)
             }
             HStack {
                 Spacer()
@@ -45,7 +47,7 @@ struct RenameROMSheet: View {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(isTaken(name))
+                .disabled(isTaken(name) || name == offer.rom.folderName)
             }
         }
         .formStyle(.grouped)
@@ -53,8 +55,9 @@ struct RenameROMSheet: View {
     }
 }
 
-/// A checkbox for each tag Rename can't place, ticked to keep it.
-struct UnplacedTagsChoice: View {
+/// A checkbox for each tag that can be dropped from a Standard name, its languages and those it can't place, ticked to
+/// keep it.
+struct DroppableTagsChoice: View {
     let tags: [String]
     @Binding var dropping: Set<String>
 
@@ -68,7 +71,7 @@ struct UnplacedTagsChoice: View {
                         set: { keep in if keep { dropping.remove(tag) } else { dropping.insert(tag) } }))
             }
         } footer: {
-            Text("Tags it can't place: a scene group's, or an edition's.")
+            Text("Its languages, and tags it can't place: a scene group's, or an edition's.")
         }
     }
 }

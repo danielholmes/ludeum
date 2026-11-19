@@ -592,7 +592,7 @@ struct GameDetailView: View {
                                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                             )
                             .font(.callout).foregroundStyle(.secondary)
-                            if let offer {
+                            if let offer, offer.renames {
                                 Text("→ \(offer.name)\(offer.taken ? " · another ROM has this name" : "")")
                                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                                     .help("The name Rename would give it")
@@ -610,8 +610,11 @@ struct GameDetailView: View {
                         Spacer()
                         if let offer {
                             Button("Rename…", systemImage: "character.cursor.ibeam") { renaming = offer }
-                                .disabled(offer.taken)
-                                .help(offer.taken ? "Another ROM has the name it would be given" : "Rename it “\(offer.name)”")
+                                .disabled(offer.renames && offer.taken)
+                                .help(
+                                    !offer.renames
+                                        ? "Drop its languages or tags it can't place from its name"
+                                        : offer.taken ? "Another ROM has the name it would be given" : "Rename it “\(offer.name)”")
                         }
                         if ROMArchiving.action(for: rom) != nil { archiveButton(rom) }
                         if !rom.missing {
@@ -766,12 +769,13 @@ struct GameDetailView: View {
 
     // MARK: Rename
 
-    /// Rename's offer for a present ROM not yet named as it would name it, while no Background task is working on it.
+    /// Rename's offer for a present ROM not yet named as it would name it, or with a tag that can be dropped from its name,
+    /// while no Background task is working on it.
     private func renameOffer(for rom: LudeumROM) -> RenameOffer? {
         guard let game, !rom.missing, !services.tasks.isActive(.rom(rom.id)),
             let standard = ROMRename.standardName(
                 forROM: rom.folderName, gameName: game.name, regions: rom.details.regions, platformId: game.platformId),
-            standard.name() != rom.folderName
+            standard.offersRename(to: rom.folderName)
         else { return nil }
         let taken = (try? services.journal?.romNameIsTaken(standard.name(), besides: rom.id, on: game.platformId)) ?? false
         return RenameOffer(rom: rom, standard: standard, taken: taken)

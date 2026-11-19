@@ -317,7 +317,7 @@ struct AddROMConfirmation: View {
     @AppStorage("addROMKeepsOriginals") private var keepingOriginals = true
     @State private var deletingMissing = true
     @AppStorage("addROMArchives") private var archivingIt = false
-    /// Its Standard name, when it differs from the picked one, and whether another ROM has it.
+    /// Its Standard name, when it differs from the picked one or has a tag to drop, and whether another ROM has it.
     @State private var standard: (standard: ROMRename.StandardName, taken: Bool)?
     @State private var givingStandardName = true
     @State private var dropping: Set<String> = []
@@ -391,8 +391,8 @@ struct AddROMConfirmation: View {
         .onAppear {
             guard let journal = services.journal, let folder else { return }
             standard = (try? AddROM(journal: journal).standardName(of: source, matching: match, in: folder))
-                .flatMap { $0.standard.name() == source.romName ? nil : $0 }
-            // Unlike Rename, Add ROM drops the tags it can't place unless I tick them to keep.
+                .flatMap { $0.standard.offersRename(to: source.romName) ? $0 : nil }
+            // Unlike Rename, Add ROM drops the tags it can't place unless I tick them to keep; its languages it keeps.
             dropping = Set(standard?.standard.unplacedTags ?? [])
         }
     }
@@ -408,8 +408,8 @@ struct AddROMConfirmation: View {
             } footer: {
                 Text("As No-Intro (or Redump, on disc Platforms) would name it, with its Regions.")
             }
-            if givingStandardName, !standard.taken, !standard.standard.unplacedTags.isEmpty {
-                UnplacedTagsChoice(tags: standard.standard.unplacedTags, dropping: $dropping)
+            if givingStandardName, !standard.taken, !standard.standard.droppableTags.isEmpty {
+                DroppableTagsChoice(tags: standard.standard.droppableTags, dropping: $dropping)
             }
         }
     }

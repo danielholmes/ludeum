@@ -484,6 +484,21 @@ struct AddROMTests {
         #expect(try gameBoy.folder.scan().map(\.name) == ["Tetris (Europe)"])
     }
 
+    /// Its languages can be dropped too, though they're kept unless I choose to.
+    @Test func itsLanguagesCanBeDroppedFromTheName() async throws {
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let original = try pick("Tetris (E) (En,Fr,De).gb", "GB")
+        let source = ROMSource([original])
+        let match = igdb(1, "Tetris", on: 33)
+
+        let offer = try #require(try adder.standardName(of: source, matching: match, in: gameBoy.folder))
+        #expect(offer.standard.unplacedTags.isEmpty)
+        #expect(offer.standard.droppableTags == ["(En,Fr,De)"])
+        try await adder.add(source, to: gameBoy.folder, match: match, keepingOriginals: true, naming: .standard(dropping: ["(En,Fr,De)"]))
+
+        #expect(try gameBoy.folder.scan().map(\.name) == ["Tetris (Europe)"])
+    }
+
     /// The missing ROM comes back with its own Regions, and is named from them.
     @Test func aMissingROMOfThePickedNameComesBackNamedFromItsOwnRegions() async throws {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)

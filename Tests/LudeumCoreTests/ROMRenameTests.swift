@@ -138,6 +138,33 @@ import Testing
         #expect(offered("Broken Sword - Director's Cut (USA) (BAHAMUT)", "Broken Sword: Director's Cut", ["USA"], on: 20) == nil)
     }
 
+    /// Its languages tag can be dropped too, though it's placed: the Version keeps them.
+    @Test func itsLanguagesCanBeDropped() throws {
+        let standard = try #require(
+            ROMRename.standardName(
+                forROM: "Tetris (E) (Fr,En,De) (Legacy)", gameName: "Tetris", regions: ["Europe"], platformId: 19))
+        #expect(standard.name() == "Tetris (Europe) (En,Fr,De) (Legacy)")
+        #expect(standard.unplacedTags == ["(Legacy)"])
+        #expect(standard.droppableTags == ["(En,Fr,De)", "(Legacy)"])
+        #expect(standard.name(dropping: ["(En,Fr,De)", "(Legacy)"]) == "Tetris (Europe)")
+        #expect(standard.name(dropping: ["(En,Fr,De)"]) == "Tetris (Europe) (Legacy)")
+        // Only a languages tag or one it can't place drops.
+        #expect(standard.name(dropping: ["(Europe)"]) == standard.name())
+    }
+
+    /// A ROM already of its Standard name is still offered Rename while it has a tag to drop, so a tag kept once can
+    /// go later.
+    @Test func aROMWithATagToDropIsOfferedThoughItHasItsStandardName() throws {
+        func offersRename(_ rom: String) throws -> Bool {
+            try #require(ROMRename.standardName(forROM: rom, gameName: "Tetris", regions: ["Europe"], platformId: 19)).offersRename(to: rom)
+        }
+        #expect(try offersRename("Tetris (Europe) (Legacy)"))
+        #expect(try offersRename("Tetris (Europe) (En,Fr,De)"))
+        #expect(try offersRename("Tetris (E)"))
+        #expect(try !offersRename("Tetris (Europe)"))
+        #expect(try !offersRename("Tetris (Europe) (Rev 1)"))
+    }
+
     /// No-Intro's order, as its names have it: Japan, USA, Europe, then the rest alphabetically; all three are World.
     @Test func regionsAreInNoIntrosOrderAndSpelling() {
         #expect(offered("Kirby", "Kirby", ["Europe", "USA"]) == "Kirby (USA, Europe)")

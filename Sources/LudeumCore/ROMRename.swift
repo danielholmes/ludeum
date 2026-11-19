@@ -12,8 +12,8 @@ public enum ROMRename {
         return name == romName ? nil : name
     }
 
-    /// A ROM's Standard name, before choosing which of the tags it can't place to drop: nil when its ROM folder couldn't
-    /// read the Game's name.
+    /// A ROM's Standard name, before choosing which of its languages and the tags it can't place to drop: nil when its ROM
+    /// folder couldn't read the Game's name.
     public static func standardName(forROM romName: String, gameName: String, regions: [String], platformId: Int64) -> StandardName? {
         let fileTitle = fitForAFileName(gameName)
         guard !fileTitle.isEmpty, !fileTitle.hasPrefix(".") else { return nil }
@@ -77,32 +77,51 @@ public enum ROMRename {
         }
         var tags: [StandardName.Tag] = []
         let region = regionTag(regions, naming: naming)
-        if !region.isEmpty { tags.append(.init(text: "(\(region))", unplaced: false)) }
-        tags += (languages.map { "(\($0))" } + disc + version + status + additional).map { .init(text: $0, unplaced: false) }
-        tags += unplaced.map { .init(text: $0, unplaced: true) }
-        tags += (flags + translations).map { .init(text: $0, unplaced: false) }
+        if !region.isEmpty { tags.append(.init(text: "(\(region))", kind: .placed)) }
+        tags += languages.map { .init(text: "(\($0))", kind: .languages) }
+        tags += (disc + version + status + additional).map { .init(text: $0, kind: .placed) }
+        tags += unplaced.map { .init(text: $0, kind: .unplaced) }
+        tags += (flags + translations).map { .init(text: $0, kind: .placed) }
         // After the last tag, only a translation patch is part of the name; anything else is a file artefact.
         if let last = afterTitle.range(of: #"[\)\]][^\)\]]*$"#, options: .regularExpression), !all.isEmpty {
             let suffix = afterTitle[last].dropFirst().trimmingCharacters(in: .whitespaces)
-            if matches(suffix, #"(?i)patch|english|translat"#) { tags.append(.init(text: suffix, unplaced: false)) }
+            if matches(suffix, #"(?i)patch|english|translat"#) { tags.append(.init(text: suffix, kind: .placed)) }
         }
         return StandardName(title: fileTitle, tags: tags)
     }
 
     public struct StandardName: Sendable, Equatable {
         struct Tag: Sendable, Equatable {
+            enum Kind: Sendable, Equatable {
+                /// One it places that stays: its region, Disc, revision, development status, edition or dump flag.
+                case placed
+                /// Its languages: placed, but they can be dropped, as its Version keeps them.
+                case languages
+                /// One it couldn't place: a scene group's, or an edition's.
+                case unplaced
+            }
             let text: String
-            let unplaced: Bool
+            let kind: Kind
         }
         let title: String
         let tags: [Tag]
 
-        /// The tags it couldn't place, as written: a scene group's, or an edition's, kept unless dropped.
-        public var unplacedTags: [String] { tags.filter(\.unplaced).map(\.text) }
+        /// The tags it couldn't place, as written: a scene group's, or an edition's, kept at a Rename unless dropped and
+        /// dropped at Add ROM unless kept.
+        public var unplacedTags: [String] { tags.filter { $0.kind == .unplaced }.map(\.text) }
 
-        /// The name, without the tags it couldn't place that are in `dropping`.
+        /// The tags that can be dropped from it, as written, in the name's order: its languages and those it couldn't place.
+        public var droppableTags: [String] { tags.filter { $0.kind != .placed }.map(\.text) }
+
+        /// The name, without the droppable tags that are in `dropping`.
         public func name(dropping: Set<String> = []) -> String {
-            ([title] + tags.filter { !($0.unplaced && dropping.contains($0.text)) }.map(\.text)).joined(separator: " ")
+            ([title] + tags.filter { $0.kind == .placed || !dropping.contains($0.text) }.map(\.text)).joined(separator: " ")
+        }
+
+        /// Whether Rename is offered a ROM named `romName`: while that isn't this name, or it has a tag that can be
+        /// dropped, so a tag kept once can still go later.
+        public func offersRename(to romName: String) -> Bool {
+            name() != romName || !droppableTags.isEmpty
         }
     }
 
