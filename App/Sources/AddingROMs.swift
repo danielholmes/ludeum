@@ -51,14 +51,14 @@ func readPicked(_ urls: [URL]) async throws -> PickedROM {
         } else {
             source.romName
         }
-    let inserted = Mutex<Int64?>(nil)
+    let addedROM = Mutex<Int64?>(nil)
     services.tasks.enqueue("Adding \(name)") { progress in
         let (_, rom) = try await adder.add(
             source, to: folder, match: match, keepingOriginals: keepingOriginals, naming: naming, progress: progress)
-        inserted.withLock { $0 = rom }
+        addedROM.withLock { $0 = rom }
     } ended: { [changes = services.changes, tasks = services.tasks, romFolders = services.settings.romFolders] in
         // Recorded only once it's all in place, so a ROM Matched to a Game means it worked.
-        guard let rom = inserted.withLock({ $0 }), let game = try? journal.game(ofROM: rom) else {
+        guard let rom = addedROM.withLock({ $0 }), let game = try? journal.game(ofROM: rom) else {
             changes.coverChanged()
             return
         }
@@ -411,7 +411,7 @@ struct AddROMConfirmation: View {
                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             } footer: {
                 Text(
-                    "As No-Intro (or Redump, on disc Platforms) would name it, with its Regions. With none yet, any its Serials or Hasheous give it once it's in are added."
+                    "As No-Intro (or Redump, on disc Platforms) would name it, with its Regions. With none yet, it takes any its Serials or Hasheous give it once it's in as its region tag, unless another ROM has that name."
                 )
             }
             if givingStandardName, !standard.taken, !standard.standard.droppableTags.isEmpty {

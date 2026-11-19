@@ -240,6 +240,24 @@ struct AddROMTests {
         #expect(try romRow("Tetris")?["regions"] as String? == #"["Japan"]"#)
     }
 
+    /// A missing ROM brought back keeps its name, as its Emulator can keep saves under it that only Rename moves.
+    @Test func aMissingROMBroughtBackKeepsItsNameWhenItsGivenRegions() async throws {
+        let h = try Harness()
+        h.internet.addHash(crc: "8cdc1683", game: 1, platform: 33, romName: "Tetris (Japan).gb")
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let game = try missingGame("Tetris", on: 33)
+        // It keeps the checksum it had.
+        try await j.journal.db.write { try $0.execute(sql: "UPDATE rom SET crc = '8cdc1683' WHERE folderName = 'Tetris'") }
+        let adder = AddROM(journal: j.journal, sevenZip: sevenZip, hasheous: h.hasheous, moveToTrash: { _ in })
+
+        try await adder.add(
+            ROMSource([try pick("Tetris.gb")]), to: gameBoy.folder, match: .game(game, deletingMissing: false), keepingOriginals: true,
+            naming: .standard())
+
+        #expect(try gameBoy.folder.scan().map(\.fileName) == ["Tetris.7z"])
+        #expect(try romRow("Tetris")?["regions"] as String? == #"["Japan"]"#)
+    }
+
     /// Going in under the picked name, it keeps it.
     @Test func aROMGoingInUnderThePickedNameKeepsItWhenItsGivenRegions() async throws {
         let h = try Harness()

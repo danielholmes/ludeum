@@ -280,8 +280,8 @@ public struct AddROM: Sendable {
     }
 
     /// Adds the ROM and returns it and its Game. Throws, with the ROM folder and journal as they were and the picked files
-    /// untouched, when anything goes wrong before the ROM is in the journal. Given its Standard name, a ROM whose Serials
-    /// or Hasheous then give it Regions its name had no tag for is renamed to take them, unless another ROM has that name.
+    /// untouched, when anything goes wrong before the ROM is in the journal. Given its Standard name with no Regions, a new
+    /// ROM whose Serials or Hasheous then give it some is renamed to take them, unless another ROM has that name.
     @discardableResult
     public func add(
         _ source: ROMSource, to folder: ROMFolder, match: AddROMMatch, keepingOriginals: Bool, naming: AddROMNaming = .picked,
@@ -317,8 +317,9 @@ public struct AddROM: Sendable {
         if !keepingOriginals { trashOriginals(of: source) }
         await SerialsImport(journal: journal, sevenZip: sevenZip).run(in: [folder], only: [added.rom])
         await RegionsImport(journal: journal, hasheous: hasheous).run(only: [added.rom])
-        if case .standard(let dropping) = naming, named.standard != nil {
-            try? nameFromItsRegions(added.rom, picked: source.romName, named: named, dropping: dropping, matching: match, in: folder)
+        // Not a missing ROM brought back: its Emulator can keep saves under its name, which only Rename moves.
+        if case .standard(let dropping) = naming, named.standard != nil, named.missingRow == nil {
+            try? renameFromItsRegions(added.rom, picked: source.romName, named: named, dropping: dropping, matching: match, in: folder)
         }
         return added
     }
@@ -326,7 +327,7 @@ public struct AddROM: Sendable {
     /// Renames a ROM given its Standard name to the one its Regions now give it, when its Serials or Hasheous have just
     /// given it Regions, so the region tag isn't left to a Rename. Throws, leaving its name and Rename offered, when
     /// another ROM has that name or the rename fails.
-    private func nameFromItsRegions(
+    private func renameFromItsRegions(
         _ rom: Int64, picked: String, named: Named, dropping: Set<String>, matching match: AddROMMatch, in folder: ROMFolder
     ) throws {
         guard let regions = try journal.rom(rom)?.details.regions, regions != named.regions, let gameName = try gameName(of: match),
