@@ -72,8 +72,7 @@ final class FakeReleases: HTTPTransport, Sendable {
 
     @Test func thePinnedReleaseIsVersionedWithItsZipsDigest() {
         let pinned = DuckStationRelease.pinned
-        // The rolling `latest` for now, until a versioned release past 12442 (#90); then `v0.1-<build>` again.
-        #expect(pinned.tag == "latest" || pinned.tag == "v0.1-\(pinned.build)")
+        #expect(pinned.tag == "v0.1-\(pinned.build)")
         #expect(pinned.sha256.count == 64)
         #expect(
             pinned.urls.map(\.absoluteString) == [

@@ -39,14 +39,14 @@ import Testing
     }
 
     @Test func duckStationMustBeTheBuildLudeumInstalls() {
-        #expect(DuckStationRelease.pinned.build == 12442)
-        #expect(Emulator.duckStation.expectedVersion == "12442")
-        #expect(EmulatorVersions.check(found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)", for: .duckStation) == .ok)
+        #expect(DuckStationRelease.pinned.build == 12640)
+        #expect(Emulator.duckStation.expectedVersion == "12640")
+        #expect(EmulatorVersions.check(found: "DuckStation Version 0.1-12640-gbb4e9ac5e (dev)", for: .duckStation) == .ok)
         // Older and newer alike: it's installed again.
         #expect(EmulatorVersions.check(found: "0.1-12083-g2781502e0", for: .duckStation) == .wrongBuild(found: "12083"))
         #expect(
-            EmulatorVersions.check(found: "DuckStation Version 0.1-12500-gabcdef012 (dev)", for: .duckStation)
-                == .wrongBuild(found: "12500"))
+            EmulatorVersions.check(found: "DuckStation Version 0.1-12700-gabcdef012 (dev)", for: .duckStation)
+                == .wrongBuild(found: "12700"))
         #expect(EmulatorVersions.check(found: nil, for: .duckStation) == .unreadable)
     }
 
@@ -57,7 +57,7 @@ import Testing
         #expect(EmulatorVersions.check(found: "PCSX2 v2.9.152\nhttps://pcsx2.net/", for: .pcsx2) == .ok)
         #expect(
             EmulatorVersions.check(
-                found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)
+                found: "DuckStation Version 0.1-12640-gbb4e9ac5e (dev)\nhttps://github.com/stenzek/duckstation", for: .duckStation) == .ok)
         // ares is the copy Ludeum installs: older and newer alike are installed again.
         #expect(EmulatorVersions.check(found: "v147", for: .ares) == .wrongBuild(found: "147"))
         #expect(EmulatorVersions.check(found: "ares v200", for: .ares) == .wrongBuild(found: "200"))
@@ -76,7 +76,7 @@ import Testing
 
     @Test func theInstalledVersionIsShownTheWayItsCompared() {
         #expect(EmulatorVersions.shown(found: "PCSX2 v2.9.103\nhttps://pcsx2.net/", for: .pcsx2) == "2.9.103")
-        #expect(EmulatorVersions.shown(found: "DuckStation Version 0.1-12442-gdd4a0eb77 (dev)", for: .duckStation) == "12442")
+        #expect(EmulatorVersions.shown(found: "DuckStation Version 0.1-12640-gbb4e9ac5e (dev)", for: .duckStation) == "12640")
         #expect(EmulatorVersions.shown(found: nil, for: .pcsx2) == nil)
     }
 

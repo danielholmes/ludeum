@@ -13,11 +13,10 @@ public struct DuckStationRelease: Sendable, Equatable {
     /// The zip's SHA-256, lowercase hex.
     public let sha256: String
 
-    /// For now the rolling `latest` as it stood on 2026-10-25, build 12442, since the last versioned release (12083)
-    /// can't read the save states 12442 made: Install breaks once the tag rolls, and the versioned pin comes back
-    /// with the next versioned release past 12442 (#90).
+    /// Build 12640, whose save states are format 94: it reads every earlier state, but no earlier build reads its own,
+    /// so the pin only moves forward.
     public static let pinned = DuckStationRelease(
-        tag: "latest", build: 12442, sha256: "b9f6f0e747ee2617988de33e1fafdd17d02e918d042fed691355aed9a86c11cd")
+        tag: "v0.1-12640", build: 12640, sha256: "ccffb8befadbe8052f468383f2ce9aa6d8f4a82f2e3a9aceebbad6e3f59dc0ce")
 
     static let asset = "duckstation-mac-release.zip"
 

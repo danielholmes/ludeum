@@ -27,7 +27,7 @@ struct EmulatorVersionSpec: Sendable {
     enum Format: Sendable {
         /// `2.9.103`, `v148`, `2609`: dotted numbers, an optional leading "v".
         case dotted
-        /// DuckStation's rolling builds, `0.1-12442-gdd4a0eb77`: the build number.
+        /// DuckStation's builds, `0.1-12640-gbb4e9ac5e`: the build number.
         case buildNumber
         /// The version and the zip's digest Install recorded, a line each: the digest says which build it is.
         case installRecord
