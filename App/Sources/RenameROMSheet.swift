@@ -9,8 +9,14 @@ struct RenameOffer: Identifiable {
 
     var id: Int64 { rom.id }
     var name: String { standard.name() }
-    /// Whether its Standard name, with every tag kept, is a new name rather than the one it has.
-    var renames: Bool { name != rom.folderName }
+    /// Whether its Standard name, with every tag kept, is a new name: when it isn't, Rename is offered only to drop tags.
+    var changesName: Bool { name != rom.folderName }
+
+    /// What Rename… does for it, or why it can't.
+    var help: String {
+        if !changesName { return "Drop its languages or tags it can't place from its name" }
+        return taken ? "Another ROM has the name it would be given" : "Rename it “\(name)”"
+    }
 }
 
 /// Confirming a Rename: the name it gets, with a choice to drop its languages and each tag Rename can't place (a scene

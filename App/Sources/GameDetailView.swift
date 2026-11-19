@@ -592,7 +592,7 @@ struct GameDetailView: View {
                                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                             )
                             .font(.callout).foregroundStyle(.secondary)
-                            if let offer, offer.renames {
+                            if let offer, offer.changesName {
                                 Text("→ \(offer.name)\(offer.taken ? " · another ROM has this name" : "")")
                                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                                     .help("The name Rename would give it")
@@ -610,11 +610,8 @@ struct GameDetailView: View {
                         Spacer()
                         if let offer {
                             Button("Rename…", systemImage: "character.cursor.ibeam") { renaming = offer }
-                                .disabled(offer.renames && offer.taken)
-                                .help(
-                                    !offer.renames
-                                        ? "Drop its languages or tags it can't place from its name"
-                                        : offer.taken ? "Another ROM has the name it would be given" : "Rename it “\(offer.name)”")
+                                .disabled(offer.taken)
+                                .help(offer.help)
                         }
                         if ROMArchiving.action(for: rom) != nil { archiveButton(rom) }
                         if !rom.missing {
@@ -775,7 +772,7 @@ struct GameDetailView: View {
         guard let game, !rom.missing, !services.tasks.isActive(.rom(rom.id)),
             let standard = ROMRename.standardName(
                 forROM: rom.folderName, gameName: game.name, regions: rom.details.regions, platformId: game.platformId),
-            standard.offersRename(to: rom.folderName)
+            standard.offersRename(forROMNamed: rom.folderName)
         else { return nil }
         let taken = (try? services.journal?.romNameIsTaken(standard.name(), besides: rom.id, on: game.platformId)) ?? false
         return RenameOffer(rom: rom, standard: standard, taken: taken)

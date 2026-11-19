@@ -156,7 +156,8 @@ import Testing
     /// go later.
     @Test func aROMWithATagToDropIsOfferedThoughItHasItsStandardName() throws {
         func offersRename(_ rom: String) throws -> Bool {
-            try #require(ROMRename.standardName(forROM: rom, gameName: "Tetris", regions: ["Europe"], platformId: 19)).offersRename(to: rom)
+            try #require(ROMRename.standardName(forROM: rom, gameName: "Tetris", regions: ["Europe"], platformId: 19)).offersRename(
+                forROMNamed: rom)
         }
         #expect(try offersRename("Tetris (Europe) (Legacy)"))
         #expect(try offersRename("Tetris (Europe) (En,Fr,De)"))

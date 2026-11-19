@@ -93,12 +93,16 @@ public enum ROMRename {
     public struct StandardName: Sendable, Equatable {
         struct Tag: Sendable, Equatable {
             enum Kind: Sendable, Equatable {
-                /// One it places that stays: its region, Disc, revision, development status, edition or dump flag.
+                /// One it recognises that stays: its region, Disc and label, revision, development status, No-Intro's
+                /// edition tags, dump flags kept and translations.
                 case placed
-                /// Its languages: placed, but they can be dropped, as its Version keeps them.
+                /// Its languages: recognised, but they can be dropped, as a Rename leaves its Version as it was.
                 case languages
-                /// One it couldn't place: a scene group's, or an edition's.
+                /// One it couldn't place: a scene group's, or an edition's No-Intro doesn't write.
                 case unplaced
+
+                /// Whether it can be dropped from the name.
+                var droppable: Bool { self != .placed }
             }
             let text: String
             let kind: Kind
@@ -111,16 +115,16 @@ public enum ROMRename {
         public var unplacedTags: [String] { tags.filter { $0.kind == .unplaced }.map(\.text) }
 
         /// The tags that can be dropped from it, as written, in the name's order: its languages and those it couldn't place.
-        public var droppableTags: [String] { tags.filter { $0.kind != .placed }.map(\.text) }
+        public var droppableTags: [String] { tags.filter(\.kind.droppable).map(\.text) }
 
         /// The name, without the droppable tags that are in `dropping`.
         public func name(dropping: Set<String> = []) -> String {
-            ([title] + tags.filter { $0.kind == .placed || !dropping.contains($0.text) }.map(\.text)).joined(separator: " ")
+            ([title] + tags.filter { !($0.kind.droppable && dropping.contains($0.text)) }.map(\.text)).joined(separator: " ")
         }
 
         /// Whether Rename is offered a ROM named `romName`: while that isn't this name, or it has a tag that can be
         /// dropped, so a tag kept once can still go later.
-        public func offersRename(to romName: String) -> Bool {
+        public func offersRename(forROMNamed romName: String) -> Bool {
             name() != romName || !droppableTags.isEmpty
         }
     }

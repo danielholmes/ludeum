@@ -391,13 +391,14 @@ struct AddROMConfirmation: View {
         .onAppear {
             guard let journal = services.journal, let folder else { return }
             standard = (try? AddROM(journal: journal).standardName(of: source, matching: match, in: folder))
-                .flatMap { $0.standard.offersRename(to: source.romName) ? $0 : nil }
-            // Unlike Rename, Add ROM drops the tags it can't place unless I tick them to keep; its languages it keeps.
+                .flatMap { $0.standard.offersRename(forROMNamed: source.romName) ? $0 : nil }
+            // Unlike Rename, Add ROM drops the tags it can't place unless I tick them to keep. It keeps its languages, as
+            // its Version is read from the name it's given.
             dropping = Set(standard?.standard.unplacedTags ?? [])
         }
     }
 
-    /// Giving it its Standard name, with a preview, when that isn't the picked name already.
+    /// Giving it its Standard name, with a preview, when that isn't the picked name already or has a tag to drop.
     @ViewBuilder private var standardNameSection: some View {
         if let standard {
             Section {
