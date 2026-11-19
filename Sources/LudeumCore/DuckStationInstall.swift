@@ -3,8 +3,9 @@ import Foundation
 
 /// The DuckStation release Ludeum installs (ADR 0024): a versioned tag, pinned with its macOS zip's SHA-256 as GitHub's
 /// release API gives it. Rolling tags (`latest`, `preview`) can't be pinned, as their zip is replaced on every build. A
-/// bump is the tag, build and digest here. Once a tag has aged off the main repo's first thirty releases its zip is in
-/// `duckstation/old-releases`.
+/// bump is the tag, build and digest here, and keeps every Save state, as DuckStation loads any state from format 42 on;
+/// no earlier build loads a later one's, so the pin only moves forward. Once a tag has aged off the main repo's first
+/// thirty releases its zip is in `duckstation/old-releases`.
 public struct DuckStationRelease: Sendable, Equatable {
     /// The versioned tag, `v0.1-<build>`.
     public let tag: String
@@ -13,8 +14,7 @@ public struct DuckStationRelease: Sendable, Equatable {
     /// The zip's SHA-256, lowercase hex.
     public let sha256: String
 
-    /// Build 12640, whose save states are format 94: it reads every earlier state, but no earlier build reads its own,
-    /// so the pin only moves forward.
+    /// Build 12640, whose Save states are format 94.
     public static let pinned = DuckStationRelease(
         tag: "v0.1-12640", build: 12640, sha256: "ccffb8befadbe8052f468383f2ce9aa6d8f4a82f2e3a9aceebbad6e3f59dc0ce")
 
