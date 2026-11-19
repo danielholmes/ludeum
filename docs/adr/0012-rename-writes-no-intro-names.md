@@ -14,5 +14,5 @@ We chose a published convention over our own, and over TOSEC (computer-centric, 
 - A ROM with no Regions gets no region tag, where No-Intro would write `(Unknown)`: to the journal, no Regions means not recorded, and an `(Unknown)` tag would be read back as a Region of that name.
 - Tags Rename can't recognise (a scene group or a real edition, which can't be told apart) are kept unless I untick them when I Rename. A kept one stays: the name then conforms, so Rename isn't offered again for it.
 - Forbidden characters are dropped, except that one joining two words becomes a "-" (No-Intro's `Q-bert`, and `Dragon Quest I-II` rather than `Dragon Quest III`); a fraction is written as No-Intro does (`Ranma 1-2`).
-- Add ROM offers the same name once the ROM is Matched (on by default). A missing ROM of that Game comes back whether the picked file has its name or would be given it, and is named from its own Regions.
+- Add ROM offers the same name once the ROM is Matched (on by default). A missing ROM of that Game comes back whether the picked file has its name or would be given it, and is named from its own Regions. A ROM given it with no Regions yet is renamed to take any its Serials or Hasheous give it once it's in (ADR 0019, amended 2026-11-19).
 - A Disc ROM's subfolder is renamed, not the Discs, tracks and playlist inside it, which keep their old names.

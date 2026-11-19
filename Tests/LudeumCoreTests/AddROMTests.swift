@@ -172,7 +172,7 @@ struct AddROMTests {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         let original = try pick("Tetris (World).gb", String(repeating: "GB", count: 10_000))
 
-        let game = try await adder.add(
+        let (game, _) = try await adder.add(
             ROMSource([original]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true)
 
         let rom = try #require(try gameBoy.folder.scan().first)
@@ -202,6 +202,55 @@ struct AddROMTests {
             ROMSource([try pick("Tetris.gb")]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true)
 
         #expect(try romRow("Tetris")?["regions"] as String? == #"["Japan"]"#)
+    }
+
+    /// Given its Standard name before Hasheous gave it Regions, it takes them as its region tag too, so no Rename is left.
+    @Test func aROMGivenItsStandardNameTakesTheRegionsItsGivenOnceItsInAsItsRegionTag() async throws {
+        let h = try Harness()
+        h.internet.addHash(crc: "8cdc1683", game: 1, platform: 33, romName: "Tetris (Japan).gb")
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let adder = AddROM(journal: j.journal, sevenZip: sevenZip, hasheous: h.hasheous, moveToTrash: { _ in })
+        let source = ROMSource([try pick("Tetris (Trashman).gb")])
+        let match = igdb(1, "Tetris", on: 33)
+        #expect(try adder.standardName(of: source, matching: match, in: gameBoy.folder)?.standard.name() == "Tetris (Trashman)")
+
+        let added = try await adder.add(
+            source, to: gameBoy.folder, match: match, keepingOriginals: true, naming: .standard(dropping: ["(Trashman)"]))
+
+        #expect(try gameBoy.folder.scan().map(\.fileName) == ["Tetris (Japan).7z"])
+        let row = try #require(try romRow("Tetris (Japan)"))
+        #expect(row["id"] as Int64 == added.rom)
+        #expect(row["regions"] as String? == #"["Japan"]"#)
+        #expect(try j.journal.game(ofROM: added.rom) == added.game)
+    }
+
+    /// Where another ROM has the name it would take, it keeps the one it went in with, and Rename is offered as before.
+    @Test func aROMKeepsItsNameWhenAnotherHasTheOneItsRegionsWouldGiveIt() async throws {
+        let h = try Harness()
+        h.internet.addHash(crc: "8cdc1683", game: 1, platform: 33, romName: "Tetris (Japan).gb")
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        _ = try missingGame("Tetris (Japan)", on: 33)
+        let adder = AddROM(journal: j.journal, sevenZip: sevenZip, hasheous: h.hasheous, moveToTrash: { _ in })
+
+        try await adder.add(
+            ROMSource([try pick("Tetris.gb")]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true,
+            naming: .standard())
+
+        #expect(try gameBoy.folder.scan().map(\.fileName) == ["Tetris.7z"])
+        #expect(try romRow("Tetris")?["regions"] as String? == #"["Japan"]"#)
+    }
+
+    /// Going in under the picked name, it keeps it.
+    @Test func aROMGoingInUnderThePickedNameKeepsItWhenItsGivenRegions() async throws {
+        let h = try Harness()
+        h.internet.addHash(crc: "8cdc1683", game: 1, platform: 33, romName: "Tetris (Japan).gb")
+        let gameBoy = try FakeROMFolder(in: directory, platform: 33)
+        let adder = AddROM(journal: j.journal, sevenZip: sevenZip, hasheous: h.hasheous, moveToTrash: { _ in })
+
+        try await adder.add(
+            ROMSource([try pick("Tetris.gb")]), to: gameBoy.folder, match: igdb(1, "Tetris", on: 33), keepingOriginals: true)
+
+        #expect(try gameBoy.folder.scan().map(\.fileName) == ["Tetris.7z"])
     }
 
     @Test func movingSendsThePickedFileToTheTrashOnceItsIn() async throws {
@@ -568,7 +617,7 @@ struct AddROMTests {
         let gameBoy = try FakeROMFolder(in: directory, platform: 33)
         let original = try pick("Hermano (World) (Homebrew).gb", "GB")
 
-        let game = try await adder.add(
+        let (game, _) = try await adder.add(
             ROMSource([original]), to: gameBoy.folder, match: .byHand(name: "  Hermano  "), keepingOriginals: true)
 
         let made = try j.journal.game(game)

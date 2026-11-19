@@ -44,18 +44,21 @@ func readPicked(_ urls: [URL]) async throws -> PickedROM {
         let folder = services.settings.romFolders.first(where: { $0.platformId == platformId })
     else { return }
     let adder = AddROM(journal: journal, hasheous: services.hasheous)
-    // The name it'll have, by which it's found once it's in.
+    // The name it goes in with, though Regions given once it's in can add a region tag.
     let name: String =
         if case .standard(let dropping) = naming, let offer = try? adder.standardName(of: source, matching: match, in: folder) {
             offer.standard.name(dropping: dropping)
         } else {
             source.romName
         }
+    let inserted = Mutex<Int64?>(nil)
     services.tasks.enqueue("Adding \(name)") { progress in
-        try await adder.add(source, to: folder, match: match, keepingOriginals: keepingOriginals, naming: naming, progress: progress)
+        let (_, rom) = try await adder.add(
+            source, to: folder, match: match, keepingOriginals: keepingOriginals, naming: naming, progress: progress)
+        inserted.withLock { $0 = rom }
     } ended: { [changes = services.changes, tasks = services.tasks, romFolders = services.settings.romFolders] in
-        // Recorded only once it's all in place, so a ROM of its name Matched to a Game means it worked.
-        guard let rom = try? journal.romID(named: name, on: platformId), let game = try? journal.game(ofROM: rom) else {
+        // Recorded only once it's all in place, so a ROM Matched to a Game means it worked.
+        guard let rom = inserted.withLock({ $0 }), let game = try? journal.game(ofROM: rom) else {
             changes.coverChanged()
             return
         }
@@ -407,7 +410,9 @@ struct AddROMConfirmation: View {
                 Text("→ \(standard.standard.name(dropping: dropping))\(standard.taken ? " · another ROM has this name" : "")")
                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             } footer: {
-                Text("As No-Intro (or Redump, on disc Platforms) would name it, with its Regions.")
+                Text(
+                    "As No-Intro (or Redump, on disc Platforms) would name it, with its Regions. With none yet, any its Serials or Hasheous give it once it's in are added."
+                )
             }
             if givingStandardName, !standard.taken, !standard.standard.droppableTags.isEmpty {
                 DroppableTagsChoice(tags: standard.standard.droppableTags, dropping: $dropping)

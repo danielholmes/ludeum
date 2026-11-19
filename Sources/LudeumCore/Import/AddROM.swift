@@ -279,13 +279,14 @@ public struct AddROM: Sendable {
         return "\(name).\(ext)"
     }
 
-    /// Adds the ROM and returns its Game. Throws, with the ROM folder and journal as they were and the picked files
-    /// untouched, when anything goes wrong before the ROM is in the journal.
+    /// Adds the ROM and returns it and its Game. Throws, with the ROM folder and journal as they were and the picked files
+    /// untouched, when anything goes wrong before the ROM is in the journal. Given its Standard name, a ROM whose Serials
+    /// or Hasheous then give it Regions its name had no tag for is renamed to take them, unless another ROM has that name.
     @discardableResult
     public func add(
         _ source: ROMSource, to folder: ROMFolder, match: AddROMMatch, keepingOriginals: Bool, naming: AddROMNaming = .picked,
         progress: @escaping @Sendable (Double) -> Void = { _ in }
-    ) async throws -> GameID {
+    ) async throws -> (game: GameID, rom: Int64) {
         if case .byHand(let gameName) = match, gameName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw LudeumError.nameRequired
         }
@@ -303,10 +304,10 @@ public struct AddROM: Sendable {
             }
         }
         let (destination, file) = try await put(source, named: named.name, in: folder, progress: progress)
-        let game: GameID
+        let added: (game: GameID, rom: Int64)
         do {
             let checksum = await ROMChecksum.of(file, platformId: folder.platformId, sevenZip: sevenZip)
-            (game, _) = try journal.recordAddedROM(
+            added = try journal.recordAddedROM(
                 file, checksum: checksum, on: folder.platformId, reusing: named.missingRow, regions: named.regions, match: match)
         } catch {
             // Never in the journal: what was put in place goes again, and the picked files were never touched.
@@ -314,11 +315,25 @@ public struct AddROM: Sendable {
             throw error
         }
         if !keepingOriginals { trashOriginals(of: source) }
-        if let rom = try journal.romID(named: named.name, on: folder.platformId) {
-            await SerialsImport(journal: journal, sevenZip: sevenZip).run(in: [folder], only: [rom])
-            await RegionsImport(journal: journal, hasheous: hasheous).run(only: [rom])
+        await SerialsImport(journal: journal, sevenZip: sevenZip).run(in: [folder], only: [added.rom])
+        await RegionsImport(journal: journal, hasheous: hasheous).run(only: [added.rom])
+        if case .standard(let dropping) = naming, named.standard != nil {
+            try? nameFromItsRegions(added.rom, picked: source.romName, named: named, dropping: dropping, matching: match, in: folder)
         }
-        return game
+        return added
+    }
+
+    /// Renames a ROM given its Standard name to the one its Regions now give it, when its Serials or Hasheous have just
+    /// given it Regions, so the region tag isn't left to a Rename. Throws, leaving its name and Rename offered, when
+    /// another ROM has that name or the rename fails.
+    private func nameFromItsRegions(
+        _ rom: Int64, picked: String, named: Named, dropping: Set<String>, matching match: AddROMMatch, in folder: ROMFolder
+    ) throws {
+        guard let regions = try journal.rom(rom)?.details.regions, regions != named.regions, let gameName = try gameName(of: match),
+            let name = ROMRename.standardName(forROM: picked, gameName: gameName, regions: regions, platformId: folder.platformId)?
+                .name(dropping: dropping), name != named.name
+        else { return }
+        try journal.renameROM(rom, to: name, in: folder)
     }
 
     /// The ROM's Standard name once it's Matched, before choosing which tags it can't place to drop, and whether another
